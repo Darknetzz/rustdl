@@ -1,0 +1,12 @@
+After this merge is pushed, decommission the old standalone repository:
+
+1. On GitHub: Settings -> General -> Archive this repository.
+2. Replace the old repo README with something like:
+
+   # Moved
+
+   Development continues at https://github.com/Darknetzz/code (path: Rust/rustdl/).
+
+3. Optionally delete or keep the local folder D:\Kriss\Documents\Git\rust-dl as a backup.
+
+You may delete this file once the old remote is archived.
