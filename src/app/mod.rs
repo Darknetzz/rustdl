@@ -1216,6 +1216,8 @@ impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         #[cfg(windows)]
         crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
+        #[cfg(not(windows))]
+        let _ = frame;
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
         self.maybe_flush_queue_save();
         self.process_events(ctx);
