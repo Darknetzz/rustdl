@@ -55,7 +55,19 @@ fn truncate_version_display(s: &str) -> String {
     }
 }
 
+/// Same binary we would use for metadata/download: full path when resolving via PATH (Windows-safe).
+fn resolve_exe_for_version_spawn(custom_path: &str, default_exe: &str) -> String {
+    let trimmed = custom_path.trim();
+    if !trimmed.is_empty() {
+        return trimmed.to_owned();
+    }
+    which(default_exe)
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| default_exe.to_owned())
+}
+
 /// First non-empty line from stdout, else stderr (e.g. `ffmpeg -version` prints the banner to stderr).
+/// Does not require exit code 0; some launcher shims return non-zero while still printing a version line.
 fn read_version_from_exe(exe: &str, args: &[&str]) -> Option<String> {
     let output = Command::new(exe)
         .args(args)
@@ -63,9 +75,6 @@ fn read_version_from_exe(exe: &str, args: &[&str]) -> Option<String> {
         .stderr(Stdio::piped())
         .output()
         .ok()?;
-    if !output.status.success() {
-        return None;
-    }
     let out = String::from_utf8_lossy(&output.stdout);
     let err = String::from_utf8_lossy(&output.stderr);
     let line = out
@@ -80,7 +89,7 @@ pub fn read_yt_dlp_version(yt_dlp_path: &str) -> Option<String> {
     if !executable_exists(yt_dlp_path, "yt-dlp") {
         return None;
     }
-    let exe = resolve_executable(yt_dlp_path, "yt-dlp");
+    let exe = resolve_exe_for_version_spawn(yt_dlp_path, "yt-dlp");
     read_version_from_exe(&exe, &["--version"])
 }
 
@@ -89,7 +98,7 @@ pub fn read_ffmpeg_version(ffmpeg_path: &str) -> Option<String> {
     if !executable_exists(ffmpeg_path, "ffmpeg") {
         return None;
     }
-    let exe = resolve_executable(ffmpeg_path, "ffmpeg");
+    let exe = resolve_exe_for_version_spawn(ffmpeg_path, "ffmpeg");
     read_version_from_exe(&exe, &["-version"])
 }
 
@@ -98,7 +107,11 @@ pub fn read_ffprobe_version(ffprobe_path: &str) -> Option<String> {
     if !executable_exists(ffprobe_path, "ffprobe") {
         return None;
     }
-    let exe = resolve_ffprobe_exe(ffprobe_path);
+    let exe = if ffprobe_path.trim().is_empty() {
+        resolve_exe_for_version_spawn("", "ffprobe")
+    } else {
+        resolve_ffprobe_exe(ffprobe_path)
+    };
     read_version_from_exe(&exe, &["-version"])
 }
 
