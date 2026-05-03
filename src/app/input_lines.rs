@@ -46,6 +46,17 @@ pub(crate) fn analyze_input_lines(
     out
 }
 
+/// True when every non-empty input line is a duplicate (within the paste or vs the queue).
+pub(crate) fn is_only_duplicate_lines(info: &[InputLineInfo]) -> bool {
+    !info.is_empty()
+        && info.iter().all(|line| {
+            matches!(
+                line.kind,
+                InputLineKind::DuplicateInInput | InputLineKind::DuplicateExisting
+            )
+        })
+}
+
 /// If the last line is a valid URL and the edit looks like a paste (paste event or a large
 /// append-only insert), append `\n` so the next paste starts on a new line.
 pub(crate) fn append_newline_after_pasted_valid_url(
@@ -79,7 +90,10 @@ pub(crate) fn append_newline_after_pasted_valid_url(
 mod tests {
     use std::collections::HashSet;
 
-    use super::{analyze_input_lines, append_newline_after_pasted_valid_url, InputLineKind};
+    use super::{
+        analyze_input_lines, append_newline_after_pasted_valid_url, is_only_duplicate_lines,
+        InputLineKind,
+    };
 
     #[test]
     fn marks_duplicate_in_input() {
@@ -99,6 +113,17 @@ mod tests {
         let lines = vec!["https://www.youtube.com/watch?v=vid".to_owned()];
         let out = analyze_input_lines(&lines, &existing);
         assert_eq!(out[0].kind, InputLineKind::DuplicateExisting);
+        assert!(is_only_duplicate_lines(&out));
+    }
+
+    #[test]
+    fn only_duplicate_false_when_mixed_or_invalid() {
+        let lines = vec![
+            "https://example.com/a".to_owned(),
+            "not a url".to_owned(),
+        ];
+        let out = analyze_input_lines(&lines, &HashSet::new());
+        assert!(!is_only_duplicate_lines(&out));
     }
 
     #[test]

@@ -1061,6 +1061,12 @@ impl eframe::App for PydlApp {
                     self.queue_urls_for_resolve(valid);
                     self.input_urls.clear();
                     self.refresh_input_line_info();
+                } else {
+                    self.refresh_input_line_info();
+                    if input_lines::is_only_duplicate_lines(&self.input_line_info) {
+                        self.input_urls.clear();
+                        self.refresh_input_line_info();
+                    }
                 }
                 self.auto_add_after = None;
             }
