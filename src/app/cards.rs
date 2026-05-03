@@ -215,6 +215,50 @@ impl PydlApp {
                     );
                 }
 
+                let can_retry_download = status == ItemStatus::Failed
+                    && output_ready
+                    && self.has_yt_dlp
+                    && {
+                        let it = &self.items[idx];
+                        self.item_has_redownload_target(it)
+                    };
+                let can_retry_metadata = matches!(status, ItemStatus::Idle)
+                    && has_error.is_some()
+                    && self.has_yt_dlp
+                    && !self.add_in_progress
+                    && !self.items[idx].source_line.trim().is_empty();
+                if can_retry_download || can_retry_metadata {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        if can_retry_download {
+                            let btn = secondary_button(
+                                ui,
+                                &format!("{} Retry download", ui_icons::RETRY),
+                                true,
+                            )
+                            .on_hover_text(
+                                "Queue this video for download again using the same URL as this row.",
+                            );
+                            if btn.clicked() {
+                                self.retry_download_item_id(id);
+                            }
+                        }
+                        if can_retry_metadata {
+                            let btn = secondary_button(
+                                ui,
+                                &format!("{} Retry fetch", ui_icons::RETRY),
+                                true,
+                            )
+                            .on_hover_text(
+                                "Run yt-dlp metadata again for this URL (after errors or no preview).",
+                            );
+                            if btn.clicked() {
+                                self.retry_metadata_item_id(id);
+                            }
+                        }
+                    });
+                }
+
                 if show_saved_file_actions {
                     ui.spacing_mut().item_spacing.y = 4.0;
                     ui.horizontal_wrapped(|ui| {

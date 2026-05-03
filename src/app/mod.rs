@@ -946,6 +946,7 @@ impl PydlApp {
         }
         {
             let it = &mut self.items[idx];
+            it.error = None;
             it.status = ItemStatus::Idle;
             it.percent = 0.0;
             it.size_text = "-".to_owned();
@@ -956,6 +957,66 @@ impl PydlApp {
         self.update_status();
         self.schedule_queue_save();
         self.spawn_download_workers(vec![item_id]);
+    }
+
+    /// Same as [`Self::redownload_item_id`] but only allowed from a failed download row (clear UX label).
+    fn retry_download_item_id(&mut self, item_id: u64) {
+        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+            return;
+        };
+        if self.items[idx].status != ItemStatus::Failed {
+            return;
+        }
+        self.redownload_item_id(item_id);
+    }
+
+    /// Re-run yt-dlp metadata for this row (same URL), replacing the card when resolve completes.
+    fn retry_metadata_item_id(&mut self, item_id: u64) {
+        if self.add_in_progress {
+            self.append_log(
+                "Wait for the current \"Add URLs\" / metadata batch to finish before retrying.",
+            );
+            return;
+        }
+        let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
+            &self.settings.yt_dlp_path,
+            &self.settings.ffmpeg_path,
+            &self.settings.ffprobe_path,
+        );
+        if !has_yt {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            self.refresh_deps();
+            return;
+        }
+        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+            return;
+        };
+        if self.items[idx].status != ItemStatus::Idle {
+            return;
+        }
+        let line = self.items[idx].source_line.clone();
+        if line.trim().is_empty() {
+            self.append_log(&format!(
+                "[item {item_id}] Cannot retry: no source URL on this row."
+            ));
+            return;
+        }
+        self.persist_settings();
+        self.pending_resolve_ids.insert(line.clone(), item_id);
+        self.items[idx] = QueueItem::pending_metadata(item_id, line.clone());
+        self.add_in_progress = true;
+        self.add_total_urls = 1;
+        self.add_processed_urls = 0;
+        self.add_current_url = Some(line.clone());
+        self.update_status();
+        self.schedule_queue_save();
+        let yt_dlp_bin = self.yt_dlp_bin();
+        background_spawn::spawn_url_resolve_pipeline(
+            &self.runtime,
+            &self.tx,
+            yt_dlp_bin,
+            vec![line],
+        );
     }
 
     fn streams_incomplete_message(has_video: bool, has_audio: bool) -> Option<String> {
