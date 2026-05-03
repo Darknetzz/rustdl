@@ -293,3 +293,19 @@ impl PydlApp {
         self.append_log(&format!("[item {item_id}] {line}"));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::is_throttled_download_log_line;
+
+    #[test]
+    fn throttle_matches_progress_spam_not_errors() {
+        assert!(is_throttled_download_log_line(
+            "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
+        ));
+        assert!(is_throttled_download_log_line("[Merger] Merging formats into mkv"));
+        assert!(!is_throttled_download_log_line(
+            "ERROR: unable to download video"
+        ));
+    }
+}
