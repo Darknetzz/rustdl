@@ -557,24 +557,65 @@ impl PydlApp {
         self.persist_settings();
     }
 
+    /// Queues every **failed** row that has a download URL (same as per-card **Retry download**).
     fn retry_failed_items(&mut self) {
-        let mut retried = 0usize;
-        for it in &mut self.items {
-            if it.status == ItemStatus::Failed {
-                it.status = ItemStatus::Idle;
-                it.percent = 0.0;
-                it.size_text = "-".to_owned();
-                it.speed_text = "-".to_owned();
-                it.eta_text = "-".to_owned();
-                it.detail = "Ready to retry".to_owned();
-                retried += 1;
+        if !Path::new(&self.output_dir).is_dir() {
+            self.append_log("Choose a valid output folder.");
+            return;
+        }
+        let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
+            &self.settings.yt_dlp_path,
+            &self.settings.ffmpeg_path,
+            &self.settings.ffprobe_path,
+        );
+        if !has_yt {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            self.refresh_deps();
+            return;
+        }
+        let failed_no_url = self
+            .items
+            .iter()
+            .filter(|it| {
+                it.status == ItemStatus::Failed && !self.item_has_redownload_target(it)
+            })
+            .count();
+        let ids: Vec<u64> = self
+            .items
+            .iter()
+            .filter(|it| {
+                it.status == ItemStatus::Failed && self.item_has_redownload_target(it)
+            })
+            .map(|it| it.item_id)
+            .collect();
+        if ids.is_empty() {
+            if self.status_failed > 0 {
+                self.append_log(
+                    "No failed items have a video URL to retry. Check the row or re-add the link.",
+                );
+            } else {
+                self.append_log("No failed downloads to retry.");
             }
+            return;
         }
-        if retried > 0 {
-            self.append_log(&format!("Marked {retried} failed item(s) for retry."));
-            self.update_status();
-            self.schedule_queue_save();
+        self.persist_settings();
+        self.refresh_done_file_lookup();
+        for id in &ids {
+            self.prepare_item_redownload_reset(*id);
         }
+        self.refresh_done_file_lookup();
+        self.update_status();
+        self.schedule_queue_save();
+        self.append_log(&format!(
+            "Retrying {} failed download(s).{}",
+            ids.len(),
+            if failed_no_url > 0 {
+                format!(" Skipped {failed_no_url} without a URL.")
+            } else {
+                String::new()
+            }
+        ));
+        self.spawn_download_workers(ids);
     }
 
     fn maybe_auto_start_downloads(&mut self) {
@@ -915,23 +956,11 @@ impl PydlApp {
         !u.is_empty() || (!s.is_empty() && Url::parse(s).is_ok())
     }
 
-    /// Deletes the matched output file if present, resets the row to idle, and starts a download for this id only.
-    fn redownload_item_id(&mut self, item_id: u64) {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
+    /// Removes a matched output file (if any) and clears progress so the row can be queued again.
+    fn prepare_item_redownload_reset(&mut self, item_id: u64) {
         let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
             return;
         };
-        if !self.item_has_redownload_target(&self.items[idx]) {
-            self.append_log(&format!(
-                "[item {item_id}] Cannot re-download: no video URL on this row."
-            ));
-            return;
-        }
-        self.persist_settings();
-        self.refresh_done_file_lookup();
         if let Some(path) = self.find_downloaded_file_for_item(&self.items[idx]) {
             if let Err(e) = fs::remove_file(&path) {
                 self.append_log(&format!(
@@ -954,6 +983,27 @@ impl PydlApp {
             it.eta_text = "-".to_owned();
             it.detail = "Re-downloading…".to_owned();
         }
+    }
+
+    /// Deletes the matched output file if present, resets the row to idle, and starts a download for this id only.
+    fn redownload_item_id(&mut self, item_id: u64) {
+        if !Path::new(&self.output_dir).is_dir() {
+            self.append_log("Choose a valid output folder.");
+            return;
+        }
+        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+            return;
+        };
+        if !self.item_has_redownload_target(&self.items[idx]) {
+            self.append_log(&format!(
+                "[item {item_id}] Cannot re-download: no video URL on this row."
+            ));
+            return;
+        }
+        self.persist_settings();
+        self.refresh_done_file_lookup();
+        self.prepare_item_redownload_reset(item_id);
+        self.refresh_done_file_lookup();
         self.update_status();
         self.schedule_queue_save();
         self.spawn_download_workers(vec![item_id]);
@@ -1496,8 +1546,11 @@ impl eframe::App for PydlApp {
                             if self.status_failed > 0
                                 && warning_button(
                                     ui,
-                                    &format!("{} Retry failed", ui_icons::RETRY),
+                                    &format!("{} Retry all failed", ui_icons::RETRY),
                                     true,
+                                )
+                                .on_hover_text(
+                                    "Retry every failed download that still has a URL (same as each card's Retry download).",
                                 )
                                 .clicked()
                             {
