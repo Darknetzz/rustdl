@@ -622,13 +622,6 @@ impl PydlApp {
         if !self.settings.auto_start_downloads {
             return;
         }
-        if self.add_in_progress
-            || self.status_resolving > 0
-            || self.status_queued > 0
-            || self.status_active > 0
-        {
-            return;
-        }
         let has_idle_items = self
             .items
             .iter()

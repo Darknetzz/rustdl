@@ -137,6 +137,7 @@ impl PydlApp {
                     self.update_status();
                     self.refresh_input_line_info();
                     self.schedule_queue_save();
+                    self.maybe_auto_start_downloads();
                 }
                 UiEvent::AddProgress {
                     processed,

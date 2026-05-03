@@ -84,7 +84,7 @@ impl Default for AppSettings {
             compact_cards: false,
             hide_card_subtitle: false,
             auto_add_pasted_urls: true,
-            auto_start_downloads: false,
+            auto_start_downloads: true,
             ui_scale: 1.08,
         }
     }
