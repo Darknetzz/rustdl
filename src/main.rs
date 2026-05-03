@@ -1,3 +1,4 @@
+use std::process;
 use std::sync::Arc;
 
 use eframe::egui;
@@ -17,7 +18,57 @@ mod ui_icons;
 mod win_icon;
 mod ytdlp;
 
+fn print_version() {
+    println!("rustdl {}", pkg_version::VERSION);
+    println!("Build: {}", pkg_version::BUILD_DATE);
+}
+
+fn print_help() {
+    println!(
+        "rustdl {} — desktop GUI for yt-dlp (egui).\n",
+        pkg_version::VERSION
+    );
+    println!("Usage:");
+    println!("  rustdl              Start the graphical interface");
+    println!("  rustdl [OPTIONS]    Print version or help and exit\n");
+    println!("Options:");
+    println!("  -h, --help       Print this help message");
+    println!("  -V, --version    Print version and build date (UTC)");
+}
+
+fn try_cli_and_exit() -> bool {
+    let mut args = std::env::args();
+    let _exe = args.next();
+    let Some(first) = args.next() else {
+        return false;
+    };
+    match first.as_str() {
+        "--version" | "-V" => {
+            print_version();
+            true
+        }
+        "--help" | "-h" => {
+            print_help();
+            true
+        }
+        s if s.starts_with('-') => {
+            eprintln!("Unknown option: {s}");
+            eprintln!("Try `rustdl --help`.");
+            process::exit(2);
+        }
+        _ => {
+            eprintln!("Unexpected argument: {first}");
+            eprintln!("Try `rustdl --help`.");
+            process::exit(2);
+        }
+    }
+}
+
 fn main() {
+    if try_cli_and_exit() {
+        return;
+    }
+
     let runtime = match Runtime::new() {
         Ok(rt) => Arc::new(rt),
         Err(e) => {
