@@ -6,8 +6,8 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::parse_item_size_text;
 use crate::app_state::TransferTotals;
 use crate::app_ui::{
-    danger_button, draw_meta_badge, draw_status_chip, secondary_button, warning_button,
-    MetaBadgeKind,
+    danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
+    warning_button, MetaBadgeKind,
 };
 use crate::models::ItemStatus;
 use crate::ui_icons;
@@ -59,7 +59,9 @@ impl PydlApp {
                 .map(|s| s.replace('x', "×"));
         let show_size_badge = is_pre_download && size_text != "-";
 
-        ui.group(|ui| {
+        let highlight_completed = status == ItemStatus::Done && !done_but_file_missing;
+
+        let card_inner = |ui: &mut egui::Ui| {
             let compact = self.settings.compact_cards;
             let card_w = if compact { 320.0 } else { 360.0 };
             let inner_w = (card_w - 20.0_f32).max(1.0);
@@ -182,9 +184,13 @@ impl PydlApp {
                             .animate(true)
                             .text("Fetching metadata...")
                     } else {
-                        egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0))
+                        let mut pb = egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0))
                             .animate(status == ItemStatus::Downloading)
-                            .show_percentage()
+                            .show_percentage();
+                        if status == ItemStatus::Done {
+                            pb = pb.fill(status_color(ItemStatus::Done));
+                        }
+                        pb
                     },
                 );
                 if detail_h > 0.0 {
@@ -343,9 +349,11 @@ impl PydlApp {
                 });
                 ui.add(
                     egui::Label::new(
-                        RichText::new(&footer_status)
-                            .small()
-                            .color(Color32::LIGHT_GRAY),
+                        RichText::new(&footer_status).small().color(if highlight_completed {
+                            status_color(ItemStatus::Done)
+                        } else {
+                            Color32::LIGHT_GRAY
+                        }),
                     )
                     .wrap(),
                 );
@@ -380,7 +388,21 @@ impl PydlApp {
                     }
                 });
             });
-        });
+        };
+
+        if highlight_completed {
+            egui::Frame::none()
+                .fill(Color32::from_rgba_unmultiplied(56, 142, 60, 45))
+                .stroke(egui::Stroke::new(
+                    2.0,
+                    status_color(ItemStatus::Done),
+                ))
+                .rounding(egui::Rounding::same(10.0))
+                .inner_margin(egui::Margin::same(8.0))
+                .show(ui, card_inner);
+        } else {
+            ui.group(card_inner);
+        }
     }
 
     pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {

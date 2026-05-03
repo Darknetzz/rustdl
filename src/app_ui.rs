@@ -9,7 +9,7 @@ pub fn status_color(s: ItemStatus) -> Color32 {
         ItemStatus::Idle => Color32::GRAY,
         ItemStatus::Queued => Color32::from_rgb(255, 193, 7),
         ItemStatus::Downloading => Color32::from_rgb(66, 165, 245),
-        ItemStatus::Done => Color32::from_rgb(102, 187, 106),
+        ItemStatus::Done => Color32::from_rgb(129, 199, 132),
         ItemStatus::Failed => Color32::from_rgb(239, 83, 80),
     }
 }
