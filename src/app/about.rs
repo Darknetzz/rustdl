@@ -21,6 +21,11 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.label(RichText::new("rustdl").strong());
                 ui.label(format!("Version: {}", pkg_version::VERSION));
+                ui.label(
+                    RichText::new(format!("Build: {}", pkg_version::BUILD_DATE))
+                        .small()
+                        .color(Color32::LIGHT_GRAY),
+                );
                 ui.separator();
                 ui.label(RichText::new("Updates").strong());
                 ui.horizontal_wrapped(|ui| {

@@ -9,6 +9,9 @@ readme = "README.md"
 # Crate metadata; in-app update check reads this URL when present.
 repository = "https://github.com/Darknetzz/code"
 
+[build-dependencies]
+chrono = { version = "0.4", default-features = false, features = ["now"] }
+
 [dependencies]
 anyhow = "1"
 arboard = "3"
