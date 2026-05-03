@@ -220,15 +220,25 @@ pub(crate) fn attach_paste_context_menu(response: &egui::Response) {
     });
 }
 
-pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool) {
+pub(crate) fn draw_precheck_status(
+    ui: &mut egui::Ui,
+    tool_name: &str,
+    ok: bool,
+    version: &str,
+) {
     let (icon, color, text) = if ok {
         (ICON_OK, Color32::from_rgb(102, 187, 106), "OK")
     } else {
         (ICON_MISSING, Color32::from_rgb(239, 83, 80), "Missing")
     };
-    ui.label(
-        RichText::new(format!("{icon} {tool_name}: {text}"))
-            .small()
-            .color(color),
-    );
+    let v = version.trim();
+    let body = if ok && !v.is_empty() {
+        format!("{icon} {tool_name}: {text} — {v}")
+    } else {
+        format!("{icon} {tool_name}: {text}")
+    };
+    let response = ui.label(RichText::new(body).small().color(color));
+    if ok && !v.is_empty() {
+        response.on_hover_text(v);
+    }
 }

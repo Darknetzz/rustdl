@@ -36,6 +36,72 @@ pub fn get_external_tools_with_paths(
     )
 }
 
+/// Shown in the main window tool strip; keep lines from growing the layout.
+const TOOL_VERSION_DISPLAY_MAX_CHARS: usize = 56;
+
+fn truncate_version_display(s: &str) -> String {
+    let t = s.trim();
+    if t.is_empty() {
+        return String::new();
+    }
+    let n = t.chars().count();
+    if n <= TOOL_VERSION_DISPLAY_MAX_CHARS {
+        t.to_string()
+    } else {
+        t.chars()
+            .take(TOOL_VERSION_DISPLAY_MAX_CHARS.saturating_sub(1))
+            .collect::<String>()
+            + "…"
+    }
+}
+
+/// First non-empty line from stdout, else stderr (e.g. `ffmpeg -version` prints the banner to stderr).
+fn read_version_from_exe(exe: &str, args: &[&str]) -> Option<String> {
+    let output = Command::new(exe)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let out = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    let line = out
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .or_else(|| err.lines().find(|l| !l.trim().is_empty()));
+    line.map(truncate_version_display)
+}
+
+/// Version string for the status bar, or None if the tool is missing or did not return a version.
+pub fn read_yt_dlp_version(yt_dlp_path: &str) -> Option<String> {
+    if !executable_exists(yt_dlp_path, "yt-dlp") {
+        return None;
+    }
+    let exe = resolve_executable(yt_dlp_path, "yt-dlp");
+    read_version_from_exe(&exe, &["--version"])
+}
+
+/// Version string for the status bar, or None if the tool is missing or did not return a version.
+pub fn read_ffmpeg_version(ffmpeg_path: &str) -> Option<String> {
+    if !executable_exists(ffmpeg_path, "ffmpeg") {
+        return None;
+    }
+    let exe = resolve_executable(ffmpeg_path, "ffmpeg");
+    read_version_from_exe(&exe, &["-version"])
+}
+
+/// Version string for the status bar, or None if the tool is missing or did not return a version.
+pub fn read_ffprobe_version(ffprobe_path: &str) -> Option<String> {
+    if !executable_exists(ffprobe_path, "ffprobe") {
+        return None;
+    }
+    let exe = resolve_ffprobe_exe(ffprobe_path);
+    read_version_from_exe(&exe, &["-version"])
+}
+
 fn executable_exists(custom_path: &str, default_exe: &str) -> bool {
     let trimmed = custom_path.trim();
     if !trimmed.is_empty() {

@@ -94,6 +94,9 @@ pub struct PydlApp {
     has_yt_dlp: bool,
     has_ffmpeg: bool,
     has_ffprobe: bool,
+    yt_dlp_version: String,
+    ffmpeg_version: String,
+    ffprobe_version: String,
     /// Ring buffer of log lines (avoids scanning a huge string every frame).
     log_lines: VecDeque<String>,
     settings: AppSettings,
@@ -186,6 +189,9 @@ impl PydlApp {
             has_yt_dlp: false,
             has_ffmpeg: false,
             has_ffprobe: false,
+            yt_dlp_version: String::new(),
+            ffmpeg_version: String::new(),
+            ffprobe_version: String::new(),
             log_lines: VecDeque::new(),
             settings,
             settings_open: false,
@@ -296,6 +302,21 @@ impl PydlApp {
         self.has_yt_dlp = yt;
         self.has_ffmpeg = ffm;
         self.has_ffprobe = ffp;
+        self.yt_dlp_version = if yt {
+            ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+        self.ffmpeg_version = if ffm {
+            ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
+        self.ffprobe_version = if ffp {
+            ytdlp::read_ffprobe_version(&self.settings.ffprobe_path).unwrap_or_default()
+        } else {
+            String::new()
+        };
     }
 
     fn append_log(&mut self, line: &str) {
@@ -1165,11 +1186,11 @@ impl eframe::App for PydlApp {
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
-                    draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp);
+                    draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
                     ui.separator();
-                    draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg);
+                    draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
                     ui.separator();
-                    draw_precheck_status(ui, "ffprobe", self.has_ffprobe);
+                    draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
                 });
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
                     ui.colored_label(
