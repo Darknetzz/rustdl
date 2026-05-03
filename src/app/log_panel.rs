@@ -108,7 +108,7 @@ impl PydlApp {
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if danger_button(ui, &format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
-                self.log_text.clear();
+                self.log_lines.clear();
             }
             ui.label("Filter");
             egui::ComboBox::from_id_salt("log_filter")
@@ -125,8 +125,13 @@ impl PydlApp {
             )
             .clicked()
             {
-                if let Some(last) = self.log_text.lines().rev().find(|line| is_error_line(line)) {
-                    ui.ctx().copy_text(last.to_owned());
+                if let Some(last) = self
+                    .log_lines
+                    .iter()
+                    .rev()
+                    .find(|line| is_error_line(line))
+                {
+                    ui.ctx().copy_text(last.clone());
                 }
             }
         });
@@ -144,7 +149,7 @@ impl PydlApp {
                     .stick_to_bottom(self.settings.autoscroll_log)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
-                        for line in self.log_text.lines() {
+                        for line in &self.log_lines {
                             if !self.log_filter.accepts(line) {
                                 continue;
                             }

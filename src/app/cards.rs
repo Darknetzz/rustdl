@@ -19,7 +19,7 @@ use super::{
 impl PydlApp {
     pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize) {
         let id = self.items[idx].item_id;
-        let item_snapshot = self.items[idx].clone();
+        let status = self.items[idx].status;
         let title = self.items[idx].title.clone();
         let subtitle = match (&self.items[idx].duration, &self.items[idx].uploader) {
             (Some(d), Some(u)) => format!("{} · {}", format_duration(*d), u),
@@ -27,7 +27,6 @@ impl PydlApp {
             (None, Some(u)) => u.clone(),
             (None, None) => "-".to_owned(),
         };
-        let status = self.items[idx].status;
         let pct = self.items[idx].percent;
         let size_text = self.items[idx].size_text.clone();
         let speed_text = self.items[idx].speed_text.clone();
@@ -39,16 +38,20 @@ impl PydlApp {
         let resolving = status == ItemStatus::Resolving;
         let done_file = match status {
             ItemStatus::Done | ItemStatus::Failed => {
-                self.find_downloaded_file_for_item(&item_snapshot)
+                let it = &self.items[idx];
+                self.find_downloaded_file_for_item(it)
             }
             _ => None,
         };
+        let video_id_nonempty = !self.items[idx].video_id.trim().is_empty();
         let done_but_file_missing = matches!(status, ItemStatus::Done | ItemStatus::Failed)
-            && !item_snapshot.video_id.trim().is_empty()
+            && video_id_nonempty
             && done_file.is_none();
         let show_saved_file_actions = matches!(status, ItemStatus::Done | ItemStatus::Failed);
-        let can_redownload =
-            show_saved_file_actions && self.item_has_redownload_target(&item_snapshot);
+        let can_redownload = show_saved_file_actions && {
+            let it = &self.items[idx];
+            self.item_has_redownload_target(it)
+        };
         let output_ready = Path::new(&self.output_dir).is_dir();
         let is_pre_download = matches!(status, ItemStatus::Idle | ItemStatus::Queued);
         let resolution_label =

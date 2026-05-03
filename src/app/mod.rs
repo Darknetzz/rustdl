@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -94,7 +94,8 @@ pub struct PydlApp {
     has_yt_dlp: bool,
     has_ffmpeg: bool,
     has_ffprobe: bool,
-    log_text: String,
+    /// Ring buffer of log lines (avoids scanning a huge string every frame).
+    log_lines: VecDeque<String>,
     settings: AppSettings,
     settings_open: bool,
     settings_dirty: bool,
@@ -137,6 +138,13 @@ pub struct PydlApp {
     thumb_semaphore: Arc<Semaphore>,
     /// When set, queue JSON is written after this instant (debounced).
     queue_save_deadline: Option<Instant>,
+
+    /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
+    download_log_throttle: HashMap<u64, f64>,
+    /// Decoded thumbnails waiting for `load_texture` (bounded per frame).
+    pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
+    /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
+    last_done_lookup_poll: Option<Instant>,
 }
 
 impl PydlApp {
@@ -178,7 +186,7 @@ impl PydlApp {
             has_yt_dlp: false,
             has_ffmpeg: false,
             has_ffprobe: false,
-            log_text: String::new(),
+            log_lines: VecDeque::new(),
             settings,
             settings_open: false,
             settings_dirty: false,
@@ -214,6 +222,9 @@ impl PydlApp {
             http_client,
             thumb_semaphore,
             queue_save_deadline: None,
+            download_log_throttle: HashMap::new(),
+            pending_thumbnail_uploads: VecDeque::new(),
+            last_done_lookup_poll: None,
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
@@ -232,10 +243,12 @@ impl PydlApp {
             || self.queue_running > 0
             || self.update_check_in_progress
             || !self.thumbnail_inflight.is_empty()
+            || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
             || self.queue_save_deadline.is_some();
         if busy {
-            ctx.request_repaint();
+            // Cap idle repaint rate during heavy background work to reduce full UI passes.
+            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / 30.0));
         }
     }
 
@@ -286,12 +299,33 @@ impl PydlApp {
     }
 
     fn append_log(&mut self, line: &str) {
-        self.log_text.push_str(line);
-        self.log_text.push('\n');
-        let max_len = self.settings.log_max_chars.clamp(2_000, 200_000);
-        if self.log_text.len() > max_len {
-            let keep = self.log_text.len() - max_len;
-            self.log_text.drain(..keep);
+        const MAX_LOG_LINES: usize = 4_000;
+        self.log_lines.push_back(line.to_string());
+        let max_chars = self.settings.log_max_chars.clamp(2_000, 200_000);
+        while !self.log_lines.is_empty()
+            && (self.log_lines.len() > MAX_LOG_LINES || self.log_chars_estimate() > max_chars)
+        {
+            self.log_lines.pop_front();
+        }
+    }
+
+    fn log_chars_estimate(&self) -> usize {
+        self.log_lines
+            .iter()
+            .map(|s| s.len().saturating_add(1))
+            .sum()
+    }
+
+    fn poll_done_file_lookup(&mut self) {
+        const INTERVAL: Duration = Duration::from_millis(400);
+        let now = Instant::now();
+        let should_poll = match self.last_done_lookup_poll {
+            None => true,
+            Some(t) => now.saturating_duration_since(t) >= INTERVAL,
+        };
+        if should_poll {
+            self.refresh_done_file_lookup();
+            self.last_done_lookup_poll = Some(now);
         }
     }
 
@@ -1053,7 +1087,7 @@ impl eframe::App for PydlApp {
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
         self.maybe_flush_queue_save();
         self.process_events(ctx);
-        self.refresh_done_file_lookup();
+        self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
             if !self.add_in_progress && ctx.input(|i| i.time >= deadline) {
                 let valid = self.collect_valid_new_lines();
@@ -1290,6 +1324,7 @@ impl eframe::App for PydlApp {
                     attach_paste_context_menu(&output_dir_edit);
                     if output_dir_edit.changed() {
                         self.persist_settings();
+                        self.last_done_lookup_poll = None;
                     }
                     if secondary_button(
                         ui,
@@ -1300,6 +1335,7 @@ impl eframe::App for PydlApp {
                     {
                         self.output_dir = default_downloads().to_string_lossy().to_string();
                         self.persist_settings();
+                        self.last_done_lookup_poll = None;
                     }
                     if secondary_button(
                         ui,

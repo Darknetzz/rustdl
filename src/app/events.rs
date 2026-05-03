@@ -7,6 +7,9 @@ use crate::app_parsing::parse_speed_eta;
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
+/// Upper bound on UI work per frame so one burst of download lines cannot freeze the window.
+const MAX_UI_EVENTS_PER_FRAME: usize = 128;
+
 /// Sends an event to the UI thread. Logs once to stderr if the channel is disconnected.
 pub(crate) fn try_send_ui(tx: &Sender<UiEvent>, event: UiEvent) -> bool {
     match tx.send(event) {
@@ -55,13 +58,33 @@ pub(crate) enum UiEvent {
     },
     ThumbnailFetched {
         item_id: u64,
-        bytes: Option<Vec<u8>>,
+        /// Decoded on a worker thread; GPU upload is deferred (see `pending_thumbnail_uploads`).
+        image: Option<egui::ColorImage>,
     },
+}
+
+/// yt-dlp progress lines that would flood the log if recorded every event.
+fn is_throttled_download_log_line(line: &str) -> bool {
+    let l = line.to_ascii_lowercase();
+    (l.contains("[download]") && (l.contains('%') || l.contains("frag")))
+        || l.contains("[merger]")
 }
 
 impl PydlApp {
     pub(super) fn process_events(&mut self, ctx: &egui::Context) {
-        while let Ok(ev) = self.rx.try_recv() {
+        let mut processed = 0usize;
+        loop {
+            if processed >= MAX_UI_EVENTS_PER_FRAME {
+                if !self.rx.is_empty() {
+                    ctx.request_repaint();
+                }
+                break;
+            }
+            let ev = match self.rx.try_recv() {
+                Ok(e) => e,
+                Err(_) => break,
+            };
+            processed += 1;
             match ev {
                 UiEvent::AddResolved { rows, source_line } => {
                     let Some(iid) = self.pending_resolve_ids.remove(&source_line) else {
@@ -146,7 +169,7 @@ impl PydlApp {
                         }
                         it.detail = line.chars().take(160).collect::<String>();
                     }
-                    self.append_log(&format!("[item {item_id}] {line}"));
+                    self.maybe_append_download_log(ctx, item_id, &line);
                     self.update_status();
                 }
                 UiEvent::DownloadDone {
@@ -221,29 +244,52 @@ impl PydlApp {
                     self.update_has_update = has_update;
                     self.update_status_text = message;
                 }
-                UiEvent::ThumbnailFetched { item_id, bytes } => {
+                UiEvent::ThumbnailFetched { item_id, image } => {
                     self.thumbnail_inflight.remove(&item_id);
-                    let Some(data) = bytes else {
+                    let Some(image) = image else {
                         self.thumbnail_attempted.insert(item_id);
                         continue;
                     };
-                    let Ok(img) = image::load_from_memory(&data) else {
-                        self.thumbnail_attempted.insert(item_id);
-                        continue;
-                    };
-                    let size = [img.width() as usize, img.height() as usize];
-                    let rgba = img.to_rgba8();
-                    let pixels = rgba.as_flat_samples();
-                    let color = egui::ColorImage::from_rgba_unmultiplied(size, pixels.as_slice());
-                    let tex = ctx.load_texture(
-                        format!("thumb-{item_id}"),
-                        color,
-                        egui::TextureOptions::LINEAR,
-                    );
-                    self.textures.insert(item_id, tex);
-                    self.thumbnail_attempted.remove(&item_id);
+                    self.pending_thumbnail_uploads
+                        .push_back((item_id, image));
                 }
             }
         }
+        self.drain_pending_thumbnail_uploads(ctx);
+    }
+
+    fn drain_pending_thumbnail_uploads(&mut self, ctx: &egui::Context) {
+        const MAX_UPLOADS_PER_FRAME: usize = 2;
+        for _ in 0..MAX_UPLOADS_PER_FRAME {
+            let Some((item_id, color_image)) = self.pending_thumbnail_uploads.pop_front() else {
+                break;
+            };
+            let tex = ctx.load_texture(
+                format!("thumb-{item_id}"),
+                color_image,
+                egui::TextureOptions::LINEAR,
+            );
+            self.textures.insert(item_id, tex);
+            self.thumbnail_attempted.remove(&item_id);
+        }
+        if !self.pending_thumbnail_uploads.is_empty() {
+            ctx.request_repaint();
+        }
+    }
+
+    fn maybe_append_download_log(&mut self, ctx: &egui::Context, item_id: u64, line: &str) {
+        if is_throttled_download_log_line(line) {
+            let now = ctx.input(|i| i.time);
+            let last = self
+                .download_log_throttle
+                .get(&item_id)
+                .copied()
+                .unwrap_or(-1_000.0);
+            if now - last < 0.25 {
+                return;
+            }
+            self.download_log_throttle.insert(item_id, now);
+        }
+        self.append_log(&format!("[item {item_id}] {line}"));
     }
 }

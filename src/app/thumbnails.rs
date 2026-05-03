@@ -1,4 +1,14 @@
+use eframe::egui;
+
 use super::{events::try_send_ui, PydlApp, UiEvent};
+
+fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage> {
+    let img = image::load_from_memory(&bytes).ok()?;
+    let rgba = img.to_rgba8();
+    let size = [rgba.width() as usize, rgba.height() as usize];
+    let raw = rgba.into_raw();
+    Some(egui::ColorImage::from_rgba_unmultiplied(size, &raw))
+}
 
 impl PydlApp {
     pub(super) fn queue_thumbnail_load(&mut self, item_id: u64, url: String) {
@@ -17,7 +27,7 @@ impl PydlApp {
                     &tx,
                     UiEvent::ThumbnailFetched {
                         item_id,
-                        bytes: None,
+                        image: None,
                     },
                 );
                 return;
@@ -26,7 +36,14 @@ impl PydlApp {
                 Ok(resp) => resp.bytes().await.ok().map(|b| b.to_vec()),
                 Err(_) => None,
             };
-            try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, bytes });
+            let image = match bytes {
+                None => None,
+                Some(b) => tokio::task::spawn_blocking(move || decode_thumbnail_image(b))
+                    .await
+                    .ok()
+                    .flatten(),
+            };
+            try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, image });
         });
     }
 }
