@@ -74,6 +74,8 @@ impl PydlApp {
             let detail_h = if compact { 0.0 } else { 15.0 };
             let progress_h = 14.0;
             let title_height = if compact { 30.0 } else { 36.0 };
+            let removable =
+                !matches!(status, ItemStatus::Queued | ItemStatus::Downloading);
 
             ui.set_width(card_w);
             ui.vertical(|ui| {
@@ -268,69 +270,131 @@ impl PydlApp {
                 if show_saved_file_actions {
                     ui.spacing_mut().item_spacing.y = 4.0;
                     ui.horizontal_wrapped(|ui| {
-                        let streams_btn = secondary_button(
-                            ui,
-                            &format!("{} Check streams", ui_icons::CHECK_STREAMS),
-                            self.has_ffprobe,
-                        )
-                            .on_hover_text(
-                                "Run ffprobe on the saved file and show video/audio stream summary.",
-                            )
-                            .on_disabled_hover_text("Configure ffprobe in Settings → Executables.");
-                        if streams_btn.clicked() {
-                            self.check_streams_for_item_id(id);
+                        ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
+                        if done_file.is_some() {
+                            ui.push_id((id, "card_open_menu"), |ui| {
+                                let r = ui.menu_button(
+                                    format!("{} Open…", ui_icons::OPEN_FILE),
+                                    |ui| {
+                                        if ui
+                                            .button(format!("{} Open file", ui_icons::OPEN_FILE))
+                                            .on_hover_text("Open with the default app for this file type")
+                                            .clicked()
+                                        {
+                                            if let Some(p) = done_file.as_ref() {
+                                                self.open_file_path(p);
+                                            }
+                                            ui.close_menu();
+                                        }
+                                        if ui
+                                            .button(format!(
+                                                "{} Reveal in folder",
+                                                ui_icons::REVEAL_FOLDER
+                                            ))
+                                            .on_hover_text("Show the file in Explorer / file manager")
+                                            .clicked()
+                                        {
+                                            if let Some(p) = done_file.as_ref() {
+                                                self.reveal_file_path(p);
+                                            }
+                                            ui.close_menu();
+                                        }
+                                    },
+                                );
+                                r.response.on_hover_text(
+                                    "Play the download or show it in your file manager",
+                                );
+                            });
                         }
-                        let redo_btn = warning_button(
-                            ui,
-                            &format!("{} Re-download", ui_icons::REDOWNLOAD),
-                            self.has_yt_dlp && output_ready && can_redownload,
-                        )
-                            .on_hover_text(
-                                "Deletes the matched file in the output folder (if found), then downloads this URL again.",
-                            )
-                            .on_disabled_hover_text(
-                                "Needs a video URL on this row, a valid output folder, and yt-dlp.",
+                        ui.push_id((id, "card_source_menu"), |ui| {
+                            let r = ui.menu_button(
+                                format!("{} Source", ui_icons::REDOWNLOAD),
+                                |ui| {
+                                    let streams = ui
+                                        .add_enabled(
+                                            self.has_ffprobe,
+                                            egui::Button::new(format!(
+                                                "{} Inspect streams (ffprobe)",
+                                                ui_icons::CHECK_STREAMS
+                                            )),
+                                        )
+                                        .on_hover_text(
+                                            "Run ffprobe on the saved file: list video/audio streams and refresh resolution on the card.",
+                                        )
+                                        .on_disabled_hover_text(
+                                            "Configure ffprobe in Settings → Executables.",
+                                        );
+                                    if streams.clicked() {
+                                        self.check_streams_for_item_id(id);
+                                        ui.close_menu();
+                                    }
+                                    let redo = ui
+                                        .add_enabled(
+                                            self.has_yt_dlp && output_ready && can_redownload,
+                                            egui::Button::new(format!(
+                                                "{} Re-download from web",
+                                                ui_icons::REDOWNLOAD
+                                            )),
+                                        )
+                                        .on_hover_text(
+                                            "Deletes the matched file in the output folder (if found), then downloads this URL again.",
+                                        )
+                                        .on_disabled_hover_text(
+                                            "Needs a video URL on this row, a valid output folder, and yt-dlp.",
+                                        );
+                                    if redo.clicked() {
+                                        self.redownload_item_id(id);
+                                        ui.close_menu();
+                                    }
+                                },
                             );
-                        if redo_btn.clicked() {
-                            self.redownload_item_id(id);
-                        }
+                            r.response.on_hover_text(
+                                "Inspect the file on disk or fetch the same URL again",
+                            );
+                        });
+                        ui.push_id((id, "card_danger_menu"), |ui| {
+                            let r = ui.menu_button(
+                                format!("{} Remove…", ui_icons::CARD_DELETE),
+                                |ui| {
+                                    if let Some(p) = done_file.as_ref() {
+                                        if danger_button(
+                                            ui,
+                                            &format!("{} Delete file from disk", ui_icons::CARD_DELETE),
+                                            true,
+                                        )
+                                        .on_hover_text("Delete only this file; the queue row stays until you remove it")
+                                            .clicked()
+                                        {
+                                            self.delete_file_path(p);
+                                            ui.close_menu();
+                                        }
+                                    }
+                                    if danger_button(
+                                        ui,
+                                        &format!("{ICON_REMOVE} Remove from queue"),
+                                        removable,
+                                    )
+                                    .on_hover_text(
+                                        "Remove this row from the list (does not delete the file unless you use Delete file above).",
+                                    )
+                                    .clicked()
+                                    {
+                                        let _ = self.remove_item_by_id(id);
+                                        self.update_status();
+                                        self.refresh_input_line_info();
+                                        self.schedule_queue_save();
+                                        ui.close_menu();
+                                    }
+                                },
+                            );
+                            r.response.on_hover_text(
+                                "Delete the saved file and/or remove this entry from the list",
+                            );
+                        });
                     });
-                }
-                if let Some(ref file_path) = done_file {
-                    ui.spacing_mut().item_spacing.y = 4.0;
-                    if secondary_button(
-                        ui,
-                        &format!("{} Open", ui_icons::OPEN_FILE),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        self.open_file_path(file_path);
-                    }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Reveal in folder", ui_icons::REVEAL_FOLDER),
-                        true,
-                    )
-                        .on_hover_text("Show the file in Explorer / file manager")
-                        .clicked()
-                    {
-                        self.reveal_file_path(file_path);
-                    }
-                    if danger_button(
-                        ui,
-                        &format!("{} Delete", ui_icons::CARD_DELETE),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        self.delete_file_path(file_path);
-                    }
                 }
 
                 ui.separator();
-                let removable =
-                    !matches!(status, ItemStatus::Queued | ItemStatus::Downloading);
                 ui.spacing_mut().item_spacing.y = 6.0;
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
@@ -383,7 +447,10 @@ impl PydlApp {
                     {
                         self.request_cancel_item(id, CancelPostAction::Remove);
                     }
-                    if danger_button(ui, &format!("{ICON_REMOVE} Remove"), removable).clicked() {
+                    if !show_saved_file_actions
+                        && danger_button(ui, &format!("{ICON_REMOVE} Remove"), removable)
+                            .clicked()
+                    {
                         let _ = self.remove_item_by_id(id);
                         self.update_status();
                         self.refresh_input_line_info();
