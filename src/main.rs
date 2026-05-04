@@ -18,6 +18,9 @@ mod ui_icons;
 mod win_icon;
 mod ytdlp;
 
+/// Minimum inner size so header/actions, the non-wrapping output-folder row, and queue controls stay visible.
+const VIEWPORT_MIN_INNER: [f32; 2] = [920.0, 760.0];
+
 fn print_version() {
     println!("rustdl {}", pkg_version::VERSION);
     println!("Build: {}", pkg_version::BUILD_DATE);
@@ -81,7 +84,7 @@ fn main() {
             .with_title("rustdl")
             .with_icon(app_icon::window_icon())
             .with_inner_size([1280.0, 880.0])
-            .with_min_inner_size([860.0, 760.0]),
+            .with_min_inner_size(VIEWPORT_MIN_INNER),
         ..Default::default()
     };
 
