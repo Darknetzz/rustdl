@@ -195,11 +195,15 @@ pub(crate) fn draw_input_line_summary(ui: &mut egui::Ui, lines: &[InputLineInfo]
     });
 }
 
-pub(crate) fn attach_paste_context_menu(response: &egui::Response) {
+/// Queue clipboard text for the next frame. Context menus run after widgets are built; pushing
+/// [`egui::Event::Paste`] in the same frame happens too late for [`egui::TextEdit`] to consume it.
+pub(crate) fn attach_paste_context_menu(
+    response: &egui::Response,
+    deferred_paste: &mut Option<String>,
+) {
     response.context_menu(|ui| {
         if secondary_button(ui, &format!("{} Paste", ui_icons::COPY_CLIPBOARD), true).clicked() {
-            // Paste is applied to the focused TextEdit. The menu would otherwise keep focus;
-            // RequestPaste alone is unreliable on some Windows + winit setups.
+            // Focus the field so the deferred paste targets it on the next frame.
             response.request_focus();
 
             let from_clipboard = arboard::Clipboard::new()
@@ -208,9 +212,7 @@ pub(crate) fn attach_paste_context_menu(response: &egui::Response) {
                 .filter(|t| !t.is_empty());
 
             if let Some(text) = from_clipboard {
-                ui.ctx().input_mut(|inp| {
-                    inp.events.push(egui::Event::Paste(text));
-                });
+                *deferred_paste = Some(text);
             } else {
                 ui.ctx()
                     .send_viewport_cmd(egui::ViewportCommand::RequestPaste);

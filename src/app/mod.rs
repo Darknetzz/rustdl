@@ -146,6 +146,9 @@ pub struct PydlApp {
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
+    /// Context-menu Paste: clipboard injected at start of next frame (see `attach_paste_context_menu`).
+    deferred_menu_paste_urls: Option<String>,
+    deferred_menu_paste_output_dir: Option<String>,
     /// Decoded thumbnails waiting for `load_texture` (bounded per frame).
     pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
@@ -233,6 +236,8 @@ impl PydlApp {
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
+            deferred_menu_paste_urls: None,
+            deferred_menu_paste_output_dir: None,
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
@@ -1214,6 +1219,12 @@ impl eframe::App for PydlApp {
         #[cfg(not(windows))]
         let _ = frame;
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
+        if let Some(text) = self.deferred_menu_paste_urls.take() {
+            ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
+        }
+        if let Some(text) = self.deferred_menu_paste_output_dir.take() {
+            ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
+        }
         self.maybe_flush_queue_save();
         self.process_events(ctx);
         self.poll_done_file_lookup();
@@ -1314,7 +1325,7 @@ impl eframe::App for PydlApp {
                     [ui.available_width(), 120.0],
                     egui::TextEdit::multiline(&mut self.input_urls).hint_text("https://..."),
                 );
-                attach_paste_context_menu(&url_edit);
+                attach_paste_context_menu(&url_edit, &mut self.deferred_menu_paste_urls);
                 if url_edit.changed() {
                     let paste_event = ctx.input(|i| {
                         i.events
@@ -1458,7 +1469,10 @@ impl eframe::App for PydlApp {
                 ui.horizontal(|ui| {
                     ui.label("Output folder");
                     let output_dir_edit = ui.text_edit_singleline(&mut self.output_dir);
-                    attach_paste_context_menu(&output_dir_edit);
+                    attach_paste_context_menu(
+                        &output_dir_edit,
+                        &mut self.deferred_menu_paste_output_dir,
+                    );
                     if output_dir_edit.changed() {
                         self.persist_settings();
                         self.last_done_lookup_poll = None;
