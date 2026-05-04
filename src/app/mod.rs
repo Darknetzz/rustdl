@@ -1480,16 +1480,105 @@ impl eframe::App for PydlApp {
                     .items
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
+
+                // Queue actions + primary download control live above the scroll so they stay
+                // reachable when the window is short (CentralPanel does not scroll as a whole).
+                ui.label(RichText::new("Queue").small().color(Color32::GRAY));
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                    if danger_button(ui, &format!("{ICON_CLEAR} Clear list"), true).clicked() {
+                        self.items.retain(|x| {
+                            matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
+                        });
+                        self.pending_resolve_ids
+                            .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                        self.update_status();
+                        self.refresh_input_line_info();
+                        self.schedule_queue_save();
+                    }
+                    if self.status_failed > 0
+                        && warning_button(
+                            ui,
+                            &format!("{} Retry all failed", ui_icons::RETRY),
+                            true,
+                        )
+                        .on_hover_text(
+                            "Retry every failed download that still has a URL (same as each card's Retry download).",
+                        )
+                        .clicked()
+                    {
+                        self.retry_failed_items();
+                    }
+                    if (self.status_queued > 0 || self.status_active > 0)
+                        && warning_button(
+                            ui,
+                            &format!("{} Cancel all -> Ready", ui_icons::CANCEL_TO_READY),
+                            true,
+                        )
+                        .clicked()
+                    {
+                        self.cancel_all_active(CancelPostAction::Ready);
+                    }
+                    if (self.status_queued > 0 || self.status_active > 0)
+                        && danger_button(
+                            ui,
+                            &format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE),
+                            true,
+                        )
+                        .clicked()
+                    {
+                        self.cancel_all_active(CancelPostAction::Remove);
+                    }
+                    let recheck = ui
+                        .add_enabled(
+                            self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
+                            egui::Button::new(
+                                RichText::new(format!(
+                                    "{} Re-check saved files",
+                                    ui_icons::RECHECK
+                                ))
+                                .color(Color32::from_rgb(40, 24, 0)),
+                            )
+                            .fill(Color32::from_rgb(255, 167, 38))
+                            .stroke(egui::Stroke::new(
+                                1.0,
+                                Color32::from_rgb(214, 120, 20),
+                            )),
+                        )
+                        .on_hover_text(
+                            "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
+                        )
+                        .on_disabled_hover_text(
+                            "Requires ffprobe. Disabled while MP3 extraction is enabled.",
+                        );
+                    if recheck.clicked() {
+                        self.recheck_all_saved_downloads();
+                    }
+                });
+                if has_idle_items
+                    && success_button(ui, &format!("{ICON_DOWNLOAD} Start downloads"), true)
+                        .clicked()
+                {
+                    self.start_downloads();
+                }
+                if trigger_add && !self.add_in_progress {
+                    self.add_urls();
+                }
+                if trigger_download && has_idle_items {
+                    self.start_downloads();
+                }
+
                 // Dedicated scroll region with a finite height so the card grid always scrolls.
                 // A single full-window ScrollArea is fragile here (nested log scroll + layout sizing).
-                // Reserve: framed video/queue block, start button, separator, activity log.
-                const RESERVE_BOTTOM_PX: f32 = 245.0;
+                // Reserve for Videos frame chrome, gap, separator, and activity log (queue UI is above).
+                const RESERVE_BOTTOM_PX: f32 = 155.0;
                 let min_card_viewport = if self.settings.compact_cards {
                     260.0
                 } else {
                     335.0
                 };
-                let video_scroll_h = (ui.available_height() - RESERVE_BOTTOM_PX).max(min_card_viewport);
+                let video_scroll_h =
+                    (ui.available_height() - RESERVE_BOTTOM_PX).max(min_card_viewport);
 
                 egui::Frame::dark_canvas(ui.style())
                     .fill(Color32::from_rgb(22, 22, 26))
@@ -1523,100 +1612,8 @@ impl eframe::App for PydlApp {
                                     self.draw_grouped_cards(ui);
                                 }
                             });
-                        ui.add_space(6.0);
-                        ui.label(RichText::new("Queue").small().color(Color32::GRAY));
-                        ui.horizontal_wrapped(|ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                            if danger_button(ui, &format!("{ICON_CLEAR} Clear list"), true).clicked()
-                            {
-                                self.items.retain(|x| {
-                                    matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
-                                });
-                                self.pending_resolve_ids
-                                    .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
-                                self.update_status();
-                                self.refresh_input_line_info();
-                                self.schedule_queue_save();
-                            }
-                            if self.status_failed > 0
-                                && warning_button(
-                                    ui,
-                                    &format!("{} Retry all failed", ui_icons::RETRY),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Retry every failed download that still has a URL (same as each card's Retry download).",
-                                )
-                                .clicked()
-                            {
-                                self.retry_failed_items();
-                            }
-                            if (self.status_queued > 0 || self.status_active > 0)
-                                && warning_button(
-                                    ui,
-                                    &format!(
-                                        "{} Cancel all -> Ready",
-                                        ui_icons::CANCEL_TO_READY
-                                    ),
-                                    true,
-                                )
-                                .clicked()
-                            {
-                                self.cancel_all_active(CancelPostAction::Ready);
-                            }
-                            if (self.status_queued > 0 || self.status_active > 0)
-                                && danger_button(
-                                    ui,
-                                    &format!(
-                                        "{} Cancel all -> Remove",
-                                        ui_icons::CANCEL_TO_REMOVE
-                                    ),
-                                    true,
-                                )
-                                .clicked()
-                            {
-                                self.cancel_all_active(CancelPostAction::Remove);
-                            }
-                            let recheck = ui
-                                .add_enabled(
-                                    self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
-                                    egui::Button::new(
-                                        RichText::new(format!(
-                                            "{} Re-check saved files",
-                                            ui_icons::RECHECK
-                                        ))
-                                        .color(Color32::from_rgb(40, 24, 0)),
-                                    )
-                                    .fill(Color32::from_rgb(255, 167, 38))
-                                    .stroke(egui::Stroke::new(
-                                        1.0,
-                                        Color32::from_rgb(214, 120, 20),
-                                    )),
-                                )
-                                .on_hover_text(
-                                    "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
-                                )
-                                .on_disabled_hover_text(
-                                    "Requires ffprobe. Disabled while MP3 extraction is enabled.",
-                                );
-                            if recheck.clicked() {
-                                self.recheck_all_saved_downloads();
-                            }
-                        });
                     });
                 ui.add_space(8.0);
-                if has_idle_items
-                    && success_button(ui, &format!("{ICON_DOWNLOAD} Start downloads"), true)
-                        .clicked()
-                {
-                    self.start_downloads();
-                }
-                if trigger_add && !self.add_in_progress {
-                    self.add_urls();
-                }
-                if trigger_download && has_idle_items {
-                    self.start_downloads();
-                }
                 ui.separator();
                 self.draw_activity_log_panel(ui);
         });
