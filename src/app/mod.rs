@@ -39,7 +39,9 @@ use crate::app_parsing::{
     human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob, split_cli_like,
 };
 use crate::app_state::{self};
-use crate::app_ui::{danger_button, secondary_button, success_button, warning_button};
+use crate::app_ui::{
+    danger_button, secondary_button, status_color, success_button, warning_button,
+};
 use crate::config::{
     default_downloads, load_queue_items, load_settings, save_queue_items, save_settings,
     AppSettings,
@@ -1375,33 +1377,41 @@ impl eframe::App for PydlApp {
                 ui.horizontal_wrapped(|ui| {
                     let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
                     if self.status_resolving > 0 {
-                        parts.push(("resolving", self.status_resolving, Color32::GRAY));
+                        parts.push((
+                            "resolving",
+                            self.status_resolving,
+                            status_color(ItemStatus::Resolving),
+                        ));
                     }
                     if self.status_ready > 0 {
-                        parts.push(("ready", self.status_ready, Color32::GRAY));
+                        parts.push((
+                            "ready",
+                            self.status_ready,
+                            status_color(ItemStatus::Idle),
+                        ));
                     }
                     if self.status_queued > 0 {
-                        parts.push(("queued", self.status_queued, Color32::GRAY));
+                        parts.push((
+                            "queued",
+                            self.status_queued,
+                            status_color(ItemStatus::Queued),
+                        ));
                     }
                     if self.status_active > 0 {
                         parts.push((
                             "active",
                             self.status_active,
-                            Color32::from_rgb(102, 187, 106),
+                            status_color(ItemStatus::Downloading),
                         ));
                     }
                     if self.status_done > 0 {
-                        parts.push((
-                            "done",
-                            self.status_done,
-                            Color32::from_rgb(102, 187, 106),
-                        ));
+                        parts.push(("done", self.status_done, status_color(ItemStatus::Done)));
                     }
                     if self.status_failed > 0 {
                         parts.push((
                             "failed",
                             self.status_failed,
-                            Color32::from_rgb(239, 83, 80),
+                            status_color(ItemStatus::Failed),
                         ));
                     }
                     if !parts.is_empty() {

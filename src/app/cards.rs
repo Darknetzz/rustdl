@@ -347,15 +347,18 @@ impl PydlApp {
                     }
                     draw_status_chip(ui, status);
                 });
+                let footer_color = match status {
+                    ItemStatus::Done if done_but_file_missing => LOG_COLOR_WARN,
+                    ItemStatus::Done => status_color(ItemStatus::Done),
+                    ItemStatus::Failed => status_color(ItemStatus::Failed),
+                    ItemStatus::Resolving => status_color(ItemStatus::Resolving),
+                    ItemStatus::Idle => status_color(ItemStatus::Idle),
+                    ItemStatus::Queued => status_color(ItemStatus::Queued),
+                    ItemStatus::Downloading => status_color(ItemStatus::Downloading),
+                };
                 ui.add(
-                    egui::Label::new(
-                        RichText::new(&footer_status).small().color(if highlight_completed {
-                            status_color(ItemStatus::Done)
-                        } else {
-                            Color32::LIGHT_GRAY
-                        }),
-                    )
-                    .wrap(),
+                    egui::Label::new(RichText::new(&footer_status).small().color(footer_color))
+                        .wrap(),
                 );
                 ui.set_width(inner_w);
                 ui.horizontal_wrapped(|ui| {
@@ -426,7 +429,17 @@ impl PydlApp {
             if ids.is_empty() {
                 continue;
             }
-            egui::CollapsingHeader::new(format!("{label} ({})", ids.len()))
+            let header_color = match label {
+                "Active" => status_color(ItemStatus::Downloading),
+                "Ready" => status_color(ItemStatus::Idle),
+                "Issues" => status_color(ItemStatus::Failed),
+                "Done" => status_color(ItemStatus::Done),
+                "Resolving" => status_color(ItemStatus::Resolving),
+                _ => Color32::LIGHT_GRAY,
+            };
+            egui::CollapsingHeader::new(
+                RichText::new(format!("{label} ({})", ids.len())).color(header_color),
+            )
                 .id_salt(label)
                 .default_open(true)
                 .show(ui, |ui| {
