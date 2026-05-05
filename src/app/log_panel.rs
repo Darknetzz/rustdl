@@ -104,7 +104,23 @@ fn is_success_line(line: &str) -> bool {
 }
 
 impl PydlApp {
-    /// Toolbar (filter, copy) + scrollable colored activity log.
+    pub(super) fn draw_logs_window(&mut self, ctx: &egui::Context) {
+        if !self.logs_open {
+            return;
+        }
+        let mut logs_open = self.logs_open;
+        egui::Window::new("Activity log")
+            .open(&mut logs_open)
+            .default_size([640.0, 440.0])
+            .min_width(400.0)
+            .min_height(260.0)
+            .show(ctx, |ui| {
+                self.draw_activity_log_panel(ui);
+            });
+        self.logs_open = logs_open;
+    }
+
+    /// Toolbar (filter, copy) + scrollable colored activity log (shown inside [`Self::draw_logs_window`]).
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if danger_button(ui, &format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
@@ -135,6 +151,7 @@ impl PydlApp {
                 }
             }
         });
+        let scroll_h = ui.available_height().max(120.0);
         egui::Frame::dark_canvas(ui.style())
             .fill(Color32::from_rgb(28, 28, 32))
             .stroke(egui::Stroke::new(1.0, Color32::from_rgb(56, 56, 64)))
@@ -142,10 +159,12 @@ impl PydlApp {
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
+                ui.set_min_height(scroll_h);
                 ui.spacing_mut().item_spacing.y = 3.0;
                 egui::ScrollArea::vertical()
-                    .max_height(200.0)
+                    .max_height(scroll_h)
                     .animated(true)
+                    .auto_shrink([false, false])
                     .stick_to_bottom(self.settings.autoscroll_log)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());

@@ -129,6 +129,8 @@ pub struct PydlApp {
     restored_items_count: usize,
     show_restore_banner: bool,
     about_open: bool,
+    /// Activity log in a floating window (see **Logs** toolbar button).
+    logs_open: bool,
     update_check_in_progress: bool,
     update_latest_version: Option<String>,
     update_release_url: Option<String>,
@@ -223,6 +225,7 @@ impl PydlApp {
             restored_items_count: 0,
             show_restore_banner: false,
             about_open: false,
+            logs_open: false,
             update_check_in_progress: false,
             update_latest_version: None,
             update_release_url: None,
@@ -1299,6 +1302,9 @@ impl eframe::App for PydlApp {
                     {
                         self.settings_open = true;
                     }
+                    if secondary_button(ui, &format!("{} Logs", ui_icons::LOGS), true).clicked() {
+                        self.logs_open = true;
+                    }
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
                         self.flush_queue_to_disk();
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1593,9 +1599,8 @@ impl eframe::App for PydlApp {
                 }
 
                 // Dedicated scroll region with a finite height so the card grid always scrolls.
-                // A single full-window ScrollArea is fragile here (nested log scroll + layout sizing).
-                // Reserve for Videos frame chrome, gap, separator, and activity log (queue UI is above).
-                const RESERVE_BOTTOM_PX: f32 = 155.0;
+                // Activity log lives in a separate window ("Logs" button).
+                const RESERVE_BOTTOM_PX: f32 = 20.0;
                 let min_card_viewport = if self.settings.compact_cards {
                     260.0
                 } else {
@@ -1637,14 +1642,12 @@ impl eframe::App for PydlApp {
                                 }
                             });
                     });
-                ui.add_space(8.0);
-                ui.separator();
-                self.draw_activity_log_panel(ui);
         });
 
         let was_settings_open = self.settings_open;
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
+        self.draw_logs_window(ctx);
         if was_settings_open && !self.settings_open && self.settings_dirty {
             self.settings.worker_count = self.worker_count.clamp(1, 6);
             self.settings.output_dir = self.output_dir.clone();

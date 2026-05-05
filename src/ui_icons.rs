@@ -3,6 +3,8 @@
 use egui_material_icons::icons as m;
 
 pub const CLEAR_LOG: &str = m::ICON_CLEAR_ALL;
+/// Open activity / download log window.
+pub const LOGS: &str = m::ICON_ARTICLE;
 pub const IMPORT_FILE: &str = m::ICON_DESCRIPTION;
 pub const USE_DOWNLOADS: &str = m::ICON_DOWNLOAD;
 pub const OPEN_FOLDER: &str = m::ICON_FOLDER_OPEN;
