@@ -16,6 +16,8 @@ mod pkg_version;
 mod ui_icons;
 #[cfg(windows)]
 mod win_icon;
+#[cfg(windows)]
+mod win_drop_target;
 mod ytdlp;
 
 /// Minimum inner size so header/actions, the non-wrapping output-folder row, and queue controls stay visible.

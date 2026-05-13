@@ -3,6 +3,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+#[cfg(windows)]
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -155,6 +157,10 @@ pub struct PydlApp {
     pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
     last_done_lookup_poll: Option<Instant>,
+    #[cfg(windows)]
+    win_browser_drop_queue: Arc<Mutex<Vec<String>>>,
+    #[cfg(windows)]
+    win_browser_drop_target_installed: bool,
 }
 
 impl PydlApp {
@@ -241,6 +247,10 @@ impl PydlApp {
             last_done_lookup_poll: None,
             deferred_menu_paste_urls: None,
             deferred_menu_paste_output_dir: None,
+            #[cfg(windows)]
+            win_browser_drop_queue: Arc::new(Mutex::new(Vec::new())),
+            #[cfg(windows)]
+            win_browser_drop_target_installed: false,
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
@@ -1214,6 +1224,69 @@ impl PydlApp {
         };
         Self::streams_incomplete_message(has_video, has_audio)
     }
+
+    #[cfg(windows)]
+    fn maybe_install_win_browser_drop_target(&mut self, frame: &eframe::Frame) {
+        if self.win_browser_drop_target_installed {
+            return;
+        }
+        let Some(hwnd) = crate::win_icon::hwnd_from_frame(frame) else {
+            return;
+        };
+        if crate::win_drop_target::install_once(hwnd, self.win_browser_drop_queue.clone()).is_ok() {
+            self.win_browser_drop_target_installed = true;
+        }
+    }
+
+    #[cfg(windows)]
+    fn drain_win_browser_url_drops(&mut self, ctx: &egui::Context) {
+        let taken = match self.win_browser_drop_queue.lock() {
+            Ok(mut g) => std::mem::take(&mut *g),
+            Err(e) => std::mem::take(&mut *e.into_inner()),
+        };
+        if !taken.is_empty() {
+            self.merge_dragged_urls_into_input(taken, ctx);
+        }
+    }
+
+    fn merge_dragged_urls_into_input(&mut self, urls: Vec<String>, ctx: &egui::Context) {
+        let urls: Vec<String> = urls
+            .into_iter()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if urls.is_empty() {
+            return;
+        }
+        if !self.input_urls.trim().is_empty() && !self.input_urls.ends_with('\n') {
+            self.input_urls.push('\n');
+        }
+        self.input_urls.push_str(&urls.join("\n"));
+        if !self.input_urls.ends_with('\n') {
+            self.input_urls.push('\n');
+        }
+        self.refresh_input_line_info();
+        if self.settings.auto_add_pasted_urls {
+            self.auto_add_after = Some(ctx.input(|i| i.time + 0.7));
+        } else {
+            self.auto_add_after = None;
+        }
+    }
+
+    fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        let mut urls = Vec::new();
+        for df in dropped {
+            if let Some(path) = df.path {
+                if let Some(mut u) = crate::app_parsing::urls_from_dropped_os_path(&path) {
+                    urls.append(&mut u);
+                }
+            }
+        }
+        if !urls.is_empty() {
+            self.merge_dragged_urls_into_input(urls, ctx);
+        }
+    }
 }
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -1230,6 +1303,12 @@ impl eframe::App for PydlApp {
         }
         self.maybe_flush_queue_save();
         self.process_events(ctx);
+        #[cfg(windows)]
+        {
+            self.maybe_install_win_browser_drop_target(frame);
+            self.drain_win_browser_url_drops(ctx);
+        }
+        self.apply_dropped_shortcut_files(ctx);
         self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
             if !self.add_in_progress && ctx.input(|i| i.time >= deadline) {
@@ -1329,7 +1408,8 @@ impl eframe::App for PydlApp {
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(
                     [ui.available_width(), 120.0],
-                    egui::TextEdit::multiline(&mut self.input_urls).hint_text("https://..."),
+                    egui::TextEdit::multiline(&mut self.input_urls)
+                        .hint_text("https://... — paste, drag from browser, or drop .url / .webloc"),
                 );
                 attach_paste_context_menu(&url_edit, &mut self.deferred_menu_paste_urls);
                 if url_edit.changed() {

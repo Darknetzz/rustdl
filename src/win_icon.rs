@@ -46,7 +46,7 @@ pub fn apply_native_window_icons(frame: &impl HasWindowHandle, icon: &IconData) 
     ICONS_APPLIED.store(true, Ordering::SeqCst);
 }
 
-fn hwnd_from_frame(frame: &impl HasWindowHandle) -> Option<HWND> {
+pub(crate) fn hwnd_from_frame(frame: &impl HasWindowHandle) -> Option<HWND> {
     let handle = frame.window_handle().ok()?;
     match handle.as_raw() {
         RawWindowHandle::Win32(w) => Some(w.hwnd.get()),

@@ -1,5 +1,10 @@
+use std::collections::HashSet;
+use std::fs;
+use std::path::Path;
+
 use once_cell::sync::Lazy;
 use regex::Regex;
+use url::Url;
 
 use crate::models::{ItemStatus, QueueItem};
 
@@ -89,6 +94,78 @@ pub fn parse_urls_from_text_blob(raw: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
         .collect()
+}
+
+/// Deduplicate strings while keeping the first occurrence order.
+pub fn dedupe_preserve_order_strings(items: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for s in items {
+        if seen.insert(s.clone()) {
+            out.push(s);
+        }
+    }
+    out
+}
+
+static EMBEDDED_HTTP_URL: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"https?://[^\s<>'"]+"#).expect("valid embedded URL regex")
+});
+
+/// Reads `URL=` from a Windows Internet Shortcut (`.url`).
+pub fn parse_internet_shortcut_url(content: &str) -> Option<String> {
+    for line in content.lines() {
+        let t = line.trim();
+        let rest = if t.len() >= 4 && t[..4].eq_ignore_ascii_case("url=") {
+            t[4..].trim()
+        } else {
+            continue;
+        };
+        if rest.is_empty() {
+            continue;
+        }
+        if Url::parse(rest).is_ok() {
+            return Some(rest.to_owned());
+        }
+    }
+    None
+}
+
+/// Pulls `http(s)` URLs out of plist/XML (e.g. Safari `.webloc`).
+pub fn parse_embedded_http_urls(content: &str) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut out = Vec::new();
+    for m in EMBEDDED_HTTP_URL.find_iter(content) {
+        let mut s = m.as_str().to_owned();
+        while matches!(s.chars().last(), Some(')' | ',' | '.' | ';' | '"' | '\'')) {
+            s.pop();
+        }
+        if Url::parse(&s).is_ok() && seen.insert(s.clone()) {
+            out.push(s);
+        }
+    }
+    out
+}
+
+/// Resolves dropped filesystem paths that carry a web URL (`.url`, `.webloc`).
+pub fn urls_from_dropped_os_path(path: &Path) -> Option<Vec<String>> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    match ext.as_str() {
+        "url" => {
+            let text = fs::read_to_string(path).ok()?;
+            parse_internet_shortcut_url(&text).map(|u| vec![u])
+        }
+        "webloc" => {
+            let text = fs::read_to_string(path).ok()?;
+            let urls = parse_embedded_http_urls(&text);
+            if urls.is_empty() {
+                None
+            } else {
+                Some(urls)
+            }
+        }
+        _ => None,
+    }
 }
 
 pub fn normalize_restored_item(item: &mut QueueItem) {
@@ -212,6 +289,37 @@ mod tests {
         assert_eq!(item.speed_text, "-");
         assert_eq!(item.eta_text, "-");
         assert!(item.detail.contains("Restored"));
+    }
+
+    #[test]
+    fn parse_internet_shortcut_url_reads_url_key() {
+        let ini = "[InternetShortcut]\r\nURL=https://example.com/watch?v=1\r\n";
+        assert_eq!(
+            parse_internet_shortcut_url(ini),
+            Some("https://example.com/watch?v=1".to_owned())
+        );
+    }
+
+    #[test]
+    fn dedupe_preserve_order_strings_keeps_first() {
+        let out = dedupe_preserve_order_strings(vec![
+            "https://a.test/1".to_owned(),
+            "https://b.test/2".to_owned(),
+            "https://a.test/1".to_owned(),
+        ]);
+        assert_eq!(
+            out,
+            vec!["https://a.test/1".to_owned(), "https://b.test/2".to_owned()]
+        );
+    }
+
+    #[test]
+    fn parse_embedded_http_urls_finds_url_in_xml() {
+        let xml = r#"<plist><string>https://youtu.be/abc123</string></plist>"#;
+        assert_eq!(
+            parse_embedded_http_urls(xml),
+            vec!["https://youtu.be/abc123".to_owned()]
+        );
     }
 
     #[test]
