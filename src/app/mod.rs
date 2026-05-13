@@ -59,6 +59,7 @@ const ICON_REMOVE: &str = icons::ICON_DELETE;
 const ICON_DOWNLOAD: &str = icons::ICON_DOWNLOAD;
 const ICON_OK: &str = "✔";
 const ICON_MISSING: &str = "✖";
+const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
     General,
@@ -124,6 +125,8 @@ pub struct PydlApp {
     cancel_post_actions: HashMap<u64, CancelPostAction>,
     log_filter: LogFilter,
     input_line_info: Vec<InputLineInfo>,
+    input_line_info_hold: Vec<InputLineInfo>,
+    input_line_info_hold_until: Option<f64>,
     /// `input_urls` at end of previous frame (for paste / newline heuristics).
     input_urls_snapshot: String,
     auto_add_after: Option<f64>,
@@ -227,6 +230,8 @@ impl PydlApp {
             cancel_post_actions: HashMap::new(),
             log_filter: LogFilter::All,
             input_line_info: Vec::new(),
+            input_line_info_hold: Vec::new(),
+            input_line_info_hold_until: None,
             input_urls_snapshot: String::new(),
             auto_add_after: None,
             settings_tab: SettingsTab::General,
@@ -267,6 +272,11 @@ impl PydlApp {
     /// Keeps the window repainting during background work; egui is event-driven and would otherwise
     /// feel frozen until the next mouse/keyboard input.
     fn request_repaint_if_background_busy(&self, ctx: &egui::Context) {
+        let now = ctx.input(|i| i.time);
+        let input_summary_hold_active = self.input_line_info.is_empty()
+            && self
+                .input_line_info_hold_until
+                .is_some_and(|until| now < until);
         let busy = self.add_in_progress
             || self.status_resolving > 0
             || self.status_active > 0
@@ -275,7 +285,8 @@ impl PydlApp {
             || !self.thumbnail_inflight.is_empty()
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
-            || self.queue_save_deadline.is_some();
+            || self.queue_save_deadline.is_some()
+            || input_summary_hold_active;
         if busy {
             // Cap idle repaint rate during heavy background work to reduce full UI passes.
             ctx.request_repaint_after(Duration::from_secs_f64(1.0 / 30.0));
@@ -716,6 +727,22 @@ impl PydlApp {
         self.input_line_info = input_lines::analyze_input_lines(&lines, &existing);
     }
 
+    fn hold_current_input_line_summary(&mut self, now: f64) {
+        if self.input_line_info.is_empty() {
+            self.input_line_info_hold.clear();
+            self.input_line_info_hold_until = None;
+            return;
+        }
+        self.input_line_info_hold = self.input_line_info.clone();
+        self.input_line_info_hold_until = Some(now + INPUT_SUMMARY_HOLD_SECS);
+    }
+
+    fn clear_input_urls_with_summary_hold(&mut self, now: f64) {
+        self.hold_current_input_line_summary(now);
+        self.input_urls.clear();
+        self.refresh_input_line_info();
+    }
+
     fn collect_valid_new_lines(&self) -> Vec<String> {
         self.input_line_info
             .iter()
@@ -769,11 +796,10 @@ impl PydlApp {
         );
     }
 
-    fn add_urls(&mut self) {
+    fn add_urls(&mut self, now: f64) {
         let lines = self.collect_valid_new_lines();
         self.queue_urls_for_resolve(lines);
-        self.input_urls.clear();
-        self.refresh_input_line_info();
+        self.clear_input_urls_with_summary_hold(now);
     }
 
     fn import_urls_from_file(&mut self) {
@@ -1323,17 +1349,16 @@ impl eframe::App for PydlApp {
         self.apply_dropped_shortcut_files(ctx);
         self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
-            if !self.add_in_progress && ctx.input(|i| i.time >= deadline) {
+            let now = ctx.input(|i| i.time);
+            if !self.add_in_progress && now >= deadline {
                 let valid = self.collect_valid_new_lines();
                 if !valid.is_empty() {
                     self.queue_urls_for_resolve(valid);
-                    self.input_urls.clear();
-                    self.refresh_input_line_info();
+                    self.clear_input_urls_with_summary_hold(now);
                 } else {
                     self.refresh_input_line_info();
                     if input_lines::is_only_duplicate_lines(&self.input_line_info) {
-                        self.input_urls.clear();
-                        self.refresh_input_line_info();
+                        self.clear_input_urls_with_summary_hold(now);
                     }
                 }
                 self.auto_add_after = None;
@@ -1439,19 +1464,30 @@ impl eframe::App for PydlApp {
                         url_edit.has_focus(),
                     );
                     self.refresh_input_line_info();
+                    self.input_line_info_hold_until = None;
                     if self.settings.auto_add_pasted_urls {
                         self.auto_add_after = Some(ctx.input(|i| i.time + 0.7));
                     } else {
                         self.auto_add_after = None;
                     }
                 }
-                draw_input_line_summary(ui, &self.input_line_info);
+                let now = ctx.input(|i| i.time);
+                let summary_lines = if self.input_line_info.is_empty()
+                    && self
+                        .input_line_info_hold_until
+                        .is_some_and(|until| now < until)
+                {
+                    &self.input_line_info_hold
+                } else {
+                    &self.input_line_info
+                };
+                draw_input_line_summary(ui, summary_lines);
 
                 ui.horizontal_wrapped(|ui| {
                     if success_button(ui, &format!("{ICON_ADD} Add URLs"), !self.add_in_progress)
                         .clicked()
                     {
-                        self.add_urls();
+                        self.add_urls(ctx.input(|i| i.time));
                     }
                     if secondary_button(
                         ui,
@@ -1686,7 +1722,7 @@ impl eframe::App for PydlApp {
                     self.start_downloads();
                 }
                 if trigger_add && !self.add_in_progress {
-                    self.add_urls();
+                    self.add_urls(ctx.input(|i| i.time));
                 }
                 if trigger_download && has_idle_items {
                     self.start_downloads();

@@ -12,6 +12,7 @@ pub(crate) enum InputLineKind {
     Invalid,
 }
 
+#[derive(Clone)]
 pub(crate) struct InputLineInfo {
     pub(crate) line: String,
     pub(crate) kind: InputLineKind,
