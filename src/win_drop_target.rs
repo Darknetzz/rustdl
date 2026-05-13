@@ -1,6 +1,6 @@
-//! Replace the default winit file-only [`IDropTarget`] so drag-and-drop from browsers works on
-//! Windows (UniformResourceLocatorW, `text/uri-list`, Unicode plain text) while still accepting
-//! [`CF_HDROP`] (including `.url` shortcuts).
+//! Replace winit's file-only [`IDropTarget`] so browser drag-and-drop works on Windows:
+//! `UniformResourceLocatorW`, `text/uri-list`, Firefox `text/x-moz-url`, `CF_UNICODETEXT`, and
+//! [`CF_HDROP`] (including `.url` shortcuts and playlist/list files resolved in-app).
 
 #![allow(unsafe_code)]
 
@@ -173,24 +173,63 @@ fn utf16_nul_prefix_to_string(bytes: &[u8]) -> Option<String> {
     }
 }
 
+/// Full UTF-16LE buffer (trim only trailing NUL code units). Use for `CF_UNICODETEXT` drag payloads.
+fn utf16le_buffer_to_string_lossy(bytes: &[u8]) -> String {
+    let mut words = Vec::with_capacity(bytes.len() / 2 + 1);
+    for chunk in bytes.chunks_exact(2) {
+        words.push(u16::from_le_bytes([chunk[0], chunk[1]]));
+    }
+    while words.last() == Some(&0) {
+        words.pop();
+    }
+    String::from_utf16_lossy(&words)
+}
+
 fn urls_from_text_uri_list(bytes: &[u8]) -> Vec<String> {
     let text = String::from_utf8_lossy(bytes);
-    app_parsing::parse_urls_from_text_blob(&text)
+    let text = app_parsing::strip_utf8_bom(text.trim());
+    app_parsing::parse_urls_from_text_blob(text)
         .into_iter()
         .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
         .collect()
 }
 
-fn urls_from_unicode_text(bytes: &[u8]) -> Vec<String> {
-    let Some(s) = utf16_nul_prefix_to_string(bytes) else {
+/// Firefox `text/x-moz-url`: UTF-16LE `URL\nTitle` or UTF-8 `URL\nTitle`.
+fn urls_from_moz_url(bytes: &[u8]) -> Vec<String> {
+    let as_utf16 = || -> Option<String> {
+        if bytes.len() < 4 || bytes.len() % 2 != 0 {
+            return None;
+        }
+        let s = utf16le_buffer_to_string_lossy(bytes);
+        let first = s.lines().next()?.trim();
+        if first.starts_with("http://") || first.starts_with("https://") {
+            Some(first.to_owned())
+        } else {
+            None
+        }
+    };
+    if let Some(u) = as_utf16() {
+        return vec![u];
+    }
+    let s = String::from_utf8_lossy(bytes);
+    let s = app_parsing::strip_utf8_bom(s.trim());
+    let Some(first) = s.lines().next().map(str::trim) else {
         return Vec::new();
     };
-    let t = s.trim();
-    if t.starts_with("http://") || t.starts_with("https://") {
-        vec![t.to_owned()]
+    if first.starts_with("http://") || first.starts_with("https://") {
+        vec![first.to_owned()]
     } else {
         Vec::new()
     }
+}
+
+fn urls_from_unicode_text(bytes: &[u8]) -> Vec<String> {
+    let s = utf16le_buffer_to_string_lossy(bytes);
+    s.lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("http://") || l.starts_with("https://"))
+        .map(str::to_owned)
+        .collect()
 }
 
 fn collect_url_formats(data_obj: IDataObject) -> Vec<String> {
@@ -198,6 +237,7 @@ fn collect_url_formats(data_obj: IDataObject) -> Vec<String> {
     unsafe {
         let loc_w = register_format_w(&utf16_nul("UniformResourceLocatorW"));
         let uri_list = register_format_w(&utf16_nul("text/uri-list"));
+        let moz = register_format_w(&utf16_nul("text/x-moz-url"));
         if let Some(b) = try_get_format_bytes(data_obj, loc_w) {
             if let Some(u) = utf16_nul_prefix_to_string(&b) {
                 out.push(u);
@@ -205,6 +245,9 @@ fn collect_url_formats(data_obj: IDataObject) -> Vec<String> {
         }
         if let Some(b) = try_get_format_bytes(data_obj, uri_list) {
             out.extend(urls_from_text_uri_list(&b));
+        }
+        if let Some(b) = try_get_format_bytes(data_obj, moz) {
+            out.extend(urls_from_moz_url(&b));
         }
         if out.is_empty() {
             if let Some(b) = try_get_format_bytes(data_obj, CF_UNICODETEXT) {

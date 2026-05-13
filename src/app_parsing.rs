@@ -88,11 +88,26 @@ pub fn split_cli_like(raw: &str) -> Vec<String> {
 }
 
 pub fn parse_urls_from_text_blob(raw: &str) -> Vec<String> {
+    let raw = strip_utf8_bom(raw);
     raw.split(|c: char| c == ',' || c == ';' || c.is_ascii_whitespace())
         .map(str::trim)
         .map(|s| s.trim_matches('"').trim_matches('\''))
         .filter(|s| !s.is_empty())
         .map(str::to_owned)
+        .collect()
+}
+
+#[inline]
+pub fn strip_utf8_bom(s: &str) -> &str {
+    s.strip_prefix('\u{feff}').unwrap_or(s)
+}
+
+/// Extracts `http`/`https` URL lines from plain-text list files (`.txt`, `.csv`, `.m3u`, `.m3u8`).
+pub fn http_url_lines_from_plain_list_content(content: &str) -> Vec<String> {
+    parse_urls_from_text_blob(content)
+        .into_iter()
+        .filter(|u| u.starts_with("http://") || u.starts_with("https://"))
+        .filter(|u| Url::parse(u).is_ok())
         .collect()
 }
 
@@ -114,6 +129,7 @@ static EMBEDDED_HTTP_URL: Lazy<Regex> = Lazy::new(|| {
 
 /// Reads `URL=` from a Windows Internet Shortcut (`.url`).
 pub fn parse_internet_shortcut_url(content: &str) -> Option<String> {
+    let content = strip_utf8_bom(content);
     for line in content.lines() {
         let t = line.trim();
         let rest = if t.len() >= 4 && t[..4].eq_ignore_ascii_case("url=") {
@@ -147,7 +163,7 @@ pub fn parse_embedded_http_urls(content: &str) -> Vec<String> {
     out
 }
 
-/// Resolves dropped filesystem paths that carry a web URL (`.url`, `.webloc`).
+/// Resolves dropped filesystem paths that carry URLs (shortcuts, lists, playlists).
 pub fn urls_from_dropped_os_path(path: &Path) -> Option<Vec<String>> {
     let ext = path.extension()?.to_str()?.to_ascii_lowercase();
     match ext.as_str() {
@@ -158,6 +174,15 @@ pub fn urls_from_dropped_os_path(path: &Path) -> Option<Vec<String>> {
         "webloc" => {
             let text = fs::read_to_string(path).ok()?;
             let urls = parse_embedded_http_urls(&text);
+            if urls.is_empty() {
+                None
+            } else {
+                Some(urls)
+            }
+        }
+        "txt" | "csv" | "m3u" | "m3u8" => {
+            let text = fs::read_to_string(path).ok()?;
+            let urls = http_url_lines_from_plain_list_content(&text);
             if urls.is_empty() {
                 None
             } else {
@@ -289,6 +314,24 @@ mod tests {
         assert_eq!(item.speed_text, "-");
         assert_eq!(item.eta_text, "-");
         assert!(item.detail.contains("Restored"));
+    }
+
+    #[test]
+    fn strip_utf8_bom_parse_urls() {
+        let raw = "\u{feff}https://a.test/x https://b.test/y";
+        assert_eq!(
+            parse_urls_from_text_blob(raw),
+            vec!["https://a.test/x".to_owned(), "https://b.test/y".to_owned()]
+        );
+    }
+
+    #[test]
+    fn http_url_lines_from_plain_list_filters_non_urls() {
+        let raw = "https://ok.test/a\nnot-a-url\n# comment line\nhttps://ok.test/b";
+        assert_eq!(
+            http_url_lines_from_plain_list_content(raw),
+            vec!["https://ok.test/a".to_owned(), "https://ok.test/b".to_owned()]
+        );
     }
 
     #[test]

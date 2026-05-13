@@ -161,6 +161,8 @@ pub struct PydlApp {
     win_browser_drop_queue: Arc<Mutex<Vec<String>>>,
     #[cfg(windows)]
     win_browser_drop_target_installed: bool,
+    #[cfg(windows)]
+    win_browser_drop_target_setup_attempted: bool,
 }
 
 impl PydlApp {
@@ -251,6 +253,8 @@ impl PydlApp {
             win_browser_drop_queue: Arc::new(Mutex::new(Vec::new())),
             #[cfg(windows)]
             win_browser_drop_target_installed: false,
+            #[cfg(windows)]
+            win_browser_drop_target_setup_attempted: false,
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
@@ -791,19 +795,13 @@ impl PydlApp {
             self.append_log("Selected file had no URL entries.");
             return;
         }
-        if !self.input_urls.trim().is_empty() && !self.input_urls.ends_with('\n') {
-            self.input_urls.push('\n');
-        }
-        self.input_urls.push_str(&parsed.join("\n"));
-        self.refresh_input_line_info();
+        let n = parsed.len();
+        self.extend_input_urls_with_lines(parsed, Some(0.0));
         self.append_log(&format!(
             "Imported {} URL candidate(s) from {}.",
-            parsed.len(),
+            n,
             path.to_string_lossy()
         ));
-        if self.settings.auto_add_pasted_urls {
-            self.auto_add_after = Some(0.0);
-        }
     }
 
     fn collect_idle_download_item_ids(&self) -> Vec<u64> {
@@ -1227,14 +1225,22 @@ impl PydlApp {
 
     #[cfg(windows)]
     fn maybe_install_win_browser_drop_target(&mut self, frame: &eframe::Frame) {
-        if self.win_browser_drop_target_installed {
+        if self.win_browser_drop_target_installed || self.win_browser_drop_target_setup_attempted {
             return;
         }
         let Some(hwnd) = crate::win_icon::hwnd_from_frame(frame) else {
             return;
         };
-        if crate::win_drop_target::install_once(hwnd, self.win_browser_drop_queue.clone()).is_ok() {
-            self.win_browser_drop_target_installed = true;
+        self.win_browser_drop_target_setup_attempted = true;
+        match crate::win_drop_target::install_once(hwnd, self.win_browser_drop_queue.clone()) {
+            Ok(()) => {
+                self.win_browser_drop_target_installed = true;
+            }
+            Err(_) => {
+                self.append_log(
+                    "Could not register URL drag-and-drop (RegisterDragDrop failed). Browser drops may not work until restart.",
+                );
+            }
         }
     }
 
@@ -1250,27 +1256,33 @@ impl PydlApp {
     }
 
     fn merge_dragged_urls_into_input(&mut self, urls: Vec<String>, ctx: &egui::Context) {
-        let urls: Vec<String> = urls
+        let deadline = ctx.input(|i| i.time + 0.7);
+        self.extend_input_urls_with_lines(urls, Some(deadline));
+    }
+
+    /// Appends trimmed non-empty lines to the URL field, refreshes validation, and sets [`Self::auto_add_after`] when requested and settings allow.
+    fn extend_input_urls_with_lines(&mut self, lines: Vec<String>, auto_add_deadline: Option<f64>) {
+        let lines: Vec<String> = lines
             .into_iter()
             .map(|s| s.trim().to_owned())
             .filter(|s| !s.is_empty())
             .collect();
-        if urls.is_empty() {
+        if lines.is_empty() {
             return;
         }
         if !self.input_urls.trim().is_empty() && !self.input_urls.ends_with('\n') {
             self.input_urls.push('\n');
         }
-        self.input_urls.push_str(&urls.join("\n"));
+        self.input_urls.push_str(&lines.join("\n"));
         if !self.input_urls.ends_with('\n') {
             self.input_urls.push('\n');
         }
         self.refresh_input_line_info();
-        if self.settings.auto_add_pasted_urls {
-            self.auto_add_after = Some(ctx.input(|i| i.time + 0.7));
+        self.auto_add_after = if self.settings.auto_add_pasted_urls {
+            auto_add_deadline
         } else {
-            self.auto_add_after = None;
-        }
+            None
+        };
     }
 
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
@@ -1409,7 +1421,9 @@ impl eframe::App for PydlApp {
                 let url_edit = ui.add_sized(
                     [ui.available_width(), 120.0],
                     egui::TextEdit::multiline(&mut self.input_urls)
-                        .hint_text("https://... — paste, drag from browser, or drop .url / .webloc"),
+                        .hint_text(
+                            "https://... — paste, drag from browser, or drop .url / .webloc / list (.txt, .m3u)",
+                        ),
                 );
                 attach_paste_context_menu(&url_edit, &mut self.deferred_menu_paste_urls);
                 if url_edit.changed() {
