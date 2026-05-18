@@ -15,6 +15,9 @@ pub struct AppSettings {
     pub autoscroll_log: bool,
     pub log_max_chars: usize,
     pub yt_dlp_extra_args: String,
+    /// Path to a Netscape `cookies.txt`, or a browser name for `--cookies-from-browser` (e.g. `firefox`).
+    #[serde(default)]
+    pub yt_dlp_cookies: String,
     pub ffmpeg_post_args: String,
     pub embed_thumbnail: bool,
     pub yt_dlp_path: String,
@@ -65,6 +68,7 @@ impl Default for AppSettings {
             autoscroll_log: true,
             log_max_chars: 28_000,
             yt_dlp_extra_args: String::new(),
+            yt_dlp_cookies: String::new(),
             ffmpeg_post_args: String::new(),
             embed_thumbnail: false,
             yt_dlp_path: String::new(),

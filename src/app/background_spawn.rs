@@ -41,6 +41,7 @@ pub(crate) fn spawn_url_resolve_pipeline(
     rt: &Arc<Runtime>,
     tx: &Sender<UiEvent>,
     yt_dlp_bin: String,
+    metadata_args: Vec<String>,
     queued_lines: Vec<String>,
 ) {
     let tx = tx.clone();
@@ -58,8 +59,9 @@ pub(crate) fn spawn_url_resolve_pipeline(
             );
             let bin = yt_dlp_bin.clone();
             let line_for_resolve = line.clone();
+            let metadata_args = metadata_args.clone();
             let rows = match tokio::task::spawn_blocking(move || {
-                ytdlp::resolve_url_to_previews_with_bin(&line_for_resolve, &bin)
+                ytdlp::resolve_url_to_previews_with_bin(&line_for_resolve, &bin, &metadata_args)
             })
             .await
             {

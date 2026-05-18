@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -411,15 +411,47 @@ pub fn probe_video_resolution_with_path(file_path: &str, ffprobe_path: &str) -> 
     }
 }
 
-pub fn resolve_url_to_previews_with_bin(url: &str, yt_dlp_path: &str) -> Vec<VideoPreview> {
+/// Build `--cookies` or `--cookies-from-browser` args from settings text.
+///
+/// Paths (contain `/` or `\`, end in `.txt`, or exist as a file) use `--cookies`.
+/// Anything else is passed to `--cookies-from-browser` (e.g. `firefox`, `chrome:Profile`).
+pub fn cookie_args_from_setting(cookies: &str) -> Vec<String> {
+    let t = cookies.trim();
+    if t.is_empty() {
+        return Vec::new();
+    }
+    let path = Path::new(t);
+    let looks_like_file = path.is_file()
+        || t.contains('\\')
+        || t.contains('/')
+        || t.ends_with(".txt");
+    if looks_like_file {
+        vec!["--cookies".to_owned(), t.to_owned()]
+    } else {
+        vec![
+            "--cookies-from-browser".to_owned(),
+            t.to_owned(),
+        ]
+    }
+}
+
+pub fn resolve_url_to_previews_with_bin(
+    url: &str,
+    yt_dlp_path: &str,
+    extra_args: &[String],
+) -> Vec<VideoPreview> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return vec![];
     }
     let bin = resolve_executable(yt_dlp_path, "yt-dlp");
-    let output = match Command::new(&bin)
-        .args(["-J", "--no-warnings", "--skip-download", trimmed])
-        .output()
+    let mut cmd = Command::new(&bin);
+    cmd.args(["-J", "--no-warnings", "--skip-download"]);
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    cmd.arg(trimmed);
+    let output = match cmd.output()
     {
         Ok(o) => o,
         Err(e) => {
