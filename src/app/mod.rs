@@ -393,8 +393,17 @@ impl PydlApp {
         }
     }
 
+    fn ytdlp_cookie_args(&self) -> Vec<String> {
+        ytdlp::cookie_args_from_setting(&self.settings.yt_dlp_cookies)
+    }
+
+    /// Args passed to `yt-dlp -J` when resolving URLs (cookies only).
+    fn metadata_extra_args(&self) -> Vec<String> {
+        self.ytdlp_cookie_args()
+    }
+
     fn download_extra_args(&self) -> Vec<String> {
-        // Retry flags first; user "Extra args" follow and can override (yt-dlp: last wins).
+        // Retry flags first; cookies; user "Extra args" follow and can override (yt-dlp: last wins).
         let mut args = Vec::new();
         if self.settings.yt_dlp_unlimited_retries {
             args.push("--retries".to_owned());
@@ -408,6 +417,7 @@ impl PydlApp {
             args.push("--fragment-retries".to_owned());
             args.push(n);
         }
+        args.extend(self.ytdlp_cookie_args());
         args.extend(split_cli_like(&self.settings.yt_dlp_extra_args));
         if self.settings.yt_ignore_errors {
             args.push("--ignore-errors".to_owned());
@@ -788,10 +798,12 @@ impl PydlApp {
             return;
         }
         let yt_dlp_bin = self.yt_dlp_bin();
+        let metadata_args = self.metadata_extra_args();
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
             &self.tx,
             yt_dlp_bin,
+            metadata_args,
             queued_lines,
         );
     }
@@ -1098,10 +1110,12 @@ impl PydlApp {
         self.update_status();
         self.schedule_queue_save();
         let yt_dlp_bin = self.yt_dlp_bin();
+        let metadata_args = self.metadata_extra_args();
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
             &self.tx,
             yt_dlp_bin,
+            metadata_args,
             vec![line],
         );
     }

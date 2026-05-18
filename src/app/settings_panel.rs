@@ -257,6 +257,23 @@ impl PydlApp {
                             .color(Color32::GRAY),
                         );
                         ui.separator();
+                        ui.label("Cookies (optional)");
+                        ui.label(
+                            RichText::new(
+                                "Path to cookies.txt, or a browser for --cookies-from-browser (e.g. firefox). \
+                                 Used when adding URLs and when downloading. On Windows, prefer a cookies.txt \
+                                 export — Chrome often fails DPAPI decryption.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_dlp_cookies)
+                                    .hint_text(r"C:\Users\you\cookies.txt  or  firefox"),
+                            )
+                            .changed();
+                        ui.separator();
                         ui.label("Extra args (space-separated) added to each download command");
                         ui.label(
                             RichText::new(

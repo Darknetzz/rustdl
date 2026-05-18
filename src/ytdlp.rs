@@ -718,6 +718,41 @@ mod tests {
     }
 
     #[test]
+    fn cookie_args_empty_when_unset() {
+        assert!(super::cookie_args_from_setting("").is_empty());
+        assert!(super::cookie_args_from_setting("   ").is_empty());
+    }
+
+    #[test]
+    fn cookie_args_file_path() {
+        let args = super::cookie_args_from_setting(r"C:\Users\me\cookies.txt");
+        assert_eq!(
+            args,
+            vec![
+                "--cookies".to_owned(),
+                r"C:\Users\me\cookies.txt".to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn cookie_args_browser() {
+        let args = super::cookie_args_from_setting("firefox");
+        assert_eq!(
+            args,
+            vec!["--cookies-from-browser".to_owned(), "firefox".to_owned()]
+        );
+        let profile = super::cookie_args_from_setting("firefox:rustdl");
+        assert_eq!(
+            profile,
+            vec![
+                "--cookies-from-browser".to_owned(),
+                "firefox:rustdl".to_owned()
+            ]
+        );
+    }
+
+    #[test]
     fn parse_progress_line_handles_template_prefix() {
         let (pct, size) = parse_progress_line("progress:42.5%|1048576|2097152|0");
         assert_eq!(pct, Some(42.5));
