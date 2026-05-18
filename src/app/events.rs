@@ -125,6 +125,9 @@ impl PydlApp {
                         for pv in deduped {
                             let iid = self.next_item_id;
                             self.next_item_id += 1;
+                            if let Some(ref err) = pv.error {
+                                self.append_log(&format!("[item {iid}] Metadata fetch failed: {err}"));
+                            }
                             self.items
                                 .insert(0, QueueItem::from_preview(iid, pv.clone()));
                             if self.settings.show_thumbnails {
@@ -220,9 +223,17 @@ impl PydlApp {
                             ItemStatus::Failed
                         };
                         it.percent = if completed { 100.0 } else { it.percent };
-                        it.detail = final_detail;
+                        it.detail = final_detail.clone();
                         if completed {
                             it.eta_text = "0s".to_owned();
+                        }
+                    }
+                    if !completed {
+                        let summary = final_detail.trim();
+                        if summary.is_empty() {
+                            self.append_log(&format!("[item {item_id}] Download failed."));
+                        } else {
+                            self.append_log(&format!("[item {item_id}] Download failed: {summary}"));
                         }
                     }
                     if completed {

@@ -29,6 +29,8 @@ impl LogFilter {
             LogFilter::Important => {
                 let lower = line.to_ascii_lowercase();
                 is_error_line(line)
+                    || lower.contains("metadata fetch failed")
+                    || lower.contains("download failed")
                     || lower.contains("starting")
                     || lower.contains("completed")
                     || lower.contains("done")
