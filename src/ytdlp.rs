@@ -429,6 +429,15 @@ fn is_cookies_from_browser_spec(value: &str) -> bool {
 ///
 /// Browser specs (`firefox`, `brave:C:\...\User Data\Default`) use `--cookies-from-browser`.
 /// Paths to a cookies file (`.txt` or an existing file) use `--cookies`.
+pub fn impersonate_args_from_setting(impersonate: &str) -> Vec<String> {
+    let t = impersonate.trim();
+    if t.is_empty() {
+        Vec::new()
+    } else {
+        vec!["--impersonate".to_owned(), t.to_owned()]
+    }
+}
+
 pub fn cookie_args_from_setting(cookies: &str) -> Vec<String> {
     let t = cookies.trim();
     if t.is_empty() {
@@ -731,6 +740,19 @@ mod tests {
         let out = dedupe_previews(&existing, &previews);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].video_id, "new1");
+    }
+
+    #[test]
+    fn impersonate_args_empty_when_unset() {
+        assert!(super::impersonate_args_from_setting("").is_empty());
+    }
+
+    #[test]
+    fn impersonate_args_chrome() {
+        assert_eq!(
+            super::impersonate_args_from_setting("chrome"),
+            vec!["--impersonate".to_owned(), "chrome".to_owned()]
+        );
     }
 
     #[test]

@@ -397,9 +397,15 @@ impl PydlApp {
         ytdlp::cookie_args_from_setting(&self.settings.yt_dlp_cookies)
     }
 
-    /// Args passed to `yt-dlp -J` when resolving URLs (cookies only).
+    fn ytdlp_impersonate_args(&self) -> Vec<String> {
+        ytdlp::impersonate_args_from_setting(&self.settings.yt_dlp_impersonate)
+    }
+
+    /// Cookies and impersonation flags for `yt-dlp -J` when resolving URLs.
     fn metadata_extra_args(&self) -> Vec<String> {
-        self.ytdlp_cookie_args()
+        let mut args = self.ytdlp_impersonate_args();
+        args.extend(self.ytdlp_cookie_args());
+        args
     }
 
     fn download_extra_args(&self) -> Vec<String> {
@@ -417,6 +423,7 @@ impl PydlApp {
             args.push("--fragment-retries".to_owned());
             args.push(n);
         }
+        args.extend(self.ytdlp_impersonate_args());
         args.extend(self.ytdlp_cookie_args());
         args.extend(split_cli_like(&self.settings.yt_dlp_extra_args));
         if self.settings.yt_ignore_errors {

@@ -18,6 +18,9 @@ pub struct AppSettings {
     /// Path to a Netscape `cookies.txt`, or a browser name for `--cookies-from-browser` (e.g. `firefox`).
     #[serde(default)]
     pub yt_dlp_cookies: String,
+    /// Passed as `--impersonate` (e.g. `chrome`). Helps with some login-gated sites when using cookies.
+    #[serde(default)]
+    pub yt_dlp_impersonate: String,
     pub ffmpeg_post_args: String,
     pub embed_thumbnail: bool,
     pub yt_dlp_path: String,
@@ -69,6 +72,7 @@ impl Default for AppSettings {
             log_max_chars: 28_000,
             yt_dlp_extra_args: String::new(),
             yt_dlp_cookies: String::new(),
+            yt_dlp_impersonate: String::new(),
             ffmpeg_post_args: String::new(),
             embed_thumbnail: false,
             yt_dlp_path: String::new(),

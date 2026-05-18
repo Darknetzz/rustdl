@@ -270,7 +270,22 @@ impl PydlApp {
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut self.settings.yt_dlp_cookies)
-                                    .hint_text(r"cookies.txt path  or  brave:...\Brave-Browser-Beta\...\Default"),
+                                    .hint_text(r"C:\Users\you\cookies.txt"),
+                            )
+                            .changed();
+                        ui.label("Impersonate (optional)");
+                        ui.label(
+                            RichText::new(
+                                "Browser TLS fingerprint for yt-dlp, e.g. chrome. Some login-gated sites need this with cookies\
+                                 (without this, you may see HTTP 410 even with a valid cookies.txt).",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_dlp_impersonate)
+                                    .hint_text("chrome"),
                             )
                             .changed();
                         ui.separator();
