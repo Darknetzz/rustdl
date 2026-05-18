@@ -11,6 +11,7 @@ repository = "https://github.com/Darknetzz/code"
 
 [build-dependencies]
 chrono = { version = "0.4", default-features = false, features = ["now"] }
+winres = "0.1"
 
 [dependencies]
 anyhow = "1"
