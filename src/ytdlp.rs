@@ -411,20 +411,36 @@ pub fn probe_video_resolution_with_path(file_path: &str, ffprobe_path: &str) -> 
     }
 }
 
+/// Browsers supported by yt-dlp `--cookies-from-browser` (see `yt-dlp --help`).
+const COOKIES_FROM_BROWSER_NAMES: &[&str] = &[
+    "brave", "chrome", "chromium", "edge", "firefox", "opera", "safari", "vivaldi", "whale",
+];
+
+fn is_cookies_from_browser_spec(value: &str) -> bool {
+    COOKIES_FROM_BROWSER_NAMES.iter().any(|name| {
+        value.eq_ignore_ascii_case(name)
+            || value
+                .get(..name.len() + 1)
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(&format!("{name}:")))
+    })
+}
+
 /// Build `--cookies` or `--cookies-from-browser` args from settings text.
 ///
-/// Paths (contain `/` or `\`, end in `.txt`, or exist as a file) use `--cookies`.
-/// Anything else is passed to `--cookies-from-browser` (e.g. `firefox`, `chrome:Profile`).
+/// Browser specs (`firefox`, `brave:C:\...\User Data\Default`) use `--cookies-from-browser`.
+/// Paths to a cookies file (`.txt` or an existing file) use `--cookies`.
 pub fn cookie_args_from_setting(cookies: &str) -> Vec<String> {
     let t = cookies.trim();
     if t.is_empty() {
         return Vec::new();
     }
+    if is_cookies_from_browser_spec(t) {
+        return vec!["--cookies-from-browser".to_owned(), t.to_owned()];
+    }
     let path = Path::new(t);
     let looks_like_file = path.is_file()
-        || t.contains('\\')
-        || t.contains('/')
-        || t.ends_with(".txt");
+        || t.ends_with(".txt")
+        || ((t.contains('\\') || t.contains('/')) && !t.contains(':'));
     if looks_like_file {
         vec!["--cookies".to_owned(), t.to_owned()]
     } else {
@@ -749,6 +765,16 @@ mod tests {
                 "--cookies-from-browser".to_owned(),
                 "firefox:rustdl".to_owned()
             ]
+        );
+    }
+
+    #[test]
+    fn cookie_args_brave_beta_profile_path() {
+        let spec = r"brave:C:\Users\Kriss\AppData\Local\BraveSoftware\Brave-Browser-Beta\User Data\Default";
+        let args = super::cookie_args_from_setting(spec);
+        assert_eq!(
+            args,
+            vec!["--cookies-from-browser".to_owned(), spec.to_owned()]
         );
     }
 

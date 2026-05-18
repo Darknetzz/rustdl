@@ -260,9 +260,9 @@ impl PydlApp {
                         ui.label("Cookies (optional)");
                         ui.label(
                             RichText::new(
-                                "Path to cookies.txt, or a browser for --cookies-from-browser (e.g. firefox). \
-                                 Used when adding URLs and when downloading. On Windows, prefer a cookies.txt \
-                                 export — Chrome often fails DPAPI decryption.",
+                                "Path to cookies.txt, or a browser for --cookies-from-browser (e.g. firefox, \
+                                 brave:C:\\...\\Brave-Browser-Beta\\User Data\\Default). Used when adding URLs \
+                                 and when downloading. On Windows, a cookies.txt export is most reliable.",
                             )
                             .small()
                             .color(Color32::GRAY),
@@ -270,7 +270,7 @@ impl PydlApp {
                         changed |= ui
                             .add(
                                 egui::TextEdit::singleline(&mut self.settings.yt_dlp_cookies)
-                                    .hint_text(r"C:\Users\you\cookies.txt  or  firefox"),
+                                    .hint_text(r"cookies.txt path  or  brave:...\Brave-Browser-Beta\...\Default"),
                             )
                             .changed();
                         ui.separator();
