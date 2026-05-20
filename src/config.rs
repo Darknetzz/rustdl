@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use std::fs;
 use std::path::PathBuf;
 
@@ -110,6 +111,65 @@ fn queue_path() -> PathBuf {
         return cfg.join("rustdl").join("rustdl_queue.json");
     }
     PathBuf::from("rustdl_queue.json")
+}
+
+fn activity_log_path() -> PathBuf {
+    if let Some(cfg) = dirs::config_dir() {
+        return cfg.join("rustdl").join("rustdl_activity_log.json");
+    }
+    PathBuf::from("rustdl_activity_log.json")
+}
+
+const MAX_ACTIVITY_LOG_LINES: usize = 4_000;
+
+fn activity_log_char_count(lines: &VecDeque<String>) -> usize {
+    lines
+        .iter()
+        .map(|s| s.len().saturating_add(1))
+        .sum()
+}
+
+/// Trims oldest lines so the in-memory / on-disk log respects [`AppSettings::log_max_chars`].
+pub fn trim_activity_log(lines: &mut VecDeque<String>, max_chars: usize) {
+    let max_chars = max_chars.clamp(2_000, 200_000);
+    while !lines.is_empty()
+        && (lines.len() > MAX_ACTIVITY_LOG_LINES
+            || activity_log_char_count(lines) > max_chars)
+    {
+        lines.pop_front();
+    }
+}
+
+pub fn load_activity_log(max_chars: usize) -> VecDeque<String> {
+    let path = activity_log_path();
+    let raw = match fs::read_to_string(path) {
+        Ok(v) => v,
+        Err(_) => return VecDeque::new(),
+    };
+    let mut lines: VecDeque<String> = serde_json::from_str(&raw).unwrap_or_default();
+    trim_activity_log(&mut lines, max_chars);
+    lines
+}
+
+pub fn save_activity_log(lines: &VecDeque<String>) -> Result<()> {
+    let path = activity_log_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create activity log directory: {}",
+                parent.to_string_lossy()
+            )
+        })?;
+    }
+    let payload: Vec<&str> = lines.iter().map(String::as_str).collect();
+    let raw = serde_json::to_string_pretty(&payload).context("failed to serialize activity log")?;
+    fs::write(&path, raw).with_context(|| {
+        format!(
+            "failed to write activity log file: {}",
+            path.to_string_lossy()
+        )
+    })?;
+    Ok(())
 }
 
 pub fn default_downloads() -> PathBuf {

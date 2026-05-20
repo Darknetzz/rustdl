@@ -45,8 +45,8 @@ use crate::app_ui::{
     danger_button, secondary_button, status_color, success_button, warning_button,
 };
 use crate::config::{
-    default_downloads, load_queue_items, load_settings, save_queue_items, save_settings,
-    AppSettings,
+    default_downloads, load_activity_log, load_queue_items, load_settings, save_activity_log,
+    save_queue_items, save_settings, trim_activity_log, AppSettings,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::pkg_version;
@@ -150,6 +150,8 @@ pub struct PydlApp {
     thumb_semaphore: Arc<Semaphore>,
     /// When set, queue JSON is written after this instant (debounced).
     queue_save_deadline: Option<Instant>,
+    /// When set, activity log JSON is written after this instant (debounced).
+    log_save_deadline: Option<Instant>,
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
@@ -173,6 +175,7 @@ impl PydlApp {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
         let (tx, rx) = unbounded();
         let settings = load_settings();
+        let log_lines = load_activity_log(settings.log_max_chars);
         let mut restored_items = load_queue_items();
         for it in &mut restored_items {
             normalize_restored_item(it);
@@ -210,7 +213,7 @@ impl PydlApp {
             yt_dlp_version: String::new(),
             ffmpeg_version: String::new(),
             ffprobe_version: String::new(),
-            log_lines: VecDeque::new(),
+            log_lines,
             settings,
             settings_open: false,
             settings_dirty: false,
@@ -249,6 +252,7 @@ impl PydlApp {
             http_client,
             thumb_semaphore,
             queue_save_deadline: None,
+            log_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
@@ -286,6 +290,7 @@ impl PydlApp {
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
             || self.queue_save_deadline.is_some()
+            || self.log_save_deadline.is_some()
             || input_summary_hold_active;
         if busy {
             // Cap idle repaint rate during heavy background work to reduce full UI passes.
@@ -328,6 +333,31 @@ impl PydlApp {
         }
     }
 
+    fn schedule_log_save(&mut self) {
+        self.log_save_deadline = Some(Instant::now() + Self::QUEUE_SAVE_DEBOUNCE);
+    }
+
+    fn maybe_flush_log_save(&mut self) {
+        if let Some(deadline) = self.log_save_deadline {
+            if Instant::now() >= deadline {
+                self.log_save_deadline = None;
+                self.flush_log_to_disk();
+            }
+        }
+    }
+
+    fn flush_log_to_disk(&mut self) {
+        self.log_save_deadline = None;
+        if let Err(err) = save_activity_log(&self.log_lines) {
+            eprintln!("rustdl: failed to save activity log: {err}");
+        }
+    }
+
+    pub(super) fn clear_activity_log(&mut self) {
+        self.log_lines.clear();
+        self.flush_log_to_disk();
+    }
+
     fn refresh_deps(&mut self) {
         let (yt, ffm, ffp) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
@@ -355,21 +385,9 @@ impl PydlApp {
     }
 
     fn append_log(&mut self, line: &str) {
-        const MAX_LOG_LINES: usize = 4_000;
         self.log_lines.push_back(line.to_string());
-        let max_chars = self.settings.log_max_chars.clamp(2_000, 200_000);
-        while !self.log_lines.is_empty()
-            && (self.log_lines.len() > MAX_LOG_LINES || self.log_chars_estimate() > max_chars)
-        {
-            self.log_lines.pop_front();
-        }
-    }
-
-    fn log_chars_estimate(&self) -> usize {
-        self.log_lines
-            .iter()
-            .map(|s| s.len().saturating_add(1))
-            .sum()
+        trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
+        self.schedule_log_save();
     }
 
     fn poll_done_file_lookup(&mut self) {
@@ -1361,6 +1379,7 @@ impl eframe::App for PydlApp {
             ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
         }
         self.maybe_flush_queue_save();
+        self.maybe_flush_log_save();
         self.process_events(ctx);
         #[cfg(windows)]
         {
@@ -1803,6 +1822,8 @@ impl eframe::App for PydlApp {
             self.settings.worker_count = self.worker_count.clamp(1, 6);
             self.settings.output_dir = self.output_dir.clone();
             self.persist_settings();
+            trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
+            self.flush_log_to_disk();
             self.refresh_deps();
             self.settings_dirty = false;
         }
@@ -1813,5 +1834,6 @@ impl eframe::App for PydlApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.flush_queue_to_disk();
+        self.flush_log_to_disk();
     }
 }

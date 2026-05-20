@@ -126,7 +126,7 @@ impl PydlApp {
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if danger_button(ui, &format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
-                self.log_lines.clear();
+                self.clear_activity_log();
             }
             ui.label("Filter");
             egui::ComboBox::from_id_salt("log_filter")
