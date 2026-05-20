@@ -34,6 +34,7 @@ shlex = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "process", "io-util", "macros"] }
 url = "2"
 which = "8"
+notify-rust = "4"
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"

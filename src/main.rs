@@ -13,6 +13,7 @@ mod app_ui;
 mod config;
 mod models;
 mod pkg_version;
+mod theme;
 mod time_format;
 mod ui_icons;
 #[cfg(windows)]

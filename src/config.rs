@@ -49,6 +49,27 @@ pub struct AppSettings {
     pub auto_add_pasted_urls: bool,
     pub auto_start_downloads: bool,
     pub ui_scale: f32,
+    /// List rows instead of horizontal preview cards in the queue.
+    #[serde(default)]
+    pub card_list_layout: bool,
+    /// Show activity log docked under the video queue (vs floating window).
+    #[serde(default = "default_logs_docked")]
+    pub logs_docked: bool,
+    #[serde(default)]
+    pub logs_open: bool,
+    #[serde(default = "default_log_dock_height")]
+    pub log_dock_height: f32,
+    /// Activity log timestamps as relative age instead of full local time.
+    #[serde(default)]
+    pub log_relative_time: bool,
+}
+
+fn default_logs_docked() -> bool {
+    true
+}
+
+fn default_log_dock_height() -> f32 {
+    180.0
 }
 
 fn default_verify_output_video_audio() -> bool {
@@ -95,29 +116,58 @@ impl Default for AppSettings {
             auto_add_pasted_urls: true,
             auto_start_downloads: true,
             ui_scale: 1.08,
+            card_list_layout: false,
+            logs_docked: true,
+            logs_open: false,
+            log_dock_height: 180.0,
+            log_relative_time: false,
         }
     }
 }
 
-fn config_path() -> PathBuf {
+/// `%APPDATA%/rustdl` or `./rustdl` fallback.
+pub fn rustdl_config_dir() -> PathBuf {
     if let Some(cfg) = dirs::config_dir() {
-        return cfg.join("rustdl").join("rustdl_config.json");
+        cfg.join("rustdl")
+    } else {
+        PathBuf::from("rustdl")
     }
-    PathBuf::from("rustdl_config.json")
+}
+
+pub fn config_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_config.json")
+}
+
+pub fn queue_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_queue.json")
+}
+
+pub fn activity_log_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_activity_log.json")
+}
+
+fn config_path() -> PathBuf {
+    if dirs::config_dir().is_some() {
+        config_file_path()
+    } else {
+        PathBuf::from("rustdl_config.json")
+    }
 }
 
 fn queue_path() -> PathBuf {
-    if let Some(cfg) = dirs::config_dir() {
-        return cfg.join("rustdl").join("rustdl_queue.json");
+    if dirs::config_dir().is_some() {
+        queue_file_path()
+    } else {
+        PathBuf::from("rustdl_queue.json")
     }
-    PathBuf::from("rustdl_queue.json")
 }
 
 fn activity_log_path() -> PathBuf {
-    if let Some(cfg) = dirs::config_dir() {
-        return cfg.join("rustdl").join("rustdl_activity_log.json");
+    if dirs::config_dir().is_some() {
+        activity_log_file_path()
+    } else {
+        PathBuf::from("rustdl_activity_log.json")
     }
-    PathBuf::from("rustdl_activity_log.json")
 }
 
 const MAX_ACTIVITY_LOG_LINES: usize = 4_000;
@@ -193,6 +243,7 @@ pub fn load_settings() -> AppSettings {
     cfg.log_max_chars = cfg.log_max_chars.clamp(2_000, 200_000);
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
+    cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
     cfg
 }
 
@@ -223,6 +274,32 @@ pub fn load_queue_items() -> Vec<QueueItem> {
         Err(_) => return Vec::new(),
     };
     serde_json::from_str::<Vec<QueueItem>>(&raw).unwrap_or_default()
+}
+
+/// Writes one URL per line (source line or webpage URL).
+pub fn export_queue_urls(items: &[QueueItem], path: &std::path::Path) -> Result<()> {
+    use std::io::Write;
+    let mut lines = Vec::new();
+    for it in items {
+        let u = if !it.webpage_url.trim().is_empty() {
+            it.webpage_url.as_str()
+        } else {
+            it.source_line.as_str()
+        };
+        if !u.trim().is_empty() {
+            lines.push(u.trim().to_owned());
+        }
+    }
+    let raw = lines.join("\n");
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).ok();
+        }
+    }
+    let mut f = fs::File::create(path).context("failed to create export file")?;
+    f.write_all(raw.as_bytes())
+        .context("failed to write export file")?;
+    Ok(())
 }
 
 pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {

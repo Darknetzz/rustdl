@@ -46,9 +46,11 @@ use crate::app_ui::{
     warning_button,
 };
 use crate::config::{
-    default_downloads, load_activity_log, load_queue_items, load_settings, save_activity_log,
-    save_queue_items, save_settings, trim_activity_log, AppSettings,
+    activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
+    load_queue_items, load_settings, rustdl_config_dir, save_activity_log, save_queue_items,
+    save_settings, trim_activity_log, AppSettings,
 };
+use crate::theme::{self, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
 use crate::pkg_version;
 use crate::ui_icons;
@@ -135,8 +137,15 @@ pub struct PydlApp {
     restored_items_count: usize,
     show_restore_banner: bool,
     about_open: bool,
-    /// Activity log in a floating window (see **Logs** toolbar button).
-    logs_open: bool,
+    /// When set, only the matching queue section is shown (click download summary).
+    queue_group_focus: Option<&'static str>,
+    /// Scroll target set when focusing a queue group from the summary row.
+    scroll_to_queue_group: Option<&'static str>,
+    queue_search: String,
+    selected_item_ids: HashSet<u64>,
+    downloads_paused: bool,
+    /// Avoid repeating desktop notifications for the same idle spell.
+    session_complete_notified: bool,
     update_check_in_progress: bool,
     update_latest_version: Option<String>,
     update_release_url: Option<String>,
@@ -242,7 +251,12 @@ impl PydlApp {
             restored_items_count: 0,
             show_restore_banner: false,
             about_open: false,
-            logs_open: false,
+            queue_group_focus: None,
+            scroll_to_queue_group: None,
+            queue_search: String::new(),
+            selected_item_ids: HashSet::new(),
+            downloads_paused: false,
+            session_complete_notified: false,
             update_check_in_progress: false,
             update_latest_version: None,
             update_release_url: None,
@@ -268,6 +282,10 @@ impl PydlApp {
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
+        app.append_log(&format!(
+            "--- Session started {} ---",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        ));
         app.refresh_deps();
         app.update_status();
         app.refresh_input_line_info();
@@ -300,6 +318,7 @@ impl PydlApp {
     }
 
     pub fn apply_ui_smoothness(ctx: &egui::Context) {
+        ctx.set_visuals(theme::dark_visuals());
         ctx.style_mut(|style| {
             style.spacing.item_spacing = egui::vec2(9.0, 7.0);
             style.spacing.button_padding = egui::vec2(14.0, 8.0);
