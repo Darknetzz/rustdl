@@ -42,7 +42,8 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    danger_button, secondary_button, status_color, success_button, warning_button,
+    danger_button, draw_status_dot, secondary_button, status_color, success_button,
+    warning_button,
 };
 use crate::config::{
     default_downloads, load_activity_log, load_queue_items, load_settings, save_activity_log,
@@ -1609,7 +1610,13 @@ impl eframe::App for PydlApp {
                         ui.label(RichText::new("Downloads:").color(Color32::GRAY));
                         for (idx, (name, count, color)) in parts.iter().enumerate() {
                             let suffix = if idx + 1 == parts.len() { "" } else { "," };
-                            ui.label(RichText::new(format!("{count} {name}{suffix}")).color(*color));
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 5.0;
+                                draw_status_dot(ui, *color);
+                                ui.label(
+                                    RichText::new(format!("{count} {name}{suffix}")).color(*color),
+                                );
+                            });
                         }
                     }
                 });

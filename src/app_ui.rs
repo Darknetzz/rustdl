@@ -14,6 +14,20 @@ pub fn status_color(s: ItemStatus) -> Color32 {
     }
 }
 
+/// Small filled circle aligned with status summary text (e.g. download counts).
+pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
+    let side = 8.0;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
+    let radius = side * 0.38;
+    ui.painter()
+        .circle_filled(rect.center(), radius, color);
+    ui.painter().circle_stroke(
+        rect.center(),
+        radius,
+        egui::Stroke::new(1.0, shade(color, 0.72)),
+    );
+}
+
 pub fn draw_status_chip(ui: &mut egui::Ui, status: ItemStatus) {
     let text = RichText::new(status.as_str()).small().color(Color32::WHITE);
     let fill = status_color(status);
