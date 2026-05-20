@@ -45,6 +45,9 @@ cargo test --all-targets --all-features
 - Queue downloads with per-item progress, status, size, and live log output.
 - About dialog with app version and update check.
 - Settings persistence in user config directory.
+- Persisted activity log with timestamps; optional docked log panel under the queue.
+- Queue search, bulk selection, pause/resume downloads, and export URLs to `.txt`.
+- Desktop notification when a download session finishes (where supported by the OS).
 
 ## Settings
 
@@ -65,6 +68,9 @@ Settings are split into tabs:
 | Autoscroll log to latest line | Keeps the log viewer pinned to the newest lines while logs are appended |
 | Parallel downloads | Number of concurrent worker queues used when starting downloads (`1..=6`) |
 | Max log chars | Maximum in-memory log buffer length before older characters are trimmed |
+| Dock activity log under video queue | Shows the log in a resizable panel below cards instead of a floating window |
+| Relative timestamps in activity log | Shows ages like `5 min ago` instead of full local time in the log viewer |
+| List layout for queue cards | Compact list rows instead of horizontal preview cards |
 
 ### Executables
 
@@ -133,6 +139,17 @@ Presets update current settings immediately, and you can still tweak any individ
 - Preferred: `<config_dir>/rustdl/rustdl_config.json`
 - Windows example: `C:\Users\<you>\AppData\Roaming\rustdl\rustdl_config.json`
 - Fallback: `./rustdl_config.json` (if config dir is unavailable)
+
+Also in the same folder:
+
+- `rustdl_queue.json` — saved download queue
+- `rustdl_activity_log.json` — persisted activity log (survives restarts)
+
+Open **Settings**, **Logs**, or **About** → **Open config folder** to reveal this directory in your file manager.
+
+## Platform notes
+
+- **Browser drag-and-drop** for URLs (from Chrome, Firefox, etc.) is supported on **Windows** only. On Linux and macOS, paste URLs or drop `.url` / `.txt` / shortcut files onto the window.
 
 ## Build release binary
 

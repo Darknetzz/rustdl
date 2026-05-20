@@ -7,9 +7,10 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::parse_item_size_text;
 use crate::app_state::TransferTotals;
 use crate::app_ui::{
-    danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
-    warning_button, MetaBadgeKind,
+    danger_button, draw_meta_badge, draw_status_chip, draw_status_dot, secondary_button,
+    status_color, warning_button, MetaBadgeKind,
 };
+use crate::theme;
 use crate::models::ItemStatus;
 use crate::time_format::{format_absolute_local, format_relative_ago};
 use crate::ui_icons;
@@ -20,6 +21,10 @@ use super::{
 
 impl PydlApp {
     pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize) {
+        if self.settings.card_list_layout {
+            self.draw_card_list(ui, idx);
+            return;
+        }
         let id = self.items[idx].item_id;
         let status = self.items[idx].status;
         let title = self.items[idx].title.clone();
@@ -82,6 +87,16 @@ impl PydlApp {
             ui.set_width(card_w);
             ui.vertical(|ui| {
                 ui.set_width(card_w);
+                ui.horizontal(|ui| {
+                    let mut sel = self.selected_item_ids.contains(&id);
+                    if ui.checkbox(&mut sel, "").changed() {
+                        if sel {
+                            self.selected_item_ids.insert(id);
+                        } else {
+                            self.selected_item_ids.remove(&id);
+                        }
+                    }
+                });
                 if self.settings.show_thumbnails
                     && !self.textures.contains_key(&id)
                     && !self.thumbnail_attempted.contains(&id)
@@ -97,7 +112,7 @@ impl PydlApp {
                 thumb_painter.rect_filled(
                     thumb_rect,
                     egui::Rounding::same(8.0),
-                    Color32::from_gray(32),
+                    theme::THUMB_PLACEHOLDER,
                 );
                 if let Some(tex) = self.textures.get(&id) {
                     let nat = tex.size_vec2();
@@ -482,7 +497,7 @@ impl PydlApp {
 
         if highlight_completed {
             egui::Frame::none()
-                .fill(Color32::from_rgba_unmultiplied(56, 142, 60, 45))
+                .fill(theme::done_card_fill())
                 .stroke(egui::Stroke::new(
                     2.0,
                     status_color(ItemStatus::Done),
@@ -493,6 +508,30 @@ impl PydlApp {
         } else {
             ui.group(card_inner);
         }
+    }
+
+    fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize) {
+        let id = self.items[idx].item_id;
+        let status = self.items[idx].status;
+        let title = ellipsize(&self.items[idx].title, 80);
+        let pct = self.items[idx].percent;
+        let selected = self.selected_item_ids.contains(&id);
+        ui.horizontal(|ui| {
+            let mut sel = selected;
+            if ui.checkbox(&mut sel, "").changed() {
+                if sel {
+                    self.selected_item_ids.insert(id);
+                } else {
+                    self.selected_item_ids.remove(&id);
+                }
+            }
+            draw_status_chip(ui, status);
+            ui.label(RichText::new(title).strong());
+            if status == ItemStatus::Downloading || status == ItemStatus::Queued {
+                ui.add(egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage());
+            }
+        });
+        ui.separator();
     }
 
     pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
@@ -507,10 +546,16 @@ impl PydlApp {
             ("Resolving", [ItemStatus::Resolving].as_slice()),
         ];
         for (label, statuses) in groups {
+            if self
+                .queue_group_focus
+                .is_some_and(|f| f != label)
+            {
+                continue;
+            }
             let ids: Vec<u64> = self
                 .items
                 .iter()
-                .filter(|it| statuses.contains(&it.status))
+                .filter(|it| statuses.contains(&it.status) && self.item_matches_search(it))
                 .map(|it| it.item_id)
                 .collect();
             if ids.is_empty() {
@@ -524,13 +569,28 @@ impl PydlApp {
                 "Resolving" => status_color(ItemStatus::Resolving),
                 _ => Color32::LIGHT_GRAY,
             };
-            egui::CollapsingHeader::new(
-                RichText::new(format!("{label} ({})", ids.len())).color(header_color),
+            let scroll_here = self.scroll_to_queue_group == Some(label);
+            let default_open =
+                scroll_here || self.queue_group_focus.is_some() || self.queue_search.is_empty();
+            let header_text = format!("{label} ({})", ids.len());
+            ui.horizontal(|ui| {
+                draw_status_dot(ui, header_color);
+                ui.add_space(4.0);
+            });
+            let collapse = egui::CollapsingHeader::new(
+                RichText::new(header_text).color(header_color).strong(),
             )
-                .id_salt(label)
-                .default_open(true)
-                .show(ui, |ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+            .id_salt(label)
+            .default_open(default_open)
+            .show(ui, |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                if self.settings.card_list_layout {
+                    for id in &ids {
+                        if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
+                            self.draw_card(ui, idx);
+                        }
+                    }
+                } else {
                     let row_width = ui.available_width();
                     egui::ScrollArea::horizontal()
                         .id_salt(format!("rustdl_cards_{label}"))
@@ -550,7 +610,17 @@ impl PydlApp {
                                 }
                             });
                         });
-                });
+                }
+            });
+            if scroll_here {
+                ui.scroll_to_rect(collapse.header_response.rect, Some(egui::Align::TOP));
+                self.scroll_to_queue_group = None;
+            }
+        }
+        if !self.queue_search.is_empty()
+            && !self.items.iter().any(|it| self.item_matches_search(it))
+        {
+            ui.label(RichText::new("No items match your search.").color(Color32::GRAY));
         }
     }
 

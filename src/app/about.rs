@@ -27,6 +27,39 @@ impl PydlApp {
                         .color(Color32::LIGHT_GRAY),
                 );
                 ui.separator();
+                ui.label(RichText::new("Keyboard shortcuts").strong());
+                ui.label(
+                    RichText::new("Ctrl+Enter (Cmd+Enter on macOS): Add URLs from input")
+                        .small()
+                        .color(Color32::GRAY),
+                );
+                ui.label(
+                    RichText::new("Ctrl+D (Cmd+D on macOS): Start downloads for ready items")
+                        .small()
+                        .color(Color32::GRAY),
+                );
+                ui.separator();
+                ui.horizontal_wrapped(|ui| {
+                    if secondary_button(
+                        ui,
+                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        self.open_config_folder();
+                    }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Open activity log file", ui_icons::OPEN_FILE),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        self.open_activity_log_file();
+                    }
+                });
+                ui.separator();
                 ui.label(RichText::new("Updates").strong());
                 ui.horizontal_wrapped(|ui| {
                     if secondary_button(

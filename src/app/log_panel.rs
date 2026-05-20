@@ -1,8 +1,13 @@
+use std::time::SystemTime;
+
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{danger_button, secondary_button};
-use crate::time_format::{log_message_body, split_log_line};
+use crate::theme::{BG_LOG, BORDER_SUBTLE, TEXT_HINT, TEXT_MUTED};
+use crate::time_format::{
+    format_relative_ago, log_message_body, split_log_line,
+};
 use crate::ui_icons;
 
 use super::{InputLineInfo, InputLineKind, PydlApp, ICON_MISSING, ICON_OK};
@@ -61,7 +66,26 @@ pub(crate) fn log_line_color(line: &str) -> Color32 {
     }
 }
 
-fn log_line_widget(line: &str, color: Color32, ui: &egui::Ui) -> egui::WidgetText {
+fn format_log_timestamp_display(line: &str, relative: bool) -> String {
+    let (ts, body) = split_log_line(line);
+    if ts.is_empty() {
+        return line.to_owned();
+    }
+    if !relative {
+        return format!("[{ts}] {body}");
+    }
+    if let Ok(parsed) = chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S") {
+        use chrono::TimeZone;
+        if let Some(local) = chrono::Local.from_local_datetime(&parsed).single() {
+            let st: SystemTime = local.into();
+            return format!("[{}] {}", format_relative_ago(st), body);
+        }
+    }
+    format!("[{ts}] {body}")
+}
+
+fn log_line_widget(line: &str, color: Color32, ui: &egui::Ui, relative_ts: bool) -> egui::WidgetText {
+    let display = format_log_timestamp_display(line, relative_ts);
     let font_px = egui::TextStyle::Small.resolve(ui.style()).size;
     let font_id = egui::FontId::new(font_px, egui::FontFamily::Monospace);
     let fmt = |c: Color32| egui::text::TextFormat {
@@ -69,16 +93,14 @@ fn log_line_widget(line: &str, color: Color32, ui: &egui::Ui) -> egui::WidgetTex
         color: c,
         ..Default::default()
     };
-    let (ts, body) = split_log_line(line);
+    let (ts, body) = split_log_line(&display);
     let mut job = egui::text::LayoutJob::default();
     if !ts.is_empty() {
-        job.append(
-            &format!("[{ts}] "),
-            0.0,
-            fmt(LOG_COLOR_DIM),
-        );
+        job.append(&format!("[{ts}] "), 0.0, fmt(LOG_COLOR_DIM));
+        job.append(body, 0.0, fmt(color));
+    } else {
+        job.append(&display, 0.0, fmt(color));
     }
-    job.append(body, 0.0, fmt(color));
     egui::WidgetText::from(job)
 }
 
@@ -98,7 +120,6 @@ fn is_warning_line(line: &str) -> bool {
 
 fn is_success_line(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
-    // Only treat 100% as success on yt-dlp-style progress lines (avoids a solid wall of green).
     if lower.contains("100%") {
         if !(lower.contains("[download]") || lower.contains("[merger]")) {
             return false;
@@ -117,22 +138,24 @@ fn is_success_line(line: &str) -> bool {
 
 impl PydlApp {
     pub(super) fn draw_logs_window(&mut self, ctx: &egui::Context) {
-        if !self.logs_open {
+        if !self.settings.logs_open {
             return;
         }
-        let mut logs_open = self.logs_open;
+        let mut open = self.settings.logs_open;
         egui::Window::new("Activity log")
-            .open(&mut logs_open)
+            .open(&mut open)
             .default_size([640.0, 440.0])
             .min_width(400.0)
             .min_height(260.0)
             .show(ctx, |ui| {
                 self.draw_activity_log_panel(ui);
             });
-        self.logs_open = logs_open;
+        if open != self.settings.logs_open {
+            self.settings.logs_open = open;
+            self.persist_settings();
+        }
     }
 
-    /// Toolbar (filter, copy) + scrollable colored activity log (shown inside [`Self::draw_logs_window`]).
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             if danger_button(ui, &format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
@@ -146,6 +169,15 @@ impl PydlApp {
                     ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
                     ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
                 });
+            if ui
+                .checkbox(
+                    &mut self.settings.log_relative_time,
+                    "Relative timestamps",
+                )
+                .changed()
+            {
+                self.persist_settings();
+            }
             if secondary_button(
                 ui,
                 &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
@@ -162,17 +194,40 @@ impl PydlApp {
                     ui.ctx().copy_text(last.clone());
                 }
             }
+            if secondary_button(ui, &format!("{} Open log file", ui_icons::OPEN_FILE), true)
+                .clicked()
+            {
+                self.open_activity_log_file();
+            }
+            if secondary_button(
+                ui,
+                &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                true,
+            )
+            .clicked()
+            {
+                self.open_config_folder();
+            }
         });
-        let scroll_h = ui.available_height().max(120.0);
+        let scroll_h = ui.available_height().max(80.0);
         egui::Frame::dark_canvas(ui.style())
-            .fill(Color32::from_rgb(28, 28, 32))
-            .stroke(egui::Stroke::new(1.0, Color32::from_rgb(56, 56, 64)))
+            .fill(BG_LOG)
+            .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.set_min_height(scroll_h);
+                if self.log_lines.is_empty() {
+                    ui.label(
+                        RichText::new("Download activity will appear here.")
+                            .small()
+                            .color(TEXT_HINT),
+                    );
+                    return;
+                }
                 ui.spacing_mut().item_spacing.y = 3.0;
+                let relative = self.settings.log_relative_time;
                 egui::ScrollArea::vertical()
                     .max_height(scroll_h)
                     .animated(true)
@@ -185,13 +240,16 @@ impl PydlApp {
                                 continue;
                             }
                             let color = log_line_color(line);
-                            // Selectable labels paint with a single theme color; use LayoutJob + non-selectable
-                            // so per-line semantic colors actually reach the tessellator.
-                            ui.add(
-                                egui::Label::new(log_line_widget(line, color, ui))
-                                    .wrap()
-                                    .selectable(false),
-                            );
+                            let widget =
+                                log_line_widget(line, color, ui, relative);
+                            let label = egui::Label::new(widget).wrap().selectable(true);
+                            let r = ui.add(label);
+                            r.context_menu(|ui| {
+                                if ui.button("Copy line").clicked() {
+                                    ui.ctx().copy_text(line.clone());
+                                    ui.close_menu();
+                                }
+                            });
                         }
                     });
             });
@@ -226,22 +284,50 @@ pub(crate) fn draw_input_line_summary(ui: &mut egui::Ui, lines: &[InputLineInfo]
     });
 }
 
-/// Queue clipboard text for the next frame. Context menus run after widgets are built; pushing
-/// [`egui::Event::Paste`] in the same frame happens too late for [`egui::TextEdit`] to consume it.
+/// Per-line URL validation preview (monospace, color-coded).
+pub(crate) fn draw_input_line_preview(ui: &mut egui::Ui, lines: &[InputLineInfo]) {
+    if lines.is_empty() {
+        return;
+    }
+    let max_show = 6usize;
+    let font_px = egui::TextStyle::Small.resolve(ui.style()).size;
+    let font_id = egui::FontId::new(font_px, egui::FontFamily::Monospace);
+    for line in lines.iter().take(max_show) {
+        let color = match line.kind {
+            InputLineKind::Valid => Color32::from_rgb(102, 187, 106),
+            InputLineKind::DuplicateInInput | InputLineKind::DuplicateExisting => {
+                Color32::from_rgb(255, 193, 7)
+            }
+            InputLineKind::Invalid => Color32::from_rgb(239, 83, 80),
+        };
+        let short: String = line.line.chars().take(72).collect();
+        let suffix = if line.line.chars().count() > 72 { "…" } else { "" };
+        ui.label(
+            RichText::new(format!("{short}{suffix}"))
+                .font(font_id.clone())
+                .color(color),
+        );
+    }
+    if lines.len() > max_show {
+        ui.label(
+            RichText::new(format!("… and {} more line(s)", lines.len() - max_show))
+                .small()
+                .color(TEXT_MUTED),
+        );
+    }
+}
+
 pub(crate) fn attach_paste_context_menu(
     response: &egui::Response,
     deferred_paste: &mut Option<String>,
 ) {
     response.context_menu(|ui| {
         if secondary_button(ui, &format!("{} Paste", ui_icons::COPY_CLIPBOARD), true).clicked() {
-            // Focus the field so the deferred paste targets it on the next frame.
             response.request_focus();
-
             let from_clipboard = arboard::Clipboard::new()
                 .ok()
                 .and_then(|mut cb| cb.get_text().ok())
                 .filter(|t| !t.is_empty());
-
             if let Some(text) = from_clipboard {
                 *deferred_paste = Some(text);
             } else {

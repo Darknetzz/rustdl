@@ -97,6 +97,24 @@ impl PydlApp {
                                 "Autoscroll log to latest line",
                             )
                             .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.logs_docked,
+                                "Dock activity log under video queue",
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.log_relative_time,
+                                "Relative timestamps in activity log",
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.card_list_layout,
+                                "List layout for queue cards (denser)",
+                            )
+                            .changed();
                         ui.horizontal(|ui| {
                             ui.label("UI scale");
                             changed |= ui

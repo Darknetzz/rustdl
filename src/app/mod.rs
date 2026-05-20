@@ -378,6 +378,147 @@ impl PydlApp {
         self.flush_log_to_disk();
     }
 
+    pub(super) fn open_config_folder(&mut self) {
+        let dir = rustdl_config_dir();
+        if let Err(e) = app_actions::open_path(&dir) {
+            self.append_log(&format!("Failed to open config folder: {e}"));
+        }
+    }
+
+    pub(super) fn open_activity_log_file(&mut self) {
+        let path = activity_log_file_path();
+        if !path.exists() {
+            let _ = save_activity_log(&self.log_lines);
+        }
+        if let Err(e) = app_actions::open_path(&path) {
+            self.append_log(&format!("Failed to open activity log: {e}"));
+        }
+    }
+
+    fn toggle_logs_panel(&mut self) {
+        self.settings.logs_open = !self.settings.logs_open;
+        self.persist_settings();
+    }
+
+    fn focus_queue_group(&mut self, group: &'static str) {
+        self.queue_group_focus = Some(group);
+        self.scroll_to_queue_group = Some(group);
+    }
+
+    pub(super) fn item_matches_search(&self, item: &QueueItem) -> bool {
+        let q = self.queue_search.trim().to_ascii_lowercase();
+        if q.is_empty() {
+            return true;
+        }
+        item.title.to_ascii_lowercase().contains(&q)
+            || item.source_line.to_ascii_lowercase().contains(&q)
+            || item.webpage_url.to_ascii_lowercase().contains(&q)
+            || item
+                .uploader
+                .as_ref()
+                .is_some_and(|u| u.to_ascii_lowercase().contains(&q))
+            || item.video_id.to_ascii_lowercase().contains(&q)
+    }
+
+    fn pause_all_downloads(&mut self) {
+        if self.downloads_paused {
+            return;
+        }
+        self.downloads_paused = true;
+        self.cancel_all_active(CancelPostAction::Ready);
+        self.append_log("Downloads paused (active items moved back to ready).");
+    }
+
+    fn resume_all_downloads(&mut self) {
+        if !self.downloads_paused {
+            return;
+        }
+        self.downloads_paused = false;
+        self.session_complete_notified = false;
+        self.append_log("Downloads resumed.");
+        self.start_downloads();
+    }
+
+    fn export_queue_to_file(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export queue URLs")
+            .set_file_name("rustdl-queue.txt")
+            .add_filter("Text", &["txt"])
+            .save_file()
+        else {
+            return;
+        };
+        match export_queue_urls(&self.items, &path) {
+            Ok(()) => self.append_log(&format!(
+                "Exported {} URL(s) to {}",
+                self.items.len(),
+                path.to_string_lossy()
+            )),
+            Err(e) => self.append_log(&format!("Export failed: {e}")),
+        }
+    }
+
+    fn remove_selected_items(&mut self) {
+        let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
+        if ids.is_empty() {
+            self.append_log("No items selected.");
+            return;
+        }
+        for id in ids {
+            let _ = self.remove_item_by_id(id);
+        }
+        self.selected_item_ids.clear();
+        self.update_status();
+        self.refresh_input_line_info();
+        self.schedule_queue_save();
+    }
+
+    fn retry_selected_failed(&mut self) {
+        for id in self.selected_item_ids.iter().copied().collect::<Vec<_>>() {
+            if self
+                .items
+                .iter()
+                .any(|x| x.item_id == id && x.status == ItemStatus::Failed)
+            {
+                self.retry_download_item_id(id);
+            }
+        }
+    }
+
+    fn maybe_notify_session_complete(&mut self) {
+        if self.session_complete_notified
+            || self.queue_running > 0
+            || self.add_in_progress
+            || self.status_resolving > 0
+            || self.status_active > 0
+            || self.status_queued > 0
+        {
+            return;
+        }
+        let has_items = !self.items.is_empty();
+        let all_terminal = self.items.iter().all(|it| {
+            matches!(
+                it.status,
+                ItemStatus::Done | ItemStatus::Failed | ItemStatus::Idle
+            )
+        });
+        if !has_items || !all_terminal {
+            return;
+        }
+        self.session_complete_notified = true;
+        let summary = format!(
+            "rustdl: {} done, {} failed",
+            self.status_done, self.status_failed
+        );
+        if let Err(e) = notify_rust::Notification::new()
+            .summary("rustdl")
+            .body(&summary)
+            .show()
+        {
+            self.append_log(&format!("Notification failed: {e}"));
+        }
+    }
+
     fn refresh_deps(&mut self) {
         let (yt, ffm, ffp) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
@@ -424,7 +565,7 @@ impl PydlApp {
         }
     }
 
-    fn persist_settings(&mut self) {
+    pub(super) fn persist_settings(&mut self) {
         self.settings.output_dir = self.output_dir.clone();
         self.settings.worker_count = self.worker_count.clamp(1, 6);
         if let Err(err) = save_settings(&self.settings) {
@@ -713,7 +854,7 @@ impl PydlApp {
     }
 
     fn maybe_auto_start_downloads(&mut self) {
-        if !self.settings.auto_start_downloads {
+        if self.downloads_paused || !self.settings.auto_start_downloads {
             return;
         }
         let has_idle_items = self
@@ -900,10 +1041,15 @@ impl PydlApp {
     }
 
     fn spawn_download_workers(&mut self, pending_ids: Vec<u64>) {
+        if self.downloads_paused {
+            self.append_log("Downloads are paused. Click Resume to continue.");
+            return;
+        }
         if pending_ids.is_empty() {
             self.append_log("Nothing to download.");
             return;
         }
+        self.session_complete_notified = false;
 
         for id in &pending_ids {
             if let Some(it) = self.items.iter_mut().find(|x| x.item_id == *id) {
@@ -956,6 +1102,10 @@ impl PydlApp {
     }
 
     fn start_downloads(&mut self) {
+        if self.downloads_paused {
+            self.append_log("Downloads are paused. Click Resume first.");
+            return;
+        }
         if self.items.is_empty() {
             self.append_log("Add URLs first.");
             return;
@@ -1483,7 +1633,7 @@ impl eframe::App for PydlApp {
                         self.settings_open = true;
                     }
                     if secondary_button(ui, &format!("{} Logs", ui_icons::LOGS), true).clicked() {
-                        self.logs_open = true;
+                        self.toggle_logs_panel();
                     }
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
                         self.flush_queue_to_disk();
@@ -1503,6 +1653,14 @@ impl eframe::App for PydlApp {
                         "Setup hint: configure missing tools in Settings -> Executables.",
                     );
                 }
+                #[cfg(not(windows))]
+                ui.label(
+                    RichText::new(
+                        "Tip: browser drag-and-drop for URLs is supported on Windows only; paste URLs or drop .url/.txt files on other platforms.",
+                    )
+                    .small()
+                    .color(TEXT_MUTED),
+                );
                 ui.separator();
 
                 ui.label("URLs (one per line)");
@@ -1546,6 +1704,7 @@ impl eframe::App for PydlApp {
                     &self.input_line_info
                 };
                 draw_input_line_summary(ui, summary_lines);
+                log_panel::draw_input_line_preview(ui, summary_lines);
 
                 ui.horizontal_wrapped(|ui| {
                     if success_button(ui, &format!("{ICON_ADD} Add URLs"), !self.add_in_progress)
@@ -1626,15 +1785,34 @@ impl eframe::App for PydlApp {
                         ));
                     }
                     if !parts.is_empty() {
-                        ui.label(RichText::new("Downloads:").color(Color32::GRAY));
+                        ui.label(RichText::new("Downloads:").color(TEXT_MUTED));
+                        if self.queue_group_focus.is_some()
+                            && ui.small_button("Show all").clicked()
+                        {
+                            self.queue_group_focus = None;
+                        }
                         for (idx, (name, count, color)) in parts.iter().enumerate() {
                             let suffix = if idx + 1 == parts.len() { "" } else { "," };
+                            let group = match *name {
+                                "ready" => "Ready",
+                                "queued" | "active" => "Active",
+                                "done" => "Done",
+                                "failed" => "Issues",
+                                "resolving" => "Resolving",
+                                _ => "Active",
+                            };
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing.x = 5.0;
                                 draw_status_dot(ui, *color);
-                                ui.label(
-                                    RichText::new(format!("{count} {name}{suffix}")).color(*color),
+                                let label = format!("{count} {name}{suffix}");
+                                let r = ui.add(
+                                    egui::Label::new(RichText::new(label).color(*color))
+                                        .sense(egui::Sense::click()),
                                 );
+                                if r.clicked() {
+                                    self.focus_queue_group(group);
+                                }
+                                r.on_hover_text(format!("Show {group} items"));
                             });
                         }
                     }
@@ -1645,14 +1823,38 @@ impl eframe::App for PydlApp {
                 if total_known > 0 {
                     let session_busy =
                         self.status_active > 0 || self.queue_running > 0 || self.add_in_progress;
-                    ui.add(
-                        egui::ProgressBar::new(total_finished as f32 / total_known as f32)
-                            .animate(session_busy)
-                            .text(format!(
-                                "Session progress: {}/{} done ({} failed)",
-                                total_finished, total_known, self.status_failed
-                            )),
-                    );
+                    let pb = egui::ProgressBar::new(total_finished as f32 / total_known as f32)
+                        .animate(session_busy)
+                        .text(format!(
+                            "Session progress: {}/{} done ({} failed)",
+                            total_finished, total_known, self.status_failed
+                        ));
+                    let pb_resp = ui.add(pb);
+                    if pb_resp.clicked() {
+                        self.focus_queue_group("Done");
+                    }
+                    if self.status_ready == 0
+                        && self.status_queued == 0
+                        && self.status_active == 0
+                        && self.status_resolving == 0
+                        && total_finished > 0
+                    {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(
+                                status_color(ItemStatus::Done),
+                                "All downloads finished for this session.",
+                            );
+                            if secondary_button(
+                                ui,
+                                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                self.open_output_folder();
+                            }
+                        });
+                    }
                     let totals = self.transfer_totals();
                     if totals.with_known_total > 0 && totals.known_total_bytes > 0 {
                         let pct = (totals.downloaded_bytes as f64
@@ -1713,9 +1915,72 @@ impl eframe::App for PydlApp {
 
                 // Queue actions + primary download control live above the scroll so they stay
                 // reachable when the window is short (CentralPanel does not scroll as a whole).
-                ui.label(RichText::new("Queue").small().color(Color32::GRAY));
+                ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
+                ui.horizontal(|ui| {
+                    ui.label("Search");
+                    let search = ui.add(
+                        egui::TextEdit::singleline(&mut self.queue_search)
+                            .hint_text("Title, URL, uploader…")
+                            .desired_width(200.0),
+                    );
+                    if search.changed() {
+                        self.queue_group_focus = None;
+                    }
+                    if !self.queue_search.is_empty() && ui.small_button("Clear").clicked() {
+                        self.queue_search.clear();
+                    }
+                });
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                    if self.downloads_paused {
+                        if success_button(ui, &format!("{} Resume downloads", ICON_DOWNLOAD), true)
+                            .clicked()
+                        {
+                            self.resume_all_downloads();
+                        }
+                    } else if warning_button(
+                        ui,
+                        &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                        self.status_queued > 0 || self.status_active > 0,
+                    )
+                    .clicked()
+                    {
+                        self.pause_all_downloads();
+                    }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Export URLs", ui_icons::IMPORT_FILE),
+                        !self.items.is_empty(),
+                    )
+                    .clicked()
+                    {
+                        self.export_queue_to_file();
+                    }
+                    if !self.selected_item_ids.is_empty() {
+                        if danger_button(
+                            ui,
+                            &format!(
+                                "{} Remove selected ({})",
+                                ICON_REMOVE,
+                                self.selected_item_ids.len()
+                            ),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.remove_selected_items();
+                        }
+                        if self.status_failed > 0
+                            && warning_button(
+                                ui,
+                                &format!("{} Retry selected", ui_icons::RETRY),
+                                true,
+                            )
+                            .clicked()
+                        {
+                            self.retry_selected_failed();
+                        }
+                    }
                     if danger_button(ui, &format!("{ICON_CLEAR} Clear list"), true).clicked() {
                         self.items.retain(|x| {
                             matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
@@ -1810,17 +2075,47 @@ impl eframe::App for PydlApp {
                     (ui.available_height() - RESERVE_BOTTOM_PX).max(min_card_viewport);
 
                 egui::Frame::dark_canvas(ui.style())
-                    .fill(Color32::from_rgb(22, 22, 26))
-                    .stroke(egui::Stroke::new(1.0, Color32::from_rgb(58, 58, 66)))
+                    .fill(BG_CANVAS)
+                    .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
                     .inner_margin(egui::Margin::same(10.0))
                     .rounding(egui::Rounding::same(8.0))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
-                        ui.label(RichText::new("Videos").strong());
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Videos").strong());
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                if secondary_button(
+                                    ui,
+                                    if self.settings.logs_docked {
+                                        "Undock log"
+                                    } else {
+                                        "Dock log"
+                                    },
+                                    true,
+                                )
+                                .clicked()
+                                {
+                                    self.settings.logs_docked = !self.settings.logs_docked;
+                                    self.persist_settings();
+                                }
+                            });
+                        });
+                        let dock_log =
+                            self.settings.logs_open && self.settings.logs_docked;
+                        let log_h = if dock_log {
+                            self.settings.log_dock_height.clamp(80.0, 480.0)
+                        } else {
+                            0.0
+                        };
+                        let cards_h = if dock_log {
+                            (video_scroll_h - log_h - 12.0).max(120.0)
+                        } else {
+                            video_scroll_h
+                        };
                         egui::ScrollArea::vertical()
                             .id_salt("rustdl_videos_scroll")
                             .auto_shrink([false, false])
-                            .max_height(video_scroll_h)
+                            .max_height(cards_h)
                             .animated(true)
                             .drag_to_scroll(true)
                             .show(ui, |ui| {
@@ -1828,7 +2123,7 @@ impl eframe::App for PydlApp {
                                     ui.vertical_centered(|ui| {
                                         ui.add_space(32.0);
                                         ui.label(
-                                            RichText::new("Nothing here yet").color(Color32::GRAY),
+                                            RichText::new("Nothing here yet").color(TEXT_MUTED),
                                         );
                                         ui.label(
                                             RichText::new(
@@ -1841,13 +2136,25 @@ impl eframe::App for PydlApp {
                                     self.draw_grouped_cards(ui);
                                 }
                             });
+                        if dock_log {
+                            ui.add_space(6.0);
+                            ui.label(RichText::new("Activity log").small().strong());
+                            ui.add(
+                                egui::Slider::new(&mut self.settings.log_dock_height, 80.0..=480.0)
+                                    .text("Log height"),
+                            );
+                            self.draw_activity_log_panel(ui);
+                        }
                     });
         });
 
         let was_settings_open = self.settings_open;
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
-        self.draw_logs_window(ctx);
+        if self.settings.logs_open && !self.settings.logs_docked {
+            self.draw_logs_window(ctx);
+        }
+        self.maybe_notify_session_complete();
         if was_settings_open && !self.settings_open && self.settings_dirty {
             self.settings.worker_count = self.worker_count.clamp(1, 6);
             self.settings.output_dir = self.output_dir.clone();
@@ -1865,5 +2172,6 @@ impl eframe::App for PydlApp {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.flush_queue_to_disk();
         self.flush_log_to_disk();
+        let _ = save_settings(&self.settings);
     }
 }
