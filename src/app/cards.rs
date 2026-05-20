@@ -1,4 +1,5 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
@@ -10,6 +11,7 @@ use crate::app_ui::{
     warning_button, MetaBadgeKind,
 };
 use crate::models::ItemStatus;
+use crate::time_format::{format_absolute_local, format_relative_ago};
 use crate::ui_icons;
 
 use super::{
@@ -36,7 +38,7 @@ impl PydlApp {
         let thumbnail_url = self.items[idx].thumbnail_url.clone();
         let has_thumbnail_url = thumbnail_url.is_some();
         let resolving = status == ItemStatus::Resolving;
-        let done_file = match status {
+        let done_file: Option<(PathBuf, SystemTime)> = match status {
             ItemStatus::Done | ItemStatus::Failed => {
                 let it = &self.items[idx];
                 self.find_downloaded_file_for_item(it)
@@ -172,6 +174,24 @@ impl PydlApp {
                     egui::Label::new(RichText::new(subtitle_text).small().color(Color32::LIGHT_GRAY))
                         .wrap(),
                 );
+                if let Some((ref path, mtime)) = done_file {
+                    let fname = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("file");
+                    let rel = format_relative_ago(mtime);
+                    let abs = format_absolute_local(mtime);
+                    let file_line = format!("{fname} · {rel}");
+                    let hover = format!(
+                        "{}\nModified: {abs}",
+                        path.to_string_lossy()
+                    );
+                    let file_label = ui.add(
+                        egui::Label::new(RichText::new(file_line).small().color(Color32::from_gray(150)))
+                            .wrap(),
+                    );
+                    file_label.on_hover_text(hover);
+                }
                 let footer_status = if resolving {
                     "metadata".to_owned()
                 } else if is_pre_download {
@@ -281,7 +301,7 @@ impl PydlApp {
                                             .on_hover_text("Open with the default app for this file type")
                                             .clicked()
                                         {
-                                            if let Some(p) = done_file.as_ref() {
+                                            if let Some((p, _)) = done_file.as_ref() {
                                                 self.open_file_path(p);
                                             }
                                             ui.close_menu();
@@ -294,7 +314,7 @@ impl PydlApp {
                                             .on_hover_text("Show the file in Explorer / file manager")
                                             .clicked()
                                         {
-                                            if let Some(p) = done_file.as_ref() {
+                                            if let Some((p, _)) = done_file.as_ref() {
                                                 self.reveal_file_path(p);
                                             }
                                             ui.close_menu();
@@ -356,7 +376,7 @@ impl PydlApp {
                             let r = ui.menu_button(
                                 format!("{} Remove…", ui_icons::CARD_DELETE),
                                 |ui| {
-                                    if let Some(p) = done_file.as_ref() {
+                                    if let Some((p, _)) = done_file.as_ref() {
                                         if danger_button(
                                             ui,
                                             &format!("{} Delete file from disk", ui_icons::CARD_DELETE),

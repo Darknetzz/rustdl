@@ -15,6 +15,7 @@ winres = "0.1"
 
 [dependencies]
 anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 arboard = "3"
 crossbeam-channel = "0.5"
 dirs = "6"

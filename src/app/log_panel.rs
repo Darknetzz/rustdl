@@ -2,6 +2,7 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{danger_button, secondary_button};
+use crate::time_format::{log_message_body, split_log_line};
 use crate::ui_icons;
 
 use super::{InputLineInfo, InputLineKind, PydlApp, ICON_MISSING, ICON_OK};
@@ -23,12 +24,13 @@ impl LogFilter {
     }
 
     pub(crate) fn accepts(self, line: &str) -> bool {
+        let body = log_message_body(line);
         match self {
             LogFilter::All => true,
-            LogFilter::Errors => is_error_line(line),
+            LogFilter::Errors => is_error_line(body),
             LogFilter::Important => {
-                let lower = line.to_ascii_lowercase();
-                is_error_line(line)
+                let lower = body.to_ascii_lowercase();
+                is_error_line(body)
                     || lower.contains("metadata fetch failed")
                     || lower.contains("download failed")
                     || lower.contains("starting")
@@ -47,11 +49,12 @@ pub(crate) const LOG_COLOR_OK: Color32 = Color32::from_rgb(132, 204, 154);
 pub(crate) const LOG_COLOR_DIM: Color32 = Color32::from_rgb(168, 170, 178);
 
 pub(crate) fn log_line_color(line: &str) -> Color32 {
-    if is_error_line(line) {
+    let body = log_message_body(line);
+    if is_error_line(body) {
         LOG_COLOR_ERROR
-    } else if is_warning_line(line) {
+    } else if is_warning_line(body) {
         LOG_COLOR_WARN
-    } else if is_success_line(line) {
+    } else if is_success_line(body) {
         LOG_COLOR_OK
     } else {
         LOG_COLOR_DIM
@@ -61,14 +64,21 @@ pub(crate) fn log_line_color(line: &str) -> Color32 {
 fn log_line_widget(line: &str, color: Color32, ui: &egui::Ui) -> egui::WidgetText {
     let font_px = egui::TextStyle::Small.resolve(ui.style()).size;
     let font_id = egui::FontId::new(font_px, egui::FontFamily::Monospace);
-    let job = egui::text::LayoutJob::single_section(
-        line.to_owned(),
-        egui::text::TextFormat {
-            font_id,
-            color,
-            ..Default::default()
-        },
-    );
+    let fmt = |c: Color32| egui::text::TextFormat {
+        font_id: font_id.clone(),
+        color: c,
+        ..Default::default()
+    };
+    let (ts, body) = split_log_line(line);
+    let mut job = egui::text::LayoutJob::default();
+    if !ts.is_empty() {
+        job.append(
+            &format!("[{ts}] "),
+            0.0,
+            fmt(LOG_COLOR_DIM),
+        );
+    }
+    job.append(body, 0.0, fmt(color));
     egui::WidgetText::from(job)
 }
 
@@ -147,7 +157,7 @@ impl PydlApp {
                     .log_lines
                     .iter()
                     .rev()
-                    .find(|line| is_error_line(line))
+                    .find(|line| is_error_line(log_message_body(line)))
                 {
                     ui.ctx().copy_text(last.clone());
                 }

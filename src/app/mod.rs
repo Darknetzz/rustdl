@@ -384,8 +384,9 @@ impl PydlApp {
         };
     }
 
-    fn append_log(&mut self, line: &str) {
-        self.log_lines.push_back(line.to_string());
+    fn append_log(&mut self, message: &str) {
+        let line = crate::time_format::format_log_line(message);
+        self.log_lines.push_back(line);
         trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
         self.schedule_log_save();
     }
@@ -537,7 +538,10 @@ impl PydlApp {
         }
     }
 
-    fn find_downloaded_file_for_item(&self, item: &QueueItem) -> Option<PathBuf> {
+    fn find_downloaded_file_for_item(
+        &self,
+        item: &QueueItem,
+    ) -> Option<(PathBuf, std::time::SystemTime)> {
         self.done_file_index.find(&item.video_id)
     }
 
@@ -711,7 +715,7 @@ impl PydlApp {
         if self.items[idx].status != ItemStatus::Done {
             return;
         }
-        let Some(path) = self.find_downloaded_file_for_item(&self.items[idx]) else {
+        let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) else {
             return;
         };
         let path_str = path.to_string_lossy().to_string();
@@ -1035,7 +1039,7 @@ impl PydlApp {
         let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
             return;
         };
-        if let Some(path) = self.find_downloaded_file_for_item(&self.items[idx]) {
+        if let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) {
             if let Err(e) = fs::remove_file(&path) {
                 self.append_log(&format!(
                     "Could not remove old file {}: {e}",
@@ -1171,7 +1175,7 @@ impl PydlApp {
         if item.video_id.trim().is_empty() {
             return Err("No video id; cannot match a file in the output folder.".to_owned());
         }
-        let Some(path) = self.find_downloaded_file_for_item(item) else {
+        let Some((path, _)) = self.find_downloaded_file_for_item(item) else {
             return Err("No matching file in the output folder.".to_owned());
         };
         let path_str = path.to_string_lossy().to_string();
@@ -1199,7 +1203,7 @@ impl PydlApp {
                 if v {
                     let path_str = self
                         .find_downloaded_file_for_item(&item)
-                        .map(|p| p.to_string_lossy().to_string())
+                        .map(|(p, _)| p.to_string_lossy().to_string())
                         .unwrap_or_default();
                     if !path_str.is_empty() {
                         if let Some((w, h)) = ytdlp::probe_video_resolution_with_path(
@@ -1280,7 +1284,7 @@ impl PydlApp {
         if item.video_id.trim().is_empty() {
             return None;
         }
-        let _path = self.find_downloaded_file_for_item(item)?;
+        let (_path, _) = self.find_downloaded_file_for_item(item)?;
         let (has_video, has_audio) = match self.probe_saved_file_streams(item) {
             Ok(x) => x,
             Err(msg) => return Some(msg),

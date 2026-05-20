@@ -6,9 +6,9 @@ use std::time::SystemTime;
 /// Max directory entries processed per scan so huge download folders stay responsive.
 pub(crate) const DONE_LOOKUP_MAX_ENTRIES: usize = 50_000;
 
-/// Indexes `video_id` → output file path using `[id]` segments in filenames.
+/// Indexes `video_id` → output file path and last-modified time using `[id]` segments in filenames.
 pub(crate) struct DoneFileIndex {
-    pub(crate) lookup: HashMap<String, PathBuf>,
+    pub(crate) lookup: HashMap<String, (PathBuf, SystemTime)>,
     cached_output_dir: String,
     cached_dir_mtime: Option<SystemTime>,
     force_refresh: bool,
@@ -73,13 +73,16 @@ impl DoneFileIndex {
             let Some(fname) = p.file_name().and_then(|n| n.to_str()) else {
                 continue;
             };
+            let mtime = fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
             for id in bracket_ids_in_filename(fname) {
-                self.lookup.insert(id, p.clone());
+                self.lookup.insert(id, (p.clone(), mtime));
             }
         }
     }
 
-    pub(crate) fn find(&self, video_id: &str) -> Option<PathBuf> {
+    pub(crate) fn find(&self, video_id: &str) -> Option<(PathBuf, SystemTime)> {
         let id = video_id.trim();
         if id.is_empty() {
             return None;
