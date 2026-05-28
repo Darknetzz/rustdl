@@ -42,8 +42,8 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    danger_button, draw_status_dot, secondary_button, status_color, success_button,
-    warning_button,
+    alert_warning, danger_button, draw_status_dot, secondary_button, status_color,
+    success_button, warning_button, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
@@ -1668,23 +1668,25 @@ impl eframe::App for PydlApp {
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
                 if self.show_restore_banner && self.restored_items_count > 0 {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.colored_label(
-                            LOG_COLOR_WARN,
-                            format!(
-                                "Restored {} item(s) from previous session.",
-                                self.restored_items_count
-                            ),
-                        );
-                        if warning_button(
-                            ui,
-                            &format!("{} Dismiss", ui_icons::DISMISS),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.show_restore_banner = false;
-                        }
+                    alert_warning(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(format!(
+                                    "Restored {} item(s) from previous session.",
+                                    self.restored_items_count
+                                ))
+                                .color(ALERT_WARNING_TEXT),
+                            );
+                            if warning_button(
+                                ui,
+                                &format!("{} Dismiss", ui_icons::DISMISS),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                self.show_restore_banner = false;
+                            }
+                        });
                     });
                 }
                 ui.horizontal(|ui| {

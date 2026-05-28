@@ -131,6 +131,22 @@ pub fn warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response
     )
 }
 
+/// Bootstrap 5 `.alert-warning` palette (`#fff3cd` / `#ffecb5` / `#664d03`).
+const ALERT_WARNING_BG: Color32 = Color32::from_rgb(255, 243, 205);
+const ALERT_WARNING_BORDER: Color32 = Color32::from_rgb(255, 236, 181);
+pub const ALERT_WARNING_TEXT: Color32 = Color32::from_rgb(102, 77, 3);
+
+/// Bordered warning strip matching Bootstrap `alert alert-warning`.
+pub fn alert_warning<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Frame::none()
+        .fill(ALERT_WARNING_BG)
+        .stroke(egui::Stroke::new(1.0, ALERT_WARNING_BORDER))
+        .rounding(egui::Rounding::same(6.0))
+        .inner_margin(egui::Margin::same(12.0))
+        .show(ui, add_contents)
+        .inner
+}
+
 pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
     colored_button(
         ui,
