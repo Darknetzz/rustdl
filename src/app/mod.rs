@@ -42,8 +42,8 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    alert_warning, danger_button, draw_status_dot, secondary_button, status_color,
-    success_button, warning_button, ALERT_WARNING_TEXT,
+    alert_danger, alert_warning, danger_button, draw_status_dot, modal_backdrop, secondary_button,
+    status_color, success_button, warning_button, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
@@ -1578,28 +1578,78 @@ impl PydlApp {
         if !self.exit_confirm_open {
             return;
         }
+        if modal_backdrop(ctx, egui::Id::new("exit_confirm_backdrop")) {
+            self.exit_confirm_open = false;
+            return;
+        }
+        let work_active = self.exit_work_in_progress();
         egui::Window::new("Quit rustdl?")
             .collapsible(false)
             .resizable(false)
+            .default_width(440.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
-                if self.exit_work_in_progress() {
-                    ui.label("Downloads or metadata fetches are still running.");
-                    ui.label(
-                        "Your queue will be saved. Active yt-dlp jobs may continue until they finish or you stop them.",
-                    );
+                ui.set_width(ui.available_width());
+                if work_active {
+                    alert_warning(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(ui_icons::EXIT)
+                                    .size(32.0)
+                                    .color(ALERT_WARNING_TEXT),
+                            );
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Downloads or metadata fetches are still running.")
+                                        .strong()
+                                        .color(ALERT_WARNING_TEXT),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new(
+                                        "Your queue will be saved. Active yt-dlp jobs may continue until they finish or you stop them.",
+                                    )
+                                    .color(ALERT_WARNING_TEXT),
+                                );
+                            });
+                        });
+                    });
                 } else {
-                    ui.label("Quit rustdl?");
+                    alert_danger(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.label(
+                                RichText::new(ui_icons::EXIT)
+                                    .size(32.0)
+                                    .color(ALERT_DANGER_TEXT),
+                            );
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new("Are you sure you want to close rustdl?")
+                                        .strong()
+                                        .color(ALERT_DANGER_TEXT),
+                                );
+                                ui.add_space(4.0);
+                                ui.label(
+                                    RichText::new("Your download queue will be saved.")
+                                        .color(ALERT_DANGER_TEXT),
+                                );
+                            });
+                        });
+                    });
                 }
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if secondary_button(ui, "Cancel", true).clicked() {
-                        self.exit_confirm_open = false;
-                    }
-                    if danger_button(ui, "Quit", true).clicked() {
-                        self.confirm_exit(ctx);
-                    }
-                });
+                ui.add_space(12.0);
+                ui.with_layout(
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        if danger_button(ui, "Quit", true).clicked() {
+                            self.confirm_exit(ctx);
+                        }
+                        ui.add_space(8.0);
+                        if secondary_button(ui, "Cancel", true).clicked() {
+                            self.exit_confirm_open = false;
+                        }
+                    },
+                );
             });
     }
 }

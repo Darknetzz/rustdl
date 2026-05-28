@@ -16,16 +16,37 @@ pub fn status_color(s: ItemStatus) -> Color32 {
 
 /// Small filled circle aligned with status summary text (e.g. download counts).
 pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
-    let side = 8.0;
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(side, side), egui::Sense::hover());
-    let radius = side * 0.38;
+    let dot = 8.0;
+    let line_h = ui.text_style_height(&egui::TextStyle::Body);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(dot, line_h), egui::Sense::hover());
+    let center = rect.center();
+    let radius = dot * 0.38;
     ui.painter()
-        .circle_filled(rect.center(), radius, color);
+        .circle_filled(center, radius, color);
     ui.painter().circle_stroke(
-        rect.center(),
+        center,
         radius,
         egui::Stroke::new(1.0, shade(color, 0.72)),
     );
+}
+
+/// Status dot immediately before colored label text.
+pub fn status_dot_with_label(
+    ui: &mut egui::Ui,
+    text: impl AsRef<str>,
+    color: Color32,
+    strong: bool,
+) -> Response {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        draw_status_dot(ui, color);
+        let mut rt = RichText::new(text.as_ref()).color(color);
+        if strong {
+            rt = rt.strong();
+        }
+        ui.label(rt)
+    })
+    .response
 }
 
 pub fn draw_status_chip(ui: &mut egui::Ui, status: ItemStatus) {
@@ -136,20 +157,55 @@ const ALERT_WARNING_BG: Color32 = Color32::from_rgb(255, 243, 205);
 const ALERT_WARNING_BORDER: Color32 = Color32::from_rgb(255, 236, 181);
 pub const ALERT_WARNING_TEXT: Color32 = Color32::from_rgb(102, 77, 3);
 
-/// Bordered warning strip matching Bootstrap `alert alert-warning` (full container width).
-pub fn alert_warning<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+/// Bootstrap 5 `.alert-danger` palette (`#f8d7da` / `#f5c2c7` / `#842029`).
+const ALERT_DANGER_BG: Color32 = Color32::from_rgb(248, 215, 218);
+const ALERT_DANGER_BORDER: Color32 = Color32::from_rgb(245, 194, 199);
+pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
+
+fn alert_box<R>(
+    ui: &mut egui::Ui,
+    bg: Color32,
+    border: Color32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     let width = ui.available_width();
     ui.scope(|ui| {
         ui.set_width(width);
         egui::Frame::none()
-            .fill(ALERT_WARNING_BG)
-            .stroke(egui::Stroke::new(1.0, ALERT_WARNING_BORDER))
+            .fill(bg)
+            .stroke(egui::Stroke::new(1.0, border))
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, add_contents)
             .inner
     })
     .inner
+}
+
+/// Bordered warning strip matching Bootstrap `alert alert-warning` (full container width).
+pub fn alert_warning<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    alert_box(ui, ALERT_WARNING_BG, ALERT_WARNING_BORDER, add_contents)
+}
+
+/// Bordered danger strip matching Bootstrap `alert alert-danger` (full container width).
+pub fn alert_danger<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    alert_box(ui, ALERT_DANGER_BG, ALERT_DANGER_BORDER, add_contents)
+}
+
+/// Dim the full viewport behind a modal. Returns `true` if the user clicked the backdrop.
+pub fn modal_backdrop(ctx: &egui::Context, id: egui::Id) -> bool {
+    let screen = ctx.screen_rect();
+    let response = egui::Area::new(id)
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.left_top())
+        .interactable(true)
+        .show(ctx, |ui| {
+            let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
+            ui.painter()
+                .rect_filled(rect, 0.0, Color32::from_black_alpha(160));
+            response
+        });
+    response.inner.clicked()
 }
 
 pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {

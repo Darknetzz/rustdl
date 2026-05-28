@@ -7,8 +7,8 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::parse_item_size_text;
 use crate::app_state::TransferTotals;
 use crate::app_ui::{
-    danger_button, draw_meta_badge, draw_status_chip, draw_status_dot, secondary_button,
-    status_color, warning_button, MetaBadgeKind,
+    danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
+    status_dot_with_label, warning_button, MetaBadgeKind,
 };
 use crate::theme;
 use crate::models::{ItemStatus, QueueItem};
@@ -594,15 +594,16 @@ impl PydlApp {
             let scroll_here = self.scroll_to_queue_group == Some(label);
             let default_open = self.queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
-            ui.horizontal(|ui| {
-                draw_status_dot(ui, header_color);
-                ui.add_space(4.0);
-                let collapse = egui::CollapsingHeader::new(
-                    RichText::new(header_text).color(header_color).strong(),
-                )
-                .id_salt(label)
-                .default_open(default_open)
-                .show(ui, |ui| {
+            let id = ui.make_persistent_id(label);
+            let header = egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                id,
+                default_open,
+            )
+            .show_header(ui, |ui| {
+                status_dot_with_label(ui, &header_text, header_color, true)
+            });
+            let (_toggle, header_inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                     if self.settings.card_list_layout {
                         for id in &ids {
@@ -632,11 +633,10 @@ impl PydlApp {
                             });
                     }
                 });
-                if scroll_here {
-                    ui.scroll_to_rect(collapse.header_response.rect, Some(egui::Align::TOP));
-                    self.scroll_to_queue_group = None;
-                }
-            });
+            if scroll_here {
+                ui.scroll_to_rect(header_inner.response.rect, Some(egui::Align::TOP));
+                self.scroll_to_queue_group = None;
+            }
         }
         if !self.queue_search.is_empty()
             && !self.items.iter().any(|it| self.item_matches_search(it))
