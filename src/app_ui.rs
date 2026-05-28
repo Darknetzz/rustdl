@@ -136,15 +136,20 @@ const ALERT_WARNING_BG: Color32 = Color32::from_rgb(255, 243, 205);
 const ALERT_WARNING_BORDER: Color32 = Color32::from_rgb(255, 236, 181);
 pub const ALERT_WARNING_TEXT: Color32 = Color32::from_rgb(102, 77, 3);
 
-/// Bordered warning strip matching Bootstrap `alert alert-warning`.
+/// Bordered warning strip matching Bootstrap `alert alert-warning` (full container width).
 pub fn alert_warning<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    egui::Frame::none()
-        .fill(ALERT_WARNING_BG)
-        .stroke(egui::Stroke::new(1.0, ALERT_WARNING_BORDER))
-        .rounding(egui::Rounding::same(6.0))
-        .inner_margin(egui::Margin::same(12.0))
-        .show(ui, add_contents)
-        .inner
+    let width = ui.available_width();
+    ui.scope(|ui| {
+        ui.set_width(width);
+        egui::Frame::none()
+            .fill(ALERT_WARNING_BG)
+            .stroke(egui::Stroke::new(1.0, ALERT_WARNING_BORDER))
+            .rounding(egui::Rounding::same(6.0))
+            .inner_margin(egui::Margin::same(12.0))
+            .show(ui, add_contents)
+            .inner
+    })
+    .inner
 }
 
 pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
