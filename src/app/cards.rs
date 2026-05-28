@@ -11,7 +11,7 @@ use crate::app_ui::{
     status_color, warning_button, MetaBadgeKind,
 };
 use crate::theme;
-use crate::models::ItemStatus;
+use crate::models::{ItemStatus, QueueItem};
 use crate::time_format::{format_absolute_local, format_relative_ago};
 use crate::ui_icons;
 
@@ -534,18 +534,40 @@ impl PydlApp {
         ui.separator();
     }
 
-    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
-        let groups = [
-            (
-                "Active",
-                [ItemStatus::Downloading, ItemStatus::Queued].as_slice(),
+    fn item_in_queue_group(&self, it: &QueueItem, label: &str) -> bool {
+        if !self.item_matches_search(it) {
+            return false;
+        }
+        match label {
+            "Active" => matches!(
+                it.status,
+                ItemStatus::Downloading | ItemStatus::Queued
             ),
-            ("Ready", [ItemStatus::Idle].as_slice()),
-            ("Issues", [ItemStatus::Failed].as_slice()),
-            ("Done", [ItemStatus::Done].as_slice()),
-            ("Resolving", [ItemStatus::Resolving].as_slice()),
-        ];
-        for (label, statuses) in groups {
+            "Ready" => it.status == ItemStatus::Idle && it.error.is_none(),
+            "Issues" => {
+                it.status == ItemStatus::Failed
+                    || (it.status == ItemStatus::Idle && it.error.is_some())
+            }
+            "Done" => it.status == ItemStatus::Done,
+            "Resolving" => it.status == ItemStatus::Resolving,
+            _ => false,
+        }
+    }
+
+    fn queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
+        if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
+            return true;
+        }
+        match label {
+            "Done" | "Ready" => false,
+            "Issues" => true,
+            _ => self.queue_search.is_empty(),
+        }
+    }
+
+    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
+        let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
+        for label in groups {
             if self
                 .queue_group_focus
                 .is_some_and(|f| f != label)
@@ -555,7 +577,7 @@ impl PydlApp {
             let ids: Vec<u64> = self
                 .items
                 .iter()
-                .filter(|it| statuses.contains(&it.status) && self.item_matches_search(it))
+                .filter(|it| self.item_in_queue_group(it, label))
                 .map(|it| it.item_id)
                 .collect();
             if ids.is_empty() {
@@ -570,8 +592,7 @@ impl PydlApp {
                 _ => Color32::LIGHT_GRAY,
             };
             let scroll_here = self.scroll_to_queue_group == Some(label);
-            let default_open =
-                scroll_here || self.queue_group_focus.is_some() || self.queue_search.is_empty();
+            let default_open = self.queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
             ui.horizontal(|ui| {
                 draw_status_dot(ui, header_color);
