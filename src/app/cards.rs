@@ -597,46 +597,46 @@ impl PydlApp {
             ui.horizontal(|ui| {
                 draw_status_dot(ui, header_color);
                 ui.add_space(4.0);
-            });
-            let collapse = egui::CollapsingHeader::new(
-                RichText::new(header_text).color(header_color).strong(),
-            )
-            .id_salt(label)
-            .default_open(default_open)
-            .show(ui, |ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                if self.settings.card_list_layout {
-                    for id in &ids {
-                        if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
-                            self.draw_card(ui, idx);
+                let collapse = egui::CollapsingHeader::new(
+                    RichText::new(header_text).color(header_color).strong(),
+                )
+                .id_salt(label)
+                .default_open(default_open)
+                .show(ui, |ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                    if self.settings.card_list_layout {
+                        for id in &ids {
+                            if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
+                                self.draw_card(ui, idx);
+                            }
                         }
-                    }
-                } else {
-                    let row_width = ui.available_width();
-                    egui::ScrollArea::horizontal()
-                        .id_salt(format!("rustdl_cards_{label}"))
-                        .auto_shrink([false, false])
-                        .max_width(row_width)
-                        .animated(true)
-                        .drag_to_scroll(true)
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                for id in &ids {
-                                    if let Some(idx) =
-                                        self.items.iter().position(|it| it.item_id == *id)
-                                    {
-                                        self.draw_card(ui, idx);
+                    } else {
+                        let row_width = ui.available_width();
+                        egui::ScrollArea::horizontal()
+                            .id_salt(format!("rustdl_cards_{label}"))
+                            .auto_shrink([false, false])
+                            .max_width(row_width)
+                            .animated(true)
+                            .drag_to_scroll(true)
+                            .show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                                    for id in &ids {
+                                        if let Some(idx) =
+                                            self.items.iter().position(|it| it.item_id == *id)
+                                        {
+                                            self.draw_card(ui, idx);
+                                        }
                                     }
-                                }
+                                });
                             });
-                        });
+                    }
+                });
+                if scroll_here {
+                    ui.scroll_to_rect(collapse.header_response.rect, Some(egui::Align::TOP));
+                    self.scroll_to_queue_group = None;
                 }
             });
-            if scroll_here {
-                ui.scroll_to_rect(collapse.header_response.rect, Some(egui::Align::TOP));
-                self.scroll_to_queue_group = None;
-            }
         }
         if !self.queue_search.is_empty()
             && !self.items.iter().any(|it| self.item_matches_search(it))

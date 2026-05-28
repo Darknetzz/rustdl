@@ -137,6 +137,9 @@ pub struct PydlApp {
     restored_items_count: usize,
     show_restore_banner: bool,
     about_open: bool,
+    exit_confirm_open: bool,
+    /// After the user confirms quit, allow the next viewport close through.
+    exit_allowed: bool,
     /// When set, only the matching queue section is shown (click download summary).
     queue_group_focus: Option<&'static str>,
     /// Scroll target set when focusing a queue group from the summary row.
@@ -251,6 +254,8 @@ impl PydlApp {
             restored_items_count: 0,
             show_restore_banner: false,
             about_open: false,
+            exit_confirm_open: false,
+            exit_allowed: false,
             queue_group_focus: None,
             scroll_to_queue_group: None,
             queue_search: String::new(),
@@ -1538,6 +1543,65 @@ impl PydlApp {
             self.merge_dragged_urls_into_input(urls, ctx);
         }
     }
+
+    fn exit_work_in_progress(&self) -> bool {
+        self.add_in_progress
+            || self.status_resolving > 0
+            || self.status_queued > 0
+            || self.status_active > 0
+            || self.queue_running > 0
+    }
+
+    fn open_exit_confirm(&mut self) {
+        self.exit_confirm_open = true;
+    }
+
+    fn confirm_exit(&mut self, ctx: &egui::Context) {
+        self.exit_confirm_open = false;
+        self.exit_allowed = true;
+        self.flush_queue_to_disk();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    fn handle_viewport_close_request(&mut self, ctx: &egui::Context) {
+        if !ctx.input(|i| i.viewport().close_requested()) {
+            return;
+        }
+        if self.exit_allowed {
+            return;
+        }
+        ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        self.open_exit_confirm();
+    }
+
+    fn draw_exit_confirm_dialog(&mut self, ctx: &egui::Context) {
+        if !self.exit_confirm_open {
+            return;
+        }
+        egui::Window::new("Quit rustdl?")
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                if self.exit_work_in_progress() {
+                    ui.label("Downloads or metadata fetches are still running.");
+                    ui.label(
+                        "Your queue will be saved. Active yt-dlp jobs may continue until they finish or you stop them.",
+                    );
+                } else {
+                    ui.label("Quit rustdl?");
+                }
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if secondary_button(ui, "Cancel", true).clicked() {
+                        self.exit_confirm_open = false;
+                    }
+                    if danger_button(ui, "Quit", true).clicked() {
+                        self.confirm_exit(ctx);
+                    }
+                });
+            });
+    }
 }
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -1561,6 +1625,7 @@ impl eframe::App for PydlApp {
             self.drain_win_browser_url_drops(ctx);
         }
         self.apply_dropped_shortcut_files(ctx);
+        self.handle_viewport_close_request(ctx);
         self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
@@ -1636,8 +1701,7 @@ impl eframe::App for PydlApp {
                         self.toggle_logs_panel();
                     }
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                        self.flush_queue_to_disk();
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                        self.open_exit_confirm();
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
@@ -2166,6 +2230,7 @@ impl eframe::App for PydlApp {
         }
 
         self.input_urls_snapshot = self.input_urls.clone();
+        self.draw_exit_confirm_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
     }
 
