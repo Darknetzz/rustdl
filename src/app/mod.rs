@@ -42,7 +42,7 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    alert_danger, alert_warning, danger_button, draw_status_dot, modal_backdrop, secondary_button,
+    alert_danger, alert_warning, danger_button, draw_status_dot, secondary_button,
     status_color, success_button, warning_button, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
@@ -1578,12 +1578,11 @@ impl PydlApp {
         if !self.exit_confirm_open {
             return;
         }
-        if modal_backdrop(ctx, egui::Id::new("exit_confirm_backdrop")) {
-            self.exit_confirm_open = false;
-            return;
-        }
+        let mut exit_confirm_open = self.exit_confirm_open;
+        let mut cancel_exit_confirm = false;
         let work_active = self.exit_work_in_progress();
         egui::Window::new("Quit rustdl?")
+            .open(&mut exit_confirm_open)
             .collapsible(false)
             .resizable(false)
             .default_width(440.0)
@@ -1646,11 +1645,15 @@ impl PydlApp {
                         }
                         ui.add_space(8.0);
                         if secondary_button(ui, "Cancel", true).clicked() {
-                            self.exit_confirm_open = false;
+                            cancel_exit_confirm = true;
                         }
                     },
                 );
             });
+        if cancel_exit_confirm {
+            exit_confirm_open = false;
+        }
+        self.exit_confirm_open = exit_confirm_open;
     }
 }
 impl eframe::App for PydlApp {
