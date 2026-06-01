@@ -140,6 +140,8 @@ pub struct PydlApp {
     exit_confirm_open: bool,
     /// After the user confirms quit, allow the next viewport close through.
     exit_allowed: bool,
+    /// User confirmed quit while work was active; wait for graceful cancellation.
+    exit_pending_after_cancel: bool,
     /// When set, only the matching queue section is shown (click download summary).
     queue_group_focus: Option<&'static str>,
     /// Scroll target set when focusing a queue group from the summary row.
@@ -263,6 +265,7 @@ impl PydlApp {
             about_open: false,
             exit_confirm_open: false,
             exit_allowed: false,
+            exit_pending_after_cancel: false,
             queue_group_focus: None,
             scroll_to_queue_group: None,
             queue_search: String::new(),
@@ -1597,6 +1600,7 @@ impl PydlApp {
             || self.status_queued > 0
             || self.status_active > 0
             || self.queue_running > 0
+            || self.av1_running
     }
 
     fn open_exit_confirm(&mut self) {
@@ -1605,6 +1609,14 @@ impl PydlApp {
 
     fn confirm_exit(&mut self, ctx: &egui::Context) {
         self.exit_confirm_open = false;
+        if self.exit_work_in_progress() {
+            self.exit_pending_after_cancel = true;
+            self.av1_cancel_flag
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            self.cancel_all_active(CancelPostAction::Ready);
+            self.append_log("Graceful shutdown requested: cancelling active jobs before exit...");
+            return;
+        }
         self.exit_allowed = true;
         self.flush_queue_to_disk();
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -1669,7 +1681,7 @@ impl PydlApp {
                                 ui.add_space(6.0);
                                 ui.label(
                                     RichText::new(
-                                        "Your queue will be saved. Active yt-dlp jobs may continue until they finish or you stop them.",
+                                        "Your queue will be saved. Confirm quit to request graceful cancellation of active downloader/AV1 jobs before closing.",
                                     )
                                     .color(ALERT_WARNING_TEXT),
                                 );

@@ -27,6 +27,12 @@ impl eframe::App for PydlApp {
             self.apply_dropped_shortcut_files(ctx);
         }
         self.handle_viewport_close_request(ctx);
+        if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
+            self.exit_pending_after_cancel = false;
+            self.exit_allowed = true;
+            self.flush_queue_to_disk();
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);

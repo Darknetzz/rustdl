@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
@@ -212,6 +213,7 @@ pub fn run_single<F>(
     plan: &Av1PlanItem,
     cfg: &Av1Config,
     enc: &EncoderChoice,
+    cancel_flag: Option<Arc<AtomicBool>>,
     mut on_line: F,
 ) -> Result<()>
 where
@@ -284,6 +286,14 @@ where
     let mut rdr = std::io::BufReader::new(stdout);
     let mut line = String::new();
     loop {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|f| f.load(Ordering::Relaxed))
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(anyhow!("Cancelled by user."));
+        }
         line.clear();
         let n = std::io::BufRead::read_line(&mut rdr, &mut line)?;
         if n == 0 {

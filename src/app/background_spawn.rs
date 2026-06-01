@@ -291,10 +291,17 @@ pub(crate) fn spawn_av1_worker(
                 let cfg = cfg.clone();
                 let tx = tx.clone();
                 let enc = enc.clone();
+                let cancel_flag = cancel_flag.clone();
                 move || {
-                    av1_transcode::run_single(&item_for_primary, &cfg, &enc, |line| {
-                        let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
-                    })
+                    av1_transcode::run_single(
+                        &item_for_primary,
+                        &cfg,
+                        &enc,
+                        Some(cancel_flag),
+                        |line| {
+                            let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                        },
+                    )
                 }
             })
             .await;
@@ -342,10 +349,18 @@ pub(crate) fn spawn_av1_worker(
                             let cfg = cfg.clone();
                             let tx = tx.clone();
                             let item = item.clone();
+                            let cancel_flag = cancel_flag.clone();
                             move || {
-                                av1_transcode::run_single(&item, &cfg, &cpu_enc, |line| {
-                                    let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
-                                })
+                                av1_transcode::run_single(
+                                    &item,
+                                    &cfg,
+                                    &cpu_enc,
+                                    Some(cancel_flag),
+                                    |line| {
+                                        let _ =
+                                            try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                                    },
+                                )
                             }
                         })
                         .await;
