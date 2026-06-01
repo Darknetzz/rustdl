@@ -368,7 +368,7 @@ pub(crate) fn draw_precheck_status(
     let (icon, fg, text) = if ok {
         (
             "✔",
-            Color32::from_rgb(15, 48, 18),
+            Color32::from_rgb(132, 235, 156),
             "OK",
         )
     } else {

@@ -25,7 +25,7 @@ impl PydlApp {
         ui.horizontal_wrapped(|ui| {
             let ffmpeg_txt = if ffmpeg_ok { "✔ ffmpeg" } else { "✖ ffmpeg" };
             let ffmpeg_fg = if ffmpeg_ok {
-                egui::Color32::from_rgb(15, 48, 18)
+                egui::Color32::from_rgb(132, 235, 156)
             } else {
                 egui::Color32::from_rgb(70, 15, 15)
             };
@@ -37,7 +37,7 @@ impl PydlApp {
             ui.separator();
             let ffprobe_txt = if ffprobe_ok { "✔ ffprobe" } else { "✖ ffprobe" };
             let ffprobe_fg = if ffprobe_ok {
-                egui::Color32::from_rgb(15, 48, 18)
+                egui::Color32::from_rgb(132, 235, 156)
             } else {
                 egui::Color32::from_rgb(70, 15, 15)
             };
