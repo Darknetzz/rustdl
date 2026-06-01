@@ -67,20 +67,140 @@ pub fn draw_status_chip(ui: &mut egui::Ui, status: ItemStatus) {
 pub enum MetaBadgeKind {
     Resolution,
     SizeEstimate,
+    Codec,
+    FrameRate,
+    FileSize,
+    Bitrate,
 }
 
-/// Small pill label for resolution or estimated size on video cards.
-pub fn draw_meta_badge(ui: &mut egui::Ui, label: &str, kind: MetaBadgeKind) {
-    let (fill, text_color) = match kind {
-        MetaBadgeKind::Resolution => (
+fn parse_resolution_height(label: &str) -> u32 {
+    if let Some((_, h)) = label.split_once('x') {
+        return h.trim().parse().unwrap_or(0);
+    }
+    if let Some(h) = label.trim().strip_suffix('p') {
+        return h.parse().unwrap_or(0);
+    }
+    if let Some(h) = label.trim().strip_suffix('w') {
+        return h.parse().unwrap_or(0);
+    }
+    0
+}
+
+fn resolution_badge_colors(label: &str) -> (Color32, Color32) {
+    match parse_resolution_height(label) {
+        h if h >= 2160 => (
+            Color32::from_rgb(90, 45, 130),
+            Color32::from_rgb(240, 220, 255),
+        ),
+        h if h >= 1080 => (
             Color32::from_rgb(38, 90, 136),
             Color32::from_rgb(230, 240, 255),
         ),
-        MetaBadgeKind::SizeEstimate => (
+        h if h >= 720 => (
+            Color32::from_rgb(25, 100, 90),
+            Color32::from_rgb(210, 248, 240),
+        ),
+        h if h >= 480 => (
+            Color32::from_rgb(100, 85, 40),
+            Color32::from_rgb(255, 244, 210),
+        ),
+        _ => (
+            Color32::from_rgb(70, 70, 80),
+            Color32::from_rgb(220, 220, 228),
+        ),
+    }
+}
+
+fn codec_badge_colors(label: &str) -> (Color32, Color32) {
+    let c = label
+        .to_ascii_lowercase()
+        .replace(['.', '-', ' ', '_'], "");
+    if c.contains("av1") {
+        (
+            Color32::from_rgb(40, 110, 60),
+            Color32::from_rgb(215, 255, 225),
+        )
+    } else if c.contains("hevc") || c.contains("h265") || c.contains("265") {
+        (
+            Color32::from_rgb(130, 75, 25),
+            Color32::from_rgb(255, 232, 200),
+        )
+    } else if c.contains("h264") || c.contains("avc") || c.contains("264") {
+        (
+            Color32::from_rgb(35, 75, 140),
+            Color32::from_rgb(220, 235, 255),
+        )
+    } else if c.contains("vp9") {
+        (
+            Color32::from_rgb(85, 50, 120),
+            Color32::from_rgb(235, 220, 255),
+        )
+    } else if c.contains("vp8") {
+        (
+            Color32::from_rgb(70, 70, 100),
+            Color32::from_rgb(230, 230, 240),
+        )
+    } else {
+        (
+            Color32::from_rgb(65, 65, 75),
+            Color32::from_rgb(230, 230, 235),
+        )
+    }
+}
+
+fn fps_badge_colors(label: &str) -> (Color32, Color32) {
+    let fps: f32 = label
+        .split_whitespace()
+        .next()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0.0);
+    if fps >= 50.0 {
+        (
+            Color32::from_rgb(20, 120, 100),
+            Color32::from_rgb(200, 255, 240),
+        )
+    } else if fps >= 28.0 {
+        (
+            Color32::from_rgb(45, 95, 160),
+            Color32::from_rgb(220, 235, 255),
+        )
+    } else if fps >= 23.0 {
+        (
+            Color32::from_rgb(120, 85, 40),
+            Color32::from_rgb(255, 240, 210),
+        )
+    } else if fps > 0.0 {
+        (
+            Color32::from_rgb(70, 70, 80),
+            Color32::from_rgb(220, 220, 228),
+        )
+    } else {
+        (
+            Color32::from_rgb(70, 70, 80),
+            Color32::from_rgb(220, 220, 228),
+        )
+    }
+}
+
+fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
+    match kind {
+        MetaBadgeKind::Resolution => resolution_badge_colors(label),
+        MetaBadgeKind::SizeEstimate | MetaBadgeKind::FileSize => (
             Color32::from_rgb(120, 75, 20),
             Color32::from_rgb(255, 236, 200),
         ),
-    };
+        MetaBadgeKind::Codec => codec_badge_colors(label),
+        MetaBadgeKind::FrameRate => fps_badge_colors(label),
+        MetaBadgeKind::Bitrate => (
+            Color32::from_rgb(75, 55, 110),
+            Color32::from_rgb(235, 225, 255),
+        ),
+    }
+}
+
+/// Small pill label for resolution, codec, fps, and related metadata on video cards.
+pub fn draw_meta_badge(ui: &mut egui::Ui, label: &str, kind: MetaBadgeKind) {
+    let (fill, text_color) = meta_badge_colors(kind, label);
     egui::Frame::none()
         .fill(fill)
         .rounding(egui::Rounding::same(5.0))
@@ -88,6 +208,36 @@ pub fn draw_meta_badge(ui: &mut egui::Ui, label: &str, kind: MetaBadgeKind) {
         .show(ui, |ui| {
             ui.label(RichText::new(label).small().strong().color(text_color));
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolution_badge_colors_follow_height_buckets() {
+        let (fill_1080, _) = resolution_badge_colors("1920x1080");
+        let (fill_720, _) = resolution_badge_colors("1280x720");
+        assert_ne!(fill_1080, fill_720);
+    }
+
+    #[test]
+    fn codec_badge_colors_distinguish_common_codecs() {
+        let (av1, _) = codec_badge_colors("AV1");
+        let (h264, _) = codec_badge_colors("H264");
+        let (hevc, _) = codec_badge_colors("HEVC");
+        assert_ne!(av1, h264);
+        assert_ne!(h264, hevc);
+    }
+
+    #[test]
+    fn fps_badge_colors_distinguish_common_rates() {
+        let (fps60, _) = fps_badge_colors("60.00 fps");
+        let (fps30, _) = fps_badge_colors("30.00 fps");
+        let (fps24, _) = fps_badge_colors("23.98 fps");
+        assert_ne!(fps60, fps30);
+        assert_ne!(fps30, fps24);
+    }
 }
 
 fn shade(color: Color32, factor: f32) -> Color32 {

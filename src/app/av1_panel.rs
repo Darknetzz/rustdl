@@ -6,8 +6,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    danger_button, draw_status_dot, secondary_button, status_color, status_dot_with_label,
-    success_button,
+    danger_button, draw_meta_badge, draw_status_dot, secondary_button, status_color,
+    status_dot_with_label, success_button, MetaBadgeKind,
 };
 use crate::theme;
 use crate::av1_transcode::{self, Av1Config, Av1Input};
@@ -18,7 +18,6 @@ use crate::ui_icons;
 use super::PydlApp;
 
 const AV1_SKIPPED_COLOR: Color32 = Color32::from_rgb(255, 167, 38);
-const AV1_META_SEP: &str = " | ";
 
 fn ellipsize_str(input: &str, max_chars: usize) -> String {
     let mut out = String::new();
@@ -162,31 +161,49 @@ fn av1_item_has_media(item: &Av1QueueItem) -> bool {
         || item.bitrate_bps.is_some()
 }
 
-fn format_av1_media_line(item: &Av1QueueItem, probing: bool) -> String {
+fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, theme: &str) {
     if probing {
-        return "Probing metadata...".to_owned();
+        ui.label(
+            RichText::new("Probing metadata...")
+                .small()
+                .color(text_muted(theme)),
+        );
+        return;
     }
-    let mut parts = Vec::new();
-    if !item.video_codec.is_empty() {
-        parts.push(item.video_codec.to_uppercase());
+    if !av1_item_has_media(item) {
+        ui.label(
+            RichText::new("Metadata unavailable")
+                .small()
+                .color(text_muted(theme)),
+        );
+        return;
     }
-    if let (Some(w), Some(h)) = (item.width, item.height) {
-        parts.push(format!("{w}x{h}"));
-    }
-    if let Some(fps) = item.fps {
-        parts.push(format!("{fps:.2} fps"));
-    }
-    if item.input_bytes > 0 {
-        parts.push(human_bytes_ui(item.input_bytes));
-    }
-    if let Some(bps) = item.bitrate_bps {
-        parts.push(format_av1_bitrate(bps));
-    }
-    if parts.is_empty() {
-        "Metadata unavailable".to_owned()
-    } else {
-        parts.join(AV1_META_SEP)
-    }
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
+        if !item.video_codec.is_empty() {
+            draw_meta_badge(
+                ui,
+                &item.video_codec.to_uppercase(),
+                MetaBadgeKind::Codec,
+            );
+        }
+        if let (Some(w), Some(h)) = (item.width, item.height) {
+            draw_meta_badge(ui, &format!("{w}x{h}"), MetaBadgeKind::Resolution);
+        }
+        if let Some(fps) = item.fps {
+            draw_meta_badge(ui, &format!("{fps:.2} fps"), MetaBadgeKind::FrameRate);
+        }
+        if item.input_bytes > 0 {
+            draw_meta_badge(
+                ui,
+                &human_bytes_ui(item.input_bytes),
+                MetaBadgeKind::FileSize,
+            );
+        }
+        if let Some(bps) = item.bitrate_bps {
+            draw_meta_badge(ui, &format_av1_bitrate(bps), MetaBadgeKind::Bitrate);
+        }
+    });
 }
 
 fn normalize_av1_source_key(path: &str) -> String {
@@ -889,16 +906,7 @@ impl PydlApp {
                         }
 
                         let probing = self.av1_media_inflight.contains(&it.item_id);
-                        let media_line = format_av1_media_line(it, probing);
-                        ui.label(
-                            RichText::new(media_line)
-                                .small()
-                                .color(if av1_item_has_media(it) {
-                                    Color32::from_rgb(180, 200, 220)
-                                } else {
-                                    text_muted(theme)
-                                }),
-                        );
+                        draw_av1_media_badges(ui, it, probing, theme);
 
                         draw_av1_path_line(ui, "in:", &it.source_path, theme);
                         draw_av1_path_line(ui, "out:", &it.output_path, theme);
