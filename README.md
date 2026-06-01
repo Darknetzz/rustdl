@@ -22,6 +22,13 @@ From this directory:
 cargo run
 ```
 
+Headless download (no GUI):
+
+```bash
+cargo run -- --download "https://..." [--profile "Best quality"] [--output-dir "C:\path"]
+cargo run -- --list-profiles
+```
+
 From the monorepo root (`code`):
 
 ```bash
@@ -46,7 +53,9 @@ cargo test --all-targets --all-features
 - About dialog with app version and update check.
 - Settings persistence in user config directory.
 - Persisted activity log with timestamps; optional docked log panel under the queue.
-- Queue search, bulk selection, pause/resume downloads, and export URLs to `.txt`.
+- Queue search, bulk selection, pause/resume downloads, drag-to-reorder Ready items (list layout), and export URLs to `.txt`.
+- Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, and SponsorBlock options.
+- Light / dark / system theme; last mode (Downloader vs AV1) remembered across restarts.
 - Desktop notification when a download session finishes (where supported by the OS).
 - AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
 
@@ -113,7 +122,7 @@ Presets are quick-start bundles in **Settings -> Download** that set multiple to
 | --- | --- |
 | Best quality | Disables audio-only/remux toggles, enables faststart, sets extra args to `--merge-output-format mp4` |
 | Audio only | Enables MP3 extraction and disables remux-to-mp4 |
-| Fast download | Prioritizes speed/retries with extra args `--concurrent-fragments 4 --retries 10`, enables ignore errors |
+| Fast download | Prioritizes speed with `--concurrent-fragments 4` and ignore errors (HTTP retries remain unlimited by default) |
 | Archive mode | Enables writing metadata artifacts (`info.json`, subtitles, embedded metadata) and sets extra args to `--write-description` |
 
 Presets update current settings immediately, and you can still tweak any individual fields afterward.
@@ -151,7 +160,7 @@ Presets update current settings immediately, and you can still tweak any individ
 | --- | --- |
 | Option precedence | If both **Extract audio as mp3** and **Remux video to mp4** are selected, mp3 extraction takes precedence |
 | ffmpeg path usage | `ffmpeg path` is passed through `--ffmpeg-location` during downloads |
-| Persistence timing | Settings are persisted automatically whenever values change |
+| Persistence timing | Settings are saved immediately when changed in the Settings window or toolbar |
 
 ## Settings file location
 
