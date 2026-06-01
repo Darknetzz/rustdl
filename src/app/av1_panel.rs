@@ -4,6 +4,7 @@ use std::path::Path;
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_actions;
+use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     danger_button, draw_status_dot, secondary_button, status_color, status_dot_with_label,
     success_button,
@@ -38,6 +39,71 @@ fn av1_item_status_color(item: &Av1QueueItem) -> Color32 {
         return AV1_SKIPPED_COLOR;
     }
     status_color(item.status)
+}
+
+struct Av1BatchSummary {
+    completed: usize,
+    completed_input_bytes: u64,
+    completed_output_bytes: u64,
+    pending_input_bytes: u64,
+}
+
+fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
+    let mut summary = Av1BatchSummary {
+        completed: 0,
+        completed_input_bytes: 0,
+        completed_output_bytes: 0,
+        pending_input_bytes: 0,
+    };
+    for item in items {
+        let pending = matches!(
+            item.status,
+            ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
+        );
+        if pending {
+            summary.pending_input_bytes = summary.pending_input_bytes.saturating_add(item.input_bytes);
+            continue;
+        }
+        if item.status != ItemStatus::Done || av1_item_is_skipped(item) {
+            continue;
+        }
+        let Some(output_bytes) = item.output_bytes else {
+            continue;
+        };
+        summary.completed += 1;
+        summary.completed_input_bytes = summary
+            .completed_input_bytes
+            .saturating_add(item.input_bytes);
+        summary.completed_output_bytes = summary
+            .completed_output_bytes
+            .saturating_add(output_bytes);
+    }
+    summary
+}
+
+pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> String {
+    if input_bytes == 0 {
+        return format!("Output {}", human_bytes_ui(output_bytes));
+    }
+    if output_bytes <= input_bytes {
+        let saved = input_bytes - output_bytes;
+        let pct = (saved as f64 / input_bytes as f64) * 100.0;
+        format!(
+            "Saved {} ({pct:.1}%) · {} → {}",
+            human_bytes_ui(saved),
+            human_bytes_ui(input_bytes),
+            human_bytes_ui(output_bytes),
+        )
+    } else {
+        let growth = output_bytes - input_bytes;
+        let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
+        format!(
+            "Output +{} (+{grow_pct:.1}%) · {} → {}",
+            human_bytes_ui(growth),
+            human_bytes_ui(input_bytes),
+            human_bytes_ui(output_bytes),
+        )
+    }
 }
 
 fn normalize_av1_source_key(path: &str) -> String {
@@ -128,13 +194,24 @@ impl PydlApp {
                 }
             }
 
+            let input_bytes = std::fs::metadata(&plan_item.input)
+                .map(|m| m.len())
+                .unwrap_or(0);
+            let ready_detail = if input_bytes > 0 {
+                format!("Ready · {}", human_bytes_ui(input_bytes))
+            } else {
+                "Ready".to_owned()
+            };
+
             self.av1_items.push(Av1QueueItem {
                 item_id,
                 source_path: source,
                 output_path: plan_item.output.to_string_lossy().to_string(),
                 status: ItemStatus::Idle,
                 percent: 0.0,
-                detail: "Ready".to_owned(),
+                detail: ready_detail,
+                input_bytes,
+                output_bytes: None,
             });
             if self.has_ffmpeg {
                 self.queue_av1_local_thumbnail(
@@ -359,6 +436,36 @@ impl PydlApp {
                     });
                 }
             });
+            let batch = compute_av1_batch_summary(&self.av1_items);
+            if batch.completed > 0 {
+                let saved = batch
+                    .completed_input_bytes
+                    .saturating_sub(batch.completed_output_bytes);
+                let pct = if batch.completed_input_bytes > 0 {
+                    (saved as f64 / batch.completed_input_bytes as f64) * 100.0
+                } else {
+                    0.0
+                };
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Summary:").color(TEXT_MUTED));
+                    ui.label(
+                        RichText::new(format!(
+                            "{} completed · {} → {} · saved {} ({pct:.1}%)",
+                            batch.completed,
+                            human_bytes_ui(batch.completed_input_bytes),
+                            human_bytes_ui(batch.completed_output_bytes),
+                            human_bytes_ui(saved),
+                        ))
+                        .color(status_color(ItemStatus::Done)),
+                    );
+                });
+            }
+            if batch.pending_input_bytes > 0 {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Pending input:").color(TEXT_MUTED));
+                    ui.label(human_bytes_ui(batch.pending_input_bytes));
+                });
+            }
         }
         egui::ScrollArea::vertical()
             .id_salt("av1_queue_scroll")

@@ -169,6 +169,8 @@ pub struct Av1QueueItem {
     pub status: ItemStatus,
     pub percent: f32,
     pub detail: String,
+    pub input_bytes: u64,
+    pub output_bytes: Option<u64>,
 }
 
 impl Default for Av1QueueItem {
@@ -180,6 +182,8 @@ impl Default for Av1QueueItem {
             status: ItemStatus::Idle,
             percent: 0.0,
             detail: String::new(),
+            input_bytes: 0,
+            output_bytes: None,
         }
     }
 }

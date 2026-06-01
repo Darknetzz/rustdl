@@ -421,7 +421,25 @@ impl PydlApp {
                     if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
                         it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
                         it.percent = if ok { 100.0 } else { it.percent };
-                        it.detail = detail.clone();
+                        let skipped = detail.to_ascii_lowercase().starts_with("skipped");
+                        if ok && !skipped {
+                            if let Ok(meta) = std::fs::metadata(&it.output_path) {
+                                let output_bytes = meta.len();
+                                it.output_bytes = Some(output_bytes);
+                                it.detail = if it.input_bytes > 0 {
+                                    super::av1_panel::format_av1_saved_detail(
+                                        it.input_bytes,
+                                        output_bytes,
+                                    )
+                                } else {
+                                    detail.clone()
+                                };
+                            } else {
+                                it.detail = detail.clone();
+                            }
+                        } else {
+                            it.detail = detail.clone();
+                        }
                     }
                     self.av1_duration_ms.remove(&item_id);
                     self.av1_progress_state.remove(&item_id);
