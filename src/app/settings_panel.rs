@@ -46,22 +46,18 @@ impl PydlApp {
             .default_width(620.0)
             .show(ctx, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::General, "General");
                     ui.selectable_value(
                         &mut self.settings_tab,
-                        SettingsTab::Executables,
-                        "Executables",
+                        SettingsTab::Shared,
+                        "Shared",
                     );
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Download, "Download");
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Postprocess,
-                        "Post-process",
-                    );
+                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Downloader, "Downloader");
+                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Av1, "AV1");
                 });
                 ui.separator();
                 match self.settings_tab {
-                    SettingsTab::General => {
+                    SettingsTab::Shared => {
+                        ui.label(RichText::new("Global settings").strong());
                         let show_thumbnails_changed = ui
                             .checkbox(&mut self.settings.show_thumbnails, "Show thumbnails in cards")
                             .changed();
@@ -81,14 +77,8 @@ impl PydlApp {
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.auto_add_pasted_urls,
-                                "Auto-add pasted URLs after a short delay",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.auto_start_downloads,
-                                "Auto-start downloads when new items become ready",
+                                &mut self.settings.card_list_layout,
+                                "List layout for queue cards (denser)",
                             )
                             .changed();
                         changed |= ui
@@ -109,12 +99,6 @@ impl PydlApp {
                                 "Relative timestamps in activity log",
                             )
                             .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.card_list_layout,
-                                "List layout for queue cards (denser)",
-                            )
-                            .changed();
                         ui.horizontal(|ui| {
                             ui.label("UI scale");
                             changed |= ui
@@ -122,12 +106,6 @@ impl PydlApp {
                                     egui::Slider::new(&mut self.settings.ui_scale, 0.85..=1.5)
                                         .fixed_decimals(2),
                                 )
-                                .changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("Parallel downloads");
-                            changed |= ui
-                                .add(egui::Slider::new(&mut self.worker_count, 1..=6).integer())
                                 .changed();
                         });
                         ui.horizontal(|ui| {
@@ -143,7 +121,28 @@ impl PydlApp {
                                 .changed();
                         });
                     }
-                    SettingsTab::Executables => {
+                    SettingsTab::Downloader => {
+                        ui.label(RichText::new("Downloader behavior").strong());
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.auto_add_pasted_urls,
+                                "Auto-add pasted URLs after a short delay",
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.auto_start_downloads,
+                                "Auto-start downloads when new items become ready",
+                            )
+                            .changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Parallel downloads");
+                            changed |= ui
+                                .add(egui::Slider::new(&mut self.worker_count, 1..=6).integer())
+                                .changed();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Downloader executables").strong());
                         ui.label("Leave empty to use PATH lookup.");
                         ui.horizontal(|ui| {
                             ui.label("yt-dlp");
@@ -172,8 +171,8 @@ impl PydlApp {
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
                         });
-                    }
-                    SettingsTab::Download => {
+                        ui.separator();
+                        ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
                         ui.horizontal_wrapped(|ui| {
                             if secondary_button(
@@ -350,8 +349,8 @@ impl PydlApp {
                                 .color(Color32::GRAY),
                         );
                         draw_effective_command_preview(ui, &command_preview);
-                    }
-                    SettingsTab::Postprocess => {
+                        ui.separator();
+                        ui.label(RichText::new("Downloader post-process").strong());
                         ui.label("Post-processor args passed as --postprocessor-args");
                         changed |= ui
                             .add(
@@ -403,6 +402,107 @@ impl PydlApp {
                                 .color(Color32::GRAY),
                         );
                         draw_effective_command_preview(ui, &command_preview);
+                    }
+                    SettingsTab::Av1 => {
+                        ui.label(RichText::new("AV1 converter settings").strong());
+                        ui.label("Leave executable paths empty to use PATH lookup.");
+                        ui.horizontal(|ui| {
+                            ui.label("AV1 ffmpeg");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.av1_ffmpeg_path)
+                                        .hint_text("ffmpeg.exe or full path"),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("AV1 ffprobe");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.av1_ffprobe_path)
+                                        .hint_text("ffprobe.exe or full path"),
+                                )
+                                .changed();
+                        });
+                        ui.separator();
+                        changed |= ui
+                            .checkbox(&mut self.settings.av1_recursive, "Recursive folder scan")
+                            .changed();
+                        changed |= ui
+                            .checkbox(&mut self.settings.av1_dry_run, "Dry run by default")
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.av1_delete_original,
+                                "Delete original after success",
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(&mut self.settings.av1_overwrite, "Overwrite output files")
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.av1_reencode_av1,
+                                "Re-encode files already in AV1",
+                            )
+                            .changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Target bitrate");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.av1_target_bitrate)
+                                        .hint_text("auto"),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Max width");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.av1_max_width)
+                                        .range(320_u32..=7680_u32)
+                                        .speed(10),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Min shrink %");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.av1_min_shrink_percent)
+                                        .range(0.0_f32..=95.0_f32)
+                                        .speed(0.5),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Size preset");
+                            egui::ComboBox::from_id_salt("settings_av1_preset")
+                                .selected_text(self.settings.av1_size_preset.clone())
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.av1_size_preset,
+                                            "light".to_owned(),
+                                            "light",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.av1_size_preset,
+                                            "balanced".to_owned(),
+                                            "balanced",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.av1_size_preset,
+                                            "aggressive".to_owned(),
+                                            "aggressive",
+                                        )
+                                        .changed();
+                                });
+                        });
                     }
                 }
             });
