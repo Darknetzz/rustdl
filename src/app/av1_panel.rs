@@ -102,20 +102,11 @@ impl PydlApp {
                     );
                 });
         });
-        ui.horizontal_wrapped(|ui| {
-            ui.label("FFmpeg path");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.settings.av1_ffmpeg_path)
-                    .hint_text("ffmpeg")
-                    .desired_width(220.0),
-            );
-            ui.label("FFprobe path");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.settings.av1_ffprobe_path)
-                    .hint_text("ffprobe")
-                    .desired_width(220.0),
-            );
-        });
+        ui.label(
+            RichText::new("FFmpeg/FFprobe paths are configured in Settings -> AV1.")
+                .small()
+                .color(egui::Color32::GRAY),
+        );
         ui.horizontal_wrapped(|ui| {
             if success_button(
                 ui,
