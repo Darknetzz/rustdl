@@ -271,12 +271,13 @@ pub(crate) fn spawn_av1_worker(
                     line: format!("starting with {}", enc.encoder),
                 },
             );
+            let item_for_primary = item.clone();
             let res = tokio::task::spawn_blocking({
                 let cfg = cfg.clone();
                 let tx = tx.clone();
                 let enc = enc.clone();
                 move || {
-                    av1_transcode::run_single(&item, &cfg, &enc, |line| {
+                    av1_transcode::run_single(&item_for_primary, &cfg, &enc, |line| {
                         let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
                     })
                 }
@@ -294,6 +295,73 @@ pub(crate) fn spawn_av1_worker(
                     );
                 }
                 Ok(Err(e)) => {
+                    // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
+                    if enc.encoder != "libsvtav1" {
+                        let _ = try_send_ui(
+                            &tx,
+                            UiEvent::Av1Line {
+                                item_id,
+                                line: format!(
+                                    "encoder {} failed; retrying with libsvtav1",
+                                    enc.encoder
+                                ),
+                            },
+                        );
+                        let cpu_enc = av1_transcode::EncoderChoice {
+                            encoder: "libsvtav1",
+                            codec: "av1",
+                        };
+                        let retry = tokio::task::spawn_blocking({
+                            let cfg = cfg.clone();
+                            let tx = tx.clone();
+                            let item = item.clone();
+                            move || {
+                                av1_transcode::run_single(&item, &cfg, &cpu_enc, |line| {
+                                    let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                                })
+                            }
+                        })
+                        .await;
+                        match retry {
+                            Ok(Ok(())) => {
+                                let _ = try_send_ui(
+                                    &tx,
+                                    UiEvent::Av1Done {
+                                        item_id,
+                                        ok: true,
+                                        detail: "Completed (CPU fallback)".to_owned(),
+                                    },
+                                );
+                                continue;
+                            }
+                            Ok(Err(retry_err)) => {
+                                let _ = try_send_ui(
+                                    &tx,
+                                    UiEvent::Av1Done {
+                                        item_id,
+                                        ok: false,
+                                        detail: format!(
+                                            "Primary encoder failed: {e}\nCPU fallback failed: {retry_err}"
+                                        ),
+                                    },
+                                );
+                                continue;
+                            }
+                            Err(retry_join_err) => {
+                                let _ = try_send_ui(
+                                    &tx,
+                                    UiEvent::Av1Done {
+                                        item_id,
+                                        ok: false,
+                                        detail: format!(
+                                            "Primary encoder failed: {e}\nCPU fallback task failed: {retry_join_err}"
+                                        ),
+                                    },
+                                );
+                                continue;
+                            }
+                        }
+                    }
                     let _ = try_send_ui(
                         &tx,
                         UiEvent::Av1Done {

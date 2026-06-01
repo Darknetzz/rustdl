@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
 
@@ -177,8 +178,12 @@ where
         std::fs::create_dir_all(parent)?;
     }
     let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
+    let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
-    cmd.arg(if cfg.overwrite { "-y" } else { "-n" })
+    cmd.arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg(if cfg.overwrite { "-y" } else { "-n" })
         .arg("-i")
         .arg(&plan.input)
         .arg("-map")
@@ -205,6 +210,17 @@ where
         .stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
     let stdout = child.stdout.take().ok_or_else(|| anyhow!("missing stdout"))?;
+    let stderr = child.stderr.take();
+    let stderr_capture = stderr_buf.clone();
+    let stderr_thread = std::thread::spawn(move || {
+        if let Some(mut s) = stderr {
+            let mut text = String::new();
+            let _ = std::io::Read::read_to_string(&mut s, &mut text);
+            if let Ok(mut guard) = stderr_capture.lock() {
+                *guard = text;
+            }
+        }
+    });
     let mut rdr = std::io::BufReader::new(stdout);
     let mut line = String::new();
     loop {
@@ -219,8 +235,26 @@ where
         }
     }
     let st = child.wait()?;
+    let _ = stderr_thread.join();
     if !st.success() {
-        return Err(anyhow!("ffmpeg failed with status {st}"));
+        let stderr_text = stderr_buf
+            .lock()
+            .ok()
+            .map(|g| g.trim().to_owned())
+            .unwrap_or_default();
+        if stderr_text.is_empty() {
+            return Err(anyhow!("ffmpeg failed with status {st}"));
+        }
+        let short = stderr_text
+            .lines()
+            .rev()
+            .take(8)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(anyhow!("ffmpeg failed with status {st}\n{short}"));
     }
     if cfg.delete_original {
         let _ = std::fs::remove_file(&plan.input);
