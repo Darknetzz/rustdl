@@ -643,10 +643,12 @@ impl PydlApp {
                         .id_salt(format!("rustdl_list_{label}"))
                         .max_height(max_h)
                         .auto_shrink([false; 2])
-                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row| {
-                            if let Some(id) = ids.get(row) {
-                                if let Some(idx) = self.item_idx(*id) {
-                                    self.draw_card(ui, idx, allow_reorder);
+                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
+                            for row in row_range {
+                                if let Some(item_id) = ids.get(row) {
+                                    if let Some(idx) = self.item_idx(*item_id) {
+                                        self.draw_card(ui, idx, allow_reorder);
+                                    }
                                 }
                             }
                         });

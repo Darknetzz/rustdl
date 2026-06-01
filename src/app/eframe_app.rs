@@ -787,7 +787,21 @@ impl eframe::App for PydlApp {
                                         );
                                     });
                                 } else {
+                                    let profile = std::env::var("RUSTDL_PROFILE")
+                                        .ok()
+                                        .as_deref()
+                                        == Some("1");
+                                    let t0 = profile.then(std::time::Instant::now);
                                     self.draw_grouped_cards(ui);
+                                    if let Some(t0) = t0 {
+                                        let ms = t0.elapsed().as_secs_f64() * 1000.0;
+                                        if ms > 8.0 {
+                                            eprintln!(
+                                                "rustdl profile: draw_grouped_cards {} items in {ms:.1}ms",
+                                                self.items.len()
+                                            );
+                                        }
+                                    }
                                 }
                             });
                         if dock_log {

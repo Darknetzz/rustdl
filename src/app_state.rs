@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct TransferTotals {
     pub downloaded_bytes: u64,
     pub known_total_bytes: u64,
@@ -131,6 +131,22 @@ mod tests {
     #[test]
     fn synthetic_queue_has_expected_len() {
         assert_eq!(synthetic_queue_items(200).len(), 200);
+    }
+
+    #[test]
+    fn status_delta_matches_full_recompute() {
+        let items = synthetic_queue_items(100);
+        let full = compute_status_counts(&items);
+        let mut incremental = StatusCounts::default();
+        for it in &items {
+            inc_status_count(&mut incremental, it.status);
+        }
+        assert_eq!(incremental.resolving, full.resolving);
+        assert_eq!(incremental.ready, full.ready);
+        assert_eq!(incremental.queued, full.queued);
+        assert_eq!(incremental.active, full.active);
+        assert_eq!(incremental.done, full.done);
+        assert_eq!(incremental.failed, full.failed);
     }
 
     #[test]
