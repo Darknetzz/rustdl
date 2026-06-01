@@ -9,6 +9,27 @@ use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::ytdlp;
 
+fn remove_embed_thumbnail_arg(args: &[String]) -> Vec<String> {
+    args.iter()
+        .filter(|arg| !arg.eq_ignore_ascii_case("--embed-thumbnail"))
+        .cloned()
+        .collect()
+}
+
+fn should_retry_without_embed_thumbnail(extra_args: &[String], err_text: &str) -> bool {
+    if !extra_args
+        .iter()
+        .any(|arg| arg.eq_ignore_ascii_case("--embed-thumbnail"))
+    {
+        return false;
+    }
+    let msg = err_text.to_ascii_lowercase();
+    msg.contains("embedthumbnail")
+        || msg.contains("unable to embed")
+        || msg.contains("could not determine image type")
+        || msg.contains("conversion failed")
+}
+
 pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, tx: &Sender<UiEvent>, client: reqwest::Client) {
     let tx = tx.clone();
     let rt = rt.clone();
@@ -150,12 +171,63 @@ pub(crate) fn spawn_download_worker(
                     );
                 }
                 Err(e) => {
+                    let err_text = e.to_string();
+                    if should_retry_without_embed_thumbnail(&extra_args, &err_text) {
+                        let retry_args = remove_embed_thumbnail_arg(&extra_args);
+                        try_send_ui(
+                            &tx,
+                            UiEvent::DownloadLine {
+                                item_id,
+                                line: "Embed thumbnail failed; retrying without --embed-thumbnail."
+                                    .to_owned(),
+                            },
+                        );
+                        let retry_res = ytdlp::stream_download_with_bins(
+                            &target,
+                            &output_dir,
+                            &retry_args,
+                            &yt_bin,
+                            &ffmpeg_path,
+                            cancel_flag.clone(),
+                            |line| {
+                                try_send_ui(&tx, UiEvent::DownloadLine { item_id, line });
+                            },
+                        )
+                        .await;
+                        match retry_res {
+                            Ok(_) => {
+                                try_send_ui(
+                                    &tx,
+                                    UiEvent::DownloadDone {
+                                        item_id,
+                                        ok: true,
+                                        detail: "Completed (thumbnail embedding skipped after failure)."
+                                            .to_owned(),
+                                    },
+                                );
+                                continue;
+                            }
+                            Err(retry_e) => {
+                                try_send_ui(
+                                    &tx,
+                                    UiEvent::DownloadDone {
+                                        item_id,
+                                        ok: false,
+                                        detail: format!(
+                                            "Initial download failed while embedding thumbnail, and retry without embedding also failed.\n--- first error ---\n{err_text}\n--- retry error ---\n{retry_e}"
+                                        ),
+                                    },
+                                );
+                                continue;
+                            }
+                        }
+                    }
                     try_send_ui(
                         &tx,
                         UiEvent::DownloadDone {
                             item_id,
                             ok: false,
-                            detail: e.to_string(),
+                            detail: err_text,
                         },
                     );
                 }
