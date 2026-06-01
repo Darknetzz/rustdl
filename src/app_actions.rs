@@ -20,3 +20,20 @@ pub fn pick_url_input_file() -> Option<std::path::PathBuf> {
         .add_filter("CSV", &["csv"])
         .pick_file()
 }
+
+pub fn pick_av1_input_files() -> Vec<std::path::PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Select video files for AV1 conversion")
+        .add_filter(
+            "Video files",
+            &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"],
+        )
+        .pick_files()
+        .unwrap_or_default()
+}
+
+pub fn pick_av1_input_folder() -> Option<std::path::PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Select folder for AV1 conversion")
+        .pick_folder()
+}

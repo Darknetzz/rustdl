@@ -1,5 +1,6 @@
 use eframe::egui::{self, RichText};
 
+use crate::app_actions;
 use crate::app_ui::{danger_button, secondary_button, success_button};
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
@@ -48,6 +49,11 @@ impl PydlApp {
         });
         ui.separator();
         ui.label("Input paths (file/folder, one per line)");
+        ui.horizontal_wrapped(|ui| {
+            if secondary_button(ui, "Browse", true).clicked() {
+                self.browse_av1_inputs();
+            }
+        });
         ui.add_sized(
             [ui.available_width(), 90.0],
             egui::TextEdit::multiline(&mut self.av1_input_paths)
@@ -241,6 +247,21 @@ impl PydlApp {
             self.av1_cancel_flag.clone(),
         );
         self.append_log("AV1: batch started.");
+    }
+
+    fn browse_av1_inputs(&mut self) {
+        let files = app_actions::pick_av1_input_files();
+        if !files.is_empty() {
+            let lines: Vec<String> = files
+                .into_iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect();
+            self.extend_av1_input_paths_with_lines(lines);
+            return;
+        }
+        if let Some(folder) = app_actions::pick_av1_input_folder() {
+            self.extend_av1_input_paths_with_lines(vec![folder.to_string_lossy().to_string()]);
+        }
     }
 }
 
