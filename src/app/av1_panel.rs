@@ -9,6 +9,24 @@ use crate::ui_icons;
 use super::PydlApp;
 
 impl PydlApp {
+    pub(super) fn av1_effective_ffmpeg_path(&self) -> String {
+        let override_path = self.settings.av1_ffmpeg_path.trim();
+        if override_path.is_empty() {
+            self.settings.ffmpeg_path.clone()
+        } else {
+            self.settings.av1_ffmpeg_path.clone()
+        }
+    }
+
+    pub(super) fn av1_effective_ffprobe_path(&self) -> String {
+        let override_path = self.settings.av1_ffprobe_path.trim();
+        if override_path.is_empty() {
+            self.settings.ffprobe_path.clone()
+        } else {
+            self.settings.av1_ffprobe_path.clone()
+        }
+    }
+
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("AV1 Converter").heading());
@@ -16,35 +34,6 @@ impl PydlApp {
                 RichText::new("Near-parity mode for local video transcoding.")
                     .small()
                     .color(egui::Color32::GRAY),
-            );
-        });
-        let (ffmpeg_ok, ffprobe_ok) = av1_transcode::av1_tools_available(
-            &self.settings.av1_ffmpeg_path,
-            &self.settings.av1_ffprobe_path,
-        );
-        ui.horizontal_wrapped(|ui| {
-            let ffmpeg_txt = if ffmpeg_ok { "✔ ffmpeg" } else { "✖ ffmpeg" };
-            let ffmpeg_fg = if ffmpeg_ok {
-                egui::Color32::from_rgb(132, 235, 156)
-            } else {
-                egui::Color32::from_rgb(70, 15, 15)
-            };
-            ui.label(
-                RichText::new(ffmpeg_txt)
-                    .strong()
-                    .color(ffmpeg_fg),
-            );
-            ui.separator();
-            let ffprobe_txt = if ffprobe_ok { "✔ ffprobe" } else { "✖ ffprobe" };
-            let ffprobe_fg = if ffprobe_ok {
-                egui::Color32::from_rgb(132, 235, 156)
-            } else {
-                egui::Color32::from_rgb(70, 15, 15)
-            };
-            ui.label(
-                RichText::new(ffprobe_txt)
-                    .strong()
-                    .color(ffprobe_fg),
             );
         });
         ui.separator();
@@ -102,16 +91,11 @@ impl PydlApp {
                     );
                 });
         });
-        ui.label(
-            RichText::new("FFmpeg/FFprobe paths are configured in Settings -> AV1.")
-                .small()
-                .color(egui::Color32::GRAY),
-        );
         ui.horizontal_wrapped(|ui| {
             if success_button(
                 ui,
                 &format!("{} Start AV1 batch", ui_icons::PLAY),
-                !self.av1_running && ffmpeg_ok && ffprobe_ok,
+                !self.av1_running && self.has_ffmpeg && self.has_ffprobe,
             )
             .clicked()
             {
@@ -199,8 +183,8 @@ impl PydlApp {
         self.av1_cancel_flag
             .store(false, std::sync::atomic::Ordering::Relaxed);
         let cfg = Av1Config {
-            ffmpeg_path: self.settings.av1_ffmpeg_path.clone(),
-            ffprobe_path: self.settings.av1_ffprobe_path.clone(),
+            ffmpeg_path: self.av1_effective_ffmpeg_path(),
+            ffprobe_path: self.av1_effective_ffprobe_path(),
             output_dir: self.output_dir.clone(),
             recursive: self.settings.av1_recursive,
             dry_run: self.settings.av1_dry_run,

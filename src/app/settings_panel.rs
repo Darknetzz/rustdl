@@ -408,7 +408,13 @@ impl PydlApp {
                     }
                     SettingsTab::Av1 => {
                         ui.label(RichText::new("AV1 converter settings").strong());
-                        ui.label("Leave executable paths empty to use PATH lookup.");
+                        ui.label(
+                            RichText::new(
+                                "FFmpeg/FFprobe defaults come from Settings -> Shared. Optional AV1 overrides below.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
                         ui.horizontal(|ui| {
                             ui.label("AV1 ffmpeg");
                             changed |= ui

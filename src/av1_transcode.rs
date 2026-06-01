@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use eframe::egui;
 
-use crate::external_tools::{executable_exists, resolve_executable};
+use crate::external_tools::resolve_executable;
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
 
@@ -39,13 +39,6 @@ pub struct EncoderChoice {
 pub struct Av1PlanItem {
     pub input: PathBuf,
     pub output: PathBuf,
-}
-
-pub fn av1_tools_available(ffmpeg_path: &str, ffprobe_path: &str) -> (bool, bool) {
-    (
-        executable_exists(ffmpeg_path, "ffmpeg"),
-        executable_exists(ffprobe_path, "ffprobe"),
-    )
 }
 
 pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
