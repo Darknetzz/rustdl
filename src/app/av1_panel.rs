@@ -158,6 +158,28 @@ fn normalize_av1_source_key(path: &str) -> String {
         .to_ascii_lowercase()
 }
 
+fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
+    if scanned.is_empty() {
+        return;
+    }
+    let remove: HashSet<String> = scanned
+        .iter()
+        .map(|s| normalize_av1_source_key(s))
+        .collect();
+    let remaining: Vec<String> = input
+        .lines()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .filter(|s| !remove.contains(&normalize_av1_source_key(s)))
+        .map(str::to_owned)
+        .collect();
+    *input = if remaining.is_empty() {
+        String::new()
+    } else {
+        format!("{}\n", remaining.join("\n"))
+    };
+}
+
 impl PydlApp {
     pub(super) fn av1_config(&self) -> Av1Config {
         Av1Config {
@@ -194,6 +216,8 @@ impl PydlApp {
         let plan = av1_transcode::collect_plan(&inputs, &cfg);
         if plan.is_empty() {
             self.append_log("AV1: no supported video files found in added path(s).");
+            remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
+            self.schedule_av1_queue_save();
             return;
         }
 
@@ -262,6 +286,8 @@ impl PydlApp {
         } else {
             self.append_log("AV1: all video(s) from path(s) are already in the queue.");
         }
+        remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
+        self.schedule_av1_queue_save();
     }
 
     pub(super) fn queue_av1_restored_assets(&mut self) {

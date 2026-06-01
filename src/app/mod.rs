@@ -1655,15 +1655,7 @@ impl PydlApp {
         if lines.is_empty() {
             return;
         }
-        if !self.av1_input_paths.trim().is_empty() && !self.av1_input_paths.ends_with('\n') {
-            self.av1_input_paths.push('\n');
-        }
-        self.av1_input_paths.push_str(&lines.join("\n"));
-        if !self.av1_input_paths.ends_with('\n') {
-            self.av1_input_paths.push('\n');
-        }
         self.scan_av1_paths_into_queue(&lines);
-        self.append_log(&format!("AV1: added {} path(s).", lines.len()));
     }
 
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
