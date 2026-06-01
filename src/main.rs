@@ -80,7 +80,7 @@ fn main() {
         Ok(rt) => Arc::new(rt),
         Err(e) => {
             eprintln!("Failed to create Tokio runtime: {e}");
-            return;
+            process::exit(1);
         }
     };
     let native_options = eframe::NativeOptions {
@@ -102,5 +102,6 @@ fn main() {
         }),
     ) {
         eprintln!("Failed to run app: {e}");
+        process::exit(1);
     }
 }

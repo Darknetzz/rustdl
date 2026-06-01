@@ -317,3 +317,25 @@ pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {
         .with_context(|| format!("failed to write queue file: {}", path.to_string_lossy()))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_default_round_trips_json() {
+        let s = AppSettings::default();
+        let raw = serde_json::to_string(&s).expect("serialize");
+        let back: AppSettings = serde_json::from_str(&raw).expect("deserialize");
+        assert_eq!(back.worker_count, s.worker_count);
+        assert_eq!(back.yt_dlp_unlimited_retries, s.yt_dlp_unlimited_retries);
+    }
+
+    #[test]
+    fn settings_partial_json_uses_defaults() {
+        let raw = r#"{"worker_count":2}"#;
+        let cfg: AppSettings = serde_json::from_str(raw).expect("deserialize");
+        assert_eq!(cfg.worker_count, 2);
+        assert!(cfg.yt_dlp_unlimited_retries);
+    }
+}
