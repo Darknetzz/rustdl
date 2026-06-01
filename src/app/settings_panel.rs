@@ -120,6 +120,27 @@ impl PydlApp {
                                 )
                                 .changed();
                         });
+                        ui.separator();
+                        ui.label(RichText::new("Shared executables").strong());
+                        ui.label("Used by downloader and AV1 unless a module override is set.");
+                        ui.horizontal(|ui| {
+                            ui.label("ffmpeg");
+                            let resp = ui.add(
+                                egui::TextEdit::singleline(&mut self.settings.ffmpeg_path)
+                                    .hint_text("ffmpeg.exe or full path"),
+                            );
+                            changed |= resp.changed();
+                            executable_paths_changed |= resp.changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("ffprobe");
+                            let resp = ui.add(
+                                egui::TextEdit::singleline(&mut self.settings.ffprobe_path)
+                                    .hint_text("ffprobe.exe or full path"),
+                            );
+                            changed |= resp.changed();
+                            executable_paths_changed |= resp.changed();
+                        });
                     }
                     SettingsTab::Downloader => {
                         ui.label(RichText::new("Downloader behavior").strong());
@@ -149,24 +170,6 @@ impl PydlApp {
                             let resp = ui.add(
                                 egui::TextEdit::singleline(&mut self.settings.yt_dlp_path)
                                     .hint_text("yt-dlp.exe or full path"),
-                            );
-                            changed |= resp.changed();
-                            executable_paths_changed |= resp.changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("ffmpeg");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.ffmpeg_path)
-                                    .hint_text("ffmpeg.exe or full path"),
-                            );
-                            changed |= resp.changed();
-                            executable_paths_changed |= resp.changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("ffprobe");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.ffprobe_path)
-                                    .hint_text("ffprobe.exe or full path"),
                             );
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
