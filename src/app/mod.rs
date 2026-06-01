@@ -1543,6 +1543,25 @@ impl PydlApp {
         };
     }
 
+    fn extend_av1_input_paths_with_lines(&mut self, lines: Vec<String>) {
+        let lines: Vec<String> = lines
+            .into_iter()
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if lines.is_empty() {
+            return;
+        }
+        if !self.av1_input_paths.trim().is_empty() && !self.av1_input_paths.ends_with('\n') {
+            self.av1_input_paths.push('\n');
+        }
+        self.av1_input_paths.push_str(&lines.join("\n"));
+        if !self.av1_input_paths.ends_with('\n') {
+            self.av1_input_paths.push('\n');
+        }
+        self.append_log(&format!("AV1: added {} dropped path(s).", lines.len()));
+    }
+
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         let mut urls = Vec::new();
@@ -1555,6 +1574,19 @@ impl PydlApp {
         }
         if !urls.is_empty() {
             self.merge_dragged_urls_into_input(urls, ctx);
+        }
+    }
+
+    fn apply_dropped_av1_paths(&mut self, ctx: &egui::Context) {
+        let dropped = ctx.input(|i| i.raw.dropped_files.clone());
+        let mut paths = Vec::new();
+        for df in dropped {
+            if let Some(path) = df.path {
+                paths.push(path.to_string_lossy().to_string());
+            }
+        }
+        if !paths.is_empty() {
+            self.extend_av1_input_paths_with_lines(paths);
         }
     }
 

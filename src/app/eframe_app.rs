@@ -21,7 +21,11 @@ impl eframe::App for PydlApp {
             self.maybe_install_win_browser_drop_target(frame);
             self.drain_win_browser_url_drops(ctx);
         }
-        self.apply_dropped_shortcut_files(ctx);
+        if self.av1_mode {
+            self.apply_dropped_av1_paths(ctx);
+        } else {
+            self.apply_dropped_shortcut_files(ctx);
+        }
         self.handle_viewport_close_request(ctx);
         self.poll_done_file_lookup();
         if let Some(deadline) = self.auto_add_after {
