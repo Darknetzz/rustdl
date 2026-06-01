@@ -65,10 +65,7 @@ Switch modes from the **Mode** toggle near the top of the main window.
 - Output goes to the current **Output folder**.
 - Supports recursive scan, dry-run, overwrite, delete original, and optional AV1 re-encode behavior.
 - Encoder detection priority: `av1_nvenc` -> `av1_amf` -> `hevc_nvenc` -> `hevc_amf` -> `libsvtav1`.
-- AV1 executable overrides are independent from downloader executable overrides:
-  - `av1_ffmpeg_path`
-  - `av1_ffprobe_path`
-  (saved in `rustdl_config.json` via Settings persistence).
+- Uses the shared **ffmpeg** and **ffprobe** paths from Settings → Shared.
 
 ## Settings
 

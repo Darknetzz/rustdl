@@ -62,12 +62,6 @@ pub struct AppSettings {
     /// Activity log timestamps as relative age instead of full local time.
     #[serde(default)]
     pub log_relative_time: bool,
-    /// Override ffmpeg path for AV1 converter mode.
-    #[serde(default)]
-    pub av1_ffmpeg_path: String,
-    /// Override ffprobe path for AV1 converter mode.
-    #[serde(default)]
-    pub av1_ffprobe_path: String,
     /// Recursive folder scan for AV1 input folders.
     #[serde(default = "default_av1_recursive")]
     pub av1_recursive: bool,
@@ -162,8 +156,6 @@ impl Default for AppSettings {
             logs_open: false,
             log_dock_height: 180.0,
             log_relative_time: false,
-            av1_ffmpeg_path: String::new(),
-            av1_ffprobe_path: String::new(),
             av1_recursive: true,
             av1_dry_run: false,
             av1_delete_original: false,

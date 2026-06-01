@@ -159,28 +159,10 @@ fn normalize_av1_source_key(path: &str) -> String {
 }
 
 impl PydlApp {
-    pub(super) fn av1_effective_ffmpeg_path(&self) -> String {
-        let override_path = self.settings.av1_ffmpeg_path.trim();
-        if override_path.is_empty() {
-            self.settings.ffmpeg_path.clone()
-        } else {
-            self.settings.av1_ffmpeg_path.clone()
-        }
-    }
-
-    pub(super) fn av1_effective_ffprobe_path(&self) -> String {
-        let override_path = self.settings.av1_ffprobe_path.trim();
-        if override_path.is_empty() {
-            self.settings.ffprobe_path.clone()
-        } else {
-            self.settings.av1_ffprobe_path.clone()
-        }
-    }
-
     pub(super) fn av1_config(&self) -> Av1Config {
         Av1Config {
-            ffmpeg_path: self.av1_effective_ffmpeg_path(),
-            ffprobe_path: self.av1_effective_ffprobe_path(),
+            ffmpeg_path: self.settings.ffmpeg_path.clone(),
+            ffprobe_path: self.settings.ffprobe_path.clone(),
             output_dir: self.output_dir.clone(),
             recursive: self.settings.av1_recursive,
             dry_run: self.settings.av1_dry_run,

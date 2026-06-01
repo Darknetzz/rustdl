@@ -429,6 +429,7 @@ impl PydlApp {
                     if let Some(ms) = media.duration_ms.filter(|ms| *ms > 0) {
                         self.av1_duration_ms.insert(item_id, ms);
                     }
+                    ctx.request_repaint();
                 }
                 UiEvent::Av1Done {
                     item_id,

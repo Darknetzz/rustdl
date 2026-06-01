@@ -130,7 +130,7 @@ impl PydlApp {
                         });
                         ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
-                        ui.label("Used by downloader and AV1 unless a module override is set.");
+                        ui.label("Used by the downloader and AV1 converter.");
                         ui.horizontal(|ui| {
                             ui.label("ffmpeg");
                             let resp = ui.add(
@@ -418,29 +418,11 @@ impl PydlApp {
                         ui.label(RichText::new("AV1 converter settings").strong());
                         ui.label(
                             RichText::new(
-                                "FFmpeg/FFprobe defaults come from Settings -> Shared. Optional AV1 overrides below.",
+                                "FFmpeg and ffprobe paths are configured in Settings → Shared.",
                             )
                             .small()
                             .color(Color32::GRAY),
                         );
-                        ui.horizontal(|ui| {
-                            ui.label("AV1 ffmpeg");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(&mut self.settings.av1_ffmpeg_path)
-                                        .hint_text("ffmpeg.exe or full path"),
-                                )
-                                .changed();
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("AV1 ffprobe");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(&mut self.settings.av1_ffprobe_path)
-                                        .hint_text("ffprobe.exe or full path"),
-                                )
-                                .changed();
-                        });
                         ui.separator();
                         changed |= ui
                             .checkbox(&mut self.settings.av1_recursive, "Recursive folder scan")
