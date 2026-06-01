@@ -502,17 +502,93 @@ impl PydlApp {
                             });
                             return;
                         }
-                        for it in &self.av1_items {
-                            ui.group(|ui| {
-                                self.draw_av1_queue_card(ui, it);
-                            });
-                            ui.add_space(6.0);
-                        }
+                        self.draw_av1_grouped_cards(ui);
                     });
             });
     }
 
-    fn draw_av1_queue_status_row(&self, ui: &mut egui::Ui) {
+    fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
+        match label {
+            "Active" => matches!(
+                item.status,
+                ItemStatus::Queued | ItemStatus::Downloading
+            ),
+            "Ready" => item.status == ItemStatus::Idle,
+            "Failed" => item.status == ItemStatus::Failed,
+            "Skipped" => av1_item_is_skipped(item),
+            "Done" => item.status == ItemStatus::Done && !av1_item_is_skipped(item),
+            _ => false,
+        }
+    }
+
+    fn av1_queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
+        if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
+            return true;
+        }
+        match label {
+            "Done" | "Ready" => false,
+            "Failed" | "Skipped" => true,
+            _ => true,
+        }
+    }
+
+    fn av1_queue_group_color(label: &str) -> Color32 {
+        match label {
+            "Active" => status_color(ItemStatus::Downloading),
+            "Ready" => status_color(ItemStatus::Idle),
+            "Failed" => status_color(ItemStatus::Failed),
+            "Skipped" => AV1_SKIPPED_COLOR,
+            "Done" => status_color(ItemStatus::Done),
+            _ => Color32::LIGHT_GRAY,
+        }
+    }
+
+    fn draw_av1_grouped_cards(&mut self, ui: &mut egui::Ui) {
+        let groups = ["Active", "Ready", "Failed", "Skipped", "Done"];
+        for label in groups {
+            if self.queue_group_focus.is_some_and(|f| f != label) {
+                continue;
+            }
+            let ids: Vec<u64> = self
+                .av1_items
+                .iter()
+                .filter(|it| Self::av1_item_in_queue_group(it, label))
+                .map(|it| it.item_id)
+                .collect();
+            if ids.is_empty() {
+                continue;
+            }
+            let scroll_here = self.scroll_to_queue_group == Some(label);
+            let default_open = self.av1_queue_group_default_open(label, scroll_here);
+            let header_text = format!("{label} ({})", ids.len());
+            let id = ui.make_persistent_id(("av1_queue_group", label));
+            let header = egui::collapsing_header::CollapsingState::load_with_default_open(
+                ui.ctx(),
+                id,
+                default_open,
+            )
+            .show_header(ui, |ui| {
+                status_dot_with_label(ui, &header_text, Self::av1_queue_group_color(label), true);
+            });
+            let (_toggle, header_inner, _) = header.body(|ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
+                for item_id in &ids {
+                    let Some(it) = self.av1_items.iter().find(|x| x.item_id == *item_id) else {
+                        continue;
+                    };
+                    ui.group(|ui| {
+                        self.draw_av1_queue_card(ui, it);
+                    });
+                }
+            });
+            if scroll_here {
+                ui.scroll_to_rect(header_inner.response.rect, Some(egui::Align::TOP));
+                self.scroll_to_queue_group = None;
+            }
+        }
+    }
+
+    fn draw_av1_queue_status_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Queue:").color(TEXT_MUTED));
             let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
@@ -564,12 +640,35 @@ impl PydlApp {
             if failed > 0 {
                 parts.push(("failed", failed, status_color(ItemStatus::Failed)));
             }
+            if self.queue_group_focus.is_some()
+                && ui
+                    .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
+                    .clicked()
+            {
+                self.queue_group_focus = None;
+            }
             for (idx, (name, count, color)) in parts.iter().enumerate() {
                 let suffix = if idx + 1 == parts.len() { "" } else { "," };
+                let group = match *name {
+                    "ready" => "Ready",
+                    "queued" | "running" => "Active",
+                    "done" => "Done",
+                    "skipped" => "Skipped",
+                    "failed" => "Failed",
+                    _ => "Active",
+                };
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 5.0;
                     draw_status_dot(ui, *color);
-                    ui.label(RichText::new(format!("{count} {name}{suffix}")).color(*color));
+                    let label = format!("{count} {name}{suffix}");
+                    let r = ui.add(
+                        egui::Label::new(RichText::new(label).color(*color))
+                            .sense(egui::Sense::click()),
+                    );
+                    if r.clicked() {
+                        self.focus_queue_group(group);
+                    }
+                    r.on_hover_text(format!("Show {group} items"));
                 });
             }
         });
