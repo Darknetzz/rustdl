@@ -50,5 +50,6 @@ pub const CHECK_STREAMS: &str = m::ICON_SEARCH;
 pub const REDOWNLOAD: &str = m::ICON_REFRESH;
 pub const OPEN_FILE: &str = m::ICON_PLAY_CIRCLE;
 pub const PLAY: &str = m::ICON_PLAY_ARROW;
+pub const ARROW_FORWARD: &str = m::ICON_ARROW_FORWARD;
 pub const REVEAL_FOLDER: &str = m::ICON_LAUNCH;
 pub const CARD_DELETE: &str = m::ICON_DELETE;

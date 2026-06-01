@@ -9,6 +9,7 @@ use crate::app_ui::{
     danger_button, draw_status_dot, secondary_button, status_color, status_dot_with_label,
     success_button,
 };
+use crate::theme;
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
 use crate::theme::{canvas_bg, panel_border, text_muted};
@@ -17,6 +18,50 @@ use crate::ui_icons;
 use super::PydlApp;
 
 const AV1_SKIPPED_COLOR: Color32 = Color32::from_rgb(255, 167, 38);
+const AV1_META_SEP: &str = " | ";
+
+fn ellipsize_str(input: &str, max_chars: usize) -> String {
+    let mut out = String::new();
+    let mut iter = input.chars();
+    for _ in 0..max_chars {
+        match iter.next() {
+            Some(ch) => out.push(ch),
+            None => return input.to_owned(),
+        }
+    }
+    if iter.next().is_some() {
+        out.push_str("...");
+    }
+    out
+}
+
+fn draw_av1_bytes_arrow(ui: &mut egui::Ui, from: &str, to: &str, text_color: Color32, theme: &str) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(RichText::new(from).small().color(text_color));
+        ui.label(
+            RichText::new(ui_icons::ARROW_FORWARD)
+                .small()
+                .color(text_muted(theme)),
+        );
+        ui.label(RichText::new(to).small().color(text_color));
+    });
+}
+
+fn draw_av1_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) {
+    let shortened = ellipsize_str(path, 76);
+    let response = ui.add(
+        egui::Label::new(
+            RichText::new(format!("{prefix} {shortened}"))
+                .small()
+                .color(text_muted(theme)),
+        )
+        .truncate(),
+    );
+    if shortened != path {
+        response.on_hover_text(path);
+    }
+}
 
 fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
@@ -88,20 +133,13 @@ pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> St
     if output_bytes <= input_bytes {
         let saved = input_bytes - output_bytes;
         let pct = (saved as f64 / input_bytes as f64) * 100.0;
-        format!(
-            "Saved {} ({pct:.1}%) · {} -> {}",
-            human_bytes_ui(saved),
-            human_bytes_ui(input_bytes),
-            human_bytes_ui(output_bytes),
-        )
+        format!("Saved {} ({pct:.1}%)", human_bytes_ui(saved))
     } else {
         let growth = output_bytes - input_bytes;
         let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
         format!(
-            "Output +{} (+{grow_pct:.1}%) · {} -> {}",
+            "Output +{} (+{grow_pct:.1}%)",
             human_bytes_ui(growth),
-            human_bytes_ui(input_bytes),
-            human_bytes_ui(output_bytes),
         )
     }
 }
@@ -126,14 +164,14 @@ fn av1_item_has_media(item: &Av1QueueItem) -> bool {
 
 fn format_av1_media_line(item: &Av1QueueItem, probing: bool) -> String {
     if probing {
-        return "Probing metadata…".to_owned();
+        return "Probing metadata...".to_owned();
     }
     let mut parts = Vec::new();
     if !item.video_codec.is_empty() {
         parts.push(item.video_codec.to_uppercase());
     }
     if let (Some(w), Some(h)) = (item.width, item.height) {
-        parts.push(format!("{w}×{h}"));
+        parts.push(format!("{w}x{h}"));
     }
     if let Some(fps) = item.fps {
         parts.push(format!("{fps:.2} fps"));
@@ -147,7 +185,7 @@ fn format_av1_media_line(item: &Av1QueueItem, probing: bool) -> String {
     if parts.is_empty() {
         "Metadata unavailable".to_owned()
     } else {
-        parts.join(" · ")
+        parts.join(AV1_META_SEP)
     }
 }
 
@@ -684,17 +722,27 @@ impl PydlApp {
             } else {
                 0.0
             };
+            let theme = &self.settings.theme;
+            let done_color = status_color(ItemStatus::Done);
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Summary:").color(text_muted(&self.settings.theme)));
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.label(RichText::new("Summary:").color(text_muted(theme)));
+                ui.label(
+                    RichText::new(format!("{} completed", batch.completed)).color(done_color),
+                );
+                draw_av1_bytes_arrow(
+                    ui,
+                    &human_bytes_ui(batch.completed_input_bytes),
+                    &human_bytes_ui(batch.completed_output_bytes),
+                    done_color,
+                    theme,
+                );
                 ui.label(
                     RichText::new(format!(
-                        "{} completed · {} -> {} · saved {} ({pct:.1}%)",
-                        batch.completed,
-                        human_bytes_ui(batch.completed_input_bytes),
-                        human_bytes_ui(batch.completed_output_bytes),
+                        "saved {} ({pct:.1}%)",
                         human_bytes_ui(saved),
                     ))
-                    .color(status_color(ItemStatus::Done)),
+                    .color(done_color),
                 );
             });
         }
@@ -709,46 +757,112 @@ impl PydlApp {
     }
 
     fn draw_av1_queue_card(&self, ui: &mut egui::Ui, it: &Av1QueueItem) {
-        ui.horizontal_wrapped(|ui| {
-            if let Some(tex) = self.textures.get(&it.item_id) {
-                ui.add(egui::Image::new(egui::load::SizedTexture::new(
-                    tex.id(),
-                    egui::vec2(90.0, 52.0),
-                )));
-            } else {
-                ui.allocate_space(egui::vec2(90.0, 52.0));
-            }
-            ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-            let status_label = av1_item_status_label(it);
-            let item_color = av1_item_status_color(it);
-            status_dot_with_label(ui, status_label, item_color, false);
-            let mut pb = egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
-                .desired_width(180.0)
-                .show_percentage()
-                .animate(it.status == ItemStatus::Downloading);
-            if matches!(it.status, ItemStatus::Failed | ItemStatus::Downloading)
-                || (it.status == ItemStatus::Done && !av1_item_is_skipped(it))
-            {
-                pb = pb.fill(item_color);
-            }
-            ui.add(pb);
-        });
-        let probing = self.av1_media_inflight.contains(&it.item_id);
-        let media_line = format_av1_media_line(it, probing);
-        ui.label(
-            RichText::new(media_line)
-                .small()
-                .color(if av1_item_has_media(it) {
-                    egui::Color32::from_rgb(180, 200, 220)
-                } else {
-                    text_muted(&self.settings.theme)
-                }),
-        );
-        ui.label(format!("in: {}", it.source_path));
-        ui.label(format!("out: {}", it.output_path));
-        if !it.detail.is_empty() {
-            ui.label(RichText::new(it.detail.clone()).small());
-        }
+        let theme = &self.settings.theme;
+        let done = it.status == ItemStatus::Done && !av1_item_is_skipped(it);
+        let item_color = av1_item_status_color(it);
+        let fill = if done {
+            theme::done_card_fill(theme)
+        } else {
+            Color32::TRANSPARENT
+        };
+
+        egui::Frame::none()
+            .fill(fill)
+            .inner_margin(egui::Margin::symmetric(8.0, 6.0))
+            .rounding(egui::Rounding::same(6.0))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 10.0;
+                    let thumb_size = egui::vec2(90.0, 52.0);
+                    let (thumb_rect, _) =
+                        ui.allocate_exact_size(thumb_size, egui::Sense::hover());
+                    let painter = ui.painter();
+                    painter.rect_filled(
+                        thumb_rect,
+                        egui::Rounding::same(4.0),
+                        theme::THUMB_PLACEHOLDER,
+                    );
+                    if let Some(tex) = self.textures.get(&it.item_id) {
+                        painter.image(
+                            tex.id(),
+                            thumb_rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            Color32::WHITE,
+                        );
+                    }
+
+                    ui.vertical(|ui| {
+                        ui.spacing_mut().item_spacing.y = 3.0;
+                        ui.set_min_width(ui.available_width());
+
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
+                            ui.label(RichText::new(format!("#{}", it.item_id)).strong());
+                            status_dot_with_label(
+                                ui,
+                                av1_item_status_label(it),
+                                item_color,
+                                false,
+                            );
+                        });
+
+                        if matches!(
+                            it.status,
+                            ItemStatus::Downloading | ItemStatus::Queued
+                        ) {
+                            let mut pb =
+                                egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
+                                    .desired_width(ui.available_width().min(280.0))
+                                    .show_percentage()
+                                    .animate(it.status == ItemStatus::Downloading);
+                            if it.status == ItemStatus::Downloading {
+                                pb = pb.fill(item_color);
+                            }
+                            ui.add(pb);
+                        }
+
+                        let probing = self.av1_media_inflight.contains(&it.item_id);
+                        let media_line = format_av1_media_line(it, probing);
+                        ui.label(
+                            RichText::new(media_line)
+                                .small()
+                                .color(if av1_item_has_media(it) {
+                                    Color32::from_rgb(180, 200, 220)
+                                } else {
+                                    text_muted(theme)
+                                }),
+                        );
+
+                        draw_av1_path_line(ui, "in:", &it.source_path, theme);
+                        draw_av1_path_line(ui, "out:", &it.output_path, theme);
+
+                        if it.status == ItemStatus::Done
+                            && !av1_item_is_skipped(it)
+                            && it.input_bytes > 0
+                        {
+                            if let Some(output_bytes) = it.output_bytes {
+                                ui.horizontal(|ui| {
+                                    ui.spacing_mut().item_spacing.x = 8.0;
+                                    if !it.detail.is_empty() {
+                                        ui.label(
+                                            RichText::new(&it.detail).small().color(item_color),
+                                        );
+                                    }
+                                    draw_av1_bytes_arrow(
+                                        ui,
+                                        &human_bytes_ui(it.input_bytes),
+                                        &human_bytes_ui(output_bytes),
+                                        item_color,
+                                        theme,
+                                    );
+                                });
+                            }
+                        } else if !it.detail.is_empty() {
+                            ui.label(RichText::new(&it.detail).small());
+                        }
+                    });
+                });
+            });
     }
 
     fn scan_av1_input_textbox(&mut self) {
