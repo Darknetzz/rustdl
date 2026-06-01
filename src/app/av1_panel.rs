@@ -789,6 +789,20 @@ impl PydlApp {
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
+                    } else {
+                        let center_msg =
+                            if !self.has_ffmpeg || self.thumbnail_attempted.contains(&it.item_id) {
+                                "No preview available"
+                            } else {
+                                "Fetching thumbnail..."
+                            };
+                        painter.text(
+                            thumb_rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            center_msg,
+                            egui::TextStyle::Small.resolve(ui.style()),
+                            Color32::from_gray(130),
+                        );
                     }
 
                     ui.vertical(|ui| {
