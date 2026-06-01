@@ -170,6 +170,25 @@ pub fn input_duration_ms(file_path: &Path, ffprobe_path: &str) -> Option<u64> {
     Some((secs * 1000.0) as u64)
 }
 
+pub fn parse_ffmpeg_out_time_secs(value: &str) -> Option<f64> {
+    let value = value.trim();
+    let (hours, rest) = value.split_once(':')?;
+    let (minutes, seconds) = rest.split_once(':')?;
+    let h: f64 = hours.parse().ok()?;
+    let m: f64 = minutes.parse().ok()?;
+    let s: f64 = seconds.parse().ok()?;
+    Some(h * 3600.0 + m * 60.0 + s)
+}
+
+pub fn parse_ffmpeg_speed(value: &str) -> Option<f64> {
+    let mut cleaned = value.trim().to_ascii_lowercase();
+    if cleaned.ends_with('x') {
+        cleaned.pop();
+    }
+    let speed: f64 = cleaned.parse().ok()?;
+    if speed > 0.0 { Some(speed) } else { None }
+}
+
 pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     let out = Command::new(ffmpeg)
@@ -358,6 +377,20 @@ mod tests {
         assert_eq!(plan.len(), 1);
         assert!(plan[0].input.to_string_lossy().ends_with("movie.mp4"));
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mkv"));
+    }
+
+    #[test]
+    fn parse_ffmpeg_out_time_handles_hms() {
+        assert_eq!(
+            parse_ffmpeg_out_time_secs("00:01:23.456789"),
+            Some(83.456789)
+        );
+        assert_eq!(parse_ffmpeg_out_time_secs("01:02:03"), Some(3723.0));
+    }
+
+    #[test]
+    fn parse_ffmpeg_speed_handles_x_suffix() {
+        assert_eq!(parse_ffmpeg_speed("2.35x"), Some(2.35));
     }
 }
 

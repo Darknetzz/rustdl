@@ -237,6 +237,26 @@ pub(crate) fn spawn_download_worker(
     });
 }
 
+pub(crate) fn spawn_av1_local_thumbnail(
+    rt: &Arc<Runtime>,
+    tx: &Sender<UiEvent>,
+    item_id: u64,
+    file_path: std::path::PathBuf,
+    ffmpeg_path: String,
+) {
+    let tx = tx.clone();
+    let rt = rt.clone();
+    rt.spawn(async move {
+        let image = tokio::task::spawn_blocking(move || {
+            av1_transcode::extract_thumbnail(&file_path, &ffmpeg_path)
+        })
+        .await
+        .ok()
+        .flatten();
+        let _ = try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, image });
+    });
+}
+
 pub(crate) fn spawn_av1_worker(
     rt: &Arc<Runtime>,
     tx: &Sender<UiEvent>,
@@ -264,21 +284,15 @@ pub(crate) fn spawn_av1_worker(
                 input: std::path::PathBuf::from(input.source_path),
                 output: std::path::PathBuf::from(output_path),
             };
-            let thumb = tokio::task::spawn_blocking({
-                let cfg = cfg.clone();
-                let input = item.input.clone();
-                move || av1_transcode::extract_thumbnail(&input, &cfg.ffmpeg_path)
-            })
-            .await
-            .ok()
-            .flatten();
-            let _ = try_send_ui(
-                &tx,
-                UiEvent::ThumbnailFetched {
-                    item_id,
-                    image: thumb,
-                },
-            );
+            if let Some(ms) = av1_transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
+                let _ = try_send_ui(
+                    &tx,
+                    UiEvent::Av1Duration {
+                        item_id,
+                        duration_ms: ms,
+                    },
+                );
+            }
             let _ = try_send_ui(
                 &tx,
                 UiEvent::Av1Line {

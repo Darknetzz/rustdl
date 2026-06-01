@@ -65,6 +65,10 @@ pub(crate) enum UiEvent {
         item_id: u64,
         line: String,
     },
+    Av1Duration {
+        item_id: u64,
+        duration_ms: u64,
+    },
     Av1Done {
         item_id: u64,
         ok: bool,
@@ -80,19 +84,120 @@ fn is_throttled_download_log_line(line: &str) -> bool {
         || l.contains("[merger]")
 }
 
+fn is_throttled_download_log_line(line: &str) -> bool {
+    let l = line.to_ascii_lowercase();
+    (l.contains("[download]") && (l.contains('%') || l.contains("frag")))
+        || l.contains("[merger]")
+}
+
+fn format_av1_duration_clock(secs: f64) -> String {
+    let total = secs.max(0.0) as u64;
+    let h = total / 3600;
+    let m = (total % 3600) / 60;
+    let s = total % 60;
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
+}
+
+fn format_av1_progress_detail(
+    progress: &str,
+    current_secs: Option<f64>,
+    total_secs: Option<f64>,
+    speed: &str,
+    percent: Option<f32>,
+) -> String {
+    let pct = percent
+        .map(|p| format!("{p:.0}%"))
+        .unwrap_or_else(|| "…".to_owned());
+    let time = match (current_secs, total_secs) {
+        (Some(c), Some(t)) => format!(
+            "{} / {}",
+            format_av1_duration_clock(c),
+            format_av1_duration_clock(t)
+        ),
+        (Some(c), None) => format_av1_duration_clock(c),
+        _ => String::new(),
+    };
+    let speed_part = if speed.is_empty() {
+        String::new()
+    } else {
+        format!(" · {speed}")
+    };
+    if progress == "end" {
+        format!("{pct} · Done{speed_part}")
+    } else if time.is_empty() {
+        format!("{pct}{speed_part}")
+    } else {
+        format!("{pct} · {time}{speed_part}")
+    }
+}
+
 impl PydlApp {
-    fn av1_progress_percent(&self, item_id: u64, line: &str) -> Option<f32> {
-        let Some(total_ms) = self.av1_duration_ms.get(&item_id).copied() else {
-            return None;
-        };
-        if total_ms == 0 {
-            return None;
+    fn handle_av1_line(&mut self, item_id: u64, line: &str) {
+        if line.starts_with("starting with ") || line.starts_with("skip_reason=") {
+            if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                it.status = ItemStatus::Downloading;
+                it.detail = line.to_owned();
+            }
+            self.append_log(&format!("[av1 {item_id}] {line}"));
+            return;
         }
-        let Some(ms_text) = line.strip_prefix("out_time_ms=") else {
-            return None;
+
+        let Some((key, value)) = line.split_once('=') else {
+            if line.starts_with("dry-run:") {
+                if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                    it.detail = line.chars().take(160).collect();
+                }
+                self.append_log(&format!("[av1 {item_id}] {line}"));
+            }
+            return;
         };
-        let current_ms = ms_text.trim().parse::<u64>().ok()?;
-        Some(((current_ms as f64 / total_ms as f64) * 100.0).clamp(0.0, 100.0) as f32)
+
+        let key = key.trim();
+        let value = value.trim();
+        if key != "progress" {
+            self.av1_progress_state
+                .entry(item_id)
+                .or_default()
+                .insert(key.to_owned(), value.to_owned());
+            return;
+        }
+
+        let state = self.av1_progress_state.remove(&item_id).unwrap_or_default();
+        let current_secs = state
+            .get("out_time")
+            .and_then(|v| crate::av1_transcode::parse_ffmpeg_out_time_secs(v));
+        let total_secs = self
+            .av1_duration_ms
+            .get(&item_id)
+            .copied()
+            .map(|ms| ms as f64 / 1000.0);
+
+        let percent = if value == "end" {
+            Some(100.0)
+        } else if let (Some(current), Some(total)) = (current_secs, total_secs) {
+            if total > 0.0 {
+                Some(((current / total) * 100.0).clamp(0.0, 100.0) as f32)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let speed = state.get("speed").map(String::as_str).unwrap_or("");
+        let detail = format_av1_progress_detail(value, current_secs, total_secs, speed, percent);
+
+        if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+            it.status = ItemStatus::Downloading;
+            if let Some(p) = percent {
+                it.percent = p;
+            }
+            it.detail = detail;
+        }
     }
 
     pub(super) fn process_events(&mut self, ctx: &egui::Context) {
@@ -290,28 +395,12 @@ impl PydlApp {
                         .push_back((item_id, image));
                 }
                 UiEvent::Av1Line { item_id, line } => {
-                    let pct_from_time = self.av1_progress_percent(item_id, &line);
-                    if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
-                        it.status = ItemStatus::Downloading;
-                        if let Some(p) = pct_from_time {
-                            it.percent = p;
-                        }
-                        if line == "progress=end" {
-                            it.percent = 100.0;
-                        }
-                        if let Some(s) = line.strip_prefix("speed=") {
-                            it.detail = format!("Encoding speed {}", s.trim());
-                        } else if let Some(t) = line.strip_prefix("out_time=") {
-                            it.detail = format!("Encoded time {}", t.trim());
-                        } else if let Some(t) = line.strip_prefix("out_time_ms=") {
-                            it.detail = format!("Progress: {} ms", t.trim());
-                        } else if let Some(reason) = line.strip_prefix("skip_reason=") {
-                            it.detail = format!("Skipped: {}", reason.trim());
-                        } else {
-                            it.detail = line.chars().take(160).collect();
-                        }
+                    self.handle_av1_line(item_id, &line);
+                }
+                UiEvent::Av1Duration { item_id, duration_ms } => {
+                    if duration_ms > 0 {
+                        self.av1_duration_ms.insert(item_id, duration_ms);
                     }
-                    self.append_log(&format!("[av1 {item_id}] {line}"));
                 }
                 UiEvent::Av1Done {
                     item_id,
@@ -324,6 +413,7 @@ impl PydlApp {
                         it.detail = detail.clone();
                     }
                     self.av1_duration_ms.remove(&item_id);
+                    self.av1_progress_state.remove(&item_id);
                     if !ok {
                         self.append_log(&format!("[av1 {item_id}] {detail}"));
                     }

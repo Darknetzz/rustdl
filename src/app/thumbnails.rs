@@ -1,6 +1,8 @@
+use std::path::PathBuf;
+
 use eframe::egui;
 
-use super::{events::try_send_ui, PydlApp, UiEvent};
+use super::{events::try_send_ui, background_spawn, PydlApp, UiEvent};
 
 fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage> {
     let img = image::load_from_memory(&bytes).ok()?;
@@ -45,5 +47,24 @@ impl PydlApp {
             };
             try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, image });
         });
+    }
+
+    pub(super) fn queue_av1_local_thumbnail(
+        &mut self,
+        item_id: u64,
+        file_path: PathBuf,
+        ffmpeg_path: String,
+    ) {
+        if self.textures.contains_key(&item_id) || self.thumbnail_inflight.contains(&item_id) {
+            return;
+        }
+        self.thumbnail_inflight.insert(item_id);
+        background_spawn::spawn_av1_local_thumbnail(
+            &self.runtime,
+            &self.tx,
+            item_id,
+            file_path,
+            ffmpeg_path,
+        );
     }
 }

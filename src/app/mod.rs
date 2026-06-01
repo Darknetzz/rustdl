@@ -160,6 +160,7 @@ pub struct PydlApp {
     av1_input_paths: String,
     av1_items: Vec<Av1QueueItem>,
     av1_duration_ms: HashMap<u64, u64>,
+    av1_progress_state: HashMap<u64, HashMap<String, String>>,
     av1_next_item_id: u64,
     av1_running: bool,
     av1_cancel_flag: Arc<AtomicBool>,
@@ -281,6 +282,7 @@ impl PydlApp {
             av1_input_paths: String::new(),
             av1_items: Vec::new(),
             av1_duration_ms: HashMap::new(),
+            av1_progress_state: HashMap::new(),
             av1_next_item_id: 1_000_000,
             av1_running: false,
             av1_cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -1563,7 +1565,8 @@ impl PydlApp {
         if !self.av1_input_paths.ends_with('\n') {
             self.av1_input_paths.push('\n');
         }
-        self.append_log(&format!("AV1: added {} dropped path(s).", lines.len()));
+        self.scan_av1_paths_into_queue(&lines);
+        self.append_log(&format!("AV1: added {} path(s).", lines.len()));
     }
 
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
