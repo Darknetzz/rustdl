@@ -192,6 +192,19 @@ pub fn alert_danger<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::U
     alert_box(ui, ALERT_DANGER_BG, ALERT_DANGER_BORDER, add_contents)
 }
 
+/// Center a compact horizontal row (e.g. dialog Cancel / OK buttons) in the parent width.
+pub fn centered_button_row<R>(
+    ui: &mut egui::Ui,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    ui.allocate_ui_with_layout(
+        egui::vec2(ui.available_width(), 0.0),
+        egui::Layout::top_down(egui::Align::Center),
+        |ui| ui.horizontal(add_contents).inner,
+    )
+    .inner
+}
+
 /// Dim the viewport behind a modal. Call before the modal window so the dialog stays on top.
 /// Returns `true` if the user clicked the backdrop.
 pub fn modal_backdrop(ctx: &egui::Context, id: egui::Id) -> bool {

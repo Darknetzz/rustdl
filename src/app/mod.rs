@@ -43,8 +43,9 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    alert_danger, alert_warning, danger_button, draw_status_dot, modal_backdrop, secondary_button,
-    status_color, success_button, warning_button, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot, modal_backdrop,
+    secondary_button, status_color, success_button, warning_button, ALERT_DANGER_TEXT,
+    ALERT_WARNING_TEXT,
 };
 use crate::config::{
     activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
@@ -1996,7 +1997,7 @@ impl PydlApp {
                     }
                 });
                 ui.add_space(16.0);
-                ui.horizontal_centered(|ui| {
+                centered_button_row(ui, |ui| {
                     if secondary_button(
                         ui,
                         &format!("{} Cancel", ui_icons::DISMISS),
