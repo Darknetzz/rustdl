@@ -15,7 +15,16 @@ pub const BG_LOG_LIGHT: Color32 = Color32::from_rgb(236, 238, 242);
 pub const BORDER_PANEL_LIGHT: Color32 = Color32::from_rgb(200, 204, 212);
 pub const TEXT_MUTED_LIGHT: Color32 = Color32::from_rgb(90, 94, 102);
 pub const TEXT_HINT_LIGHT: Color32 = Color32::from_rgb(110, 114, 122);
+#[allow(dead_code)]
 pub const THUMB_PLACEHOLDER_LIGHT: Color32 = Color32::from_gray(220);
+
+pub fn text_hint(theme: &str) -> Color32 {
+    if theme == "light" {
+        TEXT_HINT_LIGHT
+    } else {
+        TEXT_HINT
+    }
+}
 
 pub fn canvas_bg(theme: &str) -> Color32 {
     if theme == "light" {

@@ -18,6 +18,7 @@ pub const CANCEL_TO_REMOVE: &str = m::ICON_DELETE_FOREVER;
 pub const RECHECK: &str = m::ICON_SEARCH;
 pub const SCAN: &str = m::ICON_SCAN;
 pub const SETTINGS: &str = m::ICON_SETTINGS;
+#[allow(dead_code)]
 pub const SAVE: &str = m::ICON_SAVE;
 pub const DISMISS: &str = m::ICON_CLOSE;
 pub const EXIT: &str = m::ICON_EXIT_TO_APP;

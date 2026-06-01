@@ -11,7 +11,7 @@ use crate::app_ui::{
 };
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
-use crate::theme::{self, canvas_bg, panel_border, text_muted};
+use crate::theme::{canvas_bg, panel_border, text_muted};
 use crate::ui_icons;
 
 use super::PydlApp;

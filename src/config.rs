@@ -143,6 +143,7 @@ pub struct AppSettings {
 }
 
 pub const DEFAULT_OUTPUT_FILENAME_TEMPLATE: &str = "%(title)s [%(id)s].%(ext)s";
+pub const DEFAULT_PLAYLIST_PREVIEW_CAP: usize = 20;
 
 fn default_last_mode() -> String {
     "downloader".to_owned()
@@ -173,7 +174,7 @@ fn default_show_first_run_hint() -> bool {
 }
 
 fn default_playlist_preview_cap() -> usize {
-    20
+    DEFAULT_PLAYLIST_PREVIEW_CAP
 }
 
 fn default_active_profile() -> String {

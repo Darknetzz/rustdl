@@ -4,7 +4,7 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{danger_button, secondary_button};
-use crate::theme::{log_bg, BORDER_SUBTLE, TEXT_HINT, TEXT_MUTED};
+use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{
     format_relative_ago, log_message_body, split_log_line,
 };
@@ -222,7 +222,7 @@ impl PydlApp {
                     ui.label(
                         RichText::new("Download activity will appear here.")
                             .small()
-                            .color(TEXT_HINT),
+                            .color(text_hint(&self.settings.theme)),
                     );
                     return;
                 }
