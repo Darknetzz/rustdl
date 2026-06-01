@@ -46,6 +46,7 @@ impl PydlApp {
             .open(&mut settings_open)
             .resizable(true)
             .default_width(620.0)
+            .default_height(560.0)
             .show(ctx, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.selectable_value(
@@ -64,15 +65,17 @@ impl PydlApp {
                         format!("{} AV1", ui_icons::TAB_AV1),
                     );
                 });
-                if changed {
-                    ui.label(
-                        RichText::new("Changes save automatically.")
-                            .small()
-                            .color(Color32::GRAY),
-                    );
-                }
                 ui.separator();
-                match self.settings_tab {
+                let scroll_h = ui.available_height().max(240.0);
+                egui::ScrollArea::vertical()
+                    .id_salt(super::settings_tab_to_str(self.settings_tab))
+                    .auto_shrink([false, false])
+                    .max_height(scroll_h)
+                    .drag_to_scroll(true)
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        match self.settings_tab {
                     SettingsTab::Shared => {
                         ui.label(RichText::new("Global settings").strong());
                         let show_thumbnails_changed = ui
@@ -613,8 +616,8 @@ impl PydlApp {
                         ui.label("Impersonate (optional)");
                         ui.label(
                             RichText::new(
-                                "Browser TLS fingerprint for yt-dlp, e.g. chrome. Some login-gated sites need this with cookies\
-                                 (without this, you may see HTTP 410 even with a valid cookies.txt).",
+                                "Browser TLS fingerprint for yt-dlp, e.g. chrome. Some login-gated sites need \
+                                 this with cookies (without it, you may see HTTP 410 even with a valid cookies.txt).",
                             )
                             .small()
                             .color(Color32::GRAY),
@@ -867,6 +870,7 @@ impl PydlApp {
                         });
                     }
                 }
+            });
             });
         self.settings_open = settings_open;
         if changed {
