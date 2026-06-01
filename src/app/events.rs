@@ -69,6 +69,10 @@ pub(crate) enum UiEvent {
         item_id: u64,
         duration_ms: u64,
     },
+    Av1MediaProbed {
+        item_id: u64,
+        media: crate::av1_transcode::Av1InputMedia,
+    },
     Av1Done {
         item_id: u64,
         ok: bool,
@@ -411,6 +415,19 @@ impl PydlApp {
                 UiEvent::Av1Duration { item_id, duration_ms } => {
                     if duration_ms > 0 {
                         self.av1_duration_ms.insert(item_id, duration_ms);
+                    }
+                }
+                UiEvent::Av1MediaProbed { item_id, media } => {
+                    self.av1_media_inflight.remove(&item_id);
+                    if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                        it.video_codec = media.codec;
+                        it.width = media.width;
+                        it.height = media.height;
+                        it.fps = media.fps;
+                        it.bitrate_bps = media.bitrate_bps;
+                    }
+                    if let Some(ms) = media.duration_ms.filter(|ms| *ms > 0) {
+                        self.av1_duration_ms.insert(item_id, ms);
                     }
                 }
                 UiEvent::Av1Done {

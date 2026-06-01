@@ -67,4 +67,23 @@ impl PydlApp {
             ffmpeg_path,
         );
     }
+
+    pub(super) fn queue_av1_media_probe(
+        &mut self,
+        item_id: u64,
+        file_path: PathBuf,
+        ffprobe_path: String,
+    ) {
+        if self.av1_media_inflight.contains(&item_id) {
+            return;
+        }
+        self.av1_media_inflight.insert(item_id);
+        background_spawn::spawn_av1_media_probe(
+            &self.runtime,
+            &self.tx,
+            item_id,
+            file_path,
+            ffprobe_path,
+        );
+    }
 }

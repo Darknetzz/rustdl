@@ -27,6 +27,13 @@ use windows_sys::Win32::UI::Shell::{DragFinish, DragQueryFileW, HDROP};
 
 use crate::app_parsing;
 
+/// Payload from a Windows shell drag-and-drop operation.
+#[derive(Clone, Debug)]
+pub enum WinDropPayload {
+    Url(String),
+    Path(PathBuf),
+}
+
 /// `IUnknown` and `IDropTarget` IIDs (oleidl.h).
 const IID_IUNKNOWN: GUID = GUID {
     data1: 0x0000_0000,
@@ -82,7 +89,7 @@ struct IDropTargetVtbl {
 struct IDropTargetRaw {
     lp_vtbl: *const IDropTargetVtbl,
     refcount: AtomicUsize,
-    queue: Arc<Mutex<Vec<String>>>,
+    queue: Arc<Mutex<Vec<WinDropPayload>>>,
     /// Last drag offered something we accept (for DragLeave cancel semantics).
     hover_valid: bool,
     cursor_effect: u32,
@@ -322,18 +329,22 @@ unsafe fn consume_hdrop_paths<F: FnMut(PathBuf)>(data_obj: IDataObject, mut f: F
     unsafe { ReleaseStgMedium(&mut medium) };
 }
 
-fn harvest_drop_urls(data_obj: IDataObject, resolve_shortcuts: bool) -> Vec<String> {
-    let mut out = collect_url_formats(data_obj);
+fn harvest_drop(data_obj: IDataObject, resolve_shortcuts: bool) -> Vec<WinDropPayload> {
+    let mut out: Vec<WinDropPayload> = collect_url_formats(data_obj)
+        .into_iter()
+        .map(WinDropPayload::Url)
+        .collect();
     unsafe {
         consume_hdrop_paths(data_obj, |path| {
+            out.push(WinDropPayload::Path(path.clone()));
             if resolve_shortcuts {
                 if let Some(urls) = app_parsing::urls_from_dropped_os_path(&path) {
-                    out.extend(urls);
+                    out.extend(urls.into_iter().map(WinDropPayload::Url));
                 }
             }
         });
     }
-    app_parsing::dedupe_preserve_order_strings(out)
+    out
 }
 
 fn drop_accepts(data_obj: IDataObject) -> bool {
@@ -438,10 +449,10 @@ unsafe extern "system" fn dt_drop(
         *pdw_effect = DROPEFFECT_NONE;
     }
     if !p_data_obj.is_null() {
-        let urls = harvest_drop_urls(p_data_obj, true);
-        if !urls.is_empty() {
+        let items = harvest_drop(p_data_obj, true);
+        if !items.is_empty() {
             if let Ok(mut g) = raw.queue.lock() {
-                g.extend(urls);
+                g.extend(items);
             }
         }
     }
@@ -461,7 +472,7 @@ static DROP_TARGET_VTBL: IDropTargetVtbl = IDropTargetVtbl {
 };
 
 /// Installs our drop target once (revokes winit's file-only handler first).
-pub fn install_once(hwnd: HWND, queue: Arc<Mutex<Vec<String>>>) -> Result<(), &'static str> {
+pub fn install_once(hwnd: HWND, queue: Arc<Mutex<Vec<WinDropPayload>>>) -> Result<(), &'static str> {
     if hwnd == 0 {
         return Err("null hwnd");
     }

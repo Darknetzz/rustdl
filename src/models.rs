@@ -171,6 +171,11 @@ pub struct Av1QueueItem {
     pub detail: String,
     pub input_bytes: u64,
     pub output_bytes: Option<u64>,
+    pub video_codec: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub fps: Option<f32>,
+    pub bitrate_bps: Option<u64>,
 }
 
 impl Default for Av1QueueItem {
@@ -184,6 +189,11 @@ impl Default for Av1QueueItem {
             detail: String::new(),
             input_bytes: 0,
             output_bytes: None,
+            video_codec: String::new(),
+            width: None,
+            height: None,
+            fps: None,
+            bitrate_bps: None,
         }
     }
 }

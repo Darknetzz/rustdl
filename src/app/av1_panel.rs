@@ -106,6 +106,51 @@ pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> St
     }
 }
 
+fn format_av1_bitrate(bps: u64) -> String {
+    if bps >= 1_000_000 {
+        format!("{:.2} Mbps", bps as f64 / 1_000_000.0)
+    } else if bps >= 1_000 {
+        format!("{:.0} kbps", bps as f64 / 1_000.0)
+    } else {
+        format!("{bps} bps")
+    }
+}
+
+fn av1_item_has_media(item: &Av1QueueItem) -> bool {
+    !item.video_codec.is_empty()
+        || item.width.is_some()
+        || item.height.is_some()
+        || item.fps.is_some()
+        || item.bitrate_bps.is_some()
+}
+
+fn format_av1_media_line(item: &Av1QueueItem, probing: bool) -> String {
+    if probing {
+        return "Probing metadata…".to_owned();
+    }
+    let mut parts = Vec::new();
+    if !item.video_codec.is_empty() {
+        parts.push(item.video_codec.to_uppercase());
+    }
+    if let (Some(w), Some(h)) = (item.width, item.height) {
+        parts.push(format!("{w}×{h}"));
+    }
+    if let Some(fps) = item.fps {
+        parts.push(format!("{fps:.2} fps"));
+    }
+    if item.input_bytes > 0 {
+        parts.push(human_bytes_ui(item.input_bytes));
+    }
+    if let Some(bps) = item.bitrate_bps {
+        parts.push(format_av1_bitrate(bps));
+    }
+    if parts.is_empty() {
+        "Metadata unavailable".to_owned()
+    } else {
+        parts.join(" · ")
+    }
+}
+
 fn normalize_av1_source_key(path: &str) -> String {
     Path::new(path)
         .to_string_lossy()
@@ -188,10 +233,11 @@ impl PydlApp {
             let item_id = self.av1_next_item_id;
             self.av1_next_item_id = self.av1_next_item_id.saturating_add(1);
             if self.has_ffprobe {
-                if let Some(ms) = av1_transcode::input_duration_ms(&plan_item.input, &ffprobe_path)
-                {
-                    self.av1_duration_ms.insert(item_id, ms);
-                }
+                self.queue_av1_media_probe(
+                    item_id,
+                    plan_item.input.clone(),
+                    ffprobe_path.clone(),
+                );
             }
 
             let input_bytes = std::fs::metadata(&plan_item.input)
@@ -212,6 +258,11 @@ impl PydlApp {
                 detail: ready_detail,
                 input_bytes,
                 output_bytes: None,
+                video_codec: String::new(),
+                width: None,
+                height: None,
+                fps: None,
+                bitrate_bps: None,
             });
             if self.has_ffmpeg {
                 self.queue_av1_local_thumbnail(
@@ -235,6 +286,7 @@ impl PydlApp {
             self.textures.remove(&item.item_id);
             self.thumbnail_inflight.remove(&item.item_id);
             self.thumbnail_attempted.remove(&item.item_id);
+            self.av1_media_inflight.remove(&item.item_id);
         }
         self.av1_items.clear();
         self.av1_duration_ms.clear();
@@ -506,6 +558,17 @@ impl PydlApp {
                             }
                             ui.add(pb);
                         });
+                        let probing = self.av1_media_inflight.contains(&it.item_id);
+                        let media_line = format_av1_media_line(it, probing);
+                        ui.label(
+                            RichText::new(media_line)
+                                .small()
+                                .color(if av1_item_has_media(it) {
+                                    egui::Color32::from_rgb(180, 200, 220)
+                                } else {
+                                    TEXT_MUTED
+                                }),
+                        );
                         ui.label(format!("in: {}", it.source_path));
                         ui.label(format!("out: {}", it.output_path));
                         if !it.detail.is_empty() {

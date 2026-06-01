@@ -13,6 +13,16 @@ const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
 const BITRATE_MAXRATE_MULTIPLIER: f64 = 1.2;
 const BITRATE_BUFSIZE_MULTIPLIER: f64 = 2.0;
 
+#[derive(Clone, Debug, Default)]
+pub struct Av1InputMedia {
+    pub codec: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub fps: Option<f32>,
+    pub bitrate_bps: Option<u64>,
+    pub duration_ms: Option<u64>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Av1Config {
     pub ffmpeg_path: String,
@@ -237,7 +247,53 @@ fn is_video_path(path: &Path) -> bool {
         .unwrap_or(false)
 }
 
-pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
+fn parse_ffprobe_fraction(value: &str) -> Option<f64> {
+    let value = value.trim();
+    if value.is_empty() || value == "0/0" {
+        return None;
+    }
+    if let Some((num, den)) = value.split_once('/') {
+        let num: f64 = num.trim().parse().ok()?;
+        let den: f64 = den.trim().parse().ok()?;
+        if den > 0.0 {
+            return Some(num / den);
+        }
+        return None;
+    }
+    value.parse().ok()
+}
+
+fn parse_bitrate_field(raw: &str) -> Option<u64> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse().ok()
+}
+
+#[derive(serde::Deserialize)]
+struct FfprobeMediaFormat {
+    bit_rate: Option<String>,
+    duration: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct FfprobeMediaStream {
+    codec_name: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    avg_frame_rate: Option<String>,
+    r_frame_rate: Option<String>,
+    bit_rate: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct FfprobeMediaRoot {
+    streams: Vec<FfprobeMediaStream>,
+    format: Option<FfprobeMediaFormat>,
+}
+
+pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Av1InputMedia> {
     let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
     let out = Command::new(ffprobe)
         .args([
@@ -246,9 +302,11 @@ pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
             "-select_streams",
             "v:0",
             "-show_entries",
-            "stream=codec_name",
+            "stream=codec_name,width,height,avg_frame_rate,r_frame_rate,bit_rate",
+            "-show_entries",
+            "format=bit_rate,duration",
             "-of",
-            "default=noprint_wrappers=1:nokey=1",
+            "json",
             &file_path.to_string_lossy(),
         ])
         .stdout(Stdio::piped())
@@ -258,34 +316,71 @@ pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    let text = String::from_utf8_lossy(&out.stdout).trim().to_ascii_lowercase();
-    if text.is_empty() { None } else { Some(text) }
+    let root: FfprobeMediaRoot = serde_json::from_slice(&out.stdout).ok()?;
+    let stream = root.streams.into_iter().next()?;
+    let format = root.format.unwrap_or(FfprobeMediaFormat {
+        bit_rate: None,
+        duration: None,
+    });
+
+    let codec = stream
+        .codec_name
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    let width = stream.width.filter(|w| *w > 0);
+    let height = stream.height.filter(|h| *h > 0);
+    let fps = stream
+        .avg_frame_rate
+        .as_deref()
+        .and_then(parse_ffprobe_fraction)
+        .or_else(|| {
+            stream
+                .r_frame_rate
+                .as_deref()
+                .and_then(parse_ffprobe_fraction)
+        })
+        .filter(|f| *f > 0.0)
+        .map(|f| f as f32);
+    let duration_ms = format
+        .duration
+        .as_deref()
+        .and_then(|d| d.trim().parse::<f64>().ok())
+        .filter(|d| *d > 0.0)
+        .map(|d| (d * 1000.0) as u64);
+
+    let mut bitrate_bps = stream
+        .bit_rate
+        .as_deref()
+        .and_then(parse_bitrate_field)
+        .or_else(|| format.bit_rate.as_deref().and_then(parse_bitrate_field));
+
+    if bitrate_bps.is_none() {
+        if let (Some(ms), Ok(meta)) = (duration_ms, std::fs::metadata(file_path)) {
+            let secs = ms as f64 / 1000.0;
+            if secs > 0.0 {
+                bitrate_bps = Some(((meta.len() as f64 * 8.0 / secs) * 0.9) as u64);
+            }
+        }
+    }
+
+    Some(Av1InputMedia {
+        codec,
+        width,
+        height,
+        fps,
+        bitrate_bps,
+        duration_ms,
+    })
+}
+
+pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
+    probe_input_media(file_path, ffprobe_path)
+        .and_then(|m| if m.codec.is_empty() { None } else { Some(m.codec) })
 }
 
 pub fn input_duration_ms(file_path: &Path, ffprobe_path: &str) -> Option<u64> {
-    let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
-    let out = Command::new(ffprobe)
-        .args([
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            &file_path.to_string_lossy(),
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
-    }
-    let secs = String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok()?;
-    if secs <= 0.0 {
-        return None;
-    }
-    Some((secs * 1000.0) as u64)
+    probe_input_media(file_path, ffprobe_path).and_then(|m| m.duration_ms)
 }
 
 pub fn parse_ffmpeg_out_time_secs(value: &str) -> Option<f64> {
@@ -522,6 +617,13 @@ mod tests {
         let vf = build_video_filter_chain("nvidia", 1920, "nv12");
         assert!(vf.contains("format=nv12"));
         assert!(vf.contains("setsar=1"));
+    }
+
+    #[test]
+    fn parse_ffprobe_fraction_handles_rational_fps() {
+        assert_eq!(parse_ffprobe_fraction("30000/1001"), Some(29.970_029_970_029_97));
+        assert_eq!(parse_ffprobe_fraction("24/1"), Some(24.0));
+        assert!(parse_ffprobe_fraction("0/0").is_none());
     }
 }
 

@@ -156,6 +156,7 @@ pub struct PydlApp {
     av1_items: Vec<Av1QueueItem>,
     av1_duration_ms: HashMap<u64, u64>,
     av1_progress_state: HashMap<u64, HashMap<String, String>>,
+    av1_media_inflight: HashSet<u64>,
     av1_next_item_id: u64,
     av1_running: bool,
     av1_cancel_flag: Arc<AtomicBool>,
@@ -181,7 +182,7 @@ pub struct PydlApp {
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
     last_done_lookup_poll: Option<Instant>,
     #[cfg(windows)]
-    win_browser_drop_queue: Arc<Mutex<Vec<String>>>,
+    win_browser_drop_queue: Arc<Mutex<Vec<crate::win_drop_target::WinDropPayload>>>,
     #[cfg(windows)]
     win_browser_drop_target_installed: bool,
     #[cfg(windows)]
@@ -278,6 +279,7 @@ impl PydlApp {
             av1_items: Vec::new(),
             av1_duration_ms: HashMap::new(),
             av1_progress_state: HashMap::new(),
+            av1_media_inflight: HashSet::new(),
             av1_next_item_id: 1_000_000,
             av1_running: false,
             av1_cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -1509,8 +1511,37 @@ impl PydlApp {
             Ok(mut g) => std::mem::take(&mut *g),
             Err(e) => std::mem::take(&mut *e.into_inner()),
         };
-        if !taken.is_empty() {
-            self.merge_dragged_urls_into_input(taken, ctx);
+        if taken.is_empty() {
+            return;
+        }
+        if self.av1_mode {
+            let paths: Vec<String> = taken
+                .into_iter()
+                .filter_map(|item| match item {
+                    crate::win_drop_target::WinDropPayload::Path(p) => {
+                        Some(p.to_string_lossy().to_string())
+                    }
+                    crate::win_drop_target::WinDropPayload::Url(_) => None,
+                })
+                .collect();
+            if !paths.is_empty() {
+                self.extend_av1_input_paths_with_lines(paths);
+            }
+            return;
+        }
+        let mut urls = Vec::new();
+        for item in taken {
+            match item {
+                crate::win_drop_target::WinDropPayload::Url(u) => urls.push(u),
+                crate::win_drop_target::WinDropPayload::Path(p) => {
+                    if let Some(mut from_path) = crate::app_parsing::urls_from_dropped_os_path(&p) {
+                        urls.append(&mut from_path);
+                    }
+                }
+            }
+        }
+        if !urls.is_empty() {
+            self.merge_dragged_urls_into_input(urls, ctx);
         }
     }
 

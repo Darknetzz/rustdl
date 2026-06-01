@@ -257,6 +257,27 @@ pub(crate) fn spawn_av1_local_thumbnail(
     });
 }
 
+pub(crate) fn spawn_av1_media_probe(
+    rt: &Arc<Runtime>,
+    tx: &Sender<UiEvent>,
+    item_id: u64,
+    file_path: std::path::PathBuf,
+    ffprobe_path: String,
+) {
+    let tx = tx.clone();
+    let rt = rt.clone();
+    rt.spawn(async move {
+        let media = tokio::task::spawn_blocking(move || {
+            av1_transcode::probe_input_media(&file_path, &ffprobe_path)
+        })
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_default();
+        let _ = try_send_ui(&tx, UiEvent::Av1MediaProbed { item_id, media });
+    });
+}
+
 pub(crate) fn spawn_av1_worker(
     rt: &Arc<Runtime>,
     tx: &Sender<UiEvent>,
