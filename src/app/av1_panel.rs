@@ -57,7 +57,7 @@ impl PydlApp {
         ui.add_sized(
             [ui.available_width(), 90.0],
             egui::TextEdit::multiline(&mut self.av1_input_paths)
-                .hint_text(r"D:\Videos\movie.mkv\nD:\Videos\Folder"),
+                .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
         );
         ui.horizontal_wrapped(|ui| {
             ui.checkbox(&mut self.settings.av1_recursive, "Recursive");
