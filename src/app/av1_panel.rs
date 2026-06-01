@@ -147,10 +147,16 @@ impl PydlApp {
         ui.separator();
         ui.label("Input paths (file/folder, one per line)");
         ui.horizontal_wrapped(|ui| {
-            if secondary_button(ui, "Browse", true).clicked() {
+            if secondary_button(ui, &format!("{} Browse", ui_icons::BROWSE), true).clicked() {
                 self.browse_av1_inputs();
             }
-            if secondary_button(ui, "Scan inputs", true).clicked() {
+            if secondary_button(
+                ui,
+                &format!("{} Scan inputs", ui_icons::SCAN),
+                true,
+            )
+            .clicked()
+            {
                 self.scan_av1_input_textbox();
             }
             let ready = self
@@ -238,10 +244,22 @@ impl PydlApp {
                 self.av1_cancel_flag
                     .store(true, std::sync::atomic::Ordering::Relaxed);
             }
-            if secondary_button(ui, "Clear AV1 queue", !self.av1_running).clicked() {
+            if secondary_button(
+                ui,
+                &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
+                !self.av1_running,
+            )
+            .clicked()
+            {
                 self.clear_av1_queue();
             }
-            if secondary_button(ui, "Save AV1 settings", true).clicked() {
+            if secondary_button(
+                ui,
+                &format!("{} Save AV1 settings", ui_icons::SAVE),
+                true,
+            )
+            .clicked()
+            {
                 self.persist_settings();
             }
         });

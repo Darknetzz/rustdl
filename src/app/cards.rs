@@ -16,7 +16,7 @@ use crate::time_format::{format_absolute_local, format_relative_ago};
 use crate::ui_icons;
 
 use super::{
-    log_line_color, CancelPostAction, PydlApp, ICON_REMOVE, LOG_COLOR_ERROR, LOG_COLOR_WARN,
+    log_line_color, CancelPostAction, PydlApp, LOG_COLOR_ERROR, LOG_COLOR_WARN,
 };
 
 impl PydlApp {
@@ -406,7 +406,7 @@ impl PydlApp {
                                     }
                                     if danger_button(
                                         ui,
-                                        &format!("{ICON_REMOVE} Remove from queue"),
+                                        &format!("{} Remove from queue", ui_icons::REMOVE),
                                         removable,
                                     )
                                     .on_hover_text(
@@ -483,7 +483,7 @@ impl PydlApp {
                         self.request_cancel_item(id, CancelPostAction::Remove);
                     }
                     if !show_saved_file_actions
-                        && danger_button(ui, &format!("{ICON_REMOVE} Remove"), removable)
+                        && danger_button(ui, &format!("{} Remove", ui_icons::REMOVE), removable)
                             .clicked()
                     {
                         let _ = self.remove_item_by_id(id);

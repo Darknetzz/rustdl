@@ -49,10 +49,18 @@ impl PydlApp {
                     ui.selectable_value(
                         &mut self.settings_tab,
                         SettingsTab::Shared,
-                        "Shared",
+                        format!("{} Shared", ui_icons::TAB_SHARED),
                     );
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Downloader, "Downloader");
-                    ui.selectable_value(&mut self.settings_tab, SettingsTab::Av1, "AV1");
+                    ui.selectable_value(
+                        &mut self.settings_tab,
+                        SettingsTab::Downloader,
+                        format!("{} Downloader", ui_icons::TAB_DOWNLOADER),
+                    );
+                    ui.selectable_value(
+                        &mut self.settings_tab,
+                        SettingsTab::Av1,
+                        format!("{} AV1", ui_icons::TAB_AV1),
+                    );
                 });
                 ui.separator();
                 match self.settings_tab {

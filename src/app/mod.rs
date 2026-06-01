@@ -10,7 +10,6 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use eframe::egui;
 use eframe::egui::{Color32, RichText, TextureHandle};
-use egui_material_icons::icons;
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 use url::Url;
@@ -59,10 +58,6 @@ use crate::pkg_version;
 use crate::ui_icons;
 use crate::ytdlp;
 
-const ICON_ADD: &str = icons::ICON_ADD;
-const ICON_CLEAR: &str = icons::ICON_CLOSE;
-const ICON_REMOVE: &str = icons::ICON_DELETE;
-const ICON_DOWNLOAD: &str = icons::ICON_DOWNLOAD;
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {

@@ -132,7 +132,7 @@ impl eframe::App for PydlApp {
                         let dl_active = !self.av1_mode;
                         let av1_active = self.av1_mode;
                         let dl = egui::Button::new(
-                            RichText::new("Downloader")
+                            RichText::new(format!("{} Downloader", ui_icons::NAV_DOWNLOADER))
                                 .strong()
                                 .color(if dl_active {
                                     Color32::from_rgb(10, 32, 10)
@@ -158,7 +158,7 @@ impl eframe::App for PydlApp {
                             self.av1_mode = false;
                         }
                         let av1 = egui::Button::new(
-                            RichText::new("AV1 Converter")
+                            RichText::new(format!("{} AV1 Converter", ui_icons::NAV_AV1))
                                 .strong()
                                 .color(if av1_active {
                                     Color32::from_rgb(45, 27, 0)
@@ -250,7 +250,7 @@ impl eframe::App for PydlApp {
                 log_panel::draw_input_line_preview(ui, summary_lines);
 
                 ui.horizontal_wrapped(|ui| {
-                    if success_button(ui, &format!("{ICON_ADD} Add URLs"), !self.add_in_progress)
+                    if success_button(ui, &format!("{} Add URLs", ui_icons::ADD), !self.add_in_progress)
                         .clicked()
                     {
                         self.add_urls(ctx.input(|i| i.time));
@@ -330,7 +330,9 @@ impl eframe::App for PydlApp {
                     if !parts.is_empty() {
                         ui.label(RichText::new("Downloads:").color(TEXT_MUTED));
                         if self.queue_group_focus.is_some()
-                            && ui.small_button("Show all").clicked()
+                            && ui
+                                .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
+                                .clicked()
                         {
                             self.queue_group_focus = None;
                         }
@@ -469,14 +471,22 @@ impl eframe::App for PydlApp {
                     if search.changed() {
                         self.queue_group_focus = None;
                     }
-                    if !self.queue_search.is_empty() && ui.small_button("Clear").clicked() {
+                    if !self.queue_search.is_empty()
+                        && ui
+                            .small_button(format!("{} Clear", ui_icons::CLEAR_SEARCH))
+                            .clicked()
+                    {
                         self.queue_search.clear();
                     }
                 });
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                     if self.downloads_paused {
-                        if success_button(ui, &format!("{} Resume downloads", ICON_DOWNLOAD), true)
+                        if success_button(
+                            ui,
+                            &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                            true,
+                        )
                             .clicked()
                         {
                             self.resume_all_downloads();
@@ -504,7 +514,7 @@ impl eframe::App for PydlApp {
                             ui,
                             &format!(
                                 "{} Remove selected ({})",
-                                ICON_REMOVE,
+                                ui_icons::REMOVE,
                                 self.selected_item_ids.len()
                             ),
                             true,
@@ -524,7 +534,13 @@ impl eframe::App for PydlApp {
                             self.retry_selected_failed();
                         }
                     }
-                    if danger_button(ui, &format!("{ICON_CLEAR} Clear list"), true).clicked() {
+                    if danger_button(
+                        ui,
+                        &format!("{} Clear list", ui_icons::DISMISS),
+                        true,
+                    )
+                    .clicked()
+                    {
                         self.items.retain(|x| {
                             matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
                         });
@@ -594,7 +610,11 @@ impl eframe::App for PydlApp {
                     }
                 });
                 if has_idle_items
-                    && success_button(ui, &format!("{ICON_DOWNLOAD} Start downloads"), true)
+                    && success_button(
+                        ui,
+                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                        true,
+                    )
                         .clicked()
                 {
                     self.start_downloads();
@@ -627,17 +647,12 @@ impl eframe::App for PydlApp {
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Videos").strong());
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if secondary_button(
-                                    ui,
-                                    if self.settings.logs_docked {
-                                        "Undock log"
-                                    } else {
-                                        "Dock log"
-                                    },
-                                    true,
-                                )
-                                .clicked()
-                                {
+                                let dock_label = if self.settings.logs_docked {
+                                    format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                                } else {
+                                    format!("{} Dock log", ui_icons::DOCK_LOG)
+                                };
+                                if secondary_button(ui, &dock_label, true).clicked() {
                                     self.settings.logs_docked = !self.settings.logs_docked;
                                     self.persist_settings();
                                 }
