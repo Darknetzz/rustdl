@@ -96,11 +96,26 @@ fn format_av1_duration_clock(secs: f64) -> String {
     }
 }
 
+fn format_av1_rate_display(fps_raw: &str, speed_raw: &str) -> String {
+    let mut parts = Vec::new();
+    if let Ok(fps) = fps_raw.trim().parse::<f64>() {
+        if fps > 0.0 {
+            parts.push(format!("{} fps", fps.round() as i64));
+        }
+    }
+    if let Some(speed) = crate::av1_transcode::parse_ffmpeg_speed(speed_raw) {
+        parts.push(format!("{speed:.2}x"));
+    } else if !speed_raw.trim().is_empty() {
+        parts.push(speed_raw.trim().to_owned());
+    }
+    parts.join(" · ")
+}
+
 fn format_av1_progress_detail(
     progress: &str,
     current_secs: Option<f64>,
     total_secs: Option<f64>,
-    speed: &str,
+    rate: &str,
     percent: Option<f32>,
 ) -> String {
     let pct = percent
@@ -115,17 +130,17 @@ fn format_av1_progress_detail(
         (Some(c), None) => format_av1_duration_clock(c),
         _ => String::new(),
     };
-    let speed_part = if speed.is_empty() {
+    let rate_part = if rate.is_empty() {
         String::new()
     } else {
-        format!(" · {speed}")
+        format!(" · {rate}")
     };
     if progress == "end" {
-        format!("{pct} · Done{speed_part}")
+        format!("{pct} · Done{rate_part}")
     } else if time.is_empty() {
-        format!("{pct}{speed_part}")
+        format!("{pct}{rate_part}")
     } else {
-        format!("{pct} · {time}{speed_part}")
+        format!("{pct} · {time}{rate_part}")
     }
 }
 
@@ -182,11 +197,10 @@ impl PydlApp {
             None
         };
 
+        let fps_raw = state.get("fps").map(String::as_str).unwrap_or("");
         let speed_raw = state.get("speed").map(String::as_str).unwrap_or("");
-        let speed = crate::av1_transcode::parse_ffmpeg_speed(speed_raw)
-            .map(|n| format!("{n:.2}x"))
-            .unwrap_or_else(|| speed_raw.to_owned());
-        let detail = format_av1_progress_detail(value, current_secs, total_secs, &speed, percent);
+        let rate = format_av1_rate_display(fps_raw, speed_raw);
+        let detail = format_av1_progress_detail(value, current_secs, total_secs, &rate, percent);
 
         if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
             it.status = ItemStatus::Downloading;

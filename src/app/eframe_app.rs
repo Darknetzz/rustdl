@@ -127,8 +127,6 @@ impl eframe::App for PydlApp {
                 nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
                 nav_frame.show(ui, |ui| {
                     ui.horizontal_wrapped(|ui| {
-                        ui.label(RichText::new("Navigation").strong());
-                        ui.separator();
                         let dl_active = !self.av1_mode;
                         let av1_active = self.av1_mode;
                         let dl = egui::Button::new(
