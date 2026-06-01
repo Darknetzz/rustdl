@@ -11,7 +11,7 @@ use crate::app_ui::{
 };
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
-use crate::theme::TEXT_MUTED;
+use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -463,157 +463,194 @@ impl PydlApp {
                 self.persist_settings();
             }
         });
-        ui.separator();
-        if !self.av1_items.is_empty() {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Queue:").color(TEXT_MUTED));
-                let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
-                let ready = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| i.status == ItemStatus::Idle)
-                    .count();
-                let queued = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| i.status == ItemStatus::Queued)
-                    .count();
-                let running = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| i.status == ItemStatus::Downloading)
-                    .count();
-                let done = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
-                    .count();
-                let skipped = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| av1_item_is_skipped(i))
-                    .count();
-                let failed = self
-                    .av1_items
-                    .iter()
-                    .filter(|i| i.status == ItemStatus::Failed)
-                    .count();
-                if ready > 0 {
-                    parts.push(("ready", ready, status_color(ItemStatus::Idle)));
-                }
-                if queued > 0 {
-                    parts.push(("queued", queued, status_color(ItemStatus::Queued)));
-                }
-                if running > 0 {
-                    parts.push(("running", running, status_color(ItemStatus::Downloading)));
-                }
-                if done > 0 {
-                    parts.push(("done", done, status_color(ItemStatus::Done)));
-                }
-                if skipped > 0 {
-                    parts.push(("skipped", skipped, AV1_SKIPPED_COLOR));
-                }
-                if failed > 0 {
-                    parts.push(("failed", failed, status_color(ItemStatus::Failed)));
-                }
-                for (idx, (name, count, color)) in parts.iter().enumerate() {
-                    let suffix = if idx + 1 == parts.len() { "" } else { "," };
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().item_spacing.x = 5.0;
-                        draw_status_dot(ui, *color);
-                        ui.label(RichText::new(format!("{count} {name}{suffix}")).color(*color));
-                    });
-                }
-            });
-            let batch = compute_av1_batch_summary(&self.av1_items);
-            if batch.completed > 0 {
-                let saved = batch
-                    .completed_input_bytes
-                    .saturating_sub(batch.completed_output_bytes);
-                let pct = if batch.completed_input_bytes > 0 {
-                    (saved as f64 / batch.completed_input_bytes as f64) * 100.0
-                } else {
-                    0.0
-                };
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Summary:").color(TEXT_MUTED));
-                    ui.label(
-                        RichText::new(format!(
-                            "{} completed · {} -> {} · saved {} ({pct:.1}%)",
-                            batch.completed,
-                            human_bytes_ui(batch.completed_input_bytes),
-                            human_bytes_ui(batch.completed_output_bytes),
-                            human_bytes_ui(saved),
-                        ))
-                        .color(status_color(ItemStatus::Done)),
-                    );
-                });
-            }
-            if batch.pending_input_bytes > 0 {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Pending input:").color(TEXT_MUTED));
-                    ui.label(human_bytes_ui(batch.pending_input_bytes));
-                });
-            }
-        }
-        egui::ScrollArea::vertical()
-            .id_salt("av1_queue_scroll")
-            .max_height(340.0)
+        const RESERVE_BOTTOM_PX: f32 = 20.0;
+        const MIN_QUEUE_VIEWPORT: f32 = 260.0;
+        let queue_scroll_h =
+            (ui.available_height() - RESERVE_BOTTOM_PX).max(MIN_QUEUE_VIEWPORT);
+
+        egui::Frame::dark_canvas(ui.style())
+            .fill(BG_CANVAS)
+            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .inner_margin(egui::Margin::same(10.0))
+            .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
-                if self.av1_items.is_empty() {
-                    ui.label(
-                        RichText::new("No AV1 jobs yet. Browse, drop, or scan paths to add videos.")
-                            .color(egui::Color32::GRAY),
-                    );
-                    return;
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new("Videos").strong());
+                if !self.av1_items.is_empty() {
+                    ui.add_space(4.0);
+                    self.draw_av1_queue_status_row(ui);
+                    self.draw_av1_batch_summary_row(ui);
                 }
-                for it in &self.av1_items {
-                    ui.group(|ui| {
-                        ui.horizontal_wrapped(|ui| {
-                            if let Some(tex) = self.textures.get(&it.item_id) {
-                                ui.add(egui::Image::new(egui::load::SizedTexture::new(
-                                    tex.id(),
-                                    egui::vec2(90.0, 52.0),
-                                )));
-                            } else {
-                                ui.allocate_space(egui::vec2(90.0, 52.0));
-                            }
-                            ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            let status_label = av1_item_status_label(it);
-                            let item_color = av1_item_status_color(it);
-                            status_dot_with_label(ui, status_label, item_color, false);
-                            let mut pb = egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
-                                .desired_width(180.0)
-                                .show_percentage()
-                                .animate(it.status == ItemStatus::Downloading);
-                            if it.status == ItemStatus::Done && !av1_item_is_skipped(it) {
-                                pb = pb.fill(item_color);
-                            } else if it.status == ItemStatus::Failed {
-                                pb = pb.fill(item_color);
-                            } else if it.status == ItemStatus::Downloading {
-                                pb = pb.fill(item_color);
-                            }
-                            ui.add(pb);
-                        });
-                        let probing = self.av1_media_inflight.contains(&it.item_id);
-                        let media_line = format_av1_media_line(it, probing);
-                        ui.label(
-                            RichText::new(media_line)
-                                .small()
-                                .color(if av1_item_has_media(it) {
-                                    egui::Color32::from_rgb(180, 200, 220)
-                                } else {
-                                    TEXT_MUTED
-                                }),
-                        );
-                        ui.label(format!("in: {}", it.source_path));
-                        ui.label(format!("out: {}", it.output_path));
-                        if !it.detail.is_empty() {
-                            ui.label(RichText::new(it.detail.clone()).small());
+                ui.add_space(6.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("av1_queue_scroll")
+                    .auto_shrink([false, false])
+                    .max_height(queue_scroll_h)
+                    .animated(true)
+                    .drag_to_scroll(true)
+                    .show(ui, |ui| {
+                        if self.av1_items.is_empty() {
+                            ui.vertical_centered(|ui| {
+                                ui.add_space(32.0);
+                                ui.label(RichText::new("Nothing here yet").color(TEXT_MUTED));
+                                ui.label(
+                                    RichText::new(
+                                        "Browse, drop, or scan paths to add videos to the queue.",
+                                    )
+                                    .small(),
+                                );
+                            });
+                            return;
+                        }
+                        for it in &self.av1_items {
+                            ui.group(|ui| {
+                                self.draw_av1_queue_card(ui, it);
+                            });
+                            ui.add_space(6.0);
                         }
                     });
-                }
             });
+    }
+
+    fn draw_av1_queue_status_row(&self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Queue:").color(TEXT_MUTED));
+            let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
+            let ready = self
+                .av1_items
+                .iter()
+                .filter(|i| i.status == ItemStatus::Idle)
+                .count();
+            let queued = self
+                .av1_items
+                .iter()
+                .filter(|i| i.status == ItemStatus::Queued)
+                .count();
+            let running = self
+                .av1_items
+                .iter()
+                .filter(|i| i.status == ItemStatus::Downloading)
+                .count();
+            let done = self
+                .av1_items
+                .iter()
+                .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
+                .count();
+            let skipped = self
+                .av1_items
+                .iter()
+                .filter(|i| av1_item_is_skipped(i))
+                .count();
+            let failed = self
+                .av1_items
+                .iter()
+                .filter(|i| i.status == ItemStatus::Failed)
+                .count();
+            if ready > 0 {
+                parts.push(("ready", ready, status_color(ItemStatus::Idle)));
+            }
+            if queued > 0 {
+                parts.push(("queued", queued, status_color(ItemStatus::Queued)));
+            }
+            if running > 0 {
+                parts.push(("running", running, status_color(ItemStatus::Downloading)));
+            }
+            if done > 0 {
+                parts.push(("done", done, status_color(ItemStatus::Done)));
+            }
+            if skipped > 0 {
+                parts.push(("skipped", skipped, AV1_SKIPPED_COLOR));
+            }
+            if failed > 0 {
+                parts.push(("failed", failed, status_color(ItemStatus::Failed)));
+            }
+            for (idx, (name, count, color)) in parts.iter().enumerate() {
+                let suffix = if idx + 1 == parts.len() { "" } else { "," };
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 5.0;
+                    draw_status_dot(ui, *color);
+                    ui.label(RichText::new(format!("{count} {name}{suffix}")).color(*color));
+                });
+            }
+        });
+    }
+
+    fn draw_av1_batch_summary_row(&self, ui: &mut egui::Ui) {
+        let batch = compute_av1_batch_summary(&self.av1_items);
+        if batch.completed > 0 {
+            let saved = batch
+                .completed_input_bytes
+                .saturating_sub(batch.completed_output_bytes);
+            let pct = if batch.completed_input_bytes > 0 {
+                (saved as f64 / batch.completed_input_bytes as f64) * 100.0
+            } else {
+                0.0
+            };
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Summary:").color(TEXT_MUTED));
+                ui.label(
+                    RichText::new(format!(
+                        "{} completed · {} -> {} · saved {} ({pct:.1}%)",
+                        batch.completed,
+                        human_bytes_ui(batch.completed_input_bytes),
+                        human_bytes_ui(batch.completed_output_bytes),
+                        human_bytes_ui(saved),
+                    ))
+                    .color(status_color(ItemStatus::Done)),
+                );
+            });
+        }
+        if batch.pending_input_bytes > 0 {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Pending input:").color(TEXT_MUTED));
+                ui.label(human_bytes_ui(batch.pending_input_bytes));
+            });
+        }
+    }
+
+    fn draw_av1_queue_card(&self, ui: &mut egui::Ui, it: &Av1QueueItem) {
+        ui.horizontal_wrapped(|ui| {
+            if let Some(tex) = self.textures.get(&it.item_id) {
+                ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                    tex.id(),
+                    egui::vec2(90.0, 52.0),
+                )));
+            } else {
+                ui.allocate_space(egui::vec2(90.0, 52.0));
+            }
+            ui.label(RichText::new(format!("#{}", it.item_id)).strong());
+            let status_label = av1_item_status_label(it);
+            let item_color = av1_item_status_color(it);
+            status_dot_with_label(ui, status_label, item_color, false);
+            let mut pb = egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
+                .desired_width(180.0)
+                .show_percentage()
+                .animate(it.status == ItemStatus::Downloading);
+            if it.status == ItemStatus::Done && !av1_item_is_skipped(it) {
+                pb = pb.fill(item_color);
+            } else if it.status == ItemStatus::Failed {
+                pb = pb.fill(item_color);
+            } else if it.status == ItemStatus::Downloading {
+                pb = pb.fill(item_color);
+            }
+            ui.add(pb);
+        });
+        let probing = self.av1_media_inflight.contains(&it.item_id);
+        let media_line = format_av1_media_line(it, probing);
+        ui.label(
+            RichText::new(media_line)
+                .small()
+                .color(if av1_item_has_media(it) {
+                    egui::Color32::from_rgb(180, 200, 220)
+                } else {
+                    TEXT_MUTED
+                }),
+        );
+        ui.label(format!("in: {}", it.source_path));
+        ui.label(format!("out: {}", it.output_path));
+        if !it.detail.is_empty() {
+            ui.label(RichText::new(it.detail.clone()).small());
+        }
     }
 
     fn scan_av1_input_textbox(&mut self) {

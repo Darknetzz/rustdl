@@ -201,7 +201,6 @@ impl eframe::App for PydlApp {
                 );
                 ui.separator();
                 if self.av1_mode {
-                    ui.separator();
                     self.draw_av1_panel(ui);
                     return;
                 }
