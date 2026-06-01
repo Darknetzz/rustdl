@@ -192,6 +192,23 @@ pub fn alert_danger<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::U
     alert_box(ui, ALERT_DANGER_BG, ALERT_DANGER_BORDER, add_contents)
 }
 
+/// Dim the viewport behind a modal. Call before the modal window so the dialog stays on top.
+/// Returns `true` if the user clicked the backdrop.
+pub fn modal_backdrop(ctx: &egui::Context, id: egui::Id) -> bool {
+    let screen = ctx.screen_rect();
+    let response = egui::Area::new(id)
+        .order(egui::Order::Middle)
+        .fixed_pos(screen.left_top())
+        .interactable(true)
+        .show(ctx, |ui| {
+            let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
+            ui.painter()
+                .rect_filled(rect, 0.0, Color32::from_black_alpha(120));
+            response
+        });
+    response.inner.clicked()
+}
+
 pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
     colored_button(
         ui,
