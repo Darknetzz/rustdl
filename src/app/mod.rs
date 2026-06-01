@@ -1647,14 +1647,23 @@ impl PydlApp {
                     }
                 });
                 ui.add_space(16.0);
-                ui.horizontal_centered(|ui| {
-                    if secondary_button(ui, "Cancel", true).clicked() {
-                        cancel_exit_confirm = true;
-                    }
-                    ui.add_space(12.0);
-                    if danger_button(ui, "Quit", true).clicked() {
-                        self.confirm_exit(ctx);
-                    }
+                ui.vertical_centered(|ui| {
+                    ui.horizontal(|ui| {
+                        if secondary_button(
+                            ui,
+                            &format!("{} Cancel", ui_icons::DISMISS),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            cancel_exit_confirm = true;
+                        }
+                        ui.add_space(12.0);
+                        if danger_button(ui, &format!("{} Quit", ui_icons::EXIT), true).clicked()
+                        {
+                            self.confirm_exit(ctx);
+                        }
+                    });
                 });
             });
         if cancel_exit_confirm {
