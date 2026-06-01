@@ -64,6 +64,7 @@ pub(crate) fn spawn_url_resolve_pipeline(
     tx: &Sender<UiEvent>,
     yt_dlp_bin: String,
     metadata_args: Vec<String>,
+    playlist_cap: usize,
     queued_lines: Vec<String>,
 ) {
     let tx = tx.clone();
@@ -83,7 +84,12 @@ pub(crate) fn spawn_url_resolve_pipeline(
             let line_for_resolve = line.clone();
             let metadata_args = metadata_args.clone();
             let rows = match tokio::task::spawn_blocking(move || {
-                ytdlp::resolve_url_to_previews_with_bin(&line_for_resolve, &bin, &metadata_args)
+                ytdlp::resolve_url_to_previews_with_bin(
+                    &line_for_resolve,
+                    &bin,
+                    &metadata_args,
+                    playlist_cap,
+                )
             })
             .await
             {
@@ -120,6 +126,7 @@ pub(crate) fn spawn_download_worker(
     rt: &Arc<Runtime>,
     tx: &Sender<UiEvent>,
     output_dir: String,
+    output_filename_template: String,
     extra_args: Vec<String>,
     yt_bin: String,
     ffmpeg_path: String,
@@ -151,6 +158,7 @@ pub(crate) fn spawn_download_worker(
             let res = ytdlp::stream_download_with_bins(
                 &target,
                 &output_dir,
+                &output_filename_template,
                 &extra_args,
                 &yt_bin,
                 &ffmpeg_path,
@@ -288,7 +296,10 @@ pub(crate) fn spawn_av1_worker(
     let tx = tx.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        let enc = av1_transcode::detect_encoder(&cfg.ffmpeg_path);
+        let enc = av1_transcode::detect_encoder_with_override(
+            &cfg.ffmpeg_path,
+            &cfg.encoder_override,
+        );
         for (item_id, input, output_path) in jobs {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 let _ = try_send_ui(

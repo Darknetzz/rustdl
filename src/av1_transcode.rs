@@ -36,6 +36,9 @@ pub struct Av1Config {
     pub reencode_av1: bool,
     pub target_bitrate: String,
     pub max_width: u32,
+    pub size_preset: String,
+    pub min_shrink_percent: f32,
+    pub encoder_override: String,
 }
 
 #[derive(Clone, Debug)]
@@ -57,7 +60,26 @@ pub struct Av1PlanItem {
 }
 
 pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
+    detect_encoder_with_override(ffmpeg_path, "")
+}
+
+pub fn detect_encoder_with_override(ffmpeg_path: &str, override_enc: &str) -> EncoderChoice {
+    let override_enc = override_enc.trim();
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
+    if !override_enc.is_empty()
+        && encoder_supported(&ffmpeg, override_enc)
+        && encoder_usable(&ffmpeg, override_enc)
+    {
+        return EncoderChoice {
+            encoder: override_enc,
+            codec: if override_enc.contains("hevc") {
+                "hevc"
+            } else {
+                "av1"
+            },
+            hw_type: hw_type_for_encoder(override_enc),
+        };
+    }
     for enc in ["av1_nvenc", "av1_amf", "hevc_nvenc", "hevc_amf", "libsvtav1"] {
         if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
             return EncoderChoice {
@@ -151,8 +173,17 @@ fn parse_bitrate_to_bps(bitrate: &str) -> Option<i64> {
     normalized.parse().ok()
 }
 
+fn preset_bitrate_multiplier(preset: &str) -> f64 {
+    match preset.trim().to_ascii_lowercase().as_str() {
+        "light" => 1.25,
+        "aggressive" => 0.72,
+        _ => 1.0,
+    }
+}
+
 fn effective_target_bitrate_bps(cfg: &Av1Config) -> i64 {
-    parse_bitrate_to_bps(&cfg.target_bitrate).unwrap_or(BITRATE_FALLBACK_BPS)
+    let base = parse_bitrate_to_bps(&cfg.target_bitrate).unwrap_or(BITRATE_FALLBACK_BPS);
+    (base as f64 * preset_bitrate_multiplier(&cfg.size_preset)).round() as i64
 }
 
 fn select_pixel_format(hw_type: &str) -> &'static str {
@@ -522,11 +553,39 @@ where
         ));
         return Ok(plan.output.clone());
     }
+    let target_bitrate_bps = effective_target_bitrate_bps(cfg);
+    if cfg.min_shrink_percent > 0.0 {
+        if let Ok(meta) = std::fs::metadata(&plan.input) {
+            let input_bytes = meta.len();
+            if input_bytes > 0 {
+                let media = probe_input_media(&plan.input, &cfg.ffprobe_path);
+                let duration_secs = media
+                    .as_ref()
+                    .and_then(|m| m.duration_ms)
+                    .map(|ms| ms as f64 / 1000.0)
+                    .filter(|s| *s > 0.0)
+                    .unwrap_or(3600.0);
+                let estimated_out =
+                    (target_bitrate_bps as f64 * duration_secs / 8.0).max(1.0);
+                let max_allowed =
+                    input_bytes as f64 * (1.0 - cfg.min_shrink_percent as f64 / 100.0);
+                if estimated_out > max_allowed {
+                    on_line(format!(
+                        "skip_reason=estimated output {:.0} B exceeds shrink target ({:.0}% of source)",
+                        estimated_out, 100.0 - cfg.min_shrink_percent
+                    ));
+                    return Err(anyhow!(
+                        "Skipped: estimated output would not shrink by at least {:.0}%",
+                        cfg.min_shrink_percent
+                    ));
+                }
+            }
+        }
+    }
     if let Some(parent) = plan.output.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
-    let target_bitrate_bps = effective_target_bitrate_bps(cfg);
     let pix_fmt = select_pixel_format(enc.hw_type);
     let vf = build_video_filter_chain(enc.hw_type, cfg.max_width, pix_fmt);
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
@@ -638,6 +697,9 @@ mod tests {
             reencode_av1: false,
             target_bitrate: String::new(),
             max_width: 1920,
+            size_preset: "balanced".to_owned(),
+            min_shrink_percent: 0.0,
+            encoder_override: String::new(),
         };
         let plan = collect_plan(
             &[Av1Input {

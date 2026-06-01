@@ -17,9 +17,10 @@ use crate::external_tools::{executable_exists, resolve_executable, which};
 use crate::models::VideoPreview;
 
 pub const PLAYLIST_PREVIEW_CAP: usize = 20;
+/// Prefix on yt-dlp progress lines (also used by headless CLI).
+pub const PROGRESS_PREFIX: &str = "progress:";
 /// Last N stderr lines kept for error messages when yt-dlp exits non-zero.
 const STDERR_TAIL_LINES: usize = 16;
-const PROGRESS_PREFIX: &str = "progress:";
 static PROGRESS_PERCENT_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(\d+(?:\.\d+)?)%").expect("valid progress percent regex"));
 static PROGRESS_SIZE_RE: Lazy<Regex> =
@@ -444,6 +445,7 @@ pub fn resolve_url_to_previews_with_bin(
     url: &str,
     yt_dlp_path: &str,
     extra_args: &[String],
+    playlist_cap: usize,
 ) -> Vec<VideoPreview> {
     let trimmed = url.trim();
     if trimmed.is_empty() {
@@ -494,9 +496,10 @@ pub fn resolve_url_to_previews_with_bin(
     };
 
     if let Some(entries) = root.get("entries").and_then(Value::as_array) {
-        let capped = entries.len() > PLAYLIST_PREVIEW_CAP;
+        let cap = playlist_cap.max(1);
+        let capped = entries.len() > cap;
         let mut rows = Vec::new();
-        for e in entries.iter().take(PLAYLIST_PREVIEW_CAP) {
+        for e in entries.iter().take(cap) {
             let mut p = parse_preview_entry(e, trimmed);
             p.playlist_capped = capped;
             rows.push(p);
@@ -574,6 +577,7 @@ fn push_line_tail(deque: &mut VecDeque<String>, line: String) {
 pub async fn stream_download_with_bins<F>(
     url: &str,
     output_dir: &str,
+    output_filename_template: &str,
     extra_args: &[String],
     yt_dlp_path: &str,
     ffmpeg_path: &str,
@@ -583,7 +587,13 @@ pub async fn stream_download_with_bins<F>(
 where
     F: FnMut(String) + Send,
 {
-    let output_template = format!("{output_dir}/%(title)s [%(id)s].%(ext)s");
+    let template = output_filename_template.trim();
+    let template = if template.is_empty() {
+        crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE
+    } else {
+        template
+    };
+    let output_template = format!("{output_dir}/{template}");
     let mut cmd = TokioCommand::new(resolve_executable(yt_dlp_path, "yt-dlp"));
     cmd.arg("--newline")
         .arg("--progress-template")

@@ -37,6 +37,9 @@ pub struct QueueItem {
     pub speed_text: String,
     pub eta_text: String,
     pub detail: String,
+    /// User-defined queue order (lower = earlier). Defaults to item_id on create.
+    #[serde(default)]
+    pub sort_order: u64,
 }
 
 impl Default for QueueItem {
@@ -59,11 +62,10 @@ impl Default for QueueItem {
             speed_text: "-".to_owned(),
             eta_text: "-".to_owned(),
             detail: String::new(),
+            sort_order: 0,
         }
     }
 }
-
-impl QueueItem {
     pub fn pending_metadata(item_id: u64, source_line: String) -> Self {
         Self {
             item_id,
@@ -83,6 +85,7 @@ impl QueueItem {
             speed_text: "-".to_owned(),
             eta_text: "-".to_owned(),
             detail: "Fetching metadata...".to_owned(),
+            sort_order: item_id,
         }
     }
 
@@ -118,6 +121,7 @@ impl QueueItem {
             speed_text: "-".to_owned(),
             eta_text: "-".to_owned(),
             detail: String::new(),
+            sort_order: item_id,
         }
     }
 }

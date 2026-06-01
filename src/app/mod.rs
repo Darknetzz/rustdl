@@ -47,10 +47,14 @@ use crate::app_ui::{
     status_color, success_button, warning_button, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
-    load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
+    activity_log_file_path, default_downloads, export_queue_urls, import_settings_json,
+    load_activity_log, load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
     save_activity_log, save_av1_queue_snapshot, save_queue_items, save_settings, trim_activity_log,
-    AppSettings, Av1QueueSnapshot,
+    export_settings_json, AppSettings, Av1QueueSnapshot,
+};
+use crate::profiles::{
+    all_profiles, delete_user_profile, find_profile, load_profiles, save_user_profile,
+    DownloadProfile, ProfileStore,
 };
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
@@ -65,6 +69,22 @@ enum SettingsTab {
     Shared,
     Downloader,
     Av1,
+}
+
+fn settings_tab_from_str(s: &str) -> SettingsTab {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "downloader" => SettingsTab::Downloader,
+        "av1" => SettingsTab::Av1,
+        _ => SettingsTab::Shared,
+    }
+}
+
+fn settings_tab_to_str(tab: SettingsTab) -> &'static str {
+    match tab {
+        SettingsTab::Shared => "shared",
+        SettingsTab::Downloader => "downloader",
+        SettingsTab::Av1 => "av1",
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -105,7 +125,8 @@ pub struct PydlApp {
     log_lines: VecDeque<String>,
     settings: AppSettings,
     settings_open: bool,
-    settings_dirty: bool,
+    profile_store: ProfileStore,
+    applied_theme: String,
 
     items: Vec<QueueItem>,
     pending_resolve_ids: HashMap<String, u64>,
@@ -197,6 +218,8 @@ impl PydlApp {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
         let (tx, rx) = unbounded();
         let settings = load_settings();
+        theme::apply_ui_theme(&cc.egui_ctx, &settings.theme);
+        let profile_store = load_profiles();
         let log_lines = load_activity_log(settings.log_max_chars);
         let mut restored_items = load_queue_items();
         for it in &mut restored_items {
@@ -231,6 +254,9 @@ impl PydlApp {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
         let thumb_semaphore = Arc::new(Semaphore::new(8));
+        let av1_mode = settings.last_mode == "av1";
+        let settings_tab = settings_tab_from_str(&settings.settings_tab);
+        let applied_theme = settings.theme.clone();
 
         let mut app = Self {
             runtime,
@@ -254,7 +280,8 @@ impl PydlApp {
             log_lines,
             settings,
             settings_open: false,
-            settings_dirty: false,
+            profile_store,
+            applied_theme,
             items: restored_items,
             pending_resolve_ids: HashMap::new(),
             textures: HashMap::new(),
@@ -275,7 +302,7 @@ impl PydlApp {
             input_line_info_hold_until: None,
             input_urls_snapshot: String::new(),
             auto_add_after: None,
-            settings_tab: SettingsTab::Shared,
+            settings_tab,
             restored_items_count: 0,
             show_restore_banner: false,
             about_open: false,
@@ -293,7 +320,7 @@ impl PydlApp {
             update_release_url: None,
             update_has_update: false,
             update_status_text: String::new(),
-            av1_mode: false,
+            av1_mode,
             av1_input_paths: av1_snapshot.input_paths,
             av1_items: restored_av1_items,
             av1_duration_ms: HashMap::new(),
@@ -367,17 +394,52 @@ impl PydlApp {
     }
 
     pub fn apply_ui_smoothness(ctx: &egui::Context) {
-        ctx.set_visuals(theme::dark_visuals());
-        ctx.style_mut(|style| {
-            style.spacing.item_spacing = egui::vec2(9.0, 7.0);
-            style.spacing.button_padding = egui::vec2(14.0, 8.0);
-            let r = egui::Rounding::same(6.0);
-            style.visuals.widgets.noninteractive.rounding = r;
-            style.visuals.widgets.inactive.rounding = r;
-            style.visuals.widgets.hovered.rounding = r;
-            style.visuals.widgets.active.rounding = r;
-            style.visuals.window_rounding = egui::Rounding::same(10.0);
-        });
+        theme::apply_ui_theme(ctx, "dark");
+    }
+
+    pub(super) fn sync_theme_if_needed(&mut self, ctx: &egui::Context) {
+        if self.applied_theme != self.settings.theme {
+            theme::apply_ui_theme(ctx, &self.settings.theme);
+            self.applied_theme = self.settings.theme.clone();
+        }
+    }
+
+    pub(super) fn set_app_mode(&mut self, av1: bool) {
+        self.av1_mode = av1;
+        self.settings.last_mode = if av1 {
+            "av1".to_owned()
+        } else {
+            "downloader".to_owned()
+        };
+        self.persist_settings();
+    }
+
+    pub(super) fn apply_download_profile(&mut self, profile: &DownloadProfile) {
+        profile.apply_to(&mut self.settings);
+        self.persist_settings();
+        self.append_log(&format!("Applied profile: {}", profile.name));
+    }
+
+    fn output_filename_template(&self) -> String {
+        let t = self.settings.output_filename_template.trim();
+        if t.is_empty() {
+            crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned()
+        } else {
+            t.to_owned()
+        }
+    }
+
+    fn quality_format_args(&self) -> Vec<String> {
+        let preset = self.settings.quality_preset.trim().to_ascii_lowercase();
+        let custom = self.settings.quality_format_custom.trim();
+        let fmt = match preset.as_str() {
+            "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
+            "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
+            "audio" => "bestaudio/best",
+            "custom" if !custom.is_empty() => custom,
+            _ => "bestvideo+bestaudio/best",
+        };
+        vec!["-f".to_owned(), fmt.to_owned()]
     }
 
     const QUEUE_SAVE_DEBOUNCE: Duration = Duration::from_millis(400);
@@ -698,7 +760,38 @@ impl PydlApp {
         }
         args.extend(self.ytdlp_impersonate_args());
         args.extend(self.ytdlp_cookie_args());
+        if !self.settings.yt_proxy.trim().is_empty() {
+            args.push("--proxy".to_owned());
+            args.push(self.settings.yt_proxy.trim().to_owned());
+        }
+        if !self.settings.yt_download_archive.trim().is_empty() {
+            args.push("--download-archive".to_owned());
+            args.push(self.settings.yt_download_archive.trim().to_owned());
+        }
+        if self.settings.yt_sponsorblock_remove {
+            args.push("--sponsorblock-remove".to_owned());
+            args.push("all".to_owned());
+        } else if !self.settings.yt_sponsorblock_mark.trim().is_empty() {
+            args.push("--sponsorblock-mark".to_owned());
+            args.push(self.settings.yt_sponsorblock_mark.trim().to_owned());
+        }
         args.extend(split_cli_like(&self.settings.yt_dlp_extra_args));
+        args.extend(self.quality_format_args());
+        match self.settings.merge_container.trim().to_ascii_lowercase().as_str() {
+            "mp4" => {
+                args.push("--merge-output-format".to_owned());
+                args.push("mp4".to_owned());
+            }
+            "mkv" => {
+                args.push("--merge-output-format".to_owned());
+                args.push("mkv".to_owned());
+            }
+            "webm" => {
+                args.push("--merge-output-format".to_owned());
+                args.push("webm".to_owned());
+            }
+            _ => {}
+        }
         if self.settings.yt_ignore_errors {
             args.push("--ignore-errors".to_owned());
         }
@@ -757,6 +850,12 @@ impl PydlApp {
 
     fn effective_download_command_preview(&self) -> String {
         let mut parts = vec![self.yt_dlp_bin(), "--newline".to_owned()];
+        parts.push("-o".to_owned());
+        parts.push(format!(
+            "{}/{}",
+            self.output_dir,
+            self.output_filename_template()
+        ));
         let ffmpeg = self.ffmpeg_bin();
         if !ffmpeg.is_empty() {
             parts.push("--ffmpeg-location".to_owned());

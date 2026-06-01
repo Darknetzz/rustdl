@@ -95,6 +95,89 @@ pub struct AppSettings {
     /// Keep AV1 queue items across app restarts until manually cleared.
     #[serde(default = "default_av1_remember_queue")]
     pub av1_remember_queue: bool,
+    /// Last top-level mode: `downloader` or `av1`.
+    #[serde(default = "default_last_mode")]
+    pub last_mode: String,
+    /// Last settings tab: `shared`, `downloader`, or `av1`.
+    #[serde(default = "default_settings_tab")]
+    pub settings_tab: String,
+    /// UI theme: `dark`, `light`, or `system`.
+    #[serde(default = "default_theme")]
+    pub theme: String,
+    /// yt-dlp output filename template (`-o`).
+    #[serde(default = "default_output_filename_template")]
+    pub output_filename_template: String,
+    /// Quality preset: `best`, `1080p`, `720p`, `audio`, or `custom`.
+    #[serde(default = "default_quality_preset")]
+    pub quality_preset: String,
+    /// Custom `-f` string when `quality_preset` is `custom`.
+    #[serde(default)]
+    pub quality_format_custom: String,
+    /// Merge container: `default`, `mp4`, `mkv`, or `webm`.
+    #[serde(default = "default_merge_container")]
+    pub merge_container: String,
+    /// Show first-run setup hint banner.
+    #[serde(default = "default_show_first_run_hint")]
+    pub show_first_run_hint: bool,
+    /// Path to yt-dlp download archive file (`--download-archive`).
+    #[serde(default)]
+    pub yt_download_archive: String,
+    /// Proxy URL for yt-dlp (`--proxy`).
+    #[serde(default)]
+    pub yt_proxy: String,
+    /// Remove SponsorBlock segments (`--sponsorblock-remove`).
+    #[serde(default)]
+    pub yt_sponsorblock_remove: bool,
+    /// Mark SponsorBlock categories (`--sponsorblock-mark`, comma-separated).
+    #[serde(default)]
+    pub yt_sponsorblock_mark: String,
+    /// Max playlist entries to preview when resolving URLs.
+    #[serde(default = "default_playlist_preview_cap")]
+    pub playlist_preview_cap: usize,
+    /// Active named download profile (built-in or user-defined).
+    #[serde(default = "default_active_profile")]
+    pub active_profile: String,
+    /// Force ffmpeg encoder for AV1 mode; empty = auto-detect.
+    #[serde(default)]
+    pub av1_encoder_override: String,
+}
+
+pub const DEFAULT_OUTPUT_FILENAME_TEMPLATE: &str = "%(title)s [%(id)s].%(ext)s";
+
+fn default_last_mode() -> String {
+    "downloader".to_owned()
+}
+
+fn default_settings_tab() -> String {
+    "shared".to_owned()
+}
+
+fn default_theme() -> String {
+    "dark".to_owned()
+}
+
+fn default_output_filename_template() -> String {
+    DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned()
+}
+
+fn default_quality_preset() -> String {
+    "best".to_owned()
+}
+
+fn default_merge_container() -> String {
+    "default".to_owned()
+}
+
+fn default_show_first_run_hint() -> bool {
+    true
+}
+
+fn default_playlist_preview_cap() -> usize {
+    20
+}
+
+fn default_active_profile() -> String {
+    "Best quality".to_owned()
 }
 
 fn default_av1_remember_queue() -> bool {
@@ -177,6 +260,21 @@ impl Default for AppSettings {
             av1_size_preset: "balanced".to_owned(),
             av1_min_shrink_percent: 0.0,
             av1_remember_queue: true,
+            last_mode: default_last_mode(),
+            settings_tab: default_settings_tab(),
+            theme: default_theme(),
+            output_filename_template: default_output_filename_template(),
+            quality_preset: default_quality_preset(),
+            quality_format_custom: String::new(),
+            merge_container: default_merge_container(),
+            show_first_run_hint: default_show_first_run_hint(),
+            yt_download_archive: String::new(),
+            yt_proxy: String::new(),
+            yt_sponsorblock_remove: false,
+            yt_sponsorblock_mark: String::new(),
+            playlist_preview_cap: default_playlist_preview_cap(),
+            active_profile: default_active_profile(),
+            av1_encoder_override: String::new(),
         }
     }
 }
@@ -308,7 +406,80 @@ pub fn load_settings() -> AppSettings {
     } else {
         cfg.av1_size_preset = preset;
     }
+    let mode = cfg.last_mode.trim().to_ascii_lowercase();
+    cfg.last_mode = if mode == "av1" {
+        "av1".to_owned()
+    } else {
+        "downloader".to_owned()
+    };
+    let tab = cfg.settings_tab.trim().to_ascii_lowercase();
+    cfg.settings_tab = match tab.as_str() {
+        "downloader" => "downloader".to_owned(),
+        "av1" => "av1".to_owned(),
+        _ => "shared".to_owned(),
+    };
+    let theme = cfg.theme.trim().to_ascii_lowercase();
+    cfg.theme = match theme.as_str() {
+        "light" => "light".to_owned(),
+        "system" => "system".to_owned(),
+        _ => "dark".to_owned(),
+    };
+    if cfg.output_filename_template.trim().is_empty() {
+        cfg.output_filename_template = default_output_filename_template();
+    }
+    let qp = cfg.quality_preset.trim().to_ascii_lowercase();
+    cfg.quality_preset = match qp.as_str() {
+        "1080p" => "1080p".to_owned(),
+        "720p" => "720p".to_owned(),
+        "audio" => "audio".to_owned(),
+        "custom" => "custom".to_owned(),
+        _ => "best".to_owned(),
+    };
+    let mc = cfg.merge_container.trim().to_ascii_lowercase();
+    cfg.merge_container = match mc.as_str() {
+        "mp4" => "mp4".to_owned(),
+        "mkv" => "mkv".to_owned(),
+        "webm" => "webm".to_owned(),
+        _ => "default".to_owned(),
+    };
+    cfg.playlist_preview_cap = cfg.playlist_preview_cap.clamp(1, 500);
+    if cfg.active_profile.trim().is_empty() {
+        cfg.active_profile = default_active_profile();
+    }
     cfg
+}
+
+pub fn profiles_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_profiles.json")
+}
+
+fn profiles_path() -> PathBuf {
+    if dirs::config_dir().is_some() {
+        profiles_file_path()
+    } else {
+        PathBuf::from("rustdl_profiles.json")
+    }
+}
+
+pub fn export_settings_json(settings: &AppSettings, path: &std::path::Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).ok();
+        }
+    }
+    let raw = serde_json::to_string_pretty(settings).context("failed to serialize settings")?;
+    fs::write(path, raw).with_context(|| format!("failed to write {}", path.to_string_lossy()))?;
+    Ok(())
+}
+
+pub fn import_settings_json(path: &std::path::Path) -> Result<AppSettings> {
+    let raw = fs::read_to_string(path)
+        .with_context(|| format!("failed to read {}", path.to_string_lossy()))?;
+    let mut cfg = serde_json::from_str::<AppSettings>(&raw).context("invalid settings JSON")?;
+    if cfg.output_dir.trim().is_empty() || !PathBuf::from(&cfg.output_dir).is_dir() {
+        cfg.output_dir = default_downloads().to_string_lossy().to_string();
+    }
+    Ok(cfg)
 }
 
 pub fn save_settings(settings: &AppSettings) -> Result<()> {
