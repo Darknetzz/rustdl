@@ -16,6 +16,7 @@ use tokio::sync::Semaphore;
 use url::Url;
 
 mod about;
+mod av1_panel;
 mod background_spawn;
 mod cards;
 mod eframe_app;
@@ -53,6 +54,7 @@ use crate::config::{
 };
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
+use crate::models::Av1QueueItem;
 use crate::pkg_version;
 use crate::ui_icons;
 use crate::ytdlp;
@@ -155,6 +157,12 @@ pub struct PydlApp {
     update_release_url: Option<String>,
     update_has_update: bool,
     update_status_text: String,
+    av1_mode: bool,
+    av1_input_paths: String,
+    av1_items: Vec<Av1QueueItem>,
+    av1_next_item_id: u64,
+    av1_running: bool,
+    av1_cancel_flag: Arc<AtomicBool>,
 
     done_file_index: done_file_index::DoneFileIndex,
     /// Suppress repeat log spam when output index hits [`DONE_LOOKUP_MAX_ENTRIES`].
@@ -268,6 +276,12 @@ impl PydlApp {
             update_release_url: None,
             update_has_update: false,
             update_status_text: String::new(),
+            av1_mode: false,
+            av1_input_paths: String::new(),
+            av1_items: Vec::new(),
+            av1_next_item_id: 1,
+            av1_running: false,
+            av1_cancel_flag: Arc::new(AtomicBool::new(false)),
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             http_client,
@@ -307,6 +321,7 @@ impl PydlApp {
                 .input_line_info_hold_until
                 .is_some_and(|until| now < until);
         let busy = self.add_in_progress
+            || self.av1_running
             || self.status_resolving > 0
             || self.status_active > 0
             || self.queue_running > 0

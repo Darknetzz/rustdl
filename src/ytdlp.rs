@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -13,6 +13,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 use url::Url;
 
+use crate::external_tools::{executable_exists, resolve_executable, which};
 use crate::models::VideoPreview;
 
 pub const PLAYLIST_PREVIEW_CAP: usize = 20;
@@ -115,23 +116,6 @@ pub fn read_ffprobe_version(ffprobe_path: &str) -> Option<String> {
     read_version_from_exe(&exe, &["-version"])
 }
 
-fn executable_exists(custom_path: &str, default_exe: &str) -> bool {
-    let trimmed = custom_path.trim();
-    if !trimmed.is_empty() {
-        return PathBuf::from(trimmed).is_file() || which(trimmed).is_some();
-    }
-    which(default_exe).is_some()
-}
-
-fn resolve_executable(custom_path: &str, default_exe: &str) -> String {
-    let trimmed = custom_path.trim();
-    if trimmed.is_empty() {
-        default_exe.to_owned()
-    } else {
-        trimmed.to_owned()
-    }
-}
-
 fn yt_dlp_spawn_error_message(custom_path: &str, source_err: &std::io::Error) -> String {
     let trimmed = custom_path.trim();
     if trimmed.is_empty() {
@@ -148,10 +132,6 @@ fn resolve_ffprobe_exe(ffprobe_path: &str) -> String {
     } else {
         trimmed.to_owned()
     }
-}
-
-fn which(exe: &str) -> Option<PathBuf> {
-    which::which(exe).ok()
 }
 
 pub fn normalize_url_for_dedupe(input: &str) -> String {

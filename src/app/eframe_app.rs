@@ -125,6 +125,16 @@ impl eframe::App for PydlApp {
                     .color(TEXT_MUTED),
                 );
                 ui.separator();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Mode:");
+                    ui.selectable_value(&mut self.av1_mode, false, "Downloader");
+                    ui.selectable_value(&mut self.av1_mode, true, "AV1 Converter");
+                });
+                if self.av1_mode {
+                    ui.separator();
+                    self.draw_av1_panel(ui);
+                    return;
+                }
 
                 ui.label("URLs (one per line)");
                 let prev_url_snapshot = self.input_urls_snapshot.clone();

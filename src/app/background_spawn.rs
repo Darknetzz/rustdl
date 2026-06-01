@@ -5,6 +5,7 @@ use crossbeam_channel::Sender;
 use tokio::runtime::Runtime;
 
 use crate::app::events::{try_send_ui, UiEvent};
+use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::ytdlp;
@@ -233,5 +234,87 @@ pub(crate) fn spawn_download_worker(
                 }
             }
         }
+    });
+}
+
+pub(crate) fn spawn_av1_worker(
+    rt: &Arc<Runtime>,
+    tx: &Sender<UiEvent>,
+    cfg: Av1Config,
+    jobs: Vec<(u64, Av1Input, String)>,
+    cancel_flag: Arc<AtomicBool>,
+) {
+    let tx = tx.clone();
+    let rt = rt.clone();
+    rt.spawn(async move {
+        let enc = av1_transcode::detect_encoder(&cfg.ffmpeg_path);
+        for (item_id, input, output_path) in jobs {
+            if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                let _ = try_send_ui(
+                    &tx,
+                    UiEvent::Av1Done {
+                        item_id,
+                        ok: false,
+                        detail: "Cancelled by user.".to_owned(),
+                    },
+                );
+                continue;
+            }
+            let item = av1_transcode::Av1PlanItem {
+                input: std::path::PathBuf::from(input.source_path),
+                output: std::path::PathBuf::from(output_path),
+            };
+            let _ = try_send_ui(
+                &tx,
+                UiEvent::Av1Line {
+                    item_id,
+                    line: format!("starting with {}", enc.encoder),
+                },
+            );
+            let res = tokio::task::spawn_blocking({
+                let cfg = cfg.clone();
+                let tx = tx.clone();
+                let enc = enc.clone();
+                move || {
+                    av1_transcode::run_single(&item, &cfg, &enc, |line| {
+                        let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                    })
+                }
+            })
+            .await;
+            match res {
+                Ok(Ok(())) => {
+                    let _ = try_send_ui(
+                        &tx,
+                        UiEvent::Av1Done {
+                            item_id,
+                            ok: true,
+                            detail: "Completed".to_owned(),
+                        },
+                    );
+                }
+                Ok(Err(e)) => {
+                    let _ = try_send_ui(
+                        &tx,
+                        UiEvent::Av1Done {
+                            item_id,
+                            ok: false,
+                            detail: e.to_string(),
+                        },
+                    );
+                }
+                Err(e) => {
+                    let _ = try_send_ui(
+                        &tx,
+                        UiEvent::Av1Done {
+                            item_id,
+                            ok: false,
+                            detail: format!("worker failed: {e}"),
+                        },
+                    );
+                }
+            }
+        }
+        let _ = try_send_ui(&tx, UiEvent::Av1BatchDone);
     });
 }

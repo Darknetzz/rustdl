@@ -62,6 +62,39 @@ pub struct AppSettings {
     /// Activity log timestamps as relative age instead of full local time.
     #[serde(default)]
     pub log_relative_time: bool,
+    /// Override ffmpeg path for AV1 converter mode.
+    #[serde(default)]
+    pub av1_ffmpeg_path: String,
+    /// Override ffprobe path for AV1 converter mode.
+    #[serde(default)]
+    pub av1_ffprobe_path: String,
+    /// Recursive folder scan for AV1 input folders.
+    #[serde(default = "default_av1_recursive")]
+    pub av1_recursive: bool,
+    /// Dry-run mode for AV1 conversion planning.
+    #[serde(default)]
+    pub av1_dry_run: bool,
+    /// Delete original input file after successful AV1 conversion.
+    #[serde(default)]
+    pub av1_delete_original: bool,
+    /// Overwrite existing destination file if it exists.
+    #[serde(default)]
+    pub av1_overwrite: bool,
+    /// Re-encode inputs already using AV1 codec.
+    #[serde(default)]
+    pub av1_reencode_av1: bool,
+    /// Default target bitrate (e.g. 1800k). Empty means auto.
+    #[serde(default)]
+    pub av1_target_bitrate: String,
+    /// Maximum output width (maintain aspect ratio).
+    #[serde(default = "default_av1_max_width")]
+    pub av1_max_width: u32,
+    /// Output quality policy.
+    #[serde(default)]
+    pub av1_size_preset: String,
+    /// Require minimum shrink percentage relative to source. Zero disables.
+    #[serde(default)]
+    pub av1_min_shrink_percent: f32,
 }
 
 fn default_logs_docked() -> bool {
@@ -70,6 +103,14 @@ fn default_logs_docked() -> bool {
 
 fn default_log_dock_height() -> f32 {
     180.0
+}
+
+fn default_av1_recursive() -> bool {
+    true
+}
+
+fn default_av1_max_width() -> u32 {
+    1920
 }
 
 fn default_verify_output_video_audio() -> bool {
@@ -121,6 +162,17 @@ impl Default for AppSettings {
             logs_open: false,
             log_dock_height: 180.0,
             log_relative_time: false,
+            av1_ffmpeg_path: String::new(),
+            av1_ffprobe_path: String::new(),
+            av1_recursive: true,
+            av1_dry_run: false,
+            av1_delete_original: false,
+            av1_overwrite: false,
+            av1_reencode_av1: false,
+            av1_target_bitrate: String::new(),
+            av1_max_width: 1920,
+            av1_size_preset: "balanced".to_owned(),
+            av1_min_shrink_percent: 0.0,
         }
     }
 }
@@ -244,6 +296,14 @@ pub fn load_settings() -> AppSettings {
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
+    cfg.av1_max_width = cfg.av1_max_width.clamp(320, 7680);
+    cfg.av1_min_shrink_percent = cfg.av1_min_shrink_percent.clamp(0.0, 95.0);
+    let preset = cfg.av1_size_preset.trim().to_ascii_lowercase();
+    if !matches!(preset.as_str(), "light" | "balanced" | "aggressive") {
+        cfg.av1_size_preset = "balanced".to_owned();
+    } else {
+        cfg.av1_size_preset = preset;
+    }
     cfg
 }
 

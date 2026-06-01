@@ -48,6 +48,27 @@ cargo test --all-targets --all-features
 - Persisted activity log with timestamps; optional docked log panel under the queue.
 - Queue search, bulk selection, pause/resume downloads, and export URLs to `.txt`.
 - Desktop notification when a download session finishes (where supported by the OS).
+- AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
+
+## Modes
+
+`rustdl` now has two top-level modes:
+
+- **Downloader**: the original yt-dlp workflow (URL preview cards and downloads).
+- **AV1 Converter**: local file/folder conversion to AV1/HEVC (depending on available ffmpeg encoders) from a dedicated in-app panel.
+
+Switch modes from the **Mode** toggle near the top of the main window.
+
+### AV1 Converter notes
+
+- Input accepts file and folder paths (one per line).
+- Output goes to the current **Output folder**.
+- Supports recursive scan, dry-run, overwrite, delete original, and optional AV1 re-encode behavior.
+- Encoder detection priority: `av1_nvenc` -> `av1_amf` -> `hevc_nvenc` -> `hevc_amf` -> `libsvtav1`.
+- AV1 executable overrides are independent from downloader executable overrides:
+  - `av1_ffmpeg_path`
+  - `av1_ffprobe_path`
+  (saved in `rustdl_config.json` via Settings persistence).
 
 ## Settings
 

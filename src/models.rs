@@ -159,3 +159,27 @@ impl ItemStatus {
         }
     }
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Av1QueueItem {
+    pub item_id: u64,
+    pub source_path: String,
+    pub output_path: String,
+    pub status: ItemStatus,
+    pub percent: f32,
+    pub detail: String,
+}
+
+impl Default for Av1QueueItem {
+    fn default() -> Self {
+        Self {
+            item_id: 0,
+            source_path: String::new(),
+            output_path: String::new(),
+            status: ItemStatus::Idle,
+            percent: 0.0,
+            detail: String::new(),
+        }
+    }
+}

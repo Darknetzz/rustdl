@@ -11,11 +11,13 @@ mod app_parsing;
 mod app_state;
 mod app_ui;
 mod config;
+mod external_tools;
 mod models;
 mod pkg_version;
 mod theme;
 mod time_format;
 mod ui_icons;
+mod av1_transcode;
 #[cfg(windows)]
 mod win_icon;
 #[cfg(windows)]

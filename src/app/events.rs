@@ -61,6 +61,16 @@ pub(crate) enum UiEvent {
         /// Decoded on a worker thread; GPU upload is deferred (see `pending_thumbnail_uploads`).
         image: Option<egui::ColorImage>,
     },
+    Av1Line {
+        item_id: u64,
+        line: String,
+    },
+    Av1Done {
+        item_id: u64,
+        ok: bool,
+        detail: String,
+    },
+    Av1BatchDone,
 }
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
@@ -264,6 +274,30 @@ impl PydlApp {
                     };
                     self.pending_thumbnail_uploads
                         .push_back((item_id, image));
+                }
+                UiEvent::Av1Line { item_id, line } => {
+                    if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                        it.status = ItemStatus::Downloading;
+                        it.detail = line.chars().take(160).collect();
+                    }
+                    self.append_log(&format!("[av1 {item_id}] {line}"));
+                }
+                UiEvent::Av1Done {
+                    item_id,
+                    ok,
+                    detail,
+                } => {
+                    if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                        it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
+                        it.percent = if ok { 100.0 } else { it.percent };
+                        it.detail = detail.clone();
+                    }
+                    if !ok {
+                        self.append_log(&format!("[av1 {item_id}] {detail}"));
+                    }
+                }
+                UiEvent::Av1BatchDone => {
+                    self.av1_running = false;
                 }
             }
         }
