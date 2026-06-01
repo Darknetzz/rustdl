@@ -297,6 +297,7 @@ pub(crate) fn spawn_av1_worker(
                         item_id,
                         ok: false,
                         detail: "Cancelled by user.".to_owned(),
+                        final_output_path: None,
                     },
                 );
                 continue;
@@ -341,13 +342,14 @@ pub(crate) fn spawn_av1_worker(
             })
             .await;
             match res {
-                Ok(Ok(())) => {
+                Ok(Ok(final_path)) => {
                     let _ = try_send_ui(
                         &tx,
                         UiEvent::Av1Done {
                             item_id,
                             ok: true,
                             detail: "Completed".to_owned(),
+                            final_output_path: Some(final_path.to_string_lossy().into_owned()),
                         },
                     );
                 }
@@ -360,6 +362,7 @@ pub(crate) fn spawn_av1_worker(
                                 item_id,
                                 ok: true,
                                 detail: err_text,
+                                final_output_path: None,
                             },
                         );
                         continue;
@@ -401,13 +404,16 @@ pub(crate) fn spawn_av1_worker(
                         })
                         .await;
                         match retry {
-                            Ok(Ok(())) => {
+                            Ok(Ok(final_path)) => {
                                 let _ = try_send_ui(
                                     &tx,
                                     UiEvent::Av1Done {
                                         item_id,
                                         ok: true,
                                         detail: "Completed (CPU fallback)".to_owned(),
+                                        final_output_path: Some(
+                                            final_path.to_string_lossy().into_owned(),
+                                        ),
                                     },
                                 );
                                 continue;
@@ -421,6 +427,7 @@ pub(crate) fn spawn_av1_worker(
                                         detail: format!(
                                             "Primary encoder failed: {err_text}\nCPU fallback failed: {retry_err}"
                                         ),
+                                        final_output_path: None,
                                     },
                                 );
                                 continue;
@@ -434,6 +441,7 @@ pub(crate) fn spawn_av1_worker(
                                         detail: format!(
                                             "Primary encoder failed: {err_text}\nCPU fallback task failed: {retry_join_err}"
                                         ),
+                                        final_output_path: None,
                                     },
                                 );
                                 continue;
@@ -446,6 +454,7 @@ pub(crate) fn spawn_av1_worker(
                             item_id,
                             ok: false,
                             detail: err_text,
+                            final_output_path: None,
                         },
                     );
                 }
@@ -456,6 +465,7 @@ pub(crate) fn spawn_av1_worker(
                             item_id,
                             ok: false,
                             detail: format!("worker failed: {e}"),
+                            final_output_path: None,
                         },
                     );
                 }

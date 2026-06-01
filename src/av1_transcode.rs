@@ -31,6 +31,7 @@ pub struct Av1Config {
     pub recursive: bool,
     pub dry_run: bool,
     pub delete_original: bool,
+    pub rename_original: bool,
     pub overwrite: bool,
     pub reencode_av1: bool,
     pub target_bitrate: String,
@@ -434,13 +435,73 @@ pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::Co
     Some(egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()))
 }
 
+fn paths_same_directory(a: &Path, b: &Path) -> bool {
+    let (Some(pa), Some(pb)) = (a.parent(), b.parent()) else {
+        return false;
+    };
+    match (pa.canonicalize(), pb.canonicalize()) {
+        (Ok(ca), Ok(cb)) => ca == cb,
+        _ => pa == pb,
+    }
+}
+
+/// Target path when restoring the source basename in the output directory (Python parity).
+pub fn resolve_original_output_path(input: &Path, output: &Path) -> Option<PathBuf> {
+    if !paths_same_directory(input, output) {
+        return None;
+    }
+    let file_name = input.file_name()?;
+    let original_path = output.parent()?.join(file_name);
+    if original_path == output {
+        return None;
+    }
+    Some(original_path)
+}
+
+fn finalize_output_file(plan: &Av1PlanItem, cfg: &Av1Config) -> Result<PathBuf> {
+    let output = plan.output.clone();
+    let original_deleted = if cfg.delete_original {
+        match std::fs::remove_file(&plan.input) {
+            Ok(()) => true,
+            Err(_) if !plan.input.exists() => true,
+            Err(err) => {
+                return Err(anyhow!(
+                    "Failed to delete original {}: {err}",
+                    plan.input.display()
+                ));
+            }
+        }
+    } else {
+        !plan.input.exists()
+    };
+
+    if cfg.rename_original && original_deleted {
+        if let Some(target) = resolve_original_output_path(&plan.input, &output) {
+            if target.exists() && !cfg.overwrite {
+                return Err(anyhow!(
+                    "Cannot rename output to original name; file exists: {}",
+                    target.display()
+                ));
+            }
+            std::fs::rename(&output, &target).map_err(|err| {
+                anyhow!(
+                    "Failed to rename output to original name ({}): {err}",
+                    target.display()
+                )
+            })?;
+            return Ok(target);
+        }
+    }
+    Ok(output)
+}
+
 pub fn run_single<F>(
     plan: &Av1PlanItem,
     cfg: &Av1Config,
     enc: &EncoderChoice,
     cancel_flag: Option<Arc<AtomicBool>>,
     mut on_line: F,
-) -> Result<()>
+) -> Result<PathBuf>
 where
     F: FnMut(String),
 {
@@ -459,7 +520,7 @@ where
             plan.output.display(),
             enc.encoder
         ));
-        return Ok(());
+        return Ok(plan.output.clone());
     }
     if let Some(parent) = plan.output.parent() {
         std::fs::create_dir_all(parent)?;
@@ -550,10 +611,7 @@ where
             .join("\n");
         return Err(anyhow!("ffmpeg failed with status {st}\n{short}"));
     }
-    if cfg.delete_original {
-        let _ = std::fs::remove_file(&plan.input);
-    }
-    Ok(())
+    finalize_output_file(plan, cfg)
 }
 
 #[cfg(test)]
@@ -575,6 +633,7 @@ mod tests {
             recursive: false,
             dry_run: true,
             delete_original: false,
+            rename_original: false,
             overwrite: false,
             reencode_av1: false,
             target_bitrate: String::new(),
@@ -589,6 +648,20 @@ mod tests {
         assert_eq!(plan.len(), 1);
         assert!(plan[0].input.to_string_lossy().ends_with("movie.mp4"));
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mkv"));
+    }
+
+    #[test]
+    fn resolve_original_output_path_requires_same_directory() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let other = tempfile::tempdir().expect("tempdir2");
+        let input = tmp.path().join("movie.mp4");
+        let output = tmp.path().join("movie-AV1.mkv");
+        assert_eq!(
+            resolve_original_output_path(&input, &output),
+            Some(tmp.path().join("movie.mp4"))
+        );
+        let output_else = other.path().join("movie-AV1.mkv");
+        assert!(resolve_original_output_path(&input, &output_else).is_none());
     }
 
     #[test]

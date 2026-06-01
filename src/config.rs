@@ -71,6 +71,9 @@ pub struct AppSettings {
     /// Delete original input file after successful AV1 conversion.
     #[serde(default)]
     pub av1_delete_original: bool,
+    /// Rename encoded output back to the source filename after successful conversion.
+    #[serde(default)]
+    pub av1_rename_original: bool,
     /// Overwrite existing destination file if it exists.
     #[serde(default)]
     pub av1_overwrite: bool,
@@ -166,6 +169,7 @@ impl Default for AppSettings {
             av1_recursive: true,
             av1_dry_run: false,
             av1_delete_original: false,
+            av1_rename_original: false,
             av1_overwrite: false,
             av1_reencode_av1: false,
             av1_target_bitrate: String::new(),

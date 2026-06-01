@@ -189,6 +189,7 @@ impl PydlApp {
             recursive: self.settings.av1_recursive,
             dry_run: self.settings.av1_dry_run,
             delete_original: self.settings.av1_delete_original,
+            rename_original: self.settings.av1_rename_original,
             overwrite: self.settings.av1_overwrite,
             reencode_av1: self.settings.av1_reencode_av1,
             target_bitrate: self.settings.av1_target_bitrate.clone(),
@@ -371,6 +372,11 @@ impl PydlApp {
             ui.checkbox(&mut self.settings.av1_recursive, "Recursive");
             ui.checkbox(&mut self.settings.av1_dry_run, "Dry run");
             ui.checkbox(&mut self.settings.av1_delete_original, "Delete original");
+            ui.checkbox(&mut self.settings.av1_rename_original, "Rename to original name")
+                .on_hover_text(
+                    "After success, rename the encoded file back to the source filename \
+                     (same folder as output). Use with Delete original for in-place replacement.",
+                );
             ui.checkbox(&mut self.settings.av1_overwrite, "Overwrite");
             ui.checkbox(&mut self.settings.av1_reencode_av1, "Re-encode AV1");
         });

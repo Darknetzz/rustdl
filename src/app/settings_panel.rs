@@ -447,6 +447,17 @@ impl PydlApp {
                             )
                             .changed();
                         changed |= ui
+                            .checkbox(
+                                &mut self.settings.av1_rename_original,
+                                "Rename output to original filename",
+                            )
+                            .on_hover_text(
+                                "After success, rename the encoded file back to the source \
+                                 filename when it shares the output folder. Typically used with \
+                                 delete original for in-place replacement.",
+                            )
+                            .changed();
+                        changed |= ui
                             .checkbox(&mut self.settings.av1_overwrite, "Overwrite output files")
                             .changed();
                         changed |= ui

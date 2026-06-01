@@ -77,6 +77,7 @@ pub(crate) enum UiEvent {
         item_id: u64,
         ok: bool,
         detail: String,
+        final_output_path: Option<String>,
     },
     Av1BatchDone,
 }
@@ -436,10 +437,14 @@ impl PydlApp {
                     item_id,
                     ok,
                     detail,
+                    final_output_path,
                 } => {
                     if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
                         it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
                         it.percent = if ok { 100.0 } else { it.percent };
+                        if let Some(path) = final_output_path {
+                            it.output_path = path;
+                        }
                         let skipped = detail.to_ascii_lowercase().starts_with("skipped");
                         if ok && !skipped {
                             if let Ok(meta) = std::fs::metadata(&it.output_path) {
