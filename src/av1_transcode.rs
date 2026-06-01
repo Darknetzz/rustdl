@@ -138,10 +138,10 @@ pub fn encoder_indicator_label(enc: &EncoderChoice) -> String {
 }
 
 pub fn encoder_indicator_color(enc: &EncoderChoice) -> egui::Color32 {
-    match enc.hw_type {
-        "nvidia" => egui::Color32::from_rgb(118, 185, 0),
-        "amd" => egui::Color32::from_rgb(237, 28, 36),
-        _ => egui::Color32::from_rgb(130, 145, 160),
+    if encoder_uses_hardware(enc) {
+        egui::Color32::from_rgb(118, 185, 0)
+    } else {
+        egui::Color32::from_rgb(255, 167, 38)
     }
 }
 
