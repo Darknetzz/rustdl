@@ -9,9 +9,9 @@ use crate::app_ui::{
     danger_button, draw_meta_badge, draw_status_dot, secondary_button, status_color,
     status_dot_with_label, success_button, MetaBadgeKind,
 };
-use crate::theme;
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
+use crate::theme;
 use crate::theme::{canvas_bg, panel_border, text_muted};
 use crate::ui_icons;
 
@@ -105,7 +105,8 @@ fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
             ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
         );
         if pending {
-            summary.pending_input_bytes = summary.pending_input_bytes.saturating_add(item.input_bytes);
+            summary.pending_input_bytes =
+                summary.pending_input_bytes.saturating_add(item.input_bytes);
             continue;
         }
         if item.status != ItemStatus::Done || av1_item_is_skipped(item) {
@@ -118,9 +119,8 @@ fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
         summary.completed_input_bytes = summary
             .completed_input_bytes
             .saturating_add(item.input_bytes);
-        summary.completed_output_bytes = summary
-            .completed_output_bytes
-            .saturating_add(output_bytes);
+        summary.completed_output_bytes =
+            summary.completed_output_bytes.saturating_add(output_bytes);
     }
     summary
 }
@@ -136,10 +136,7 @@ pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> St
     } else {
         let growth = output_bytes - input_bytes;
         let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
-        format!(
-            "Output +{} (+{grow_pct:.1}%)",
-            human_bytes_ui(growth),
-        )
+        format!("Output +{} (+{grow_pct:.1}%)", human_bytes_ui(growth),)
     }
 }
 
@@ -181,11 +178,7 @@ fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, 
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
         if !item.video_codec.is_empty() {
-            draw_meta_badge(
-                ui,
-                &item.video_codec.to_uppercase(),
-                MetaBadgeKind::Codec,
-            );
+            draw_meta_badge(ui, &item.video_codec.to_uppercase(), MetaBadgeKind::Codec);
         }
         if let (Some(w), Some(h)) = (item.width, item.height) {
             draw_meta_badge(ui, &format!("{w}x{h}"), MetaBadgeKind::Resolution);
@@ -322,11 +315,7 @@ impl PydlApp {
             let item_id = self.av1_next_item_id;
             self.av1_next_item_id = self.av1_next_item_id.saturating_add(1);
             if self.has_ffprobe {
-                self.queue_av1_media_probe(
-                    item_id,
-                    plan_item.input.clone(),
-                    ffprobe_path.clone(),
-                );
+                self.queue_av1_media_probe(item_id, plan_item.input.clone(), ffprobe_path.clone());
             }
 
             let input_bytes = std::fs::metadata(&plan_item.input)
@@ -354,11 +343,7 @@ impl PydlApp {
                 bitrate_bps: None,
             });
             if self.has_ffmpeg {
-                self.queue_av1_local_thumbnail(
-                    item_id,
-                    plan_item.input,
-                    ffmpeg_path.clone(),
-                );
+                self.queue_av1_local_thumbnail(item_id, plan_item.input, ffmpeg_path.clone());
             }
             added += 1;
         }
@@ -419,13 +404,7 @@ impl PydlApp {
             if secondary_button(ui, &format!("{} Browse", ui_icons::BROWSE), true).clicked() {
                 self.browse_av1_inputs();
             }
-            if secondary_button(
-                ui,
-                &format!("{} Scan inputs", ui_icons::SCAN),
-                true,
-            )
-            .clicked()
-            {
+            if secondary_button(ui, &format!("{} Scan inputs", ui_icons::SCAN), true).clicked() {
                 self.scan_av1_input_textbox();
             }
             let ready = self
@@ -508,10 +487,7 @@ impl PydlApp {
             if success_button(
                 ui,
                 &format!("{} Start AV1 batch", ui_icons::PLAY),
-                !self.av1_running
-                    && self.has_ffmpeg
-                    && self.has_ffprobe
-                    && ready_count > 0,
+                !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
             )
             .clicked()
             {
@@ -592,7 +568,10 @@ impl PydlApp {
             ui.add_space(6.0);
             ui.label(RichText::new("Activity log").small().strong());
             if ui
-                .add(egui::Slider::new(&mut self.settings.log_dock_height, 80.0..=480.0))
+                .add(egui::Slider::new(
+                    &mut self.settings.log_dock_height,
+                    80.0..=480.0,
+                ))
                 .changed()
             {
                 self.persist_settings();
@@ -603,10 +582,7 @@ impl PydlApp {
 
     fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
         match label {
-            "Active" => matches!(
-                item.status,
-                ItemStatus::Queued | ItemStatus::Downloading
-            ),
+            "Active" => matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading),
             "Ready" => item.status == ItemStatus::Idle,
             "Failed" => item.status == ItemStatus::Failed,
             "Skipped" => av1_item_is_skipped(item),
@@ -797,9 +773,7 @@ impl PydlApp {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 ui.label(RichText::new("Summary:").color(text_muted(theme)));
-                ui.label(
-                    RichText::new(format!("{} completed", batch.completed)).color(done_color),
-                );
+                ui.label(RichText::new(format!("{} completed", batch.completed)).color(done_color));
                 draw_av1_bytes_arrow(
                     ui,
                     &human_bytes_ui(batch.completed_input_bytes),
@@ -808,19 +782,14 @@ impl PydlApp {
                     theme,
                 );
                 ui.label(
-                    RichText::new(format!(
-                        "saved {} ({pct:.1}%)",
-                        human_bytes_ui(saved),
-                    ))
-                    .color(done_color),
+                    RichText::new(format!("saved {} ({pct:.1}%)", human_bytes_ui(saved),))
+                        .color(done_color),
                 );
             });
         }
         if batch.pending_input_bytes > 0 {
             ui.horizontal_wrapped(|ui| {
-                ui.label(
-                    RichText::new("Pending input:").color(text_muted(&self.settings.theme)),
-                );
+                ui.label(RichText::new("Pending input:").color(text_muted(&self.settings.theme)));
                 ui.label(human_bytes_ui(batch.pending_input_bytes));
             });
         }
@@ -844,8 +813,7 @@ impl PydlApp {
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing.x = 10.0;
                     let thumb_size = egui::vec2(90.0, 52.0);
-                    let (thumb_rect, _) =
-                        ui.allocate_exact_size(thumb_size, egui::Sense::hover());
+                    let (thumb_rect, _) = ui.allocate_exact_size(thumb_size, egui::Sense::hover());
                     let painter = ui.painter();
                     painter.rect_filled(
                         thumb_rect,
@@ -882,18 +850,10 @@ impl PydlApp {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            status_dot_with_label(
-                                ui,
-                                av1_item_status_label(it),
-                                item_color,
-                                false,
-                            );
+                            status_dot_with_label(ui, av1_item_status_label(it), item_color, false);
                         });
 
-                        if matches!(
-                            it.status,
-                            ItemStatus::Downloading | ItemStatus::Queued
-                        ) {
+                        if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
                             let mut pb =
                                 egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
                                     .desired_width(ui.available_width().min(280.0))

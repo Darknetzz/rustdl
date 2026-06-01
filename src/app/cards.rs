@@ -10,14 +10,12 @@ use crate::app_ui::{
     danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
     status_dot_with_label, warning_button, MetaBadgeKind,
 };
-use crate::theme;
 use crate::models::{ItemStatus, QueueItem};
+use crate::theme;
 use crate::time_format::{format_absolute_local, format_relative_ago};
 use crate::ui_icons;
 
-use super::{
-    log_line_color, CancelPostAction, PydlApp, LOG_COLOR_ERROR, LOG_COLOR_WARN,
-};
+use super::{log_line_color, CancelPostAction, PydlApp, LOG_COLOR_ERROR, LOG_COLOR_WARN};
 
 impl PydlApp {
     pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
@@ -82,8 +80,7 @@ impl PydlApp {
             let detail_h = if compact { 0.0 } else { 15.0 };
             let progress_h = 14.0;
             let title_height = if compact { 30.0 } else { 36.0 };
-            let removable =
-                !matches!(status, ItemStatus::Queued | ItemStatus::Downloading);
+            let removable = !matches!(status, ItemStatus::Queued | ItemStatus::Downloading);
 
             ui.set_width(card_w);
             ui.vertical(|ui| {
@@ -335,6 +332,19 @@ impl PydlApp {
                                             }
                                             ui.close_menu();
                                         }
+                                        if ui
+                                            .button(format!(
+                                                "{} Open output folder",
+                                                ui_icons::REVEAL_FOLDER
+                                            ))
+                                            .on_hover_text(
+                                                "Open the folder containing this download (or the output folder)",
+                                            )
+                                            .clicked()
+                                        {
+                                            self.open_item_output_folder(id);
+                                            ui.close_menu();
+                                        }
                                     },
                                 );
                                 r.response.on_hover_text(
@@ -499,10 +509,7 @@ impl PydlApp {
         if highlight_completed {
             egui::Frame::none()
                 .fill(done_fill)
-                .stroke(egui::Stroke::new(
-                    2.0,
-                    status_color(ItemStatus::Done),
-                ))
+                .stroke(egui::Stroke::new(2.0, status_color(ItemStatus::Done)))
                 .rounding(egui::Rounding::same(10.0))
                 .inner_margin(egui::Margin::same(8.0))
                 .show(ui, card_inner);
@@ -553,10 +560,7 @@ impl PydlApp {
             return false;
         }
         match label {
-            "Active" => matches!(
-                it.status,
-                ItemStatus::Downloading | ItemStatus::Queued
-            ),
+            "Active" => matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued),
             "Ready" => it.status == ItemStatus::Idle && it.error.is_none(),
             "Issues" => {
                 it.status == ItemStatus::Failed
@@ -582,10 +586,7 @@ impl PydlApp {
     pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
         let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
         for label in groups {
-            if self
-                .queue_group_focus
-                .is_some_and(|f| f != label)
-            {
+            if self.queue_group_focus.is_some_and(|f| f != label) {
                 continue;
             }
             let mut ids: Vec<u64> = self
@@ -633,38 +634,38 @@ impl PydlApp {
                 status_dot_with_label(ui, &header_text, header_color, true)
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                    if self.settings.card_list_layout {
-                        let allow_reorder = label == "Ready";
-                        for id in &ids {
-                            if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
-                                self.draw_card(ui, idx, allow_reorder);
-                            }
+                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                if self.settings.card_list_layout {
+                    let allow_reorder = label == "Ready";
+                    for id in &ids {
+                        if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
+                            self.draw_card(ui, idx, allow_reorder);
                         }
-                    } else {
-                        let row_width = ui.available_width();
-                        let card_min_w = if row_width < 720.0 { 220.0 } else { 280.0 };
-                        let _ = card_min_w;
-                        egui::ScrollArea::horizontal()
-                            .id_salt(format!("rustdl_cards_{label}"))
-                            .auto_shrink([false, false])
-                            .max_width(row_width)
-                            .animated(true)
-                            .drag_to_scroll(true)
-                            .show(ui, |ui| {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                    for id in &ids {
-                                        if let Some(idx) =
-                                            self.items.iter().position(|it| it.item_id == *id)
-                                        {
-                                            self.draw_card(ui, idx, false);
-                                        }
-                                    }
-                                });
-                            });
                     }
-                });
+                } else {
+                    let row_width = ui.available_width();
+                    let card_min_w = if row_width < 720.0 { 220.0 } else { 280.0 };
+                    let _ = card_min_w;
+                    egui::ScrollArea::horizontal()
+                        .id_salt(format!("rustdl_cards_{label}"))
+                        .auto_shrink([false, false])
+                        .max_width(row_width)
+                        .animated(true)
+                        .drag_to_scroll(true)
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                                for id in &ids {
+                                    if let Some(idx) =
+                                        self.items.iter().position(|it| it.item_id == *id)
+                                    {
+                                        self.draw_card(ui, idx, false);
+                                    }
+                                }
+                            });
+                        });
+                }
+            });
             if scroll_here {
                 ui.scroll_to_rect(header_inner.response.rect, Some(egui::Align::TOP));
                 self.scroll_to_queue_group = None;

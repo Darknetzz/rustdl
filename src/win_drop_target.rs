@@ -12,7 +12,7 @@ use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
-use windows_sys::core::{GUID, HRESULT, IUnknown};
+use windows_sys::core::{IUnknown, GUID, HRESULT};
 use windows_sys::Win32::Foundation::{E_NOINTERFACE, HWND, POINTL, S_OK};
 use windows_sys::Win32::System::Com::{
     IDataObject, DVASPECT_CONTENT, FORMATETC, STGMEDIUM, TYMED_HGLOBAL,
@@ -20,8 +20,8 @@ use windows_sys::Win32::System::Com::{
 use windows_sys::Win32::System::DataExchange::RegisterClipboardFormatW;
 use windows_sys::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
 use windows_sys::Win32::System::Ole::{
-    ReleaseStgMedium, CF_HDROP, CF_UNICODETEXT, DROPEFFECT_COPY, DROPEFFECT_NONE, RegisterDragDrop,
-    RevokeDragDrop,
+    RegisterDragDrop, ReleaseStgMedium, RevokeDragDrop, CF_HDROP, CF_UNICODETEXT, DROPEFFECT_COPY,
+    DROPEFFECT_NONE,
 };
 use windows_sys::Win32::UI::Shell::{DragFinish, DragQueryFileW, HDROP};
 
@@ -98,18 +98,17 @@ struct IDropTargetRaw {
 unsafe fn guid_eq(a: *const GUID, b: &GUID) -> bool {
     unsafe {
         let a = &*a;
-        a.data1 == b.data1
-            && a.data2 == b.data2
-            && a.data3 == b.data3
-            && a.data4 == b.data4
+        a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4
     }
 }
 
 /// [`IDataObject::GetData`] is vtable slot 3 after `IUnknown` (same layout as the Windows SDK).
 unsafe fn idata_get_data(obj: IDataObject, fmt: &FORMATETC, med: *mut STGMEDIUM) -> HRESULT {
-    type GetDataFn =
-        unsafe extern "system" fn(this: IDataObject, pformatetc_in: *const FORMATETC, pmedium: *mut STGMEDIUM)
-            -> HRESULT;
+    type GetDataFn = unsafe extern "system" fn(
+        this: IDataObject,
+        pformatetc_in: *const FORMATETC,
+        pmedium: *mut STGMEDIUM,
+    ) -> HRESULT;
     let vtbl = *(obj as *const *const usize);
     let get_data = *vtbl.add(3);
     let f: GetDataFn = mem::transmute(get_data);
@@ -472,7 +471,10 @@ static DROP_TARGET_VTBL: IDropTargetVtbl = IDropTargetVtbl {
 };
 
 /// Installs our drop target once (revokes winit's file-only handler first).
-pub fn install_once(hwnd: HWND, queue: Arc<Mutex<Vec<WinDropPayload>>>) -> Result<(), &'static str> {
+pub fn install_once(
+    hwnd: HWND,
+    queue: Arc<Mutex<Vec<WinDropPayload>>>,
+) -> Result<(), &'static str> {
     if hwnd == 0 {
         return Err("null hwnd");
     }

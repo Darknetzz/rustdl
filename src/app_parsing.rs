@@ -123,9 +123,8 @@ pub fn dedupe_preserve_order_strings(items: Vec<String>) -> Vec<String> {
     out
 }
 
-static EMBEDDED_HTTP_URL: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"https?://[^\s<>'"]+"#).expect("valid embedded URL regex")
-});
+static EMBEDDED_HTTP_URL: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r#"https?://[^\s<>'"]+"#).expect("valid embedded URL regex"));
 
 /// Reads `URL=` from a Windows Internet Shortcut (`.url`).
 pub fn parse_internet_shortcut_url(content: &str) -> Option<String> {
@@ -359,7 +358,10 @@ mod tests {
         let raw = "https://ok.test/a\nnot-a-url\n# comment line\nhttps://ok.test/b";
         assert_eq!(
             http_url_lines_from_plain_list_content(raw),
-            vec!["https://ok.test/a".to_owned(), "https://ok.test/b".to_owned()]
+            vec![
+                "https://ok.test/a".to_owned(),
+                "https://ok.test/b".to_owned()
+            ]
         );
     }
 

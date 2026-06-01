@@ -21,8 +21,8 @@ pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     let mut settings = load_settings();
     if let Some(name) = opts.profile {
         let store = load_profiles();
-        let profile = find_profile(&store, &name)
-            .ok_or_else(|| anyhow!("unknown profile: {name}"))?;
+        let profile =
+            find_profile(&store, &name).ok_or_else(|| anyhow!("unknown profile: {name}"))?;
         profile.apply_to(&mut settings);
     }
     let output_dir = opts
@@ -272,7 +272,9 @@ fn print_help() {
     println!("Options:");
     println!("  -h, --help           Print this help message");
     println!("  -V, --version        Print version and build date (UTC)");
-    println!("  --download URL       Download using saved settings (URL, @file.txt, or - for stdin)");
+    println!(
+        "  --download URL       Download using saved settings (URL, @file.txt, or - for stdin)"
+    );
     println!("  --profile NAME       Apply named profile before download");
     println!("  --output-dir PATH    Override output folder");
     println!("  --dry-run            Print planned download args without executing");
@@ -287,10 +289,7 @@ mod tests {
         let text = "# comment\n\nhttps://a.test\n  https://b.test  \n";
         assert_eq!(
             parse_url_lines(text),
-            vec![
-                "https://a.test".to_owned(),
-                "https://b.test".to_owned()
-            ]
+            vec!["https://a.test".to_owned(), "https://b.test".to_owned()]
         );
     }
 }

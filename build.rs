@@ -11,6 +11,7 @@ fn main() {
         println!("cargo:rerun-if-changed=assets/rustdl.ico");
         let mut res = winres::WindowsResource::new();
         res.set_icon("assets/rustdl.ico");
-        res.compile().expect("failed to embed Windows executable icon");
+        res.compile()
+            .expect("failed to embed Windows executable icon");
     }
 }

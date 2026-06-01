@@ -125,6 +125,9 @@ pub struct AppSettings {
     /// Proxy URL for yt-dlp (`--proxy`).
     #[serde(default)]
     pub yt_proxy: String,
+    /// Max download rate for yt-dlp (`--limit-rate`, e.g. `50K`, `4M`).
+    #[serde(default)]
+    pub yt_limit_rate: String,
     /// Remove SponsorBlock segments (`--sponsorblock-remove`).
     #[serde(default)]
     pub yt_sponsorblock_remove: bool,
@@ -271,6 +274,7 @@ impl Default for AppSettings {
             show_first_run_hint: default_show_first_run_hint(),
             yt_download_archive: String::new(),
             yt_proxy: String::new(),
+            yt_limit_rate: String::new(),
             yt_sponsorblock_remove: false,
             yt_sponsorblock_mark: String::new(),
             playlist_preview_cap: default_playlist_preview_cap(),
@@ -328,18 +332,14 @@ fn activity_log_path() -> PathBuf {
 const MAX_ACTIVITY_LOG_LINES: usize = 4_000;
 
 fn activity_log_char_count(lines: &VecDeque<String>) -> usize {
-    lines
-        .iter()
-        .map(|s| s.len().saturating_add(1))
-        .sum()
+    lines.iter().map(|s| s.len().saturating_add(1)).sum()
 }
 
 /// Trims oldest lines so the in-memory / on-disk log respects [`AppSettings::log_max_chars`].
 pub fn trim_activity_log(lines: &mut VecDeque<String>, max_chars: usize) {
     let max_chars = max_chars.clamp(2_000, 200_000);
     while !lines.is_empty()
-        && (lines.len() > MAX_ACTIVITY_LOG_LINES
-            || activity_log_char_count(lines) > max_chars)
+        && (lines.len() > MAX_ACTIVITY_LOG_LINES || activity_log_char_count(lines) > max_chars)
     {
         lines.pop_front();
     }
@@ -595,12 +595,8 @@ pub fn save_av1_queue_snapshot(snapshot: &Av1QueueSnapshot) -> Result<()> {
     }
     let raw =
         serde_json::to_string_pretty(snapshot).context("failed to serialize AV1 queue snapshot")?;
-    fs::write(&path, raw).with_context(|| {
-        format!(
-            "failed to write AV1 queue file: {}",
-            path.to_string_lossy()
-        )
-    })?;
+    fs::write(&path, raw)
+        .with_context(|| format!("failed to write AV1 queue file: {}", path.to_string_lossy()))?;
     Ok(())
 }
 

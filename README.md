@@ -25,7 +25,9 @@ cargo run
 Headless download (no GUI):
 
 ```bash
-cargo run -- --download "https://..." [--profile "Best quality"] [--output-dir "C:\path"]
+cargo run -- --download "https://..." [--profile "Best quality"] [--output-dir "C:\path"] [--dry-run]
+cargo run -- --download @urls.txt          # batch from file (one URL per line)
+cargo run -- --download -                  # batch from stdin
 cargo run -- --list-profiles
 ```
 
@@ -53,8 +55,8 @@ cargo test --all-targets --all-features
 - About dialog with app version and update check.
 - Settings persistence in user config directory.
 - Persisted activity log with timestamps; optional docked log panel under the queue.
-- Queue search, bulk selection, pause/resume downloads, drag-to-reorder Ready items (list layout), and export URLs to `.txt`.
-- Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, and SponsorBlock options.
+- Queue search, bulk selection, pause/resume downloads, drag-to-reorder Ready items (list layout), import/export queue URLs to `.txt`.
+- Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, speed limit, and SponsorBlock options.
 - Light / dark / system theme; last mode (Downloader vs AV1) remembered across restarts.
 - Desktop notification when a download session finishes (where supported by the OS).
 - AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
@@ -177,7 +179,13 @@ Open **Settings**, **Logs**, or **About** → **Open config folder** to reveal t
 
 ## Platform notes
 
-- **Browser drag-and-drop** for URLs (from Chrome, Firefox, etc.) is supported on **Windows** only. On Linux and macOS, paste URLs or drop `.url` / `.txt` / shortcut files onto the window.
+### Browser drag-and-drop
+
+Browser URL drag-and-drop (from Chrome, Firefox, etc.) is supported on **Windows** only via a custom shell `IDropTarget` ([`win_drop_target.rs`](src/win_drop_target.rs)).
+
+**Linux and macOS (deferred):** winit/eframe exposes file drops (`.url`, `.txt`, shortcuts) but not browser URI-list payloads in a cross-platform way. Implementing parity would require platform-specific code (GTK/Wayland `text/uri-list` on Linux; `NSPasteboard` / `NSDragging` on macOS). Until then, use **paste**, **Import file**, or **Import queue** from a `.txt` export.
+
+On all platforms you can paste URLs or drop `.url` / `.txt` / shortcut files onto the window.
 
 ## Build release binary
 

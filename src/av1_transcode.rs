@@ -89,7 +89,13 @@ pub fn detect_encoder_with_override(ffmpeg_path: &str, override_enc: &str) -> En
             }
         }
     }
-    for enc in ["av1_nvenc", "av1_amf", "hevc_nvenc", "hevc_amf", "libsvtav1"] {
+    for enc in [
+        "av1_nvenc",
+        "av1_amf",
+        "hevc_nvenc",
+        "hevc_amf",
+        "libsvtav1",
+    ] {
         if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
             return EncoderChoice {
                 encoder: enc,
@@ -167,22 +173,19 @@ fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
         "format=nv12"
     };
     let mut cmd = Command::new(ffmpeg_bin);
-    cmd.arg("-hide_banner")
-        .arg("-loglevel")
-        .arg("error")
-        .args([
-            "-f",
-            "lavfi",
-            "-i",
-            "testsrc=size=1280x720:rate=30:duration=0.5",
-            "-vf",
-            vf,
-            "-c:v",
-            encoder,
-            "-f",
-            "null",
-            "-",
-        ]);
+    cmd.arg("-hide_banner").arg("-loglevel").arg("error").args([
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc=size=1280x720:rate=30:duration=0.5",
+        "-vf",
+        vf,
+        "-c:v",
+        encoder,
+        "-f",
+        "null",
+        "-",
+    ]);
     if hw_type == "nvidia" {
         cmd.args(["-preset", "p7", "-rc", "vbr", "-b:v", "2M"]);
     } else if hw_type == "amd" {
@@ -190,11 +193,7 @@ fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
     } else if encoder == "libsvtav1" {
         cmd.args(["-preset", "8", "-b:v", "2M"]);
     }
-    let Ok(out) = cmd
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-    else {
+    let Ok(out) = cmd.stdout(Stdio::null()).stderr(Stdio::null()).output() else {
         return false;
     };
     out.status.success()
@@ -242,9 +241,7 @@ fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) 
             "scale='trunc(min({w},iw)/64)*64':'trunc(trunc(min({w},iw)/64)*64*ih/iw/16)*16',format={pix_fmt}"
         )
     } else {
-        format!(
-            "scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,format={pix_fmt}"
-        )
+        format!("scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,format={pix_fmt}")
     };
     format!("{scale},setsar=1")
 }
@@ -261,7 +258,16 @@ fn append_encoder_rate_control(cmd: &mut Command, hw_type: &str, target_bitrate_
         }
         "amd" => {
             cmd.args([
-                "-usage", "0", "-quality", "70", "-profile:v", "1", "-rc", "1", "-align", "3",
+                "-usage",
+                "0",
+                "-quality",
+                "70",
+                "-profile:v",
+                "1",
+                "-rc",
+                "1",
+                "-align",
+                "3",
             ]);
             cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
         }
@@ -305,7 +311,10 @@ fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
     if !is_video_path(input) {
         return;
     }
-    let stem = input.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+    let stem = input
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("video");
     let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-AV1.mkv"));
     out.push(Av1PlanItem {
         input: input.to_path_buf(),
@@ -448,8 +457,13 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Av1Inpu
 }
 
 pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
-    probe_input_media(file_path, ffprobe_path)
-        .and_then(|m| if m.codec.is_empty() { None } else { Some(m.codec) })
+    probe_input_media(file_path, ffprobe_path).and_then(|m| {
+        if m.codec.is_empty() {
+            None
+        } else {
+            Some(m.codec)
+        }
+    })
 }
 
 pub fn input_duration_ms(file_path: &Path, ffprobe_path: &str) -> Option<u64> {
@@ -472,7 +486,11 @@ pub fn parse_ffmpeg_speed(value: &str) -> Option<f64> {
         cleaned.pop();
     }
     let speed: f64 = cleaned.parse().ok()?;
-    if speed > 0.0 { Some(speed) } else { None }
+    if speed > 0.0 {
+        Some(speed)
+    } else {
+        None
+    }
 }
 
 pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
@@ -504,7 +522,10 @@ pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::Co
     let dyn_img = image::load_from_memory(&out.stdout).ok()?;
     let rgba = dyn_img.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
-    Some(egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()))
+    Some(egui::ColorImage::from_rgba_unmultiplied(
+        size,
+        rgba.as_raw(),
+    ))
 }
 
 fn paths_same_directory(a: &Path, b: &Path) -> bool {
@@ -606,8 +627,7 @@ where
                     .map(|ms| ms as f64 / 1000.0)
                     .filter(|s| *s > 0.0)
                     .unwrap_or(3600.0);
-                let estimated_out =
-                    (target_bitrate_bps as f64 * duration_secs / 8.0).max(1.0);
+                let estimated_out = (target_bitrate_bps as f64 * duration_secs / 8.0).max(1.0);
                 let max_allowed =
                     input_bytes as f64 * (1.0 - cfg.min_shrink_percent as f64 / 100.0);
                 if estimated_out > max_allowed {
@@ -656,7 +676,10 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
-    let stdout = child.stdout.take().ok_or_else(|| anyhow!("missing stdout"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("missing stdout"))?;
     let stderr = child.stderr.take();
     let stderr_capture = stderr_buf.clone();
     let stderr_thread = std::thread::spawn(move || {
@@ -802,10 +825,7 @@ mod tests {
             codec: "av1",
             hw_type: "nvidia",
         };
-        assert_eq!(
-            encoder_indicator_label(&gpu),
-            "GPU · av1_nvenc (NVIDIA)"
-        );
+        assert_eq!(encoder_indicator_label(&gpu), "GPU · av1_nvenc (NVIDIA)");
         let cpu = EncoderChoice {
             encoder: "libsvtav1",
             codec: "av1",
@@ -816,9 +836,11 @@ mod tests {
 
     #[test]
     fn parse_ffprobe_fraction_handles_rational_fps() {
-        assert_eq!(parse_ffprobe_fraction("30000/1001"), Some(29.970_029_970_029_97));
+        assert_eq!(
+            parse_ffprobe_fraction("30000/1001"),
+            Some(29.970_029_970_029_97)
+        );
         assert_eq!(parse_ffprobe_fraction("24/1"), Some(24.0));
         assert!(parse_ffprobe_fraction("0/0").is_none());
     }
 }
-

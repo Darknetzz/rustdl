@@ -5,9 +5,7 @@ use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{danger_button, secondary_button};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
-use crate::time_format::{
-    format_relative_ago, log_message_body, split_log_line,
-};
+use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
 use crate::ui_icons;
 
 use super::{InputLineInfo, InputLineKind, PydlApp};
@@ -84,7 +82,12 @@ fn format_log_timestamp_display(line: &str, relative: bool) -> String {
     format!("[{ts}] {body}")
 }
 
-fn log_line_widget(line: &str, color: Color32, ui: &egui::Ui, relative_ts: bool) -> egui::WidgetText {
+fn log_line_widget(
+    line: &str,
+    color: Color32,
+    ui: &egui::Ui,
+    relative_ts: bool,
+) -> egui::WidgetText {
     let display = format_log_timestamp_display(line, relative_ts);
     let font_px = egui::TextStyle::Small.resolve(ui.style()).size;
     let font_id = egui::FontId::new(font_px, egui::FontFamily::Monospace);
@@ -170,10 +173,7 @@ impl PydlApp {
                     ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
                 });
             if ui
-                .checkbox(
-                    &mut self.settings.log_relative_time,
-                    "Relative timestamps",
-                )
+                .checkbox(&mut self.settings.log_relative_time, "Relative timestamps")
                 .changed()
             {
                 self.persist_settings();
@@ -240,8 +240,7 @@ impl PydlApp {
                                 continue;
                             }
                             let color = log_line_color(line);
-                            let widget =
-                                log_line_widget(line, color, ui, relative);
+                            let widget = log_line_widget(line, color, ui, relative);
                             let label = egui::Label::new(widget).wrap().selectable(true);
                             let r = ui.add(label);
                             r.context_menu(|ui| {
@@ -301,7 +300,11 @@ pub(crate) fn draw_input_line_preview(ui: &mut egui::Ui, lines: &[InputLineInfo]
             InputLineKind::Invalid => Color32::from_rgb(239, 83, 80),
         };
         let short: String = line.line.chars().take(72).collect();
-        let suffix = if line.line.chars().count() > 72 { "…" } else { "" };
+        let suffix = if line.line.chars().count() > 72 {
+            "…"
+        } else {
+            ""
+        };
         ui.label(
             RichText::new(format!("{short}{suffix}"))
                 .font(font_id.clone())
@@ -339,12 +342,7 @@ pub(crate) fn attach_paste_context_menu(
     });
 }
 
-pub(crate) fn draw_precheck_status(
-    ui: &mut egui::Ui,
-    tool_name: &str,
-    ok: bool,
-    version: &str,
-) {
+pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool, version: &str) {
     fn compact_version(v: &str) -> String {
         let t = v.trim();
         if t.is_empty() {
@@ -366,17 +364,9 @@ pub(crate) fn draw_precheck_status(
         }
     }
     let (icon, fg, text) = if ok {
-        (
-            "✔",
-            Color32::from_rgb(132, 235, 156),
-            "OK",
-        )
+        ("✔", Color32::from_rgb(132, 235, 156), "OK")
     } else {
-        (
-            "✖",
-            Color32::from_rgb(70, 15, 15),
-            "Missing",
-        )
+        ("✖", Color32::from_rgb(70, 15, 15), "Missing")
     };
     let v = version.trim();
     let cv = compact_version(v);
@@ -386,14 +376,9 @@ pub(crate) fn draw_precheck_status(
         format!("{icon} {tool_name}: {text}")
     };
     let response = ui.add(
-        egui::Label::new(
-            RichText::new(body)
-                .small()
-                .color(fg)
-                .strong(),
-        )
-        .sense(egui::Sense::hover())
-        .selectable(false),
+        egui::Label::new(RichText::new(body).small().color(fg).strong())
+            .sense(egui::Sense::hover())
+            .selectable(false),
     );
     if ok && !v.is_empty() {
         response.on_hover_text(v);

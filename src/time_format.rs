@@ -103,7 +103,10 @@ mod tests {
     #[test]
     fn split_log_line_with_timestamp() {
         let line = "[2026-05-20 14:32:15] [item 1] done";
-        assert_eq!(split_log_line(line), ("2026-05-20 14:32:15", "[item 1] done"));
+        assert_eq!(
+            split_log_line(line),
+            ("2026-05-20 14:32:15", "[item 1] done")
+        );
         assert_eq!(log_message_body(line), "[item 1] done");
     }
 

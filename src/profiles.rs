@@ -216,9 +216,7 @@ pub fn all_profiles(store: &ProfileStore) -> Vec<DownloadProfile> {
 }
 
 pub fn find_profile(store: &ProfileStore, name: &str) -> Option<DownloadProfile> {
-    all_profiles(store)
-        .into_iter()
-        .find(|p| p.name == name)
+    all_profiles(store).into_iter().find(|p| p.name == name)
 }
 
 pub fn save_user_profile(store: &mut ProfileStore, profile: DownloadProfile) -> Result<()> {

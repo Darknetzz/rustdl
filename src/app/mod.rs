@@ -17,9 +17,9 @@ mod about;
 mod av1_panel;
 mod background_spawn;
 mod cards;
+mod done_file_index;
 mod download_control;
 mod eframe_app;
-mod done_file_index;
 mod events;
 mod input_lines;
 mod log_panel;
@@ -44,21 +44,20 @@ use crate::app_parsing::{
 };
 use crate::app_state::{self};
 use crate::app_ui::{
-    alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot, modal_backdrop,
-    secondary_button, status_color, success_button, warning_button, ALERT_DANGER_TEXT,
-    ALERT_WARNING_TEXT,
+    alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot,
+    modal_backdrop, secondary_button, status_color, success_button, warning_button,
+    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    default_downloads, export_queue_urls, load_activity_log,
-    load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
-    save_settings, trim_activity_log,
+    default_downloads, export_queue_urls, load_activity_log, load_av1_queue_snapshot,
+    load_queue_items, load_settings, rustdl_config_dir, save_settings, trim_activity_log,
     AppSettings, Av1QueueSnapshot,
 };
+use crate::models::Av1QueueItem;
+use crate::models::{ItemStatus, QueueItem};
+use crate::pkg_version;
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
-use crate::models::{ItemStatus, QueueItem};
-use crate::models::Av1QueueItem;
-use crate::pkg_version;
 use crate::ui_icons;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
@@ -242,9 +241,14 @@ impl PydlApp {
         let av1_next_item_id = if restored_av1_items.is_empty() {
             1_000_000
         } else {
-            av1_snapshot
-                .next_item_id
-                .max(restored_av1_items.iter().map(|x| x.item_id).max().unwrap_or(999_999) + 1)
+            av1_snapshot.next_item_id.max(
+                restored_av1_items
+                    .iter()
+                    .map(|x| x.item_id)
+                    .max()
+                    .unwrap_or(999_999)
+                    + 1,
+            )
         };
         let next_item_id = restored_items
             .iter()
@@ -414,7 +418,13 @@ impl PydlApp {
             .items
             .iter()
             .find(|it| it.item_id == dragged_id)
-            .map(|it| if it.sort_order == 0 { it.item_id } else { it.sort_order })
+            .map(|it| {
+                if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                }
+            })
         else {
             return;
         };
@@ -422,7 +432,13 @@ impl PydlApp {
             .items
             .iter()
             .find(|it| it.item_id == target_id)
-            .map(|it| if it.sort_order == 0 { it.item_id } else { it.sort_order })
+            .map(|it| {
+                if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                }
+            })
         else {
             return;
         };
@@ -752,7 +768,7 @@ impl PydlApp {
         }
     }
 
-    fn reveal_file_path(&mut self, file_path: &Path) {
+    pub(super) fn reveal_file_path(&mut self, file_path: &Path) {
         let target = if cfg!(target_os = "windows") {
             file_path.to_path_buf()
         } else if let Some(parent) = file_path.parent() {
@@ -762,6 +778,24 @@ impl PydlApp {
         };
         if let Err(e) = app_actions::open_path(&target) {
             self.append_log(&format!("Failed to reveal file in folder: {e}"));
+        }
+    }
+
+    pub(super) fn open_item_output_folder(&mut self, item_id: u64) {
+        let Some(item) = self.items.iter().find(|x| x.item_id == item_id) else {
+            return;
+        };
+        if let Some((path, _)) = self.find_downloaded_file_for_item(item) {
+            if let Some(parent) = path.parent() {
+                if let Err(e) = app_actions::open_path(parent) {
+                    self.append_log(&format!("Failed to open output folder: {e}"));
+                }
+                return;
+            }
+        }
+        let dir = Path::new(&self.output_dir);
+        if let Err(e) = app_actions::open_path(dir) {
+            self.append_log(&format!("Failed to open output folder: {e}"));
         }
     }
 
@@ -977,6 +1011,37 @@ impl PydlApp {
         let lines = self.collect_valid_new_lines();
         self.queue_urls_for_resolve(lines);
         self.clear_input_urls_with_summary_hold(now);
+    }
+
+    pub(super) fn import_queue_from_file(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Import queue URLs")
+            .add_filter("Text", &["txt"])
+            .pick_file()
+        else {
+            return;
+        };
+        let content = match fs::read_to_string(&path) {
+            Ok(x) => x,
+            Err(e) => {
+                self.append_log(&format!(
+                    "Failed to read queue file {}: {e}",
+                    path.to_string_lossy()
+                ));
+                return;
+            }
+        };
+        let parsed = parse_urls_from_text_blob(&content);
+        if parsed.is_empty() {
+            self.append_log("Queue import file had no URL entries.");
+            return;
+        }
+        self.append_log(&format!(
+            "Importing {} URL(s) from {} into the queue.",
+            parsed.len(),
+            path.to_string_lossy()
+        ));
+        self.queue_urls_for_resolve(parsed);
     }
 
     fn import_urls_from_file(&mut self) {

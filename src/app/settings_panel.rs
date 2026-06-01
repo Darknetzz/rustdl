@@ -481,6 +481,13 @@ impl PydlApp {
                                     .hint_text("http://127.0.0.1:8080"),
                             )
                             .changed();
+                        ui.label("Download speed limit (--limit-rate)");
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_limit_rate)
+                                    .hint_text("50K, 4M, or empty for unlimited"),
+                            )
+                            .changed();
                         changed |= ui
                             .checkbox(
                                 &mut self.settings.yt_sponsorblock_remove,

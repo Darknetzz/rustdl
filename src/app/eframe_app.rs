@@ -595,6 +595,16 @@ impl eframe::App for PydlApp {
                     {
                         self.export_queue_to_file();
                     }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Import queue", ui_icons::IMPORT_FILE),
+                        !self.add_in_progress,
+                    )
+                    .on_hover_text("Load URLs from a .txt file directly into the download queue")
+                    .clicked()
+                    {
+                        self.import_queue_from_file();
+                    }
                     if !self.selected_item_ids.is_empty() {
                         if danger_button(
                             ui,

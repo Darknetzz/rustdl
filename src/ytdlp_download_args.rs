@@ -47,11 +47,17 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
         args.push("--fragment-retries".to_owned());
         args.push(n);
     }
-    args.extend(ytdlp::impersonate_args_from_setting(&settings.yt_dlp_impersonate));
+    args.extend(ytdlp::impersonate_args_from_setting(
+        &settings.yt_dlp_impersonate,
+    ));
     args.extend(ytdlp::cookie_args_from_setting(&settings.yt_dlp_cookies));
     if !settings.yt_proxy.trim().is_empty() {
         args.push("--proxy".to_owned());
         args.push(settings.yt_proxy.trim().to_owned());
+    }
+    if !settings.yt_limit_rate.trim().is_empty() {
+        args.push("--limit-rate".to_owned());
+        args.push(settings.yt_limit_rate.trim().to_owned());
     }
     if !settings.yt_download_archive.trim().is_empty() {
         args.push("--download-archive".to_owned());
@@ -66,7 +72,12 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
     }
     args.extend(split_cli_like(&settings.yt_dlp_extra_args));
     args.extend(quality_format_args(settings));
-    match settings.merge_container.trim().to_ascii_lowercase().as_str() {
+    match settings
+        .merge_container
+        .trim()
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "mp4" => {
             args.push("--merge-output-format".to_owned());
             args.push("mp4".to_owned());
@@ -148,7 +159,10 @@ mod tests {
         let mut s = base_settings();
         s.quality_preset = "custom".to_owned();
         s.quality_format_custom = "best".to_owned();
-        assert_eq!(quality_format_args(&s), vec!["-f".to_owned(), "best".to_owned()]);
+        assert_eq!(
+            quality_format_args(&s),
+            vec!["-f".to_owned(), "best".to_owned()]
+        );
     }
 
     #[test]
@@ -198,5 +212,14 @@ mod tests {
         assert!(args.contains(&"chrome".to_owned()));
         assert!(args.contains(&"--cookies-from-browser".to_owned()));
         assert!(args.contains(&"firefox".to_owned()));
+    }
+
+    #[test]
+    fn download_args_limit_rate() {
+        let mut s = base_settings();
+        s.yt_limit_rate = "4M".to_owned();
+        let args = build_download_extra_args(&s);
+        assert!(args.contains(&"--limit-rate".to_owned()));
+        assert!(args.contains(&"4M".to_owned()));
     }
 }

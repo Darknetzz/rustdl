@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use eframe::egui;
 
-use super::{events::try_send_ui, background_spawn, PydlApp, UiEvent};
+use super::{background_spawn, events::try_send_ui, PydlApp, UiEvent};
 
 fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage> {
     let img = image::load_from_memory(&bytes).ok()?;

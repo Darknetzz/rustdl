@@ -2,9 +2,7 @@ use rustdl::ytdlp::{self, PROGRESS_PREFIX};
 
 #[test]
 fn progress_fixture_template_prefix() {
-    let line = format!(
-        "{PROGRESS_PREFIX} 42.5% of  100.00MiB at  2.00MiB/s ETA 00:30"
-    );
+    let line = format!("{PROGRESS_PREFIX} 42.5% of  100.00MiB at  2.00MiB/s ETA 00:30");
     let (pct, size) = ytdlp::parse_progress_line(&line);
     assert_eq!(pct, Some(42.5));
     assert_eq!(size.as_deref(), Some("100.00MiB"));

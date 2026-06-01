@@ -3,7 +3,9 @@ use std::sync::Once;
 use crossbeam_channel::Sender;
 use eframe::egui;
 
-use crate::app_parsing::{av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready};
+use crate::app_parsing::{
+    av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready,
+};
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
@@ -85,8 +87,7 @@ pub(crate) enum UiEvent {
 /// yt-dlp progress lines that would flood the log if recorded every event.
 fn is_throttled_download_log_line(line: &str) -> bool {
     let l = line.to_ascii_lowercase();
-    (l.contains("[download]") && (l.contains('%') || l.contains("frag")))
-        || l.contains("[merger]")
+    (l.contains("[download]") && (l.contains('%') || l.contains("frag"))) || l.contains("[merger]")
 }
 
 fn format_av1_duration_clock(secs: f64) -> String {
@@ -271,7 +272,9 @@ impl PydlApp {
                             let iid = self.next_item_id;
                             self.next_item_id += 1;
                             if let Some(ref err) = pv.error {
-                                self.append_log(&format!("[item {iid}] Metadata fetch failed: {err}"));
+                                self.append_log(&format!(
+                                    "[item {iid}] Metadata fetch failed: {err}"
+                                ));
                             }
                             self.items
                                 .insert(0, QueueItem::from_preview(iid, pv.clone()));
@@ -378,7 +381,9 @@ impl PydlApp {
                         if summary.is_empty() {
                             self.append_log(&format!("[item {item_id}] Download failed."));
                         } else {
-                            self.append_log(&format!("[item {item_id}] Download failed: {summary}"));
+                            self.append_log(&format!(
+                                "[item {item_id}] Download failed: {summary}"
+                            ));
                         }
                     }
                     if completed {
@@ -407,13 +412,15 @@ impl PydlApp {
                         self.thumbnail_attempted.insert(item_id);
                         continue;
                     };
-                    self.pending_thumbnail_uploads
-                        .push_back((item_id, image));
+                    self.pending_thumbnail_uploads.push_back((item_id, image));
                 }
                 UiEvent::Av1Line { item_id, line } => {
                     self.handle_av1_line(item_id, &line);
                 }
-                UiEvent::Av1Duration { item_id, duration_ms } => {
+                UiEvent::Av1Duration {
+                    item_id,
+                    duration_ms,
+                } => {
                     if duration_ms > 0 {
                         self.av1_duration_ms.insert(item_id, duration_ms);
                     }
@@ -443,7 +450,11 @@ impl PydlApp {
                         if !ok && av1_detail_is_user_cancellation(&detail) {
                             reset_av1_item_to_ready(it);
                         } else {
-                            it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
+                            it.status = if ok {
+                                ItemStatus::Done
+                            } else {
+                                ItemStatus::Failed
+                            };
                             it.percent = if ok { 100.0 } else { it.percent };
                             if let Some(path) = final_output_path {
                                 it.output_path = path;
@@ -479,10 +490,7 @@ impl PydlApp {
                 UiEvent::Av1BatchDone => {
                     self.av1_running = false;
                     for item in &mut self.av1_items {
-                        if matches!(
-                            item.status,
-                            ItemStatus::Queued | ItemStatus::Downloading
-                        ) {
+                        if matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading) {
                             reset_av1_item_to_ready(item);
                         }
                     }
@@ -538,7 +546,9 @@ mod tests {
         assert!(is_throttled_download_log_line(
             "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
         ));
-        assert!(is_throttled_download_log_line("[Merger] Merging formats into mkv"));
+        assert!(is_throttled_download_log_line(
+            "[Merger] Merging formats into mkv"
+        ));
         assert!(!is_throttled_download_log_line(
             "ERROR: unable to download video"
         ));

@@ -308,16 +308,12 @@ impl PydlApp {
         let failed_no_url = self
             .items
             .iter()
-            .filter(|it| {
-                it.status == ItemStatus::Failed && !self.item_has_redownload_target(it)
-            })
+            .filter(|it| it.status == ItemStatus::Failed && !self.item_has_redownload_target(it))
             .count();
         let ids: Vec<u64> = self
             .items
             .iter()
-            .filter(|it| {
-                it.status == ItemStatus::Failed && self.item_has_redownload_target(it)
-            })
+            .filter(|it| it.status == ItemStatus::Failed && self.item_has_redownload_target(it))
             .map(|it| it.item_id)
             .collect();
         if ids.is_empty() {

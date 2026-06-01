@@ -20,4 +20,3 @@ pub fn resolve_executable(custom_path: &str, default_exe: &str) -> String {
         trimmed.to_owned()
     }
 }
-

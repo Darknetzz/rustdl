@@ -119,10 +119,7 @@ mod tests {
 
     #[test]
     fn only_duplicate_false_when_mixed_or_invalid() {
-        let lines = vec![
-            "https://example.com/a".to_owned(),
-            "not a url".to_owned(),
-        ];
+        let lines = vec!["https://example.com/a".to_owned(), "not a url".to_owned()];
         let out = analyze_input_lines(&lines, &HashSet::new());
         assert!(!is_only_duplicate_lines(&out));
     }

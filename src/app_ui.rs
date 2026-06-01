@@ -23,13 +23,9 @@ pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(dot, line_h), egui::Sense::hover());
     let center = rect.center();
     let radius = dot * 0.38;
+    ui.painter().circle_filled(center, radius, color);
     ui.painter()
-        .circle_filled(center, radius, color);
-    ui.painter().circle_stroke(
-        center,
-        radius,
-        egui::Stroke::new(1.0, shade(color, 0.72)),
-    );
+        .circle_stroke(center, radius, egui::Stroke::new(1.0, shade(color, 0.72)));
 }
 
 /// Status dot immediately before colored label text.
@@ -112,9 +108,7 @@ fn resolution_badge_colors(label: &str) -> (Color32, Color32) {
 }
 
 fn codec_badge_colors(label: &str) -> (Color32, Color32) {
-    let c = label
-        .to_ascii_lowercase()
-        .replace(['.', '-', ' ', '_'], "");
+    let c = label.to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
     if c.contains("av1") {
         (
             Color32::from_rgb(40, 110, 60),
@@ -323,7 +317,11 @@ pub fn centered_button_row<R>(
                 .sizing_pass()
                 .invisible(),
         );
-        sizing_ui.horizontal(&mut add_contents).response.rect.width()
+        sizing_ui
+            .horizontal(&mut add_contents)
+            .response
+            .rect
+            .width()
     };
     let pad = ((avail_w - row_width) * 0.5).max(0.0);
     ui.horizontal(|ui| {

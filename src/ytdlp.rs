@@ -432,10 +432,7 @@ pub fn cookie_args_from_setting(cookies: &str) -> Vec<String> {
     if looks_like_file {
         vec!["--cookies".to_owned(), t.to_owned()]
     } else {
-        vec![
-            "--cookies-from-browser".to_owned(),
-            t.to_owned(),
-        ]
+        vec!["--cookies-from-browser".to_owned(), t.to_owned()]
     }
 }
 
@@ -456,8 +453,7 @@ pub fn resolve_url_to_previews_with_bin(
         cmd.arg(arg);
     }
     cmd.arg(trimmed);
-    let output = match cmd.output()
-    {
+    let output = match cmd.output() {
         Ok(o) => o,
         Err(e) => {
             return vec![VideoPreview {
