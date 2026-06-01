@@ -62,6 +62,31 @@ pub fn compute_transfer_totals(items: &[QueueItem]) -> TransferTotals {
     totals
 }
 
+pub fn rebuild_item_index_map(items: &[QueueItem]) -> HashMap<u64, usize> {
+    let mut map = HashMap::with_capacity(items.len());
+    for (i, it) in items.iter().enumerate() {
+        map.insert(it.item_id, i);
+    }
+    map
+}
+
+pub fn rebuild_dedupe_keys_set(items: &[QueueItem]) -> HashSet<String> {
+    let mut keys = HashSet::new();
+    for it in items {
+        if it.status == ItemStatus::Resolving {
+            continue;
+        }
+        keys.insert(ytdlp::normalize_url_for_dedupe(&it.source_line));
+        if !it.webpage_url.is_empty() {
+            keys.insert(ytdlp::normalize_url_for_dedupe(&it.webpage_url));
+        }
+        if !it.video_id.is_empty() {
+            keys.insert(format!("vid:{}", it.video_id));
+        }
+    }
+    keys.into_iter().filter(|k| !k.is_empty()).collect()
+}
+
 /// Build synthetic queue items for profiling / tests (no network).
 pub fn synthetic_queue_items(count: usize) -> Vec<QueueItem> {
     (0..count)
@@ -103,5 +128,11 @@ mod tests {
     #[test]
     fn synthetic_queue_has_expected_len() {
         assert_eq!(synthetic_queue_items(200).len(), 200);
+    }
+
+    #[test]
+    fn item_index_map_matches_len() {
+        let items = synthetic_queue_items(200);
+        assert_eq!(rebuild_item_index_map(&items).len(), 200);
     }
 }

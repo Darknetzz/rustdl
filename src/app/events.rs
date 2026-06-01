@@ -6,6 +6,7 @@ use eframe::egui;
 use crate::app_parsing::{
     av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready,
 };
+use crate::app_state;
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
@@ -218,6 +219,12 @@ impl PydlApp {
     }
 
     pub(super) fn process_events(&mut self, ctx: &egui::Context) {
+        let profile = std::env::var("RUSTDL_PROFILE").ok().as_deref() == Some("1");
+        let t0 = if profile {
+            Some(std::time::Instant::now())
+        } else {
+            None
+        };
         let mut processed = 0usize;
         loop {
             if processed >= MAX_UI_EVENTS_PER_FRAME {
@@ -236,35 +243,36 @@ impl PydlApp {
                     let Some(iid) = self.pending_resolve_ids.remove(&source_line) else {
                         continue;
                     };
-                    if let Some(pos) = self.items.iter().position(|x| x.item_id == iid) {
-                        self.items.remove(pos);
+                    if let Some(idx) = self.item_idx(iid) {
+                        let removed = self.items.remove(idx);
+                        app_state::dec_status_count(&mut self.status_counts, removed.status);
                     } else {
                         continue;
                     }
-                    let deduped = ytdlp::dedupe_previews(&self.dedupe_keys(), &rows);
+                    let deduped = ytdlp::dedupe_previews(self.dedupe_keys(), &rows);
                     if deduped.is_empty() {
                         self.append_log(&format!("No new videos found for: {source_line}"));
                         // Keep a visible card: otherwise the resolving row vanishes and it looks broken.
                         let iid = self.next_item_id;
                         self.next_item_id += 1;
                         if rows.is_empty() {
-                            self.items.insert(
-                                0,
-                                QueueItem {
-                                    item_id: iid,
-                                    source_line: source_line.clone(),
-                                    title: source_line.clone(),
-                                    error: Some("No preview returned for this URL.".to_owned()),
-                                    status: ItemStatus::Idle,
-                                    ..Default::default()
-                                },
-                            );
+                            let item = QueueItem {
+                                item_id: iid,
+                                source_line: source_line.clone(),
+                                title: source_line.clone(),
+                                error: Some("No preview returned for this URL.".to_owned()),
+                                status: ItemStatus::Idle,
+                                ..Default::default()
+                            };
+                            app_state::inc_status_count(&mut self.status_counts, item.status);
+                            self.items.insert(0, item);
                         } else {
                             let mut it = QueueItem::from_preview(iid, rows[0].clone());
                             it.error = Some(
                                 "This video is already in the list (same as a finished or pending item)."
                                     .to_owned(),
                             );
+                            app_state::inc_status_count(&mut self.status_counts, it.status);
                             self.items.insert(0, it);
                         }
                     } else {
@@ -276,8 +284,9 @@ impl PydlApp {
                                     "[item {iid}] Metadata fetch failed: {err}"
                                 ));
                             }
-                            self.items
-                                .insert(0, QueueItem::from_preview(iid, pv.clone()));
+                            let item = QueueItem::from_preview(iid, pv.clone());
+                            app_state::inc_status_count(&mut self.status_counts, item.status);
+                            self.items.insert(0, item);
                             if self.settings.show_thumbnails {
                                 if let Some(url) = pv.thumbnail_url.clone() {
                                     self.queue_thumbnail_load(iid, url);
@@ -285,7 +294,8 @@ impl PydlApp {
                             }
                         }
                     }
-                    self.update_status();
+                    self.sync_status_fields_from_counts();
+                    self.invalidate_queue_caches();
                     self.refresh_input_line_info();
                     self.schedule_queue_save();
                     self.maybe_auto_start_downloads();
@@ -306,8 +316,12 @@ impl PydlApp {
                     self.maybe_auto_start_downloads();
                 }
                 UiEvent::DownloadLine { item_id, line } => {
-                    if let Some(it) = self.items.iter_mut().find(|x| x.item_id == item_id) {
-                        it.status = ItemStatus::Downloading;
+                    if let Some(idx) = self.item_idx(item_id) {
+                        let old = self.items[idx].status;
+                        if old != ItemStatus::Downloading {
+                            self.set_item_status_at(idx, ItemStatus::Downloading);
+                        }
+                        let it = &mut self.items[idx];
                         let (pct, size) = ytdlp::parse_progress_line(&line);
                         if let Some(p) = pct {
                             it.percent = p.clamp(0.0, 100.0);
@@ -322,7 +336,7 @@ impl PydlApp {
                         it.detail = line.chars().take(160).collect::<String>();
                     }
                     self.maybe_append_download_log(ctx, item_id, &line);
-                    self.update_status();
+                    self.mark_transfer_totals_dirty();
                 }
                 UiEvent::DownloadDone {
                     item_id,
@@ -333,10 +347,9 @@ impl PydlApp {
                         self.download_cancel_flags.remove(&item_id);
                         match post_action {
                             super::CancelPostAction::Ready => {
-                                if let Some(it) =
-                                    self.items.iter_mut().find(|x| x.item_id == item_id)
-                                {
-                                    it.status = ItemStatus::Idle;
+                                if let Some(idx) = self.item_idx(item_id) {
+                                    self.set_item_status_at(idx, ItemStatus::Idle);
+                                    let it = &mut self.items[idx];
                                     it.percent = 0.0;
                                     it.speed_text = "-".to_owned();
                                     it.eta_text = "-".to_owned();
@@ -348,7 +361,6 @@ impl PydlApp {
                             }
                         }
                         self.queue_running = self.queue_running.saturating_sub(1);
-                        self.update_status();
                         self.refresh_input_line_info();
                         self.schedule_queue_save();
                         continue;
@@ -364,12 +376,14 @@ impl PydlApp {
                             self.append_log(&format!("[item {item_id}] {msg}"));
                         }
                     }
-                    if let Some(it) = self.items.iter_mut().find(|x| x.item_id == item_id) {
-                        it.status = if completed {
+                    if let Some(idx) = self.item_idx(item_id) {
+                        let new_status = if completed {
                             ItemStatus::Done
                         } else {
                             ItemStatus::Failed
                         };
+                        self.set_item_status_at(idx, new_status);
+                        let it = &mut self.items[idx];
                         it.percent = if completed { 100.0 } else { it.percent };
                         it.detail = final_detail.clone();
                         if completed {
@@ -391,7 +405,7 @@ impl PydlApp {
                     }
                     self.download_cancel_flags.remove(&item_id);
                     self.queue_running = self.queue_running.saturating_sub(1);
-                    self.update_status();
+                    self.mark_transfer_totals_dirty();
                     self.schedule_queue_save();
                 }
                 UiEvent::UpdateCheckDone {
@@ -499,6 +513,13 @@ impl PydlApp {
             }
         }
         self.drain_pending_thumbnail_uploads(ctx);
+        self.evict_textures_if_needed();
+        if let Some(t0) = t0 {
+            let ms = t0.elapsed().as_secs_f64() * 1000.0;
+            if ms > 8.0 {
+                eprintln!("rustdl profile: process_events {processed} events in {ms:.1}ms");
+            }
+        }
     }
 
     fn drain_pending_thumbnail_uploads(&mut self, ctx: &egui::Context) {

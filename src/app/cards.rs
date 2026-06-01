@@ -4,8 +4,6 @@ use std::time::SystemTime;
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_parsing::parse_item_size_text;
-use crate::app_state::TransferTotals;
 use crate::app_ui::{
     danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
     status_dot_with_label, warning_button, MetaBadgeKind,
@@ -576,6 +574,9 @@ impl PydlApp {
         if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
             return true;
         }
+        if label == "Done" && self.items.len() > 30 {
+            return false;
+        }
         match label {
             "Done" | "Ready" => false,
             "Issues" => true,
@@ -597,10 +598,9 @@ impl PydlApp {
                 .collect();
             if label == "Ready" {
                 ids.sort_by_key(|id| {
-                    self.items
-                        .iter()
-                        .find(|it| it.item_id == *id)
-                        .map(|it| {
+                    self.item_idx(*id)
+                        .map(|idx| {
+                            let it = &self.items[idx];
                             if it.sort_order == 0 {
                                 it.item_id
                             } else {
@@ -637,11 +637,19 @@ impl PydlApp {
                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                 if self.settings.card_list_layout {
                     let allow_reorder = label == "Ready";
-                    for id in &ids {
-                        if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
-                            self.draw_card(ui, idx, allow_reorder);
-                        }
-                    }
+                    const LIST_ROW_H: f32 = 42.0;
+                    let max_h = ui.available_height().min(480.0).max(LIST_ROW_H * 3.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt(format!("rustdl_list_{label}"))
+                        .max_height(max_h)
+                        .auto_shrink([false; 2])
+                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row| {
+                            if let Some(id) = ids.get(row) {
+                                if let Some(idx) = self.item_idx(*id) {
+                                    self.draw_card(ui, idx, allow_reorder);
+                                }
+                            }
+                        });
                 } else {
                     let row_width = ui.available_width();
                     let card_min_w = if row_width < 720.0 { 220.0 } else { 280.0 };
@@ -656,9 +664,7 @@ impl PydlApp {
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                                 for id in &ids {
-                                    if let Some(idx) =
-                                        self.items.iter().position(|it| it.item_id == *id)
-                                    {
+                                    if let Some(idx) = self.item_idx(*id) {
                                         self.draw_card(ui, idx, false);
                                     }
                                 }
@@ -676,20 +682,6 @@ impl PydlApp {
         {
             ui.label(RichText::new("No items match your search.").color(Color32::GRAY));
         }
-    }
-
-    pub(super) fn transfer_totals(&self) -> TransferTotals {
-        let mut totals = TransferTotals::default();
-        for it in &self.items {
-            if let Some((downloaded, total)) = parse_item_size_text(&it.size_text) {
-                totals.downloaded_bytes += downloaded;
-                if let Some(t) = total {
-                    totals.known_total_bytes += t;
-                    totals.with_known_total += 1;
-                }
-            }
-        }
-        totals
     }
 }
 

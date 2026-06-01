@@ -2,44 +2,11 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::app_state::{self, StatusCounts, TransferTotals};
-use crate::models::{ItemStatus, QueueItem};
-use crate::ytdlp;
-
-use super::PydlApp;
-
-const TRANSFER_TOTALS_REFRESH: Duration = Duration::from_millis(500);
-pub(super) const MAX_TEXTURES: usize = 128;
-pub(super) const THUMBNAIL_QUEUE_SOFT_CAP: usize = 50;
-pub(super) const THUMBNAIL_DECODE_MAX_WIDTH: u32 = 320;
-
-pub(super) fn rebuild_item_index_map(items: &[QueueItem]) -> HashMap<u64, usize> {
-    let mut map = HashMap::with_capacity(items.len());
-    for (i, it) in items.iter().enumerate() {
-        map.insert(it.item_id, i);
-    }
-    map
-}
-
-pub(super) fn rebuild_dedupe_keys_set(items: &[QueueItem]) -> HashSet<String> {
-    let mut keys = HashSet::new();
-    for it in items {
-        if it.status == ItemStatus::Resolving {
-            continue;
-        }
-        keys.insert(ytdlp::normalize_url_for_dedupe(&it.source_line));
-        if !it.webpage_url.is_empty() {
-            keys.insert(ytdlp::normalize_url_for_dedupe(&it.webpage_url));
-        }
-        if !it.video_id.is_empty() {
-            keys.insert(format!("vid:{}", it.video_id));
-        }
-    }
-    keys.into_iter().filter(|k| !k.is_empty()).collect()
-}
+use crate::models::ItemStatus;
 
 impl PydlApp {
     pub(super) fn rebuild_item_index(&mut self) {
-        self.item_index_by_id = rebuild_item_index_map(&self.items);
+        self.item_index_by_id = app_state::rebuild_item_index_map(&self.items);
     }
 
     pub(super) fn item_idx(&self, item_id: u64) -> Option<usize> {
@@ -47,7 +14,7 @@ impl PydlApp {
     }
 
     pub(super) fn rebuild_dedupe_keys_cache(&mut self) {
-        self.cached_dedupe_keys = rebuild_dedupe_keys_set(&self.items);
+        self.cached_dedupe_keys = app_state::rebuild_dedupe_keys_set(&self.items);
     }
 
     pub(super) fn dedupe_keys(&self) -> &HashSet<String> {
@@ -116,6 +83,22 @@ impl PydlApp {
             self.last_transfer_totals_at = Some(now);
         }
         self.cached_transfer_totals.clone()
+    }
+
+    pub(super) fn set_item_status_at(&mut self, idx: usize, new: ItemStatus) {
+        let old = self.items[idx].status;
+        if old != new {
+            self.items[idx].status = new;
+            self.apply_status_delta(old, new);
+        }
+    }
+
+    pub(super) fn set_item_status_by_id(&mut self, item_id: u64, new: ItemStatus) -> bool {
+        let Some(idx) = self.item_idx(item_id) else {
+            return false;
+        };
+        self.set_item_status_at(idx, new);
+        true
     }
 
     pub(super) fn mark_transfer_totals_dirty(&mut self) {

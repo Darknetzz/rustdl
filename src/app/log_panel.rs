@@ -10,6 +10,8 @@ use crate::ui_icons;
 
 use super::{InputLineInfo, InputLineKind, PydlApp};
 
+const MAX_LOG_RENDER_LINES: usize = 320;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LogFilter {
     All,
@@ -228,6 +230,13 @@ impl PydlApp {
                 }
                 ui.spacing_mut().item_spacing.y = 3.0;
                 let relative = self.settings.log_relative_time;
+                let filtered: Vec<&String> = self
+                    .log_lines
+                    .iter()
+                    .filter(|line| self.log_filter.accepts(line))
+                    .collect();
+                let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
+                let window = &filtered[start..];
                 egui::ScrollArea::vertical()
                     .max_height(scroll_h)
                     .animated(true)
@@ -235,17 +244,25 @@ impl PydlApp {
                     .stick_to_bottom(self.settings.autoscroll_log)
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
-                        for line in &self.log_lines {
-                            if !self.log_filter.accepts(line) {
-                                continue;
-                            }
+                        if start > 0 {
+                            ui.label(
+                                RichText::new(format!(
+                                    "Showing last {} of {} matching lines",
+                                    window.len(),
+                                    filtered.len()
+                                ))
+                                .small()
+                                .color(text_hint(&self.settings.theme)),
+                            );
+                        }
+                        for line in window {
                             let color = log_line_color(line);
                             let widget = log_line_widget(line, color, ui, relative);
                             let label = egui::Label::new(widget).wrap().selectable(true);
                             let r = ui.add(label);
                             r.context_menu(|ui| {
                                 if ui.button("Copy line").clicked() {
-                                    ui.ctx().copy_text(line.clone());
+                                    ui.ctx().copy_text((*line).clone());
                                     ui.close_menu();
                                 }
                             });

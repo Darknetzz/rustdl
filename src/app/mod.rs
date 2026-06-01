@@ -892,7 +892,7 @@ impl PydlApp {
     }
 
     fn probe_done_item_resolution_if_missing(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         if self.items[idx].width.is_some() && self.items[idx].height.is_some() {
@@ -972,13 +972,15 @@ impl PydlApp {
         for line in lines {
             let iid = self.next_item_id;
             self.next_item_id += 1;
-            self.items
-                .insert(0, QueueItem::pending_metadata(iid, line.clone()));
+            let item = QueueItem::pending_metadata(iid, line.clone());
+            app_state::inc_status_count(&mut self.status_counts, item.status);
+            self.items.insert(0, item);
             self.pending_resolve_ids.insert(line.clone(), iid);
             queued_lines.push(line);
         }
         self.add_total_urls = queued_lines.len();
-        self.update_status();
+        self.sync_status_fields_from_counts();
+        self.invalidate_queue_caches();
         self.schedule_queue_save();
         if queued_lines.is_empty() {
             self.add_in_progress = false;
@@ -1080,7 +1082,7 @@ impl PydlApp {
             self.refresh_deps();
             return;
         }
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         if self.items[idx].status != ItemStatus::Idle {
@@ -1154,7 +1156,7 @@ impl PydlApp {
 
     /// User-triggered check: updates detail and log; does not change status.
     fn check_streams_for_item_id(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         let item = self.items[idx].clone();
@@ -1208,7 +1210,7 @@ impl PydlApp {
             .collect();
         let mut issues = 0usize;
         for item_id in ids {
-            let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+            let Some(idx) = self.item_idx(item_id) else {
                 continue;
             };
             let item = self.items[idx].clone();
@@ -1244,7 +1246,7 @@ impl PydlApp {
         {
             return None;
         }
-        let idx = self.items.iter().position(|x| x.item_id == item_id)?;
+        let idx = self.item_idx(item_id)?;
         let item = &self.items[idx];
         if item.video_id.trim().is_empty() {
             return None;

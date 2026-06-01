@@ -75,9 +75,9 @@ impl PydlApp {
         self.session_complete_notified = false;
 
         for id in &pending_ids {
-            if let Some(it) = self.items.iter_mut().find(|x| x.item_id == *id) {
-                it.status = ItemStatus::Queued;
-                it.detail = "Queued".to_owned();
+            if let Some(idx) = self.item_idx(*id) {
+                self.set_item_status_at(idx, ItemStatus::Queued);
+                self.items[idx].detail = "Queued".to_owned();
             }
         }
         self.update_status();
@@ -145,23 +145,27 @@ impl PydlApp {
     }
 
     pub(super) fn remove_item_by_id(&mut self, item_id: u64) -> bool {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return false;
         };
         if self.items[idx].status == ItemStatus::Resolving {
             self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
         }
+        let item = self.items[idx].clone();
+        app_state::dec_status_count(&mut self.status_counts, item.status);
+        self.sync_status_fields_from_counts();
         self.items.remove(idx);
         self.textures.remove(&item_id);
         self.thumbnail_attempted.remove(&item_id);
         self.thumbnail_inflight.remove(&item_id);
         self.download_cancel_flags.remove(&item_id);
         self.cancel_post_actions.remove(&item_id);
+        self.invalidate_queue_caches();
         true
     }
 
     pub(super) fn request_cancel_item(&mut self, item_id: u64, post_action: CancelPostAction) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         match self.items[idx].status {
@@ -173,8 +177,8 @@ impl PydlApp {
                         "[item {item_id}] Cancelled and removed from queue."
                     ));
                 } else {
+                    self.set_item_status_at(idx, ItemStatus::Idle);
                     let it = &mut self.items[idx];
-                    it.status = ItemStatus::Idle;
                     it.percent = 0.0;
                     it.speed_text = "-".to_owned();
                     it.eta_text = "-".to_owned();
@@ -230,7 +234,7 @@ impl PydlApp {
     }
 
     fn prepare_item_redownload_reset(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         if let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) {
@@ -248,13 +252,13 @@ impl PydlApp {
         {
             let it = &mut self.items[idx];
             it.error = None;
-            it.status = ItemStatus::Idle;
             it.percent = 0.0;
             it.size_text = "-".to_owned();
             it.speed_text = "-".to_owned();
             it.eta_text = "-".to_owned();
             it.detail = "Re-downloading…".to_owned();
         }
+        self.set_item_status_at(idx, ItemStatus::Idle);
     }
 
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
@@ -262,7 +266,7 @@ impl PydlApp {
             self.append_log("Choose a valid output folder.");
             return;
         }
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         if !self.item_has_redownload_target(&self.items[idx]) {
@@ -281,7 +285,7 @@ impl PydlApp {
     }
 
     pub(super) fn retry_download_item_id(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
+        let Some(idx) = self.item_idx(item_id) else {
             return;
         };
         if self.items[idx].status != ItemStatus::Failed {
