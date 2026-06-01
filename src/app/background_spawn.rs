@@ -264,6 +264,21 @@ pub(crate) fn spawn_av1_worker(
                 input: std::path::PathBuf::from(input.source_path),
                 output: std::path::PathBuf::from(output_path),
             };
+            let thumb = tokio::task::spawn_blocking({
+                let cfg = cfg.clone();
+                let input = item.input.clone();
+                move || av1_transcode::extract_thumbnail(&input, &cfg.ffmpeg_path)
+            })
+            .await
+            .ok()
+            .flatten();
+            let _ = try_send_ui(
+                &tx,
+                UiEvent::ThumbnailFetched {
+                    item_id,
+                    image: thumb,
+                },
+            );
             let _ = try_send_ui(
                 &tx,
                 UiEvent::Av1Line {
@@ -295,6 +310,18 @@ pub(crate) fn spawn_av1_worker(
                     );
                 }
                 Ok(Err(e)) => {
+                    let err_text = e.to_string();
+                    if err_text.to_ascii_lowercase().starts_with("skipped") {
+                        let _ = try_send_ui(
+                            &tx,
+                            UiEvent::Av1Done {
+                                item_id,
+                                ok: true,
+                                detail: err_text,
+                            },
+                        );
+                        continue;
+                    }
                     // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
                     if enc.encoder != "libsvtav1" {
                         let _ = try_send_ui(
@@ -341,7 +368,7 @@ pub(crate) fn spawn_av1_worker(
                                         item_id,
                                         ok: false,
                                         detail: format!(
-                                            "Primary encoder failed: {e}\nCPU fallback failed: {retry_err}"
+                                            "Primary encoder failed: {err_text}\nCPU fallback failed: {retry_err}"
                                         ),
                                     },
                                 );
@@ -354,7 +381,7 @@ pub(crate) fn spawn_av1_worker(
                                         item_id,
                                         ok: false,
                                         detail: format!(
-                                            "Primary encoder failed: {e}\nCPU fallback task failed: {retry_join_err}"
+                                            "Primary encoder failed: {err_text}\nCPU fallback task failed: {retry_join_err}"
                                         ),
                                     },
                                 );
@@ -367,7 +394,7 @@ pub(crate) fn spawn_av1_worker(
                         UiEvent::Av1Done {
                             item_id,
                             ok: false,
-                            detail: e.to_string(),
+                            detail: err_text,
                         },
                     );
                 }

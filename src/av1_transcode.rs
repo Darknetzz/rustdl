@@ -3,6 +3,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 
 use anyhow::{anyhow, Result};
+use eframe::egui;
 
 use crate::external_tools::{executable_exists, resolve_executable};
 
@@ -149,6 +150,64 @@ pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
     if text.is_empty() { None } else { Some(text) }
 }
 
+pub fn input_duration_ms(file_path: &Path, ffprobe_path: &str) -> Option<u64> {
+    let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
+    let out = Command::new(ffprobe)
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            &file_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let secs = String::from_utf8_lossy(&out.stdout).trim().parse::<f64>().ok()?;
+    if secs <= 0.0 {
+        return None;
+    }
+    Some((secs * 1000.0) as u64)
+}
+
+pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
+    let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
+    let out = Command::new(ffmpeg)
+        .args([
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-ss",
+            "00:00:01.000",
+            "-i",
+            &file_path.to_string_lossy(),
+            "-frames:v",
+            "1",
+            "-f",
+            "image2pipe",
+            "-vcodec",
+            "png",
+            "pipe:1",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() || out.stdout.is_empty() {
+        return None;
+    }
+    let dyn_img = image::load_from_memory(&out.stdout).ok()?;
+    let rgba = dyn_img.to_rgba8();
+    let size = [rgba.width() as usize, rgba.height() as usize];
+    Some(egui::ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()))
+}
+
 pub fn run_single<F>(
     plan: &Av1PlanItem,
     cfg: &Av1Config,
@@ -161,7 +220,8 @@ where
     if !cfg.reencode_av1 {
         if let Some(codec) = input_codec(&plan.input, &cfg.ffprobe_path) {
             if codec == "av1" && enc.codec == "av1" {
-                return Err(anyhow!("Skipped (already AV1): {}", plan.input.display()));
+                on_line("skip_reason=already AV1 input and re-encode disabled".to_owned());
+                return Err(anyhow!("Skipped: already AV1 ({})", plan.input.display()));
             }
         }
     }

@@ -146,15 +146,28 @@ impl PydlApp {
                 for it in &self.av1_items {
                     ui.group(|ui| {
                         ui.horizontal_wrapped(|ui| {
+                            if let Some(tex) = self.textures.get(&it.item_id) {
+                                ui.add(egui::Image::new(egui::load::SizedTexture::new(
+                                    tex.id(),
+                                    egui::vec2(90.0, 52.0),
+                                )));
+                            }
                             ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            ui.label(match it.status {
+                            let status_text = match it.status {
                                 ItemStatus::Idle => "Idle",
                                 ItemStatus::Queued => "Queued",
                                 ItemStatus::Downloading => "Running",
-                                ItemStatus::Done => "Done",
+                                ItemStatus::Done => {
+                                    if it.detail.to_ascii_lowercase().starts_with("skipped") {
+                                        "Skipped"
+                                    } else {
+                                        "Done"
+                                    }
+                                }
                                 ItemStatus::Failed => "Failed",
                                 ItemStatus::Resolving => "Resolving",
-                            });
+                            };
+                            ui.label(status_text);
                             ui.add(
                                 egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
                                     .desired_width(180.0),
@@ -209,10 +222,14 @@ impl PydlApp {
             return;
         }
         self.av1_items.clear();
+        self.av1_duration_ms.clear();
         let mut jobs = Vec::new();
         for p in plan {
             let item_id = self.av1_next_item_id;
             self.av1_next_item_id = self.av1_next_item_id.saturating_add(1);
+            if let Some(ms) = av1_transcode::input_duration_ms(&p.input, &cfg.ffprobe_path) {
+                self.av1_duration_ms.insert(item_id, ms);
+            }
             self.av1_items.push(Av1QueueItem {
                 item_id,
                 source_path: p.input.to_string_lossy().to_string(),

@@ -81,6 +81,20 @@ fn is_throttled_download_log_line(line: &str) -> bool {
 }
 
 impl PydlApp {
+    fn av1_progress_percent(&self, item_id: u64, line: &str) -> Option<f32> {
+        let Some(total_ms) = self.av1_duration_ms.get(&item_id).copied() else {
+            return None;
+        };
+        if total_ms == 0 {
+            return None;
+        }
+        let Some(ms_text) = line.strip_prefix("out_time_ms=") else {
+            return None;
+        };
+        let current_ms = ms_text.trim().parse::<u64>().ok()?;
+        Some(((current_ms as f64 / total_ms as f64) * 100.0).clamp(0.0, 100.0) as f32)
+    }
+
     pub(super) fn process_events(&mut self, ctx: &egui::Context) {
         let mut processed = 0usize;
         loop {
@@ -276,9 +290,26 @@ impl PydlApp {
                         .push_back((item_id, image));
                 }
                 UiEvent::Av1Line { item_id, line } => {
+                    let pct_from_time = self.av1_progress_percent(item_id, &line);
                     if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
                         it.status = ItemStatus::Downloading;
-                        it.detail = line.chars().take(160).collect();
+                        if let Some(p) = pct_from_time {
+                            it.percent = p;
+                        }
+                        if line == "progress=end" {
+                            it.percent = 100.0;
+                        }
+                        if let Some(s) = line.strip_prefix("speed=") {
+                            it.detail = format!("Encoding speed {}", s.trim());
+                        } else if let Some(t) = line.strip_prefix("out_time=") {
+                            it.detail = format!("Encoded time {}", t.trim());
+                        } else if let Some(t) = line.strip_prefix("out_time_ms=") {
+                            it.detail = format!("Progress: {} ms", t.trim());
+                        } else if let Some(reason) = line.strip_prefix("skip_reason=") {
+                            it.detail = format!("Skipped: {}", reason.trim());
+                        } else {
+                            it.detail = line.chars().take(160).collect();
+                        }
                     }
                     self.append_log(&format!("[av1 {item_id}] {line}"));
                 }
@@ -292,6 +323,7 @@ impl PydlApp {
                         it.percent = if ok { 100.0 } else { it.percent };
                         it.detail = detail.clone();
                     }
+                    self.av1_duration_ms.remove(&item_id);
                     if !ok {
                         self.append_log(&format!("[av1 {item_id}] {detail}"));
                     }
