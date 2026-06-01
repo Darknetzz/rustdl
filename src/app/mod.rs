@@ -18,6 +18,7 @@ use url::Url;
 mod about;
 mod background_spawn;
 mod cards;
+mod eframe_app;
 mod done_file_index;
 mod events;
 mod input_lines;
