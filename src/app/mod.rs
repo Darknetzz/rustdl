@@ -43,7 +43,7 @@ use crate::app_icon;
 use crate::app_parsing::{
     human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob,
 };
-use crate::app_state::{self, StatusCounts, TransferTotals};
+use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot,
     modal_backdrop, secondary_button, status_color, success_button, warning_button,

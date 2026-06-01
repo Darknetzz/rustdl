@@ -1,3 +1,13 @@
+//! Synthetic queue benchmarks for large-list performance regressions.
+//!
+//! Manual GUI profile checklist (set `RUSTDL_PROFILE=1`):
+//!
+//! 1. Empty queue baseline FPS.
+//! 2. Restore/import 200-item queue, list layout, Done group expanded.
+//! 3. Active download with log autoscroll and multiple workers.
+//!
+//! Slow frames (>8ms) log to stderr for `process_events` and `draw_grouped_cards`.
+
 use rustdl::app_state::{
     compute_status_counts, compute_transfer_totals, rebuild_item_index_map, synthetic_queue_items,
 };

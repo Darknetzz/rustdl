@@ -5,7 +5,6 @@ use std::sync::Arc;
 
 use url::Url;
 
-use crate::app_state;
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 use crate::ytdlp_download_args::output_filename_template;

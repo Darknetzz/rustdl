@@ -6,7 +6,6 @@ use eframe::egui;
 use crate::app_parsing::{
     av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready,
 };
-use crate::app_state;
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
