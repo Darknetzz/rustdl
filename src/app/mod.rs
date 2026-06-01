@@ -66,10 +66,9 @@ const ICON_DOWNLOAD: &str = icons::ICON_DOWNLOAD;
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
-    General,
-    Executables,
-    Download,
-    Postprocess,
+    Shared,
+    Downloader,
+    Av1,
 }
 
 #[derive(Clone, Copy)]
@@ -257,7 +256,7 @@ impl PydlApp {
             input_line_info_hold_until: None,
             input_urls_snapshot: String::new(),
             auto_add_after: None,
-            settings_tab: SettingsTab::General,
+            settings_tab: SettingsTab::Shared,
             restored_items_count: 0,
             show_restore_banner: false,
             about_open: false,
