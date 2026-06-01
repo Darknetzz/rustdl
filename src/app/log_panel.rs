@@ -365,18 +365,16 @@ pub(crate) fn draw_precheck_status(
             s
         }
     }
-    let (icon, fg, bg, text) = if ok {
+    let (icon, fg, text) = if ok {
         (
-            "✓",
+            "✔",
             Color32::from_rgb(15, 48, 18),
-            Color32::from_rgb(130, 220, 145),
             "OK",
         )
     } else {
         (
-            "✗",
+            "✖",
             Color32::from_rgb(70, 15, 15),
-            Color32::from_rgb(238, 110, 110),
             "Missing",
         )
     };
@@ -387,23 +385,16 @@ pub(crate) fn draw_precheck_status(
     } else {
         format!("{icon} {tool_name}: {text}")
     };
-    let response = egui::Frame::none()
-        .fill(bg)
-        .rounding(egui::Rounding::same(5.0))
-        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
-        .show(ui, |ui| {
-            ui.add(
-                egui::Label::new(
-                    RichText::new(body)
-                        .small()
-                        .color(fg)
-                        .strong(),
-                )
-                .sense(egui::Sense::hover())
-                .selectable(false),
-            )
-        })
-        .inner;
+    let response = ui.add(
+        egui::Label::new(
+            RichText::new(body)
+                .small()
+                .color(fg)
+                .strong(),
+        )
+        .sense(egui::Sense::hover())
+        .selectable(false),
+    );
     if ok && !v.is_empty() {
         response.on_hover_text(v);
     }

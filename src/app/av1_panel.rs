@@ -22,51 +22,29 @@ impl PydlApp {
             &self.settings.av1_ffprobe_path,
         );
         ui.horizontal_wrapped(|ui| {
-            let ffmpeg_txt = if ffmpeg_ok { "✓ ffmpeg" } else { "✗ ffmpeg" };
+            let ffmpeg_txt = if ffmpeg_ok { "✔ ffmpeg" } else { "✖ ffmpeg" };
             let ffmpeg_fg = if ffmpeg_ok {
                 egui::Color32::from_rgb(15, 48, 18)
             } else {
                 egui::Color32::from_rgb(70, 15, 15)
             };
-            let ffmpeg_bg = if ffmpeg_ok {
-                egui::Color32::from_rgb(130, 220, 145)
-            } else {
-                egui::Color32::from_rgb(238, 110, 110)
-            };
-            egui::Frame::none()
-                .fill(ffmpeg_bg)
-                .rounding(egui::Rounding::same(5.0))
-                .inner_margin(egui::Margin::symmetric(6.0, 2.0))
-                .show(ui, |ui| {
-                    ui.label(
-                        RichText::new(ffmpeg_txt)
-                            .strong()
-                            .color(ffmpeg_fg),
-                    );
-                });
+            ui.label(
+                RichText::new(ffmpeg_txt)
+                    .strong()
+                    .color(ffmpeg_fg),
+            );
             ui.separator();
-            let ffprobe_txt = if ffprobe_ok { "✓ ffprobe" } else { "✗ ffprobe" };
+            let ffprobe_txt = if ffprobe_ok { "✔ ffprobe" } else { "✖ ffprobe" };
             let ffprobe_fg = if ffprobe_ok {
                 egui::Color32::from_rgb(15, 48, 18)
             } else {
                 egui::Color32::from_rgb(70, 15, 15)
             };
-            let ffprobe_bg = if ffprobe_ok {
-                egui::Color32::from_rgb(130, 220, 145)
-            } else {
-                egui::Color32::from_rgb(238, 110, 110)
-            };
-            egui::Frame::none()
-                .fill(ffprobe_bg)
-                .rounding(egui::Rounding::same(5.0))
-                .inner_margin(egui::Margin::symmetric(6.0, 2.0))
-                .show(ui, |ui| {
-                    ui.label(
-                        RichText::new(ffprobe_txt)
-                            .strong()
-                            .color(ffprobe_fg),
-                    );
-                });
+            ui.label(
+                RichText::new(ffprobe_txt)
+                    .strong()
+                    .color(ffprobe_fg),
+            );
         });
         ui.separator();
         ui.label("Input paths (file/folder, one per line)");
