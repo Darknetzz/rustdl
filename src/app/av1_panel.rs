@@ -626,12 +626,25 @@ impl PydlApp {
             if self.queue_group_focus.is_some_and(|f| f != label) {
                 continue;
             }
-            let ids: Vec<u64> = self
+            let mut ids: Vec<u64> = self
                 .av1_items
                 .iter()
                 .filter(|it| Self::av1_item_in_queue_group(it, label))
                 .map(|it| it.item_id)
                 .collect();
+            if label == "Active" {
+                ids.sort_by_key(|id| {
+                    self.av1_items
+                        .iter()
+                        .find(|it| it.item_id == *id)
+                        .map(|it| match it.status {
+                            ItemStatus::Downloading => (0, it.item_id),
+                            ItemStatus::Queued => (1, it.item_id),
+                            _ => (2, it.item_id),
+                        })
+                        .unwrap_or((2, *id))
+                });
+            }
             if ids.is_empty() {
                 continue;
             }
