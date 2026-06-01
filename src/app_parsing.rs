@@ -194,6 +194,9 @@ pub fn urls_from_dropped_os_path(path: &Path) -> Option<Vec<String>> {
 }
 
 pub fn normalize_restored_item(item: &mut QueueItem) {
+    if item.sort_order == 0 {
+        item.sort_order = item.item_id;
+    }
     match item.status {
         ItemStatus::Done | ItemStatus::Failed => {}
         _ => {

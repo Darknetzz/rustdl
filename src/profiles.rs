@@ -215,7 +215,7 @@ pub fn all_profiles(store: &ProfileStore) -> Vec<DownloadProfile> {
     out
 }
 
-pub fn find_profile<'a>(store: &'a ProfileStore, name: &str) -> Option<DownloadProfile> {
+pub fn find_profile(store: &ProfileStore, name: &str) -> Option<DownloadProfile> {
     all_profiles(store)
         .into_iter()
         .find(|p| p.name == name)
@@ -237,6 +237,7 @@ pub fn save_user_profile(store: &mut ProfileStore, profile: DownloadProfile) -> 
     save_profiles(store)
 }
 
+#[allow(dead_code)]
 pub fn delete_user_profile(store: &mut ProfileStore, name: &str) -> Result<()> {
     store.user_profiles.retain(|p| p.name != name);
     save_profiles(store)

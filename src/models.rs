@@ -66,6 +66,8 @@ impl Default for QueueItem {
         }
     }
 }
+
+impl QueueItem {
     pub fn pending_metadata(item_id: u64, source_line: String) -> Self {
         Self {
             item_id,

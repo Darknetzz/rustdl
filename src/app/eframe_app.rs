@@ -56,6 +56,7 @@ impl eframe::App for PydlApp {
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
 
         egui::CentralPanel::default().show(ctx, |ui| {
+                self.sync_theme_if_needed(ctx);
                 ui.horizontal(|ui| {
                     let sz = egui::vec2(40.0, 40.0);
                     let img = ui.add(
@@ -98,17 +99,51 @@ impl eframe::App for PydlApp {
                         });
                     });
                 }
+                if self.settings.show_first_run_hint {
+                    alert_warning(ui, |ui| {
+                        ui.vertical(|ui| {
+                            ui.label(
+                                RichText::new(
+                                    "Welcome to rustdl — set your output folder, confirm yt-dlp is on PATH, \
+                                     and open Settings for download presets and quality options.",
+                                )
+                                .color(ALERT_WARNING_TEXT),
+                            );
+                            ui.horizontal(|ui| {
+                                if warning_button(ui, &format!("{} Open Settings", ui_icons::SETTINGS), true)
+                                    .clicked()
+                                {
+                                    self.settings_open = true;
+                                }
+                                if warning_button(ui, &format!("{} Dismiss", ui_icons::DISMISS), true)
+                                    .clicked()
+                                {
+                                    self.settings.show_first_run_hint = false;
+                                    self.persist_settings();
+                                }
+                            });
+                        });
+                    });
+                }
                 ui.horizontal(|ui| {
                     if secondary_button(
                         ui,
                         &format!("{} Settings", ui_icons::SETTINGS),
                         true,
                     )
+                    .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
                     .clicked()
                     {
                         self.settings_open = true;
                     }
-                    if secondary_button(ui, &format!("{} Logs", ui_icons::LOGS), true).clicked() {
+                    if secondary_button(
+                        ui,
+                        &format!("{} Logs", ui_icons::LOGS),
+                        true,
+                    )
+                    .on_hover_text("View activity log (dock under queue in Settings)")
+                    .clicked()
+                    {
                         self.toggle_logs_panel();
                     }
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
@@ -155,7 +190,7 @@ impl eframe::App for PydlApp {
                             },
                         ));
                         if ui.add(dl).clicked() {
-                            self.av1_mode = false;
+                            self.set_app_mode(false);
                         }
                         let av1 = egui::Button::new(
                             RichText::new(format!("{} AV1 Converter", ui_icons::NAV_AV1))
@@ -181,7 +216,7 @@ impl eframe::App for PydlApp {
                             },
                         ));
                         if ui.add(av1).clicked() {
-                            self.av1_mode = true;
+                            self.set_app_mode(true);
                         }
                     });
                 });
@@ -206,6 +241,23 @@ impl eframe::App for PydlApp {
                 }
 
                 ui.label("URLs (one per line)");
+                #[cfg(not(windows))]
+                {
+                    if secondary_button(ui, &format!("{} Paste URLs", ui_icons::ADD), true).clicked()
+                    {
+                        if let Ok(mut clip) = arboard::Clipboard::new() {
+                            if let Ok(text) = clip.get_text() {
+                                if !text.trim().is_empty() {
+                                    self.extend_input_urls_with_lines(
+                                        parse_urls_from_text_blob(&text),
+                                        Some(ctx.input(|i| i.time)),
+                                    );
+                                    self.refresh_input_line_info();
+                                }
+                            }
+                        }
+                    }
+                }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(
                     [ui.available_width(), 120.0],
@@ -460,6 +512,32 @@ impl eframe::App for PydlApp {
                 // Queue actions + primary download control live above the scroll so they stay
                 // reachable when the window is short (CentralPanel does not scroll as a whole).
                 ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
+                let profiles = crate::profiles::all_profiles(&self.profile_store);
+                if !profiles.is_empty() {
+                    ui.horizontal(|ui| {
+                        ui.label("Profile");
+                        egui::ComboBox::from_id_salt("toolbar_profile")
+                            .selected_text(self.settings.active_profile.clone())
+                            .show_ui(ui, |ui| {
+                                for p in &profiles {
+                                    if ui
+                                        .selectable_value(
+                                            &mut self.settings.active_profile,
+                                            p.name.clone(),
+                                            &p.name,
+                                        )
+                                        .clicked()
+                                    {
+                                        if let Some(prof) =
+                                            crate::profiles::find_profile(&self.profile_store, &p.name)
+                                        {
+                                            self.apply_download_profile(&prof);
+                                        }
+                                    }
+                                }
+                            });
+                    });
+                }
                 ui.horizontal(|ui| {
                     ui.label("Search");
                     let search = ui.add(
@@ -705,22 +783,12 @@ impl eframe::App for PydlApp {
                     });
         });
 
-        let was_settings_open = self.settings_open;
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
         if self.settings.logs_open && !self.settings.logs_docked {
             self.draw_logs_window(ctx);
         }
         self.maybe_notify_session_complete();
-        if was_settings_open && !self.settings_open && self.settings_dirty {
-            self.settings.worker_count = self.worker_count.clamp(1, 6);
-            self.settings.output_dir = self.output_dir.clone();
-            self.persist_settings();
-            trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
-            self.flush_log_to_disk();
-            self.refresh_deps();
-            self.settings_dirty = false;
-        }
 
         self.input_urls_snapshot = self.input_urls.clone();
         self.draw_exit_confirm_dialog(ctx);

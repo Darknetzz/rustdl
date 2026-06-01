@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 use std::process;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -120,7 +120,7 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
     args
 }
 
-pub fn output_template(settings: &AppSettings, output_dir: &str) -> String {
+pub fn output_template(settings: &AppSettings, _output_dir: &str) -> String {
     let template = settings.output_filename_template.trim();
     let template = if template.is_empty() {
         crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE

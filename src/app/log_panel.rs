@@ -4,7 +4,7 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{danger_button, secondary_button};
-use crate::theme::{BG_LOG, BORDER_SUBTLE, TEXT_HINT, TEXT_MUTED};
+use crate::theme::{log_bg, BORDER_SUBTLE, TEXT_HINT, TEXT_MUTED};
 use crate::time_format::{
     format_relative_ago, log_message_body, split_log_line,
 };
@@ -211,7 +211,7 @@ impl PydlApp {
         });
         let scroll_h = ui.available_height().max(80.0);
         egui::Frame::dark_canvas(ui.style())
-            .fill(BG_LOG)
+            .fill(log_bg(&self.settings.theme))
             .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(6.0))

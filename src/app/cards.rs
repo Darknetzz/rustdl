@@ -20,9 +20,9 @@ use super::{
 };
 
 impl PydlApp {
-    pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize) {
+    pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
         if self.settings.card_list_layout {
-            self.draw_card_list(ui, idx);
+            self.draw_card_list(ui, idx, allow_reorder);
             return;
         }
         let id = self.items[idx].item_id;
@@ -67,6 +67,7 @@ impl PydlApp {
         let show_size_badge = is_pre_download && size_text != "-";
 
         let highlight_completed = status == ItemStatus::Done && !done_but_file_missing;
+        let done_fill = theme::done_card_fill(&self.settings.theme);
 
         let card_inner = |ui: &mut egui::Ui| {
             let compact = self.settings.compact_cards;
@@ -497,7 +498,7 @@ impl PydlApp {
 
         if highlight_completed {
             egui::Frame::none()
-                .fill(theme::done_card_fill())
+                .fill(done_fill)
                 .stroke(egui::Stroke::new(
                     2.0,
                     status_color(ItemStatus::Done),
@@ -510,13 +511,19 @@ impl PydlApp {
         }
     }
 
-    fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize) {
+    fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
         let id = self.items[idx].item_id;
         let status = self.items[idx].status;
         let title = ellipsize(&self.items[idx].title, 80);
         let pct = self.items[idx].percent;
         let selected = self.selected_item_ids.contains(&id);
-        ui.horizontal(|ui| {
+        let row_response = ui.horizontal(|ui| {
+            if allow_reorder && status == ItemStatus::Idle {
+                let drag_id = egui::Id::new(("ready_drag", id));
+                let _drag = ui.dnd_drag_source(drag_id, std::sync::Arc::new(id), |ui| {
+                    ui.label(RichText::new("↕").weak());
+                });
+            }
             let mut sel = selected;
             if ui.checkbox(&mut sel, "").changed() {
                 if sel {
@@ -531,6 +538,13 @@ impl PydlApp {
                 ui.add(egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage());
             }
         });
+        if allow_reorder && status == ItemStatus::Idle {
+            if let Some(dragged) = row_response.response.dnd_release_payload::<u64>() {
+                if *dragged != id {
+                    self.reorder_ready_items(*dragged, id);
+                }
+            }
+        }
         ui.separator();
     }
 
@@ -574,12 +588,27 @@ impl PydlApp {
             {
                 continue;
             }
-            let ids: Vec<u64> = self
+            let mut ids: Vec<u64> = self
                 .items
                 .iter()
                 .filter(|it| self.item_in_queue_group(it, label))
                 .map(|it| it.item_id)
                 .collect();
+            if label == "Ready" {
+                ids.sort_by_key(|id| {
+                    self.items
+                        .iter()
+                        .find(|it| it.item_id == *id)
+                        .map(|it| {
+                            if it.sort_order == 0 {
+                                it.item_id
+                            } else {
+                                it.sort_order
+                            }
+                        })
+                        .unwrap_or(*id)
+                });
+            }
             if ids.is_empty() {
                 continue;
             }
@@ -606,13 +635,16 @@ impl PydlApp {
             let (_toggle, header_inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                     if self.settings.card_list_layout {
+                        let allow_reorder = label == "Ready";
                         for id in &ids {
                             if let Some(idx) = self.items.iter().position(|it| it.item_id == *id) {
-                                self.draw_card(ui, idx);
+                                self.draw_card(ui, idx, allow_reorder);
                             }
                         }
                     } else {
                         let row_width = ui.available_width();
+                        let card_min_w = if row_width < 720.0 { 220.0 } else { 280.0 };
+                        let _ = card_min_w;
                         egui::ScrollArea::horizontal()
                             .id_salt(format!("rustdl_cards_{label}"))
                             .auto_shrink([false, false])
@@ -626,7 +658,7 @@ impl PydlApp {
                                         if let Some(idx) =
                                             self.items.iter().position(|it| it.item_id == *id)
                                         {
-                                            self.draw_card(ui, idx);
+                                            self.draw_card(ui, idx, false);
                                         }
                                     }
                                 });

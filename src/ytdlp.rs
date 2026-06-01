@@ -16,7 +16,9 @@ use url::Url;
 use crate::external_tools::{executable_exists, resolve_executable, which};
 use crate::models::VideoPreview;
 
-pub const PLAYLIST_PREVIEW_CAP: usize = 20;
+pub const DEFAULT_PLAYLIST_PREVIEW_CAP: usize = 20;
+/// Default cap when settings do not specify (see [`AppSettings::playlist_preview_cap`]).
+pub const PLAYLIST_PREVIEW_CAP: usize = DEFAULT_PLAYLIST_PREVIEW_CAP;
 /// Prefix on yt-dlp progress lines (also used by headless CLI).
 pub const PROGRESS_PREFIX: &str = "progress:";
 /// Last N stderr lines kept for error messages when yt-dlp exits non-zero.
@@ -574,6 +576,7 @@ fn push_line_tail(deque: &mut VecDeque<String>, line: String) {
     deque.push_back(line);
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn stream_download_with_bins<F>(
     url: &str,
     output_dir: &str,

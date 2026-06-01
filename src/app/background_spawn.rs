@@ -122,6 +122,7 @@ pub(crate) fn spawn_url_resolve_pipeline(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_download_worker(
     rt: &Arc<Runtime>,
     tx: &Sender<UiEvent>,
@@ -194,6 +195,7 @@ pub(crate) fn spawn_download_worker(
                         let retry_res = ytdlp::stream_download_with_bins(
                             &target,
                             &output_dir,
+                            &output_filename_template,
                             &retry_args,
                             &yt_bin,
                             &ffmpeg_path,

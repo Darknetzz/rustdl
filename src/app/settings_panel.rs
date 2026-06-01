@@ -2,6 +2,8 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{secondary_button, warning_button};
+use crate::config::{export_settings_json, import_settings_json, trim_activity_log};
+use crate::profiles::{all_profiles, find_profile, save_user_profile, DownloadProfile};
 use crate::ui_icons;
 
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
@@ -62,6 +64,13 @@ impl PydlApp {
                         format!("{} AV1", ui_icons::TAB_AV1),
                     );
                 });
+                if changed {
+                    ui.label(
+                        RichText::new("Changes save automatically.")
+                            .small()
+                            .color(Color32::GRAY),
+                    );
+                }
                 ui.separator();
                 match self.settings_tab {
                     SettingsTab::Shared => {
@@ -117,6 +126,34 @@ impl PydlApp {
                                 .changed();
                         });
                         ui.horizontal(|ui| {
+                            ui.label("Theme");
+                            egui::ComboBox::from_id_salt("settings_theme")
+                                .selected_text(self.settings.theme.clone())
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.theme,
+                                            "dark".to_owned(),
+                                            "Dark",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.theme,
+                                            "light".to_owned(),
+                                            "Light",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.theme,
+                                            "system".to_owned(),
+                                            "System",
+                                        )
+                                        .changed();
+                                });
+                        });
+                        ui.horizontal(|ui| {
                             ui.label("Max log chars");
                             changed |= ui
                                 .add(
@@ -148,6 +185,72 @@ impl PydlApp {
                             );
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Settings portability").strong());
+                        ui.horizontal_wrapped(|ui| {
+                            if secondary_button(
+                                ui,
+                                &format!("{} Export settings", ui_icons::IMPORT_FILE),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_file_name("rustdl_config_export.json")
+                                    .save_file()
+                                {
+                                    match export_settings_json(&self.settings, &path) {
+                                        Ok(()) => self.append_log(&format!(
+                                            "Exported settings to {}",
+                                            path.to_string_lossy()
+                                        )),
+                                        Err(e) => self.append_log(&format!(
+                                            "Export settings failed: {e:#}"
+                                        )),
+                                    }
+                                }
+                            }
+                            if secondary_button(
+                                ui,
+                                &format!("{} Import settings", ui_icons::IMPORT_FILE),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .pick_file()
+                                {
+                                    match import_settings_json(&path) {
+                                        Ok(imported) => {
+                                            self.settings = imported;
+                                            self.output_dir = self.settings.output_dir.clone();
+                                            self.worker_count =
+                                                self.settings.worker_count.clamp(1, 6);
+                                            self.settings_tab =
+                                                super::settings_tab_from_str(
+                                                    &self.settings.settings_tab,
+                                                );
+                                            changed = true;
+                                            self.append_log(&format!(
+                                                "Imported settings from {}",
+                                                path.to_string_lossy()
+                                            ));
+                                        }
+                                        Err(e) => self.append_log(&format!(
+                                            "Import settings failed: {e:#}"
+                                        )),
+                                    }
+                                }
+                            }
+                            if secondary_button(ui, "Reset to defaults", true).clicked() {
+                                let keep_output = self.settings.output_dir.clone();
+                                self.settings = crate::config::AppSettings::default();
+                                self.settings.output_dir = keep_output.clone();
+                                self.output_dir = keep_output;
+                                changed = true;
+                            }
                         });
                     }
                     SettingsTab::Downloader => {
@@ -182,6 +285,212 @@ impl PydlApp {
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
                         });
+                        ui.separator();
+                        ui.label(RichText::new("Download profile").strong());
+                        let profiles = all_profiles(&self.profile_store);
+                        let active = self.settings.active_profile.clone();
+                        egui::ComboBox::from_id_salt("settings_active_profile")
+                            .selected_text(active.clone())
+                            .show_ui(ui, |ui| {
+                                for p in &profiles {
+                                    if ui
+                                        .selectable_value(
+                                            &mut self.settings.active_profile,
+                                            p.name.clone(),
+                                            &p.name,
+                                        )
+                                        .clicked()
+                                    {
+                                        if let Some(prof) =
+                                            find_profile(&self.profile_store, &p.name)
+                                        {
+                                            prof.apply_to(&mut self.settings);
+                                        }
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        ui.horizontal_wrapped(|ui| {
+                            if secondary_button(ui, "Save current as profile…", true).clicked()
+                            {
+                                self.new_profile_name_buffer = Some(String::new());
+                            }
+                        });
+                        if self.new_profile_name_buffer.is_some() {
+                            let mut name_buf = self
+                                .new_profile_name_buffer
+                                .take()
+                                .unwrap_or_default();
+                            let mut save_clicked = false;
+                            ui.horizontal(|ui| {
+                                ui.label("Profile name");
+                                ui.text_edit_singleline(&mut name_buf);
+                                save_clicked = secondary_button(ui, "Save", !name_buf.trim().is_empty())
+                                    .clicked();
+                            });
+                            if save_clicked {
+                                let name = name_buf.trim().to_owned();
+                                let profile =
+                                    DownloadProfile::from_settings(&name, &self.settings, false);
+                                if let Err(e) =
+                                    save_user_profile(&mut self.profile_store, profile)
+                                {
+                                    self.append_log(&format!("Save profile failed: {e:#}"));
+                                    self.new_profile_name_buffer = Some(name_buf);
+                                } else {
+                                    self.settings.active_profile = name.clone();
+                                    self.append_log(&format!("Saved profile: {name}"));
+                                    changed = true;
+                                }
+                            } else {
+                                self.new_profile_name_buffer = Some(name_buf);
+                            }
+                        }
+                        ui.separator();
+                        ui.label(RichText::new("User profiles file").strong());
+                        ui.horizontal_wrapped(|ui| {
+                            if secondary_button(ui, "Export profiles", true).clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_file_name("rustdl_profiles.json")
+                                    .save_file()
+                                {
+                                    if let Err(e) = crate::profiles::export_profiles_json(
+                                        &self.profile_store,
+                                        &path,
+                                    ) {
+                                        self.append_log(&format!("Export profiles failed: {e:#}"));
+                                    } else {
+                                        self.append_log(&format!(
+                                            "Exported profiles to {}",
+                                            path.to_string_lossy()
+                                        ));
+                                    }
+                                }
+                            }
+                            if secondary_button(ui, "Import profiles", true).clicked() {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .pick_file()
+                                {
+                                    match crate::profiles::import_profiles_json(&path) {
+                                        Ok(imported) => {
+                                            self.profile_store = imported;
+                                            self.append_log(&format!(
+                                                "Imported profiles from {}",
+                                                path.to_string_lossy()
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            self.append_log(&format!(
+                                                "Import profiles failed: {e:#}"
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Output and quality").strong());
+                        ui.label("Output filename template (-o)");
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(
+                                    &mut self.settings.output_filename_template,
+                                )
+                                .hint_text(crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE),
+                            )
+                            .changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Quality preset");
+                            egui::ComboBox::from_id_salt("settings_quality_preset")
+                                .selected_text(self.settings.quality_preset.clone())
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in [
+                                        ("best", "Best"),
+                                        ("1080p", "1080p max"),
+                                        ("720p", "720p max"),
+                                        ("audio", "Audio best"),
+                                        ("custom", "Custom (-f)"),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.quality_preset,
+                                                v.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                        });
+                        if self.settings.quality_preset == "custom" {
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.quality_format_custom,
+                                    )
+                                    .hint_text("bestvideo+bestaudio/best"),
+                                )
+                                .changed();
+                        }
+                        ui.horizontal(|ui| {
+                            ui.label("Merge container");
+                            egui::ComboBox::from_id_salt("settings_merge_container")
+                                .selected_text(self.settings.merge_container.clone())
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in [
+                                        ("default", "Default"),
+                                        ("mp4", "MP4"),
+                                        ("mkv", "MKV"),
+                                        ("webm", "WebM"),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.merge_container,
+                                                v.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Playlist preview limit");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.playlist_preview_cap)
+                                        .range(1_usize..=500_usize),
+                                )
+                                .changed();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Network and archive").strong());
+                        ui.label("Download archive file (--download-archive)");
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_download_archive)
+                                    .hint_text("optional path"),
+                            )
+                            .changed();
+                        ui.label("Proxy URL (--proxy)");
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_proxy)
+                                    .hint_text("http://127.0.0.1:8080"),
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.yt_sponsorblock_remove,
+                                "Remove SponsorBlock segments",
+                            )
+                            .changed();
+                        ui.label("SponsorBlock mark categories (--sponsorblock-mark)");
+                        changed |= ui
+                            .add(
+                                egui::TextEdit::singleline(&mut self.settings.yt_sponsorblock_mark)
+                                    .hint_text("sponsor,intro (leave empty to disable)"),
+                            )
+                            .changed();
                         ui.separator();
                         ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
@@ -523,6 +832,39 @@ impl PydlApp {
                                         .changed();
                                 });
                         });
+                        ui.horizontal(|ui| {
+                            ui.label("Encoder override");
+                            egui::ComboBox::from_id_salt("settings_av1_encoder")
+                                .selected_text(if self.settings.av1_encoder_override.is_empty() {
+                                    "Auto".to_owned()
+                                } else {
+                                    self.settings.av1_encoder_override.clone()
+                                })
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.av1_encoder_override,
+                                            String::new(),
+                                            "Auto",
+                                        )
+                                        .changed();
+                                    for enc in [
+                                        "av1_nvenc",
+                                        "av1_amf",
+                                        "hevc_nvenc",
+                                        "hevc_amf",
+                                        "libsvtav1",
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.av1_encoder_override,
+                                                enc.to_owned(),
+                                                enc,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                        });
                     }
                 }
             });
@@ -534,9 +876,14 @@ impl PydlApp {
             self.settings.yt_dlp_retry_count = self.settings.yt_dlp_retry_count.clamp(1, 999);
             self.settings.worker_count = self.worker_count.clamp(1, 6);
             self.settings.output_dir = self.output_dir.clone();
-            self.settings_dirty = true;
+            self.settings.playlist_preview_cap = self.settings.playlist_preview_cap.clamp(1, 500);
+            self.settings.av1_max_width = self.settings.av1_max_width.clamp(320, 7680);
+            self.settings.av1_min_shrink_percent =
+                self.settings.av1_min_shrink_percent.clamp(0.0, 95.0);
+            trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
+            self.persist_settings();
+            self.flush_log_to_disk();
             if executable_paths_changed {
-                // Keep dependency indicators responsive while editing executable paths.
                 self.refresh_deps();
             }
         }

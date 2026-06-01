@@ -453,7 +453,7 @@ pub fn profiles_file_path() -> PathBuf {
     rustdl_config_dir().join("rustdl_profiles.json")
 }
 
-fn profiles_path() -> PathBuf {
+pub(crate) fn profiles_path() -> PathBuf {
     if dirs::config_dir().is_some() {
         profiles_file_path()
     } else {

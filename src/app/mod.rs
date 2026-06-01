@@ -47,15 +47,12 @@ use crate::app_ui::{
     status_color, success_button, warning_button, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    activity_log_file_path, default_downloads, export_queue_urls, import_settings_json,
-    load_activity_log, load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
+    activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
+    load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
     save_activity_log, save_av1_queue_snapshot, save_queue_items, save_settings, trim_activity_log,
-    export_settings_json, AppSettings, Av1QueueSnapshot,
+    AppSettings, Av1QueueSnapshot,
 };
-use crate::profiles::{
-    all_profiles, delete_user_profile, find_profile, load_profiles, save_user_profile,
-    DownloadProfile, ProfileStore,
-};
+use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
 use crate::models::Av1QueueItem;
@@ -65,13 +62,13 @@ use crate::ytdlp;
 
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum SettingsTab {
+pub(super) enum SettingsTab {
     Shared,
     Downloader,
     Av1,
 }
 
-fn settings_tab_from_str(s: &str) -> SettingsTab {
+pub(super) fn settings_tab_from_str(s: &str) -> SettingsTab {
     match s.trim().to_ascii_lowercase().as_str() {
         "downloader" => SettingsTab::Downloader,
         "av1" => SettingsTab::Av1,
@@ -79,7 +76,7 @@ fn settings_tab_from_str(s: &str) -> SettingsTab {
     }
 }
 
-fn settings_tab_to_str(tab: SettingsTab) -> &'static str {
+pub(super) fn settings_tab_to_str(tab: SettingsTab) -> &'static str {
     match tab {
         SettingsTab::Shared => "shared",
         SettingsTab::Downloader => "downloader",
@@ -127,6 +124,7 @@ pub struct PydlApp {
     settings_open: bool,
     profile_store: ProfileStore,
     applied_theme: String,
+    new_profile_name_buffer: Option<String>,
 
     items: Vec<QueueItem>,
     pending_resolve_ids: HashMap<String, u64>,
@@ -282,6 +280,7 @@ impl PydlApp {
             settings_open: false,
             profile_store,
             applied_theme,
+            new_profile_name_buffer: None,
             items: restored_items,
             pending_resolve_ids: HashMap::new(),
             textures: HashMap::new(),
@@ -393,8 +392,65 @@ impl PydlApp {
         }
     }
 
+    #[allow(dead_code)]
     pub fn apply_ui_smoothness(ctx: &egui::Context) {
         theme::apply_ui_theme(ctx, "dark");
+    }
+
+    pub(super) fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) {
+        if dragged_id == target_id {
+            return;
+        }
+        let Some(dragged_order) = self
+            .items
+            .iter()
+            .find(|it| it.item_id == dragged_id)
+            .map(|it| if it.sort_order == 0 { it.item_id } else { it.sort_order })
+        else {
+            return;
+        };
+        let Some(target_order) = self
+            .items
+            .iter()
+            .find(|it| it.item_id == target_id)
+            .map(|it| if it.sort_order == 0 { it.item_id } else { it.sort_order })
+        else {
+            return;
+        };
+        if dragged_order < target_order {
+            for it in &mut self.items {
+                if it.status != ItemStatus::Idle {
+                    continue;
+                }
+                let order = if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                };
+                if it.item_id == dragged_id {
+                    it.sort_order = target_order;
+                } else if order > dragged_order && order <= target_order {
+                    it.sort_order = order.saturating_sub(1);
+                }
+            }
+        } else {
+            for it in &mut self.items {
+                if it.status != ItemStatus::Idle {
+                    continue;
+                }
+                let order = if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                };
+                if it.item_id == dragged_id {
+                    it.sort_order = target_order;
+                } else if order >= target_order && order < dragged_order {
+                    it.sort_order = order.saturating_add(1);
+                }
+            }
+        }
+        self.schedule_queue_save();
     }
 
     pub(super) fn sync_theme_if_needed(&mut self, ctx: &egui::Context) {
@@ -718,6 +774,7 @@ impl PydlApp {
     pub(super) fn persist_settings(&mut self) {
         self.settings.output_dir = self.output_dir.clone();
         self.settings.worker_count = self.worker_count.clamp(1, 6);
+        self.settings.settings_tab = settings_tab_to_str(self.settings_tab).to_owned();
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
@@ -953,6 +1010,10 @@ impl PydlApp {
     fn apply_preset(&mut self, preset: DownloadPreset) {
         match preset {
             DownloadPreset::BestQuality => {
+                if let Some(p) = find_profile(&self.profile_store, "Best quality") {
+                    self.apply_download_profile(&p);
+                    return;
+                }
                 self.settings.ffmpeg_extract_audio_mp3 = false;
                 self.settings.ffmpeg_remux_mp4 = false;
                 self.settings.ffmpeg_faststart = true;
@@ -961,12 +1022,20 @@ impl PydlApp {
                 self.settings.yt_dlp_extra_args = "--merge-output-format mp4".to_owned();
             }
             DownloadPreset::AudioOnly => {
+                if let Some(p) = find_profile(&self.profile_store, "Audio only") {
+                    self.apply_download_profile(&p);
+                    return;
+                }
                 self.settings.ffmpeg_extract_audio_mp3 = true;
                 self.settings.ffmpeg_remux_mp4 = false;
                 self.settings.ffmpeg_faststart = false;
                 self.settings.yt_dlp_extra_args = String::new();
             }
             DownloadPreset::FastDownload => {
+                if let Some(p) = find_profile(&self.profile_store, "Fast download") {
+                    self.apply_download_profile(&p);
+                    return;
+                }
                 self.settings.ffmpeg_extract_audio_mp3 = false;
                 self.settings.ffmpeg_remux_mp4 = false;
                 self.settings.ffmpeg_faststart = false;
@@ -974,13 +1043,23 @@ impl PydlApp {
                 self.settings.yt_dlp_extra_args = "--concurrent-fragments 4".to_owned();
             }
             DownloadPreset::ArchiveMode => {
+                if let Some(p) = find_profile(&self.profile_store, "Archive mode") {
+                    self.apply_download_profile(&p);
+                    return;
+                }
                 self.settings.yt_write_info_json = true;
                 self.settings.yt_embed_metadata = true;
                 self.settings.yt_write_auto_subs = true;
                 self.settings.yt_dlp_extra_args = "--write-description".to_owned();
             }
         }
-        self.settings_dirty = true;
+        self.settings.active_profile = match preset {
+            DownloadPreset::BestQuality => "Best quality",
+            DownloadPreset::AudioOnly => "Audio only",
+            DownloadPreset::FastDownload => "Fast download",
+            DownloadPreset::ArchiveMode => "Archive mode",
+        }
+        .to_owned();
         self.persist_settings();
     }
 
@@ -1186,6 +1265,7 @@ impl PydlApp {
             &self.tx,
             yt_dlp_bin,
             metadata_args,
+            self.settings.playlist_preview_cap,
             queued_lines,
         );
     }
@@ -1225,11 +1305,21 @@ impl PydlApp {
     }
 
     fn collect_idle_download_item_ids(&self) -> Vec<u64> {
-        self.items
+        let mut ids: Vec<(u64, u64)> = self
+            .items
             .iter()
             .filter(|it| it.status == ItemStatus::Idle && it.error.is_none())
-            .map(|it| it.item_id)
-            .collect()
+            .map(|it| {
+                let order = if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                };
+                (order, it.item_id)
+            })
+            .collect();
+        ids.sort_by_key(|(order, _)| *order);
+        ids.into_iter().map(|(_, id)| id).collect()
     }
 
     fn spawn_download_workers(&mut self, pending_ids: Vec<u64>) {
@@ -1260,6 +1350,7 @@ impl PydlApp {
         let download_args = self.download_extra_args();
         let yt_dlp_bin = self.yt_dlp_bin();
         let ffmpeg_bin = self.ffmpeg_bin();
+        let output_template = self.output_filename_template();
 
         for ids in groups.into_iter().filter(|g| !g.is_empty()) {
             self.queue_running += 1;
@@ -1285,6 +1376,7 @@ impl PydlApp {
                 &self.runtime,
                 &self.tx,
                 self.output_dir.clone(),
+                output_template.clone(),
                 download_args.clone(),
                 yt_dlp_bin.clone(),
                 ffmpeg_bin.clone(),
@@ -1507,6 +1599,7 @@ impl PydlApp {
             &self.tx,
             yt_dlp_bin,
             metadata_args,
+            self.settings.playlist_preview_cap,
             vec![line],
         );
     }

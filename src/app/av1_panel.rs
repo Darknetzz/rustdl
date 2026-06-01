@@ -11,7 +11,7 @@ use crate::app_ui::{
 };
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
-use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
+use crate::theme::{self, canvas_bg, panel_border, text_muted};
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -194,6 +194,9 @@ impl PydlApp {
             reencode_av1: self.settings.av1_reencode_av1,
             target_bitrate: self.settings.av1_target_bitrate.clone(),
             max_width: self.settings.av1_max_width,
+            size_preset: self.settings.av1_size_preset.clone(),
+            min_shrink_percent: self.settings.av1_min_shrink_percent,
+            encoder_override: self.settings.av1_encoder_override.clone(),
         }
     }
 
@@ -369,52 +372,37 @@ impl PydlApp {
             self.schedule_av1_queue_save();
         }
         ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut self.settings.av1_recursive, "Recursive");
-            ui.checkbox(&mut self.settings.av1_dry_run, "Dry run");
-            ui.checkbox(&mut self.settings.av1_delete_original, "Delete original");
-            ui.checkbox(&mut self.settings.av1_rename_original, "Rename to original name")
-                .on_hover_text(
-                    "After success, rename the encoded file back to the source filename \
-                     (same folder as output). Use with Delete original for in-place replacement.",
-                );
-            ui.checkbox(&mut self.settings.av1_overwrite, "Overwrite");
-            ui.checkbox(&mut self.settings.av1_reencode_av1, "Re-encode AV1");
+            ui.label(RichText::new("Session").strong());
+            if ui
+                .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
+                .changed()
+            {
+                self.persist_settings();
+            }
         });
         ui.horizontal_wrapped(|ui| {
-            ui.label("Target bitrate");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.settings.av1_target_bitrate)
-                    .desired_width(90.0)
-                    .hint_text("auto"),
-            );
-            ui.label("Max width");
-            ui.add(egui::DragValue::new(&mut self.settings.av1_max_width).range(320..=7680));
-            ui.label("Min shrink %");
-            ui.add(
-                egui::DragValue::new(&mut self.settings.av1_min_shrink_percent)
-                    .speed(0.5)
-                    .range(0.0..=95.0),
-            );
-            ui.label("Preset");
-            egui::ComboBox::from_id_salt("av1_size_preset")
-                .selected_text(self.settings.av1_size_preset.clone())
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(
-                        &mut self.settings.av1_size_preset,
-                        "light".to_owned(),
-                        "light",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.av1_size_preset,
-                        "balanced".to_owned(),
-                        "balanced",
-                    );
-                    ui.selectable_value(
-                        &mut self.settings.av1_size_preset,
-                        "aggressive".to_owned(),
-                        "aggressive",
-                    );
-                });
+            ui.label(RichText::new("Encode settings").small());
+            let br = if self.settings.av1_target_bitrate.trim().is_empty() {
+                "auto".to_owned()
+            } else {
+                self.settings.av1_target_bitrate.clone()
+            };
+            ui.label(format!(
+                "Bitrate: {br} · Max width: {} · Preset: {} · Min shrink: {:.0}%",
+                self.settings.av1_max_width,
+                self.settings.av1_size_preset,
+                self.settings.av1_min_shrink_percent,
+            ));
+            if secondary_button(
+                ui,
+                &format!("{} Edit in Settings", ui_icons::SETTINGS),
+                true,
+            )
+            .clicked()
+            {
+                self.settings_open = true;
+                self.settings_tab = super::SettingsTab::Av1;
+            }
         });
         ui.horizontal_wrapped(|ui| {
             let ready_count = self
@@ -453,24 +441,21 @@ impl PydlApp {
             {
                 self.clear_av1_queue();
             }
-            if secondary_button(
-                ui,
-                &format!("{} Save AV1 settings", ui_icons::SAVE),
-                true,
-            )
-            .clicked()
-            {
-                self.persist_settings();
-            }
         });
         const RESERVE_BOTTOM_PX: f32 = 20.0;
-        const MIN_QUEUE_VIEWPORT: f32 = 260.0;
+        const MIN_QUEUE_VIEWPORT: f32 = 220.0;
+        let dock_log = self.settings.logs_docked;
+        let log_h = if dock_log {
+            self.settings.log_dock_height.clamp(80.0, 480.0) + 36.0
+        } else {
+            0.0
+        };
         let queue_scroll_h =
-            (ui.available_height() - RESERVE_BOTTOM_PX).max(MIN_QUEUE_VIEWPORT);
+            (ui.available_height() - RESERVE_BOTTOM_PX - log_h).max(MIN_QUEUE_VIEWPORT);
 
         egui::Frame::dark_canvas(ui.style())
-            .fill(BG_CANVAS)
-            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .fill(canvas_bg(&self.settings.theme))
+            .stroke(egui::Stroke::new(1.0, panel_border(&self.settings.theme)))
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
@@ -492,7 +477,10 @@ impl PydlApp {
                         if self.av1_items.is_empty() {
                             ui.vertical_centered(|ui| {
                                 ui.add_space(32.0);
-                                ui.label(RichText::new("Nothing here yet").color(TEXT_MUTED));
+                                ui.label(
+                                    RichText::new("Nothing here yet")
+                                        .color(text_muted(&self.settings.theme)),
+                                );
                                 ui.label(
                                     RichText::new(
                                         "Browse, drop, or scan paths to add videos to the queue.",
@@ -505,6 +493,17 @@ impl PydlApp {
                         self.draw_av1_grouped_cards(ui);
                     });
             });
+        if dock_log {
+            ui.add_space(6.0);
+            ui.label(RichText::new("Activity log").small().strong());
+            if ui
+                .add(egui::Slider::new(&mut self.settings.log_dock_height, 80.0..=480.0))
+                .changed()
+            {
+                self.persist_settings();
+            }
+            self.draw_activity_log_panel(ui);
+        }
     }
 
     fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
@@ -590,7 +589,7 @@ impl PydlApp {
 
     fn draw_av1_queue_status_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Queue:").color(TEXT_MUTED));
+            ui.label(RichText::new("Queue:").color(text_muted(&self.settings.theme)));
             let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
             let ready = self
                 .av1_items
@@ -686,7 +685,7 @@ impl PydlApp {
                 0.0
             };
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Summary:").color(TEXT_MUTED));
+                ui.label(RichText::new("Summary:").color(text_muted(&self.settings.theme)));
                 ui.label(
                     RichText::new(format!(
                         "{} completed · {} -> {} · saved {} ({pct:.1}%)",
@@ -701,7 +700,9 @@ impl PydlApp {
         }
         if batch.pending_input_bytes > 0 {
             ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Pending input:").color(TEXT_MUTED));
+                ui.label(
+                    RichText::new("Pending input:").color(text_muted(&self.settings.theme)),
+                );
                 ui.label(human_bytes_ui(batch.pending_input_bytes));
             });
         }
@@ -725,11 +726,9 @@ impl PydlApp {
                 .desired_width(180.0)
                 .show_percentage()
                 .animate(it.status == ItemStatus::Downloading);
-            if it.status == ItemStatus::Done && !av1_item_is_skipped(it) {
-                pb = pb.fill(item_color);
-            } else if it.status == ItemStatus::Failed {
-                pb = pb.fill(item_color);
-            } else if it.status == ItemStatus::Downloading {
+            if matches!(it.status, ItemStatus::Failed | ItemStatus::Downloading)
+                || (it.status == ItemStatus::Done && !av1_item_is_skipped(it))
+            {
                 pb = pb.fill(item_color);
             }
             ui.add(pb);
@@ -742,7 +741,7 @@ impl PydlApp {
                 .color(if av1_item_has_media(it) {
                     egui::Color32::from_rgb(180, 200, 220)
                 } else {
-                    TEXT_MUTED
+                    text_muted(&self.settings.theme)
                 }),
         );
         ui.label(format!("in: {}", it.source_path));

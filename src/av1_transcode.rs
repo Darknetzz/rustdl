@@ -59,6 +59,18 @@ pub struct Av1PlanItem {
     pub output: PathBuf,
 }
 
+fn known_encoder(name: &str) -> Option<&'static str> {
+    match name.trim() {
+        "av1_nvenc" => Some("av1_nvenc"),
+        "av1_amf" => Some("av1_amf"),
+        "hevc_nvenc" => Some("hevc_nvenc"),
+        "hevc_amf" => Some("hevc_amf"),
+        "libsvtav1" => Some("libsvtav1"),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
 pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
     detect_encoder_with_override(ffmpeg_path, "")
 }
@@ -66,19 +78,16 @@ pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
 pub fn detect_encoder_with_override(ffmpeg_path: &str, override_enc: &str) -> EncoderChoice {
     let override_enc = override_enc.trim();
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
-    if !override_enc.is_empty()
-        && encoder_supported(&ffmpeg, override_enc)
-        && encoder_usable(&ffmpeg, override_enc)
-    {
-        return EncoderChoice {
-            encoder: override_enc,
-            codec: if override_enc.contains("hevc") {
-                "hevc"
-            } else {
-                "av1"
-            },
-            hw_type: hw_type_for_encoder(override_enc),
-        };
+    if !override_enc.is_empty() {
+        if let Some(enc) = known_encoder(override_enc) {
+            if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
+                return EncoderChoice {
+                    encoder: enc,
+                    codec: if enc.contains("hevc") { "hevc" } else { "av1" },
+                    hw_type: hw_type_for_encoder(enc),
+                };
+            }
+        }
     }
     for enc in ["av1_nvenc", "av1_amf", "hevc_nvenc", "hevc_amf", "libsvtav1"] {
         if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {

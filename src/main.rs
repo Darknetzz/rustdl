@@ -31,10 +31,8 @@ const VIEWPORT_MIN_INNER: [f32; 2] = [920.0, 760.0];
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if !args.is_empty() {
-        if cli::run_cli_or_exit(args) {
-            return;
-        }
+    if !args.is_empty() && cli::run_cli_or_exit(args) {
+        return;
     }
 
     let runtime = match Runtime::new() {
