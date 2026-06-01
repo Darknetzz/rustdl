@@ -113,6 +113,38 @@ fn hw_type_for_encoder(encoder: &str) -> &'static str {
     }
 }
 
+pub fn encoder_uses_hardware(enc: &EncoderChoice) -> bool {
+    enc.hw_type != "cpu"
+}
+
+pub fn encoder_hw_vendor_label(hw_type: &str) -> &'static str {
+    match hw_type {
+        "nvidia" => "NVIDIA",
+        "amd" => "AMD",
+        _ => "CPU",
+    }
+}
+
+pub fn encoder_indicator_label(enc: &EncoderChoice) -> String {
+    if encoder_uses_hardware(enc) {
+        format!(
+            "GPU · {} ({})",
+            enc.encoder,
+            encoder_hw_vendor_label(enc.hw_type)
+        )
+    } else {
+        format!("CPU · {}", enc.encoder)
+    }
+}
+
+pub fn encoder_indicator_color(enc: &EncoderChoice) -> egui::Color32 {
+    match enc.hw_type {
+        "nvidia" => egui::Color32::from_rgb(118, 185, 0),
+        "amd" => egui::Color32::from_rgb(237, 28, 36),
+        _ => egui::Color32::from_rgb(130, 145, 160),
+    }
+}
+
 fn encoder_supported(ffmpeg_bin: &str, encoder: &str) -> bool {
     let Ok(out) = Command::new(ffmpeg_bin)
         .arg("-hide_banner")
@@ -761,6 +793,25 @@ mod tests {
         let vf = build_video_filter_chain("nvidia", 1920, "nv12");
         assert!(vf.contains("format=nv12"));
         assert!(vf.contains("setsar=1"));
+    }
+
+    #[test]
+    fn encoder_indicator_label_distinguishes_gpu_and_cpu() {
+        let gpu = EncoderChoice {
+            encoder: "av1_nvenc",
+            codec: "av1",
+            hw_type: "nvidia",
+        };
+        assert_eq!(
+            encoder_indicator_label(&gpu),
+            "GPU · av1_nvenc (NVIDIA)"
+        );
+        let cpu = EncoderChoice {
+            encoder: "libsvtav1",
+            codec: "av1",
+            hw_type: "cpu",
+        };
+        assert_eq!(encoder_indicator_label(&cpu), "CPU · libsvtav1");
     }
 
     #[test]

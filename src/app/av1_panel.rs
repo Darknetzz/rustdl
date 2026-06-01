@@ -218,7 +218,31 @@ fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
     };
 }
 
+fn av1_encoder_detect_key(ffmpeg_path: &str, encoder_override: &str) -> String {
+    format!("{ffmpeg_path}\0{encoder_override}")
+}
+
 impl PydlApp {
+    pub(super) fn refresh_av1_encoder_detection(&mut self) {
+        if !self.has_ffmpeg {
+            self.av1_encoder_choice = None;
+            self.av1_encoder_detect_key.clear();
+            return;
+        }
+        let key = av1_encoder_detect_key(
+            &self.settings.ffmpeg_path,
+            &self.settings.av1_encoder_override,
+        );
+        if self.av1_encoder_detect_key == key {
+            return;
+        }
+        self.av1_encoder_choice = Some(av1_transcode::detect_encoder_with_override(
+            &self.settings.ffmpeg_path,
+            &self.settings.av1_encoder_override,
+        ));
+        self.av1_encoder_detect_key = key;
+    }
+
     pub(super) fn av1_config(&self) -> Av1Config {
         Av1Config {
             ffmpeg_path: self.settings.ffmpeg_path.clone(),
@@ -418,6 +442,7 @@ impl PydlApp {
                 self.persist_settings();
             }
         });
+        self.refresh_av1_encoder_detection();
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Encode settings").small());
             let br = if self.settings.av1_target_bitrate.trim().is_empty() {
@@ -431,6 +456,21 @@ impl PydlApp {
                 self.settings.av1_size_preset,
                 self.settings.av1_min_shrink_percent,
             ));
+            if let Some(enc) = &self.av1_encoder_choice {
+                status_dot_with_label(
+                    ui,
+                    av1_transcode::encoder_indicator_label(enc),
+                    av1_transcode::encoder_indicator_color(enc),
+                    true,
+                );
+            } else if !self.has_ffmpeg {
+                status_dot_with_label(
+                    ui,
+                    "Encoder: ffmpeg not found",
+                    Color32::from_rgb(255, 193, 120),
+                    true,
+                );
+            }
             if secondary_button(
                 ui,
                 &format!("{} Edit in Settings", ui_icons::SETTINGS),

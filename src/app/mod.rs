@@ -180,6 +180,8 @@ pub struct PydlApp {
     av1_next_item_id: u64,
     av1_running: bool,
     av1_cancel_flag: Arc<AtomicBool>,
+    av1_encoder_choice: Option<crate::av1_transcode::EncoderChoice>,
+    av1_encoder_detect_key: String,
 
     done_file_index: done_file_index::DoneFileIndex,
     /// Suppress repeat log spam when output index hits [`DONE_LOOKUP_MAX_ENTRIES`].
@@ -328,6 +330,8 @@ impl PydlApp {
             av1_next_item_id,
             av1_running: false,
             av1_cancel_flag: Arc::new(AtomicBool::new(false)),
+            av1_encoder_choice: None,
+            av1_encoder_detect_key: String::new(),
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             http_client,
@@ -749,6 +753,7 @@ impl PydlApp {
         } else {
             String::new()
         };
+        self.refresh_av1_encoder_detection();
     }
 
     fn append_log(&mut self, message: &str) {
