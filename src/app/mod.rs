@@ -23,6 +23,7 @@ mod eframe_app;
 mod events;
 mod input_lines;
 mod log_panel;
+mod queue_cache;
 mod queue_persist;
 mod settings_panel;
 mod thumbnails;
@@ -42,7 +43,7 @@ use crate::app_icon;
 use crate::app_parsing::{
     human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob,
 };
-use crate::app_state::{self};
+use crate::app_state::{self, StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot,
     modal_backdrop, secondary_button, status_color, success_button, warning_button,
@@ -116,6 +117,12 @@ pub struct PydlApp {
     status_active: usize,
     status_done: usize,
     status_failed: usize,
+    status_counts: StatusCounts,
+    item_index_by_id: HashMap<u64, usize>,
+    cached_dedupe_keys: HashSet<String>,
+    cached_transfer_totals: TransferTotals,
+    transfer_totals_dirty: bool,
+    last_transfer_totals_at: Option<Instant>,
     has_yt_dlp: bool,
     has_ffmpeg: bool,
     has_ffprobe: bool,
@@ -280,6 +287,12 @@ impl PydlApp {
             status_active: 0,
             status_done: 0,
             status_failed: 0,
+            status_counts: StatusCounts::default(),
+            item_index_by_id: HashMap::new(),
+            cached_dedupe_keys: HashSet::new(),
+            cached_transfer_totals: TransferTotals::default(),
+            transfer_totals_dirty: true,
+            last_transfer_totals_at: None,
             has_yt_dlp: false,
             has_ffmpeg: false,
             has_ffprobe: false,
@@ -374,7 +387,8 @@ impl PydlApp {
         }
         app.refresh_deps();
         app.queue_av1_restored_assets();
-        app.update_status();
+        app.recompute_status();
+        app.invalidate_queue_caches();
         app.refresh_input_line_info();
         app
     }
@@ -648,6 +662,9 @@ impl PydlApp {
     }
 
     fn poll_done_file_lookup(&mut self) {
+        if !self.should_poll_done_lookup() {
+            return;
+        }
         const INTERVAL: Duration = Duration::from_millis(400);
         let now = Instant::now();
         let should_poll = match self.last_done_lookup_poll {
@@ -896,33 +913,6 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn update_status(&mut self) {
-        let counts = app_state::compute_status_counts(&self.items);
-        self.status_resolving = counts.resolving;
-        self.status_ready = counts.ready;
-        self.status_queued = counts.queued;
-        self.status_active = counts.active;
-        self.status_done = counts.done;
-        self.status_failed = counts.failed;
-    }
-
-    fn dedupe_keys(&self) -> HashSet<String> {
-        let mut keys = HashSet::new();
-        for it in &self.items {
-            if it.status == ItemStatus::Resolving {
-                continue;
-            }
-            keys.insert(ytdlp::normalize_url_for_dedupe(&it.source_line));
-            if !it.webpage_url.is_empty() {
-                keys.insert(ytdlp::normalize_url_for_dedupe(&it.webpage_url));
-            }
-            if !it.video_id.is_empty() {
-                keys.insert(format!("vid:{}", it.video_id));
-            }
-        }
-        keys.into_iter().filter(|k| !k.is_empty()).collect()
-    }
-
     pub(super) fn refresh_input_line_info(&mut self) {
         let lines: Vec<String> = self
             .input_urls
@@ -931,8 +921,8 @@ impl PydlApp {
             .filter(|s| !s.is_empty())
             .map(str::to_owned)
             .collect();
-        let existing = self.dedupe_keys();
-        self.input_line_info = input_lines::analyze_input_lines(&lines, &existing);
+        self.input_line_info =
+            input_lines::analyze_input_lines(&lines, self.dedupe_keys());
     }
 
     fn hold_current_input_line_summary(&mut self, now: f64) {
