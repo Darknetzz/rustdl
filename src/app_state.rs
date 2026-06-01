@@ -1,4 +1,7 @@
+use std::collections::{HashMap, HashSet};
+
 use crate::models::{ItemStatus, QueueItem};
+use crate::ytdlp;
 
 #[derive(Default)]
 pub struct TransferTotals {

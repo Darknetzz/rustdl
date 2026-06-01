@@ -4,6 +4,13 @@ use std::time::{Duration, Instant};
 use crate::app_state::{self, StatusCounts, TransferTotals};
 use crate::models::ItemStatus;
 
+use super::PydlApp;
+
+const TRANSFER_TOTALS_REFRESH: Duration = Duration::from_millis(500);
+pub(super) const MAX_TEXTURES: usize = 128;
+pub(super) const THUMBNAIL_QUEUE_SOFT_CAP: usize = 50;
+pub(super) const THUMBNAIL_DECODE_MAX_WIDTH: u32 = 320;
+
 impl PydlApp {
     pub(super) fn rebuild_item_index(&mut self) {
         self.item_index_by_id = app_state::rebuild_item_index_map(&self.items);
@@ -135,7 +142,8 @@ impl PydlApp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::QueueItem;
+    use crate::app_state;
+    use crate::models::{ItemStatus, QueueItem};
 
     fn sample_item(id: u64, status: ItemStatus) -> QueueItem {
         QueueItem {
@@ -151,7 +159,7 @@ mod tests {
             sample_item(10, ItemStatus::Idle),
             sample_item(20, ItemStatus::Done),
         ];
-        let map = rebuild_item_index_map(&items);
+        let map = app_state::rebuild_item_index_map(&items);
         assert_eq!(map.get(&10), Some(&0));
         assert_eq!(map.get(&20), Some(&1));
     }
@@ -167,7 +175,7 @@ mod tests {
                 ..Default::default()
             },
         ];
-        let keys = rebuild_dedupe_keys_set(&items);
+        let keys = app_state::rebuild_dedupe_keys_set(&items);
         assert!(!keys.is_empty());
     }
 }
