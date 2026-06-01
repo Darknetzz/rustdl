@@ -46,13 +46,11 @@ impl PydlApp {
     pub(super) fn on_item_removed(&mut self, item: &QueueItem) {
         app_state::dec_status_count(&mut self.status_counts, item.status);
         self.sync_status_fields_from_counts();
-        self.invalidate_queue_caches();
     }
 
     pub(super) fn on_item_inserted(&mut self, item: &QueueItem) {
         app_state::inc_status_count(&mut self.status_counts, item.status);
         self.sync_status_fields_from_counts();
-        self.invalidate_queue_caches();
     }
 
     pub(super) fn recompute_status(&mut self) {
@@ -83,7 +81,8 @@ impl PydlApp {
         let now = Instant::now();
         let stale = self
             .last_transfer_totals_at
-            .is_none_or(|t| now.saturating_duration_since(t) >= TRANSFER_TOTALS_REFRESH);
+            .map(|t| now.saturating_duration_since(t) >= TRANSFER_TOTALS_REFRESH)
+            .unwrap_or(true);
         if self.transfer_totals_dirty || (downloading && stale) {
             self.cached_transfer_totals = self.compute_transfer_totals();
             self.transfer_totals_dirty = false;

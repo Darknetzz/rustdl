@@ -973,8 +973,8 @@ impl PydlApp {
             let iid = self.next_item_id;
             self.next_item_id += 1;
             let item = QueueItem::pending_metadata(iid, line.clone());
-            app_state::inc_status_count(&mut self.status_counts, item.status);
-            self.items.insert(0, item);
+            self.items.insert(0, item.clone());
+            self.on_item_inserted(&item);
             self.pending_resolve_ids.insert(line.clone(), iid);
             queued_lines.push(line);
         }

@@ -638,7 +638,7 @@ impl PydlApp {
                 if self.settings.card_list_layout {
                     let allow_reorder = label == "Ready";
                     const LIST_ROW_H: f32 = 42.0;
-                    let max_h = ui.available_height().min(480.0).max(LIST_ROW_H * 3.0);
+                    let max_h = ui.available_height().clamp(LIST_ROW_H * 3.0, 480.0);
                     egui::ScrollArea::vertical()
                         .id_salt(format!("rustdl_list_{label}"))
                         .max_height(max_h)

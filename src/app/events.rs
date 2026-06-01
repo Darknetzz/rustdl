@@ -245,7 +245,7 @@ impl PydlApp {
                     };
                     if let Some(idx) = self.item_idx(iid) {
                         let removed = self.items.remove(idx);
-                        app_state::dec_status_count(&mut self.status_counts, removed.status);
+                        self.on_item_removed(&removed);
                     } else {
                         continue;
                     }
@@ -264,16 +264,16 @@ impl PydlApp {
                                 status: ItemStatus::Idle,
                                 ..Default::default()
                             };
-                            app_state::inc_status_count(&mut self.status_counts, item.status);
-                            self.items.insert(0, item);
+                            self.items.insert(0, item.clone());
+                            self.on_item_inserted(&item);
                         } else {
                             let mut it = QueueItem::from_preview(iid, rows[0].clone());
                             it.error = Some(
                                 "This video is already in the list (same as a finished or pending item)."
                                     .to_owned(),
                             );
-                            app_state::inc_status_count(&mut self.status_counts, it.status);
-                            self.items.insert(0, it);
+                            self.items.insert(0, it.clone());
+                            self.on_item_inserted(&it);
                         }
                     } else {
                         for pv in deduped {
@@ -285,8 +285,8 @@ impl PydlApp {
                                 ));
                             }
                             let item = QueueItem::from_preview(iid, pv.clone());
-                            app_state::inc_status_count(&mut self.status_counts, item.status);
-                            self.items.insert(0, item);
+                            self.items.insert(0, item.clone());
+                            self.on_item_inserted(&item);
                             if self.settings.show_thumbnails {
                                 if let Some(url) = pv.thumbnail_url.clone() {
                                     self.queue_thumbnail_load(iid, url);
@@ -382,7 +382,7 @@ impl PydlApp {
                         } else {
                             ItemStatus::Failed
                         };
-                        self.set_item_status_at(idx, new_status);
+                        self.set_item_status_by_id(item_id, new_status);
                         let it = &mut self.items[idx];
                         it.percent = if completed { 100.0 } else { it.percent };
                         it.detail = final_detail.clone();

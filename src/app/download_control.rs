@@ -149,12 +149,11 @@ impl PydlApp {
         let Some(idx) = self.item_idx(item_id) else {
             return false;
         };
+        let item = self.items[idx].clone();
         if self.items[idx].status == ItemStatus::Resolving {
             self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
         }
-        let item = self.items[idx].clone();
-        app_state::dec_status_count(&mut self.status_counts, item.status);
-        self.sync_status_fields_from_counts();
+        self.on_item_removed(&item);
         self.items.remove(idx);
         self.textures.remove(&item_id);
         self.thumbnail_attempted.remove(&item_id);
