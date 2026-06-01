@@ -304,15 +304,6 @@ pub(crate) fn spawn_av1_worker(
         );
         for (item_id, input, output_path) in jobs {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
-                let _ = try_send_ui(
-                    &tx,
-                    UiEvent::Av1Done {
-                        item_id,
-                        ok: false,
-                        detail: "Cancelled by user.".to_owned(),
-                        final_output_path: None,
-                    },
-                );
                 continue;
             }
             let item = av1_transcode::Av1PlanItem {

@@ -211,18 +211,29 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
     }
 }
 
+pub fn av1_detail_is_user_cancellation(detail: &str) -> bool {
+    let d = detail.trim().to_ascii_lowercase();
+    d.starts_with("cancelled") || d.contains("cancelled by user")
+}
+
+pub fn reset_av1_item_to_ready(item: &mut Av1QueueItem) {
+    item.status = ItemStatus::Idle;
+    item.percent = 0.0;
+    item.detail = if item.input_bytes > 0 {
+        format!("Ready · {}", human_bytes_ui(item.input_bytes))
+    } else {
+        "Ready".to_owned()
+    };
+}
+
 pub fn normalize_restored_av1_item(item: &mut Av1QueueItem) {
     match item.status {
-        ItemStatus::Done | ItemStatus::Failed => {}
-        _ => {
-            item.status = ItemStatus::Idle;
-            item.percent = 0.0;
-            item.detail = if item.input_bytes > 0 {
-                format!("Ready · {}", human_bytes_ui(item.input_bytes))
-            } else {
-                "Ready".to_owned()
-            };
+        ItemStatus::Done => {}
+        ItemStatus::Failed if av1_detail_is_user_cancellation(&item.detail) => {
+            reset_av1_item_to_ready(item);
         }
+        ItemStatus::Failed => {}
+        _ => reset_av1_item_to_ready(item),
     }
 }
 
@@ -395,5 +406,34 @@ mod tests {
         assert_eq!(item.status, ItemStatus::Done);
         assert_eq!(item.percent, 100.0);
         assert_eq!(item.detail, "Completed");
+    }
+
+    #[test]
+    fn normalize_restored_av1_item_restores_cancelled_failures_to_ready() {
+        use crate::models::Av1QueueItem;
+
+        let mut item = Av1QueueItem {
+            status: ItemStatus::Failed,
+            detail: "Cancelled by user.".to_owned(),
+            input_bytes: 1_048_576,
+            ..Default::default()
+        };
+        normalize_restored_av1_item(&mut item);
+        assert_eq!(item.status, ItemStatus::Idle);
+        assert_eq!(item.percent, 0.0);
+        assert!(item.detail.starts_with("Ready ·"));
+    }
+
+    #[test]
+    fn normalize_restored_av1_item_keeps_real_failures() {
+        use crate::models::Av1QueueItem;
+
+        let mut item = Av1QueueItem {
+            status: ItemStatus::Failed,
+            detail: "ffmpeg failed with status exit status: 1".to_owned(),
+            ..Default::default()
+        };
+        normalize_restored_av1_item(&mut item);
+        assert_eq!(item.status, ItemStatus::Failed);
     }
 }

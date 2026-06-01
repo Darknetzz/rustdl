@@ -3,7 +3,7 @@ use std::sync::Once;
 use crossbeam_channel::Sender;
 use eframe::egui;
 
-use crate::app_parsing::parse_speed_eta;
+use crate::app_parsing::{av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready};
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
@@ -440,40 +440,53 @@ impl PydlApp {
                     final_output_path,
                 } => {
                     if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
-                        it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
-                        it.percent = if ok { 100.0 } else { it.percent };
-                        if let Some(path) = final_output_path {
-                            it.output_path = path;
-                        }
-                        let skipped = detail.to_ascii_lowercase().starts_with("skipped");
-                        if ok && !skipped {
-                            if let Ok(meta) = std::fs::metadata(&it.output_path) {
-                                let output_bytes = meta.len();
-                                it.output_bytes = Some(output_bytes);
-                                it.detail = if it.input_bytes > 0 {
-                                    super::av1_panel::format_av1_saved_detail(
-                                        it.input_bytes,
-                                        output_bytes,
-                                    )
+                        if !ok && av1_detail_is_user_cancellation(&detail) {
+                            reset_av1_item_to_ready(it);
+                        } else {
+                            it.status = if ok { ItemStatus::Done } else { ItemStatus::Failed };
+                            it.percent = if ok { 100.0 } else { it.percent };
+                            if let Some(path) = final_output_path {
+                                it.output_path = path;
+                            }
+                            let skipped = detail.to_ascii_lowercase().starts_with("skipped");
+                            if ok && !skipped {
+                                if let Ok(meta) = std::fs::metadata(&it.output_path) {
+                                    let output_bytes = meta.len();
+                                    it.output_bytes = Some(output_bytes);
+                                    it.detail = if it.input_bytes > 0 {
+                                        super::av1_panel::format_av1_saved_detail(
+                                            it.input_bytes,
+                                            output_bytes,
+                                        )
+                                    } else {
+                                        detail.clone()
+                                    };
                                 } else {
-                                    detail.clone()
-                                };
+                                    it.detail = detail.clone();
+                                }
                             } else {
                                 it.detail = detail.clone();
                             }
-                        } else {
-                            it.detail = detail.clone();
                         }
                     }
                     self.av1_duration_ms.remove(&item_id);
                     self.av1_progress_state.remove(&item_id);
-                    if !ok {
+                    if !ok && !av1_detail_is_user_cancellation(&detail) {
                         self.append_log(&format!("[av1 {item_id}] {detail}"));
                     }
                     self.schedule_av1_queue_save();
                 }
                 UiEvent::Av1BatchDone => {
                     self.av1_running = false;
+                    for item in &mut self.av1_items {
+                        if matches!(
+                            item.status,
+                            ItemStatus::Queued | ItemStatus::Downloading
+                        ) {
+                            reset_av1_item_to_ready(item);
+                        }
+                    }
+                    self.schedule_av1_queue_save();
                 }
             }
         }
