@@ -110,6 +110,71 @@ impl eframe::App for PydlApp {
                     ui.separator();
                     draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
                 });
+                let mut nav_frame = egui::Frame::group(ui.style());
+                nav_frame.fill = Color32::from_rgb(28, 32, 38);
+                nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
+                nav_frame.rounding = egui::Rounding::same(8.0);
+                nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
+                nav_frame.show(ui, |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new("Navigation").strong());
+                        ui.separator();
+                        let dl_active = !self.av1_mode;
+                        let av1_active = self.av1_mode;
+                        let dl = egui::Button::new(
+                            RichText::new("Downloader")
+                                .strong()
+                                .color(if dl_active {
+                                    Color32::from_rgb(10, 32, 10)
+                                } else {
+                                    Color32::from_rgb(210, 220, 235)
+                                }),
+                        )
+                        .min_size(egui::vec2(150.0, 34.0))
+                        .fill(if dl_active {
+                            Color32::from_rgb(152, 255, 152)
+                        } else {
+                            Color32::from_rgb(44, 52, 64)
+                        })
+                        .stroke(egui::Stroke::new(
+                            1.0,
+                            if dl_active {
+                                Color32::from_rgb(80, 190, 80)
+                            } else {
+                                Color32::from_rgb(88, 100, 116)
+                            },
+                        ));
+                        if ui.add(dl).clicked() {
+                            self.av1_mode = false;
+                        }
+                        let av1 = egui::Button::new(
+                            RichText::new("AV1 Converter")
+                                .strong()
+                                .color(if av1_active {
+                                    Color32::from_rgb(45, 27, 0)
+                                } else {
+                                    Color32::from_rgb(210, 220, 235)
+                                }),
+                        )
+                        .min_size(egui::vec2(170.0, 34.0))
+                        .fill(if av1_active {
+                            Color32::from_rgb(255, 190, 90)
+                        } else {
+                            Color32::from_rgb(44, 52, 64)
+                        })
+                        .stroke(egui::Stroke::new(
+                            1.0,
+                            if av1_active {
+                                Color32::from_rgb(245, 154, 35)
+                            } else {
+                                Color32::from_rgb(88, 100, 116)
+                            },
+                        ));
+                        if ui.add(av1).clicked() {
+                            self.av1_mode = true;
+                        }
+                    });
+                });
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
                     ui.colored_label(
                         LOG_COLOR_WARN,
@@ -125,11 +190,6 @@ impl eframe::App for PydlApp {
                     .color(TEXT_MUTED),
                 );
                 ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    ui.label("Mode:");
-                    ui.selectable_value(&mut self.av1_mode, false, "Downloader");
-                    ui.selectable_value(&mut self.av1_mode, true, "AV1 Converter");
-                });
                 if self.av1_mode {
                     ui.separator();
                     self.draw_av1_panel(ui);

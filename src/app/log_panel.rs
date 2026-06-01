@@ -10,7 +10,7 @@ use crate::time_format::{
 };
 use crate::ui_icons;
 
-use super::{InputLineInfo, InputLineKind, PydlApp, ICON_MISSING, ICON_OK};
+use super::{InputLineInfo, InputLineKind, PydlApp};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LogFilter {
@@ -345,18 +345,65 @@ pub(crate) fn draw_precheck_status(
     ok: bool,
     version: &str,
 ) {
-    let (icon, color, text) = if ok {
-        (ICON_OK, Color32::from_rgb(102, 187, 106), "OK")
+    fn compact_version(v: &str) -> String {
+        let t = v.trim();
+        if t.is_empty() {
+            return String::new();
+        }
+        let mut s = t.to_owned();
+        if let Some((head, _)) = s.split_once(" Copyright") {
+            s = head.to_owned();
+        }
+        if let Some((head, _)) = s.split_once(" built with") {
+            s = head.to_owned();
+        }
+        if s.chars().count() > 42 {
+            let mut short = s.chars().take(41).collect::<String>();
+            short.push('…');
+            short
+        } else {
+            s
+        }
+    }
+    let (icon, fg, bg, text) = if ok {
+        (
+            "✓",
+            Color32::from_rgb(15, 48, 18),
+            Color32::from_rgb(130, 220, 145),
+            "OK",
+        )
     } else {
-        (ICON_MISSING, Color32::from_rgb(239, 83, 80), "Missing")
+        (
+            "✗",
+            Color32::from_rgb(70, 15, 15),
+            Color32::from_rgb(238, 110, 110),
+            "Missing",
+        )
     };
     let v = version.trim();
+    let cv = compact_version(v);
     let body = if ok && !v.is_empty() {
-        format!("{icon} {tool_name}: {text} — {v}")
+        format!("{icon} {tool_name}: {text} — {cv}")
     } else {
         format!("{icon} {tool_name}: {text}")
     };
-    let response = ui.label(RichText::new(body).small().color(color));
+    let response = egui::Frame::none()
+        .fill(bg)
+        .rounding(egui::Rounding::same(5.0))
+        .inner_margin(egui::Margin::symmetric(6.0, 2.0))
+        .show(ui, |ui| {
+            ui.add(
+                egui::Label::new(
+                    RichText::new(body)
+                        .small()
+                        .color(fg)
+                        .strong(),
+                )
+                .sense(egui::Sense::hover())
+                .selectable(false),
+            )
+        })
+        .inner;
     if ok && !v.is_empty() {
         response.on_hover_text(v);
     }

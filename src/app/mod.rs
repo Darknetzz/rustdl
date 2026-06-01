@@ -63,8 +63,6 @@ const ICON_ADD: &str = icons::ICON_ADD;
 const ICON_CLEAR: &str = icons::ICON_CLOSE;
 const ICON_REMOVE: &str = icons::ICON_DELETE;
 const ICON_DOWNLOAD: &str = icons::ICON_DOWNLOAD;
-const ICON_OK: &str = "✔";
-const ICON_MISSING: &str = "✖";
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
