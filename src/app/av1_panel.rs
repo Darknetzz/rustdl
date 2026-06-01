@@ -89,7 +89,7 @@ pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> St
         let saved = input_bytes - output_bytes;
         let pct = (saved as f64 / input_bytes as f64) * 100.0;
         format!(
-            "Saved {} ({pct:.1}%) · {} → {}",
+            "Saved {} ({pct:.1}%) · {} -> {}",
             human_bytes_ui(saved),
             human_bytes_ui(input_bytes),
             human_bytes_ui(output_bytes),
@@ -98,7 +98,7 @@ pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> St
         let growth = output_bytes - input_bytes;
         let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
         format!(
-            "Output +{} (+{grow_pct:.1}%) · {} → {}",
+            "Output +{} (+{grow_pct:.1}%) · {} -> {}",
             human_bytes_ui(growth),
             human_bytes_ui(input_bytes),
             human_bytes_ui(output_bytes),
@@ -533,7 +533,7 @@ impl PydlApp {
                     ui.label(RichText::new("Summary:").color(TEXT_MUTED));
                     ui.label(
                         RichText::new(format!(
-                            "{} completed · {} → {} · saved {} ({pct:.1}%)",
+                            "{} completed · {} -> {} · saved {} ({pct:.1}%)",
                             batch.completed,
                             human_bytes_ui(batch.completed_input_bytes),
                             human_bytes_ui(batch.completed_output_bytes),
