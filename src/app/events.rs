@@ -84,12 +84,6 @@ fn is_throttled_download_log_line(line: &str) -> bool {
         || l.contains("[merger]")
 }
 
-fn is_throttled_download_log_line(line: &str) -> bool {
-    let l = line.to_ascii_lowercase();
-    (l.contains("[download]") && (l.contains('%') || l.contains("frag")))
-        || l.contains("[merger]")
-}
-
 fn format_av1_duration_clock(secs: f64) -> String {
     let total = secs.max(0.0) as u64;
     let h = total / 3600;
@@ -188,8 +182,11 @@ impl PydlApp {
             None
         };
 
-        let speed = state.get("speed").map(String::as_str).unwrap_or("");
-        let detail = format_av1_progress_detail(value, current_secs, total_secs, speed, percent);
+        let speed_raw = state.get("speed").map(String::as_str).unwrap_or("");
+        let speed = crate::av1_transcode::parse_ffmpeg_speed(speed_raw)
+            .map(|n| format!("{n:.2}x"))
+            .unwrap_or_else(|| speed_raw.to_owned());
+        let detail = format_av1_progress_detail(value, current_secs, total_secs, &speed, percent);
 
         if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
             it.status = ItemStatus::Downloading;
