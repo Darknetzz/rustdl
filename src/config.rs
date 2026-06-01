@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::models::QueueItem;
+use crate::models::{Av1QueueItem, QueueItem};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -89,6 +89,13 @@ pub struct AppSettings {
     /// Require minimum shrink percentage relative to source. Zero disables.
     #[serde(default)]
     pub av1_min_shrink_percent: f32,
+    /// Keep AV1 queue items across app restarts until manually cleared.
+    #[serde(default = "default_av1_remember_queue")]
+    pub av1_remember_queue: bool,
+}
+
+fn default_av1_remember_queue() -> bool {
+    true
 }
 
 fn default_logs_docked() -> bool {
@@ -165,6 +172,7 @@ impl Default for AppSettings {
             av1_max_width: 1920,
             av1_size_preset: "balanced".to_owned(),
             av1_min_shrink_percent: 0.0,
+            av1_remember_queue: true,
         }
     }
 }
@@ -367,6 +375,56 @@ pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {
     let raw = serde_json::to_string_pretty(items).context("failed to serialize queue items")?;
     fs::write(&path, raw)
         .with_context(|| format!("failed to write queue file: {}", path.to_string_lossy()))?;
+    Ok(())
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct Av1QueueSnapshot {
+    pub input_paths: String,
+    pub next_item_id: u64,
+    pub items: Vec<Av1QueueItem>,
+}
+
+pub fn av1_queue_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_av1_queue.json")
+}
+
+fn av1_queue_path() -> PathBuf {
+    if dirs::config_dir().is_some() {
+        av1_queue_file_path()
+    } else {
+        PathBuf::from("rustdl_av1_queue.json")
+    }
+}
+
+pub fn load_av1_queue_snapshot() -> Av1QueueSnapshot {
+    let path = av1_queue_path();
+    let raw = match fs::read_to_string(path) {
+        Ok(v) => v,
+        Err(_) => return Av1QueueSnapshot::default(),
+    };
+    serde_json::from_str(&raw).unwrap_or_default()
+}
+
+pub fn save_av1_queue_snapshot(snapshot: &Av1QueueSnapshot) -> Result<()> {
+    let path = av1_queue_path();
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "failed to create AV1 queue directory: {}",
+                parent.to_string_lossy()
+            )
+        })?;
+    }
+    let raw =
+        serde_json::to_string_pretty(snapshot).context("failed to serialize AV1 queue snapshot")?;
+    fs::write(&path, raw).with_context(|| {
+        format!(
+            "failed to write AV1 queue file: {}",
+            path.to_string_lossy()
+        )
+    })?;
     Ok(())
 }
 

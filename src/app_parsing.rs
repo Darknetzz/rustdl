@@ -208,6 +208,21 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
     }
 }
 
+pub fn normalize_restored_av1_item(item: &mut Av1QueueItem) {
+    match item.status {
+        ItemStatus::Done | ItemStatus::Failed => {}
+        _ => {
+            item.status = ItemStatus::Idle;
+            item.percent = 0.0;
+            item.detail = if item.input_bytes > 0 {
+                format!("Ready · {}", human_bytes_ui(item.input_bytes))
+            } else {
+                "Ready".to_owned()
+            };
+        }
+    }
+}
+
 pub fn is_version_newer(latest: &str, current: &str) -> bool {
     fn parts(v: &str) -> [u32; 3] {
         let mut out = [0u32; 3];

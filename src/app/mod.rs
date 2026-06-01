@@ -39,7 +39,7 @@ pub(crate) use log_panel::{
 use crate::app_actions;
 use crate::app_icon;
 use crate::app_parsing::{
-    human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob, split_cli_like,
+    human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob, split_cli_like,
 };
 use crate::app_state::{self};
 use crate::app_ui::{
@@ -48,8 +48,8 @@ use crate::app_ui::{
 };
 use crate::config::{
     activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
-    load_queue_items, load_settings, rustdl_config_dir, save_activity_log, save_queue_items,
-    save_settings, trim_activity_log, AppSettings,
+    load_queue_items, load_settings, rustdl_config_dir, save_activity_log, save_av1_queue_snapshot,
+    save_queue_items, trim_activity_log, AppSettings, Av1QueueSnapshot,
 };
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
@@ -171,6 +171,8 @@ pub struct PydlApp {
     queue_save_deadline: Option<Instant>,
     /// When set, activity log JSON is written after this instant (debounced).
     log_save_deadline: Option<Instant>,
+    /// When set, AV1 queue JSON is written after this instant (debounced).
+    av1_queue_save_deadline: Option<Instant>,
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
@@ -199,6 +201,22 @@ impl PydlApp {
         for it in &mut restored_items {
             normalize_restored_item(it);
         }
+        let av1_snapshot = if settings.av1_remember_queue {
+            load_av1_queue_snapshot()
+        } else {
+            Av1QueueSnapshot::default()
+        };
+        let mut restored_av1_items = av1_snapshot.items;
+        for it in &mut restored_av1_items {
+            normalize_restored_av1_item(it);
+        }
+        let av1_next_item_id = if restored_av1_items.is_empty() {
+            1_000_000
+        } else {
+            av1_snapshot
+                .next_item_id
+                .max(restored_av1_items.iter().map(|x| x.item_id).max().unwrap_or(999_999) + 1)
+        };
         let next_item_id = restored_items
             .iter()
             .map(|x| x.item_id)
@@ -275,12 +293,12 @@ impl PydlApp {
             update_has_update: false,
             update_status_text: String::new(),
             av1_mode: false,
-            av1_input_paths: String::new(),
-            av1_items: Vec::new(),
+            av1_input_paths: av1_snapshot.input_paths,
+            av1_items: restored_av1_items,
             av1_duration_ms: HashMap::new(),
             av1_progress_state: HashMap::new(),
             av1_media_inflight: HashSet::new(),
-            av1_next_item_id: 1_000_000,
+            av1_next_item_id,
             av1_running: false,
             av1_cancel_flag: Arc::new(AtomicBool::new(false)),
             done_file_index: done_file_index::DoneFileIndex::new(),
@@ -289,6 +307,7 @@ impl PydlApp {
             thumb_semaphore,
             queue_save_deadline: None,
             log_save_deadline: None,
+            av1_queue_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
