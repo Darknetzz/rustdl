@@ -240,6 +240,15 @@ impl eframe::App for PydlApp {
                     return;
                 }
 
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Downloader").heading());
+                    ui.label(
+                        RichText::new("Queue and download media with yt-dlp.")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
+                });
+                ui.separator();
                 ui.label("URLs (one per line)");
                 #[cfg(not(windows))]
                 {
