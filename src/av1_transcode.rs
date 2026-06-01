@@ -9,6 +9,9 @@ use eframe::egui;
 use crate::external_tools::resolve_executable;
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
+const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
+const BITRATE_MAXRATE_MULTIPLIER: f64 = 1.2;
+const BITRATE_BUFSIZE_MULTIPLIER: f64 = 2.0;
 
 #[derive(Clone, Debug)]
 pub struct Av1Config {
@@ -33,6 +36,7 @@ pub struct Av1Input {
 pub struct EncoderChoice {
     pub encoder: &'static str,
     pub codec: &'static str,
+    pub hw_type: &'static str,
 }
 
 #[derive(Clone, Debug)]
@@ -44,16 +48,26 @@ pub struct Av1PlanItem {
 pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     for enc in ["av1_nvenc", "av1_amf", "hevc_nvenc", "hevc_amf", "libsvtav1"] {
-        if encoder_supported(&ffmpeg, enc) {
+        if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
             return EncoderChoice {
                 encoder: enc,
                 codec: if enc.contains("hevc") { "hevc" } else { "av1" },
+                hw_type: hw_type_for_encoder(enc),
             };
         }
     }
     EncoderChoice {
         encoder: "libsvtav1",
         codec: "av1",
+        hw_type: "cpu",
+    }
+}
+
+fn hw_type_for_encoder(encoder: &str) -> &'static str {
+    match encoder {
+        "av1_nvenc" | "hevc_nvenc" => "nvidia",
+        "av1_amf" | "hevc_amf" => "amd",
+        _ => "cpu",
     }
 }
 
@@ -69,6 +83,110 @@ fn encoder_supported(ffmpeg_bin: &str, encoder: &str) -> bool {
     };
     let text = String::from_utf8_lossy(&out.stdout).to_ascii_lowercase();
     text.contains(&encoder.to_ascii_lowercase())
+}
+
+fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
+    let hw_type = hw_type_for_encoder(encoder);
+    let vf = if hw_type == "cpu" {
+        "format=yuv420p"
+    } else {
+        "format=nv12"
+    };
+    let mut cmd = Command::new(ffmpeg_bin);
+    cmd.arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .args([
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=1280x720:rate=30:duration=0.5",
+            "-vf",
+            vf,
+            "-c:v",
+            encoder,
+            "-f",
+            "null",
+            "-",
+        ]);
+    if hw_type == "nvidia" {
+        cmd.args(["-preset", "p7", "-rc", "vbr", "-b:v", "2M"]);
+    } else if hw_type == "amd" {
+        cmd.args(["-usage", "0", "-quality", "70", "-rc", "1", "-b:v", "2M"]);
+    } else if encoder == "libsvtav1" {
+        cmd.args(["-preset", "8", "-b:v", "2M"]);
+    }
+    let Ok(out) = cmd
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+    else {
+        return false;
+    };
+    out.status.success()
+}
+
+fn parse_bitrate_to_bps(bitrate: &str) -> Option<i64> {
+    let normalized = bitrate.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return None;
+    }
+    if let Some(num) = normalized.strip_suffix('m') {
+        return Some((num.trim().parse::<f64>().ok()? * 1_000_000.0).round() as i64);
+    }
+    if let Some(num) = normalized.strip_suffix('k') {
+        return Some((num.trim().parse::<f64>().ok()? * 1_000.0).round() as i64);
+    }
+    normalized.parse().ok()
+}
+
+fn effective_target_bitrate_bps(cfg: &Av1Config) -> i64 {
+    parse_bitrate_to_bps(&cfg.target_bitrate).unwrap_or(BITRATE_FALLBACK_BPS)
+}
+
+fn select_pixel_format(hw_type: &str) -> &'static str {
+    if hw_type == "cpu" {
+        "yuv420p"
+    } else {
+        "nv12"
+    }
+}
+
+fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) -> String {
+    let w = max_video_width;
+    let scale = if hw_type == "amd" {
+        format!(
+            "scale='trunc(min({w},iw)/64)*64':'trunc(trunc(min({w},iw)/64)*64*ih/iw/16)*16',format={pix_fmt}"
+        )
+    } else {
+        format!(
+            "scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,format={pix_fmt}"
+        )
+    };
+    format!("{scale},setsar=1")
+}
+
+fn append_encoder_rate_control(cmd: &mut Command, hw_type: &str, target_bitrate_bps: i64) {
+    let maxrate = (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
+    let bufsize = (target_bitrate_bps as f64 * BITRATE_BUFSIZE_MULTIPLIER).round() as i64;
+    match hw_type {
+        "nvidia" => {
+            cmd.args(["-preset", "p7", "-rc", "vbr"]);
+            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+            cmd.arg("-maxrate").arg(maxrate.to_string());
+            cmd.arg("-bufsize").arg(bufsize.to_string());
+        }
+        "amd" => {
+            cmd.args([
+                "-usage", "0", "-quality", "70", "-profile:v", "1", "-rc", "1", "-align", "3",
+            ]);
+            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+        }
+        _ => {
+            cmd.args(["-preset", "8", "-g", "240"]);
+            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+        }
+    }
 }
 
 pub fn collect_plan(inputs: &[Av1Input], cfg: &Av1Config) -> Vec<Av1PlanItem> {
@@ -252,33 +370,32 @@ where
         std::fs::create_dir_all(parent)?;
     }
     let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
+    let target_bitrate_bps = effective_target_bitrate_bps(cfg);
+    let pix_fmt = select_pixel_format(enc.hw_type);
+    let vf = build_video_filter_chain(enc.hw_type, cfg.max_width, pix_fmt);
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
     cmd.arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")
         .arg(if cfg.overwrite { "-y" } else { "-n" })
-        .arg("-i")
-        .arg(&plan.input)
-        .arg("-map")
-        .arg("0")
-        .arg("-c:v")
-        .arg(enc.encoder)
-        .arg("-vf")
-        .arg(format!(
-            "scale='if(gt(iw,{w}),{w},iw)':-2:flags=lanczos",
-            w = cfg.max_width
-        ))
-        .arg("-c:a")
-        .arg("libopus")
-        .arg("-b:a")
-        .arg("64k");
-    if !cfg.target_bitrate.trim().is_empty() {
-        cmd.arg("-b:v").arg(cfg.target_bitrate.trim());
-    }
-    cmd.arg("-progress")
+        .arg("-progress")
         .arg("pipe:1")
         .arg("-nostats")
+        .arg("-i")
+        .arg(&plan.input)
+        .arg("-vf")
+        .arg(vf)
+        .arg("-c:v")
+        .arg(enc.encoder);
+    if enc.codec == "hevc" {
+        cmd.args(["-tag:v", "hvc1"]);
+    }
+    append_encoder_rate_control(&mut cmd, enc.hw_type, target_bitrate_bps);
+    cmd.arg("-c:a")
+        .arg("libopus")
+        .arg("-b:a")
+        .arg("64k")
         .arg(&plan.output)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -391,6 +508,20 @@ mod tests {
     #[test]
     fn parse_ffmpeg_speed_handles_x_suffix() {
         assert_eq!(parse_ffmpeg_speed("2.35x"), Some(2.35));
+    }
+
+    #[test]
+    fn parse_bitrate_to_bps_handles_suffixes() {
+        assert_eq!(parse_bitrate_to_bps("2500k"), Some(2_500_000));
+        assert_eq!(parse_bitrate_to_bps("2.5m"), Some(2_500_000));
+        assert_eq!(parse_bitrate_to_bps("1800000"), Some(1_800_000));
+    }
+
+    #[test]
+    fn build_video_filter_chain_uses_nv12_for_nvidia() {
+        let vf = build_video_filter_chain("nvidia", 1920, "nv12");
+        assert!(vf.contains("format=nv12"));
+        assert!(vf.contains("setsar=1"));
     }
 }
 

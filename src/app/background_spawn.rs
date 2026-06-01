@@ -297,7 +297,7 @@ pub(crate) fn spawn_av1_worker(
                 &tx,
                 UiEvent::Av1Line {
                     item_id,
-                    line: format!("starting with {}", enc.encoder),
+                    line: format!("starting with {} ({})", enc.encoder, enc.hw_type),
                 },
             );
             let item_for_primary = item.clone();
@@ -358,6 +358,7 @@ pub(crate) fn spawn_av1_worker(
                         let cpu_enc = av1_transcode::EncoderChoice {
                             encoder: "libsvtav1",
                             codec: "av1",
+                            hw_type: "cpu",
                         };
                         let retry = tokio::task::spawn_blocking({
                             let cfg = cfg.clone();

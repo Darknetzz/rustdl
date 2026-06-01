@@ -1,15 +1,44 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use eframe::egui::{self, RichText};
+use eframe::egui::{self, Color32, RichText};
 
 use crate::app_actions;
-use crate::app_ui::{danger_button, secondary_button, success_button};
+use crate::app_ui::{
+    danger_button, draw_status_dot, secondary_button, status_color, status_dot_with_label,
+    success_button,
+};
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
+use crate::theme::TEXT_MUTED;
 use crate::ui_icons;
 
 use super::PydlApp;
+
+const AV1_SKIPPED_COLOR: Color32 = Color32::from_rgb(255, 167, 38);
+
+fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
+    item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
+}
+
+fn av1_item_status_label(item: &Av1QueueItem) -> &'static str {
+    match item.status {
+        ItemStatus::Idle => "Ready",
+        ItemStatus::Queued => "Queued",
+        ItemStatus::Downloading => "Running",
+        ItemStatus::Done if av1_item_is_skipped(item) => "Skipped",
+        ItemStatus::Done => "Done",
+        ItemStatus::Failed => "Failed",
+        ItemStatus::Resolving => "Resolving",
+    }
+}
+
+fn av1_item_status_color(item: &Av1QueueItem) -> Color32 {
+    if av1_item_is_skipped(item) {
+        return AV1_SKIPPED_COLOR;
+    }
+    status_color(item.status)
+}
 
 fn normalize_av1_source_key(path: &str) -> String {
     Path::new(path)
@@ -165,7 +194,12 @@ impl PydlApp {
                 .filter(|item| item.status == ItemStatus::Idle)
                 .count();
             if ready > 0 {
-                ui.label(RichText::new(format!("{ready} ready")).strong());
+                status_dot_with_label(
+                    ui,
+                    format!("{ready} ready"),
+                    status_color(ItemStatus::Idle),
+                    true,
+                );
             }
         });
         ui.add_sized(
@@ -264,6 +298,68 @@ impl PydlApp {
             }
         });
         ui.separator();
+        if !self.av1_items.is_empty() {
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Queue:").color(TEXT_MUTED));
+                let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
+                let ready = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| i.status == ItemStatus::Idle)
+                    .count();
+                let queued = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| i.status == ItemStatus::Queued)
+                    .count();
+                let running = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| i.status == ItemStatus::Downloading)
+                    .count();
+                let done = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
+                    .count();
+                let skipped = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| av1_item_is_skipped(i))
+                    .count();
+                let failed = self
+                    .av1_items
+                    .iter()
+                    .filter(|i| i.status == ItemStatus::Failed)
+                    .count();
+                if ready > 0 {
+                    parts.push(("ready", ready, status_color(ItemStatus::Idle)));
+                }
+                if queued > 0 {
+                    parts.push(("queued", queued, status_color(ItemStatus::Queued)));
+                }
+                if running > 0 {
+                    parts.push(("running", running, status_color(ItemStatus::Downloading)));
+                }
+                if done > 0 {
+                    parts.push(("done", done, status_color(ItemStatus::Done)));
+                }
+                if skipped > 0 {
+                    parts.push(("skipped", skipped, AV1_SKIPPED_COLOR));
+                }
+                if failed > 0 {
+                    parts.push(("failed", failed, status_color(ItemStatus::Failed)));
+                }
+                for (idx, (name, count, color)) in parts.iter().enumerate() {
+                    let suffix = if idx + 1 == parts.len() { "" } else { "," };
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 5.0;
+                        draw_status_dot(ui, *color);
+                        ui.label(RichText::new(format!("{count} {name}{suffix}")).color(*color));
+                    });
+                }
+            });
+        }
         egui::ScrollArea::vertical()
             .id_salt("av1_queue_scroll")
             .max_height(340.0)
@@ -287,26 +383,21 @@ impl PydlApp {
                                 ui.allocate_space(egui::vec2(90.0, 52.0));
                             }
                             ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            let status_text = match it.status {
-                                ItemStatus::Idle => "Ready",
-                                ItemStatus::Queued => "Queued",
-                                ItemStatus::Downloading => "Running",
-                                ItemStatus::Done => {
-                                    if it.detail.to_ascii_lowercase().starts_with("skipped") {
-                                        "Skipped"
-                                    } else {
-                                        "Done"
-                                    }
-                                }
-                                ItemStatus::Failed => "Failed",
-                                ItemStatus::Resolving => "Resolving",
-                            };
-                            ui.label(status_text);
-                            ui.add(
-                                egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
-                                    .desired_width(180.0)
-                                    .show_percentage(),
-                            );
+                            let status_label = av1_item_status_label(it);
+                            let item_color = av1_item_status_color(it);
+                            status_dot_with_label(ui, status_label, item_color, false);
+                            let mut pb = egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
+                                .desired_width(180.0)
+                                .show_percentage()
+                                .animate(it.status == ItemStatus::Downloading);
+                            if it.status == ItemStatus::Done && !av1_item_is_skipped(it) {
+                                pb = pb.fill(item_color);
+                            } else if it.status == ItemStatus::Failed {
+                                pb = pb.fill(item_color);
+                            } else if it.status == ItemStatus::Downloading {
+                                pb = pb.fill(item_color);
+                            }
+                            ui.add(pb);
                         });
                         ui.label(format!("in: {}", it.source_path));
                         ui.label(format!("out: {}", it.output_path));
