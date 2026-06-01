@@ -1997,7 +1997,7 @@ impl PydlApp {
                     }
                 });
                 ui.add_space(16.0);
-                centered_button_row(ui, |ui| {
+                centered_button_row(ui, "exit_confirm", |ui| {
                     if secondary_button(
                         ui,
                         &format!("{} Cancel", ui_icons::DISMISS),

@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use eframe::egui;
 use eframe::egui::{Color32, Response, RichText};
 
@@ -195,13 +197,24 @@ pub fn alert_danger<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::U
 /// Center a compact horizontal row (e.g. dialog Cancel / OK buttons) in the parent width.
 pub fn centered_button_row<R>(
     ui: &mut egui::Ui,
-    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+    id_salt: impl Hash,
+    mut add_contents: impl FnMut(&mut egui::Ui) -> R,
 ) -> R {
-    ui.allocate_ui_with_layout(
-        egui::vec2(ui.available_width(), 0.0),
-        egui::Layout::top_down(egui::Align::Center),
-        |ui| ui.horizontal(add_contents).inner,
-    )
+    let avail_w = ui.available_width();
+    let row_width = {
+        let mut sizing_ui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("centered_button_row_sizing", id_salt))
+                .sizing_pass()
+                .invisible(),
+        );
+        sizing_ui.horizontal(&mut add_contents).response.rect.width()
+    };
+    let pad = ((avail_w - row_width) * 0.5).max(0.0);
+    ui.horizontal(|ui| {
+        ui.add_space(pad);
+        add_contents(ui)
+    })
     .inner
 }
 
