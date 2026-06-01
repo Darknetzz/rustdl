@@ -425,6 +425,16 @@ impl PydlApp {
                         );
                         ui.separator();
                         changed |= ui
+                            .checkbox(
+                                &mut self.settings.av1_remember_queue,
+                                "Remember AV1 queue between sessions",
+                            )
+                            .on_hover_text(
+                                "When enabled, queue items stay until you click Clear. \
+                                 When off, the AV1 queue is cleared each time you start the app.",
+                            )
+                            .changed();
+                        changed |= ui
                             .checkbox(&mut self.settings.av1_recursive, "Recursive folder scan")
                             .changed();
                         changed |= ui

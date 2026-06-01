@@ -15,6 +15,7 @@ impl eframe::App for PydlApp {
         }
         self.maybe_flush_queue_save();
         self.maybe_flush_log_save();
+        self.maybe_flush_av1_queue_save();
         self.process_events(ctx);
         #[cfg(windows)]
         {
@@ -31,6 +32,7 @@ impl eframe::App for PydlApp {
             self.exit_pending_after_cancel = false;
             self.exit_allowed = true;
             self.flush_queue_to_disk();
+            self.flush_av1_queue_to_disk();
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.poll_done_file_lookup();
@@ -728,6 +730,7 @@ impl eframe::App for PydlApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.flush_queue_to_disk();
+        self.flush_av1_queue_to_disk();
         self.flush_log_to_disk();
         let _ = save_settings(&self.settings);
     }

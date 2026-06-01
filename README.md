@@ -64,6 +64,7 @@ Switch modes from the **Mode** toggle near the top of the main window.
 - Input accepts file and folder paths (one per line).
 - Output goes to the current **Output folder**.
 - Supports recursive scan, dry-run, overwrite, delete original, and optional AV1 re-encode behavior.
+- Queue items are remembered between sessions until you click **Clear** (disable in Settings → AV1 → *Remember AV1 queue between sessions* to start fresh each launch).
 - Encoder detection priority: `av1_nvenc` -> `av1_amf` -> `hevc_nvenc` -> `hevc_amf` -> `libsvtav1`.
 - Uses the shared **ffmpeg** and **ffprobe** paths from Settings → Shared.
 

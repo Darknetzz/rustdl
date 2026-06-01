@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::models::{ItemStatus, QueueItem};
+use crate::models::{Av1QueueItem, ItemStatus, QueueItem};
 
 static SPEED_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"at\s+([0-9.]+\s*[KMGTP]?i?B/s)").expect("valid speed regex"));

@@ -48,8 +48,9 @@ use crate::app_ui::{
 };
 use crate::config::{
     activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
-    load_queue_items, load_settings, rustdl_config_dir, save_activity_log, save_av1_queue_snapshot,
-    save_queue_items, trim_activity_log, AppSettings, Av1QueueSnapshot,
+    load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
+    save_activity_log, save_av1_queue_snapshot, save_queue_items, save_settings, trim_activity_log,
+    AppSettings, Av1QueueSnapshot,
 };
 use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::models::{ItemStatus, QueueItem};
@@ -326,7 +327,14 @@ impl PydlApp {
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         ));
+        if app.settings.av1_remember_queue && !app.av1_items.is_empty() {
+            app.append_log(&format!(
+                "AV1: restored {} item(s) from previous session.",
+                app.av1_items.len()
+            ));
+        }
         app.refresh_deps();
+        app.queue_av1_restored_assets();
         app.update_status();
         app.refresh_input_line_info();
         app
@@ -411,6 +419,45 @@ impl PydlApp {
         self.log_save_deadline = None;
         if let Err(err) = save_activity_log(&self.log_lines) {
             eprintln!("rustdl: failed to save activity log: {err}");
+        }
+    }
+
+    fn schedule_av1_queue_save(&mut self) {
+        if !self.settings.av1_remember_queue {
+            return;
+        }
+        self.av1_queue_save_deadline = Some(Instant::now() + Self::QUEUE_SAVE_DEBOUNCE);
+    }
+
+    fn maybe_flush_av1_queue_save(&mut self) {
+        if let Some(deadline) = self.av1_queue_save_deadline {
+            if Instant::now() >= deadline {
+                self.av1_queue_save_deadline = None;
+                self.flush_av1_queue_to_disk();
+            }
+        }
+    }
+
+    fn flush_av1_queue_to_disk(&mut self) {
+        self.av1_queue_save_deadline = None;
+        if !self.settings.av1_remember_queue {
+            return;
+        }
+        let snapshot = Av1QueueSnapshot {
+            input_paths: self.av1_input_paths.clone(),
+            next_item_id: self.av1_next_item_id,
+            items: self.av1_items.clone(),
+        };
+        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
+            self.append_log(&format!("Failed to save AV1 queue state: {err}"));
+        }
+    }
+
+    pub(super) fn clear_av1_queue_persistence(&mut self) {
+        self.av1_queue_save_deadline = None;
+        let snapshot = Av1QueueSnapshot::default();
+        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
+            self.append_log(&format!("Failed to clear AV1 queue state: {err}"));
         }
     }
 
@@ -611,6 +658,11 @@ impl PydlApp {
         self.settings.worker_count = self.worker_count.clamp(1, 6);
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
+        }
+        if self.settings.av1_remember_queue {
+            self.flush_av1_queue_to_disk();
+        } else {
+            self.clear_av1_queue_persistence();
         }
     }
 
@@ -1667,6 +1719,7 @@ impl PydlApp {
         }
         self.exit_allowed = true;
         self.flush_queue_to_disk();
+        self.flush_av1_queue_to_disk();
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 

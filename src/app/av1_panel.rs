@@ -258,8 +258,27 @@ impl PydlApp {
 
         if added > 0 {
             self.append_log(&format!("AV1: added {added} video(s) to queue as ready."));
+            self.schedule_av1_queue_save();
         } else {
             self.append_log("AV1: all video(s) from path(s) are already in the queue.");
+        }
+    }
+
+    pub(super) fn queue_av1_restored_assets(&mut self) {
+        if self.av1_items.is_empty() {
+            return;
+        }
+        let cfg = self.av1_config();
+        let ffmpeg_path = cfg.ffmpeg_path.clone();
+        let ffprobe_path = cfg.ffprobe_path.clone();
+        for item in self.av1_items.clone() {
+            let source = std::path::PathBuf::from(&item.source_path);
+            if self.has_ffprobe && item.video_codec.is_empty() {
+                self.queue_av1_media_probe(item.item_id, source.clone(), ffprobe_path.clone());
+            }
+            if self.has_ffmpeg && !self.textures.contains_key(&item.item_id) {
+                self.queue_av1_local_thumbnail(item.item_id, source, ffmpeg_path.clone());
+            }
         }
     }
 
@@ -273,6 +292,7 @@ impl PydlApp {
         self.av1_items.clear();
         self.av1_duration_ms.clear();
         self.av1_progress_state.clear();
+        self.clear_av1_queue_persistence();
     }
 
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
@@ -313,11 +333,14 @@ impl PydlApp {
                 );
             }
         });
-        ui.add_sized(
+        let input_edit = ui.add_sized(
             [ui.available_width(), 90.0],
             egui::TextEdit::multiline(&mut self.av1_input_paths)
                 .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
         );
+        if input_edit.changed() {
+            self.schedule_av1_queue_save();
+        }
         ui.horizontal_wrapped(|ui| {
             ui.checkbox(&mut self.settings.av1_recursive, "Recursive");
             ui.checkbox(&mut self.settings.av1_dry_run, "Dry run");
@@ -622,6 +645,7 @@ impl PydlApp {
             self.av1_cancel_flag.clone(),
         );
         self.append_log("AV1: batch started.");
+        self.schedule_av1_queue_save();
     }
 
     fn browse_av1_inputs(&mut self) {

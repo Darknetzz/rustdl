@@ -430,6 +430,7 @@ impl PydlApp {
                         self.av1_duration_ms.insert(item_id, ms);
                     }
                     ctx.request_repaint();
+                    self.schedule_av1_queue_save();
                 }
                 UiEvent::Av1Done {
                     item_id,
@@ -464,6 +465,7 @@ impl PydlApp {
                     if !ok {
                         self.append_log(&format!("[av1 {item_id}] {detail}"));
                     }
+                    self.schedule_av1_queue_save();
                 }
                 UiEvent::Av1BatchDone => {
                     self.av1_running = false;
