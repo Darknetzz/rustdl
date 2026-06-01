@@ -478,3 +478,25 @@ pub(crate) fn spawn_av1_worker(
         let _ = try_send_ui(&tx, UiEvent::Av1BatchDone);
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::should_retry_without_embed_thumbnail;
+
+    #[test]
+    fn retry_without_embed_when_thumbnail_error() {
+        let args = vec!["--embed-thumbnail".to_owned()];
+        assert!(should_retry_without_embed_thumbnail(
+            &args,
+            "Unable to embed thumbnail in file"
+        ));
+    }
+
+    #[test]
+    fn no_retry_without_embed_flag() {
+        assert!(!should_retry_without_embed_thumbnail(
+            &[],
+            "Unable to embed thumbnail"
+        ));
+    }
+}

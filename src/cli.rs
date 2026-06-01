@@ -8,126 +8,13 @@ use anyhow::{anyhow, Result};
 use crate::config::{load_settings, AppSettings};
 use crate::profiles::{all_profiles, find_profile, load_profiles};
 use crate::ytdlp;
+use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
 pub struct CliDownloadOptions {
     pub url: String,
     pub profile: Option<String>,
     pub output_dir: Option<String>,
-}
-
-fn quality_format_args(settings: &AppSettings) -> Vec<String> {
-    let preset = settings.quality_preset.trim().to_ascii_lowercase();
-    let custom = settings.quality_format_custom.trim();
-    let fmt = match preset.as_str() {
-        "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-        "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-        "audio" => "bestaudio/best",
-        "custom" if !custom.is_empty() => custom,
-        _ => "bestvideo+bestaudio/best",
-    };
-    vec!["-f".to_owned(), fmt.to_owned()]
-}
-
-pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
-    let mut args = Vec::new();
-    if settings.yt_dlp_unlimited_retries {
-        args.push("--retries".to_owned());
-        args.push("infinite".to_owned());
-        args.push("--fragment-retries".to_owned());
-        args.push("infinite".to_owned());
-    } else {
-        let n = settings.yt_dlp_retry_count.to_string();
-        args.push("--retries".to_owned());
-        args.push(n.clone());
-        args.push("--fragment-retries".to_owned());
-        args.push(n);
-    }
-    let imp = settings.yt_dlp_impersonate.trim();
-    if !imp.is_empty() {
-        args.push("--impersonate".to_owned());
-        args.push(imp.to_owned());
-    }
-    args.extend(ytdlp::cookie_args_from_setting(&settings.yt_dlp_cookies));
-    if !settings.yt_proxy.trim().is_empty() {
-        args.push("--proxy".to_owned());
-        args.push(settings.yt_proxy.trim().to_owned());
-    }
-    if !settings.yt_download_archive.trim().is_empty() {
-        args.push("--download-archive".to_owned());
-        args.push(settings.yt_download_archive.trim().to_owned());
-    }
-    if settings.yt_sponsorblock_remove {
-        args.push("--sponsorblock-remove".to_owned());
-        args.push("all".to_owned());
-    } else if !settings.yt_sponsorblock_mark.trim().is_empty() {
-        args.push("--sponsorblock-mark".to_owned());
-        args.push(settings.yt_sponsorblock_mark.trim().to_owned());
-    }
-    args.extend(crate::app_parsing::split_cli_like(&settings.yt_dlp_extra_args));
-    args.extend(quality_format_args(settings));
-    match settings.merge_container.trim().to_ascii_lowercase().as_str() {
-        "mp4" => {
-            args.push("--merge-output-format".to_owned());
-            args.push("mp4".to_owned());
-        }
-        "mkv" => {
-            args.push("--merge-output-format".to_owned());
-            args.push("mkv".to_owned());
-        }
-        "webm" => {
-            args.push("--merge-output-format".to_owned());
-            args.push("webm".to_owned());
-        }
-        _ => {}
-    }
-    if settings.yt_ignore_errors {
-        args.push("--ignore-errors".to_owned());
-    }
-    if settings.yt_restrict_filenames {
-        args.push("--restrict-filenames".to_owned());
-    }
-    if settings.yt_write_info_json {
-        args.push("--write-info-json".to_owned());
-    }
-    if settings.yt_write_auto_subs {
-        args.push("--write-auto-subs".to_owned());
-    }
-    if settings.embed_thumbnail {
-        args.push("--embed-thumbnail".to_owned());
-    }
-    if settings.yt_embed_metadata {
-        args.push("--embed-metadata".to_owned());
-    }
-    if settings.ffmpeg_extract_audio_mp3 {
-        args.push("--extract-audio".to_owned());
-        args.push("--audio-format".to_owned());
-        args.push("mp3".to_owned());
-    } else if settings.ffmpeg_remux_mp4 {
-        args.push("--remux-video".to_owned());
-        args.push("mp4".to_owned());
-    }
-    let mut post_args = settings.ffmpeg_post_args.trim().to_owned();
-    if settings.ffmpeg_faststart {
-        if !post_args.is_empty() {
-            post_args.push(' ');
-        }
-        post_args.push_str("-movflags +faststart");
-    }
-    if !post_args.trim().is_empty() {
-        args.push("--postprocessor-args".to_owned());
-        args.push(post_args);
-    }
-    args
-}
-
-pub fn output_template(settings: &AppSettings, _output_dir: &str) -> String {
-    let template = settings.output_filename_template.trim();
-    let template = if template.is_empty() {
-        crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE
-    } else {
-        template
-    };
-    template.to_owned()
+    pub dry_run: bool,
 }
 
 pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
@@ -145,19 +32,19 @@ pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
         return Err(anyhow!("output directory does not exist: {output_dir}"));
     }
     let extra = build_download_extra_args(&settings);
-    let yt_dlp = if settings.yt_dlp_path.trim().is_empty() {
-        "yt-dlp".to_owned()
-    } else {
-        settings.yt_dlp_path.trim().to_owned()
-    };
+    let yt_dlp = yt_dlp_bin(&settings);
     let ffmpeg = settings.ffmpeg_path.trim().to_owned();
-    let cancel = Arc::new(AtomicBool::new(false));
     let url = opts.url.trim().to_owned();
     if url.is_empty() {
         return Err(anyhow!("URL is empty"));
     }
+    let template = output_filename_template(&settings);
+    if opts.dry_run {
+        print_dry_run(&url, &output_dir, &template, &extra, &yt_dlp, &ffmpeg);
+        return Ok(());
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
     println!("Downloading {url} -> {output_dir}");
-    let template = output_template(&settings, &output_dir);
     ytdlp::stream_download_with_bins(
         &url,
         &output_dir,
@@ -177,10 +64,44 @@ pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     Ok(())
 }
 
+fn yt_dlp_bin(settings: &AppSettings) -> String {
+    if settings.yt_dlp_path.trim().is_empty() {
+        "yt-dlp".to_owned()
+    } else {
+        settings.yt_dlp_path.trim().to_owned()
+    }
+}
+
+fn print_dry_run(
+    url: &str,
+    output_dir: &str,
+    template: &str,
+    extra: &[String],
+    yt_dlp: &str,
+    ffmpeg: &str,
+) {
+    println!("dry-run: would download");
+    println!("  url: {url}");
+    println!("  output_dir: {output_dir}");
+    println!("  template: {template}");
+    if !ffmpeg.is_empty() {
+        println!("  ffmpeg: {ffmpeg}");
+    }
+    println!("  command: {yt_dlp} --newline -o {output_dir}/{template} ...");
+    for chunk in extra.chunks(2) {
+        if chunk.len() == 2 {
+            println!("    {} {}", chunk[0], chunk[1]);
+        } else if !chunk.is_empty() {
+            println!("    {}", chunk[0]);
+        }
+    }
+}
+
 pub fn parse_cli_download_args(args: &[String]) -> Result<Option<CliDownloadOptions>> {
     let mut url = None;
     let mut profile = None;
     let mut output_dir = None;
+    let mut dry_run = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -208,6 +129,9 @@ pub fn parse_cli_download_args(args: &[String]) -> Result<Option<CliDownloadOpti
                         .clone(),
                 );
             }
+            "--dry-run" => {
+                dry_run = true;
+            }
             s => return Err(anyhow!("unknown option: {s}")),
         }
         i += 1;
@@ -216,7 +140,52 @@ pub fn parse_cli_download_args(args: &[String]) -> Result<Option<CliDownloadOpti
         url: u,
         profile,
         output_dir,
+        dry_run,
     }))
+}
+
+pub async fn run_headless_batch(urls: Vec<String>, opts: CliDownloadOptions) -> Result<()> {
+    let total = urls.len();
+    for (idx, url) in urls.into_iter().enumerate() {
+        if total > 1 {
+            println!("--- [{}/{}] ---", idx + 1, total);
+        }
+        let item_opts = CliDownloadOptions {
+            url,
+            profile: opts.profile.clone(),
+            output_dir: opts.output_dir.clone(),
+            dry_run: opts.dry_run,
+        };
+        run_headless_download(item_opts).await?;
+    }
+    Ok(())
+}
+
+fn read_urls_from_batch_source(source: &str) -> Result<Vec<String>> {
+    let trimmed = source.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("batch source is empty"));
+    }
+    if trimmed == "-" {
+        use std::io::{self, Read};
+        let mut buf = String::new();
+        io::stdin().read_to_string(&mut buf)?;
+        return Ok(parse_url_lines(&buf));
+    }
+    if let Some(path) = trimmed.strip_prefix('@') {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow!("failed to read batch file {path}: {e}"))?;
+        return Ok(parse_url_lines(&content));
+    }
+    Ok(vec![trimmed.to_owned()])
+}
+
+fn parse_url_lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(str::to_owned)
+        .collect()
 }
 
 pub fn run_cli_or_exit(args: Vec<String>) -> bool {
@@ -236,9 +205,29 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
         "--download" => match parse_cli_download_args(&args) {
             Ok(Some(opts)) => {
                 let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
-                if let Err(e) = rt.block_on(run_headless_download(opts)) {
-                    eprintln!("Download failed: {e:#}");
-                    process::exit(1);
+                match read_urls_from_batch_source(&opts.url) {
+                    Ok(urls) if urls.is_empty() => {
+                        eprintln!("no URLs to download");
+                        process::exit(2);
+                    }
+                    Ok(urls) if urls.len() > 1 => {
+                        if let Err(e) = rt.block_on(run_headless_batch(urls, opts)) {
+                            eprintln!("Download failed: {e:#}");
+                            process::exit(1);
+                        }
+                    }
+                    Ok(mut urls) => {
+                        let mut opts = opts;
+                        opts.url = urls.pop().unwrap_or_default();
+                        if let Err(e) = rt.block_on(run_headless_download(opts)) {
+                            eprintln!("Download failed: {e:#}");
+                            process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{e:#}");
+                        process::exit(2);
+                    }
                 }
                 true
             }
@@ -283,7 +272,25 @@ fn print_help() {
     println!("Options:");
     println!("  -h, --help           Print this help message");
     println!("  -V, --version        Print version and build date (UTC)");
-    println!("  --download URL       Download a single URL using saved settings");
+    println!("  --download URL       Download using saved settings (URL, @file.txt, or - for stdin)");
     println!("  --profile NAME       Apply named profile before download");
     println!("  --output-dir PATH    Override output folder");
+    println!("  --dry-run            Print planned download args without executing");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_url_lines_skips_comments_and_blanks() {
+        let text = "# comment\n\nhttps://a.test\n  https://b.test  \n";
+        assert_eq!(
+            parse_url_lines(text),
+            vec![
+                "https://a.test".to_owned(),
+                "https://b.test".to_owned()
+            ]
+        );
+    }
 }

@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 #[cfg(windows)]
 use std::sync::Mutex;
@@ -12,17 +12,18 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText, TextureHandle};
 use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
-use url::Url;
 
 mod about;
 mod av1_panel;
 mod background_spawn;
 mod cards;
+mod download_control;
 mod eframe_app;
 mod done_file_index;
 mod events;
 mod input_lines;
 mod log_panel;
+mod queue_persist;
 mod settings_panel;
 mod thumbnails;
 mod update_check;
@@ -39,7 +40,7 @@ pub(crate) use log_panel::{
 use crate::app_actions;
 use crate::app_icon;
 use crate::app_parsing::{
-    human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob, split_cli_like,
+    human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob,
 };
 use crate::app_state::{self};
 use crate::app_ui::{
@@ -48,9 +49,9 @@ use crate::app_ui::{
     ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    activity_log_file_path, default_downloads, export_queue_urls, load_activity_log,
+    default_downloads, export_queue_urls, load_activity_log,
     load_queue_items, load_av1_queue_snapshot, load_settings, rustdl_config_dir,
-    save_activity_log, save_av1_queue_snapshot, save_queue_items, save_settings, trim_activity_log,
+    save_settings, trim_activity_log,
     AppSettings, Av1QueueSnapshot,
 };
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
@@ -60,6 +61,9 @@ use crate::models::Av1QueueItem;
 use crate::pkg_version;
 use crate::ui_icons;
 use crate::ytdlp;
+use crate::ytdlp_download_args::{
+    build_download_extra_args, metadata_extra_args, output_filename_template,
+};
 
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -481,128 +485,10 @@ impl PydlApp {
         self.append_log(&format!("Applied profile: {}", profile.name));
     }
 
-    fn output_filename_template(&self) -> String {
-        let t = self.settings.output_filename_template.trim();
-        if t.is_empty() {
-            crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned()
-        } else {
-            t.to_owned()
-        }
-    }
-
-    fn quality_format_args(&self) -> Vec<String> {
-        let preset = self.settings.quality_preset.trim().to_ascii_lowercase();
-        let custom = self.settings.quality_format_custom.trim();
-        let fmt = match preset.as_str() {
-            "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-            "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-            "audio" => "bestaudio/best",
-            "custom" if !custom.is_empty() => custom,
-            _ => "bestvideo+bestaudio/best",
-        };
-        vec!["-f".to_owned(), fmt.to_owned()]
-    }
-
-    const QUEUE_SAVE_DEBOUNCE: Duration = Duration::from_millis(400);
-
-    fn schedule_queue_save(&mut self) {
-        self.queue_save_deadline = Some(Instant::now() + Self::QUEUE_SAVE_DEBOUNCE);
-    }
-
-    fn maybe_flush_queue_save(&mut self) {
-        if let Some(deadline) = self.queue_save_deadline {
-            if Instant::now() >= deadline {
-                self.queue_save_deadline = None;
-                self.flush_queue_to_disk();
-            }
-        }
-    }
-
-    fn flush_queue_to_disk(&mut self) {
-        self.queue_save_deadline = None;
-        if let Err(err) = save_queue_items(&self.items) {
-            self.append_log(&format!("Failed to save queue state: {err}"));
-        }
-    }
-
-    fn schedule_log_save(&mut self) {
-        self.log_save_deadline = Some(Instant::now() + Self::QUEUE_SAVE_DEBOUNCE);
-    }
-
-    fn maybe_flush_log_save(&mut self) {
-        if let Some(deadline) = self.log_save_deadline {
-            if Instant::now() >= deadline {
-                self.log_save_deadline = None;
-                self.flush_log_to_disk();
-            }
-        }
-    }
-
-    fn flush_log_to_disk(&mut self) {
-        self.log_save_deadline = None;
-        if let Err(err) = save_activity_log(&self.log_lines) {
-            eprintln!("rustdl: failed to save activity log: {err}");
-        }
-    }
-
-    fn schedule_av1_queue_save(&mut self) {
-        if !self.settings.av1_remember_queue {
-            return;
-        }
-        self.av1_queue_save_deadline = Some(Instant::now() + Self::QUEUE_SAVE_DEBOUNCE);
-    }
-
-    fn maybe_flush_av1_queue_save(&mut self) {
-        if let Some(deadline) = self.av1_queue_save_deadline {
-            if Instant::now() >= deadline {
-                self.av1_queue_save_deadline = None;
-                self.flush_av1_queue_to_disk();
-            }
-        }
-    }
-
-    fn flush_av1_queue_to_disk(&mut self) {
-        self.av1_queue_save_deadline = None;
-        if !self.settings.av1_remember_queue {
-            return;
-        }
-        let snapshot = Av1QueueSnapshot {
-            input_paths: self.av1_input_paths.clone(),
-            next_item_id: self.av1_next_item_id,
-            items: self.av1_items.clone(),
-        };
-        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
-            self.append_log(&format!("Failed to save AV1 queue state: {err}"));
-        }
-    }
-
-    pub(super) fn clear_av1_queue_persistence(&mut self) {
-        self.av1_queue_save_deadline = None;
-        let snapshot = Av1QueueSnapshot::default();
-        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
-            self.append_log(&format!("Failed to clear AV1 queue state: {err}"));
-        }
-    }
-
-    pub(super) fn clear_activity_log(&mut self) {
-        self.log_lines.clear();
-        self.flush_log_to_disk();
-    }
-
     pub(super) fn open_config_folder(&mut self) {
         let dir = rustdl_config_dir();
         if let Err(e) = app_actions::open_path(&dir) {
             self.append_log(&format!("Failed to open config folder: {e}"));
-        }
-    }
-
-    pub(super) fn open_activity_log_file(&mut self) {
-        let path = activity_log_file_path();
-        if !path.exists() {
-            let _ = save_activity_log(&self.log_lines);
-        }
-        if let Err(e) = app_actions::open_path(&path) {
-            self.append_log(&format!("Failed to open activity log: {e}"));
         }
     }
 
@@ -629,25 +515,6 @@ impl PydlApp {
                 .as_ref()
                 .is_some_and(|u| u.to_ascii_lowercase().contains(&q))
             || item.video_id.to_ascii_lowercase().contains(&q)
-    }
-
-    fn pause_all_downloads(&mut self) {
-        if self.downloads_paused {
-            return;
-        }
-        self.downloads_paused = true;
-        self.cancel_all_active(CancelPostAction::Ready);
-        self.append_log("Downloads paused (active items moved back to ready).");
-    }
-
-    fn resume_all_downloads(&mut self) {
-        if !self.downloads_paused {
-            return;
-        }
-        self.downloads_paused = false;
-        self.session_complete_notified = false;
-        self.append_log("Downloads resumed.");
-        self.start_downloads();
     }
 
     fn export_queue_to_file(&mut self) {
@@ -730,7 +597,7 @@ impl PydlApp {
         }
     }
 
-    fn refresh_deps(&mut self) {
+    pub(super) fn refresh_deps(&mut self) {
         let (yt, ffm, ffp) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
             &self.settings.ffmpeg_path,
@@ -757,7 +624,7 @@ impl PydlApp {
         self.refresh_av1_encoder_detection();
     }
 
-    fn append_log(&mut self, message: &str) {
+    pub(super) fn append_log(&mut self, message: &str) {
         let line = crate::time_format::format_log_line(message);
         self.log_lines.push_back(line);
         trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
@@ -791,111 +658,15 @@ impl PydlApp {
         }
     }
 
-    fn ytdlp_cookie_args(&self) -> Vec<String> {
-        ytdlp::cookie_args_from_setting(&self.settings.yt_dlp_cookies)
-    }
-
-    fn ytdlp_impersonate_args(&self) -> Vec<String> {
-        ytdlp::impersonate_args_from_setting(&self.settings.yt_dlp_impersonate)
-    }
-
-    /// Cookies and impersonation flags for `yt-dlp -J` when resolving URLs.
     fn metadata_extra_args(&self) -> Vec<String> {
-        let mut args = self.ytdlp_impersonate_args();
-        args.extend(self.ytdlp_cookie_args());
-        args
+        metadata_extra_args(&self.settings)
     }
 
-    fn download_extra_args(&self) -> Vec<String> {
-        // Retry flags first; cookies; user "Extra args" follow and can override (yt-dlp: last wins).
-        let mut args = Vec::new();
-        if self.settings.yt_dlp_unlimited_retries {
-            args.push("--retries".to_owned());
-            args.push("infinite".to_owned());
-            args.push("--fragment-retries".to_owned());
-            args.push("infinite".to_owned());
-        } else {
-            let n = self.settings.yt_dlp_retry_count.to_string();
-            args.push("--retries".to_owned());
-            args.push(n.clone());
-            args.push("--fragment-retries".to_owned());
-            args.push(n);
-        }
-        args.extend(self.ytdlp_impersonate_args());
-        args.extend(self.ytdlp_cookie_args());
-        if !self.settings.yt_proxy.trim().is_empty() {
-            args.push("--proxy".to_owned());
-            args.push(self.settings.yt_proxy.trim().to_owned());
-        }
-        if !self.settings.yt_download_archive.trim().is_empty() {
-            args.push("--download-archive".to_owned());
-            args.push(self.settings.yt_download_archive.trim().to_owned());
-        }
-        if self.settings.yt_sponsorblock_remove {
-            args.push("--sponsorblock-remove".to_owned());
-            args.push("all".to_owned());
-        } else if !self.settings.yt_sponsorblock_mark.trim().is_empty() {
-            args.push("--sponsorblock-mark".to_owned());
-            args.push(self.settings.yt_sponsorblock_mark.trim().to_owned());
-        }
-        args.extend(split_cli_like(&self.settings.yt_dlp_extra_args));
-        args.extend(self.quality_format_args());
-        match self.settings.merge_container.trim().to_ascii_lowercase().as_str() {
-            "mp4" => {
-                args.push("--merge-output-format".to_owned());
-                args.push("mp4".to_owned());
-            }
-            "mkv" => {
-                args.push("--merge-output-format".to_owned());
-                args.push("mkv".to_owned());
-            }
-            "webm" => {
-                args.push("--merge-output-format".to_owned());
-                args.push("webm".to_owned());
-            }
-            _ => {}
-        }
-        if self.settings.yt_ignore_errors {
-            args.push("--ignore-errors".to_owned());
-        }
-        if self.settings.yt_restrict_filenames {
-            args.push("--restrict-filenames".to_owned());
-        }
-        if self.settings.yt_write_info_json {
-            args.push("--write-info-json".to_owned());
-        }
-        if self.settings.yt_write_auto_subs {
-            args.push("--write-auto-subs".to_owned());
-        }
-        if self.settings.embed_thumbnail {
-            args.push("--embed-thumbnail".to_owned());
-        }
-        if self.settings.yt_embed_metadata {
-            args.push("--embed-metadata".to_owned());
-        }
-        if self.settings.ffmpeg_extract_audio_mp3 {
-            args.push("--extract-audio".to_owned());
-            args.push("--audio-format".to_owned());
-            args.push("mp3".to_owned());
-        } else if self.settings.ffmpeg_remux_mp4 {
-            args.push("--remux-video".to_owned());
-            args.push("mp4".to_owned());
-        }
-        let mut post_args = self.settings.ffmpeg_post_args.trim().to_owned();
-        if self.settings.ffmpeg_faststart {
-            if !post_args.is_empty() {
-                post_args.push(' ');
-            }
-            post_args.push_str("-movflags +faststart");
-        }
-        if !post_args.trim().is_empty() {
-            args.push("--postprocessor-args".to_owned());
-            args.push(post_args);
-        }
-        args
+    pub(super) fn download_extra_args(&self) -> Vec<String> {
+        build_download_extra_args(&self.settings)
     }
 
-    fn yt_dlp_bin(&self) -> String {
+    pub(super) fn yt_dlp_bin(&self) -> String {
         if self.settings.yt_dlp_path.trim().is_empty() {
             "yt-dlp".to_owned()
         } else {
@@ -903,7 +674,7 @@ impl PydlApp {
         }
     }
 
-    fn ffmpeg_bin(&self) -> String {
+    pub(super) fn ffmpeg_bin(&self) -> String {
         if self.settings.ffmpeg_path.trim().is_empty() {
             String::new()
         } else {
@@ -917,7 +688,7 @@ impl PydlApp {
         parts.push(format!(
             "{}/{}",
             self.output_dir,
-            self.output_filename_template()
+            output_filename_template(&self.settings)
         ));
         let ffmpeg = self.ffmpeg_bin();
         if !ffmpeg.is_empty() {
@@ -939,7 +710,7 @@ impl PydlApp {
         }
     }
 
-    fn refresh_done_file_lookup(&mut self) {
+    pub(super) fn refresh_done_file_lookup(&mut self) {
         self.done_file_index.refresh(&self.output_dir);
         if self.done_file_index.scan_truncated {
             if !self.done_lookup_truncation_logged {
@@ -954,7 +725,7 @@ impl PydlApp {
         }
     }
 
-    fn find_downloaded_file_for_item(
+    pub(super) fn find_downloaded_file_for_item(
         &self,
         item: &QueueItem,
     ) -> Option<(PathBuf, std::time::SystemTime)> {
@@ -1069,80 +840,6 @@ impl PydlApp {
         self.persist_settings();
     }
 
-    /// Queues every **failed** row that has a download URL (same as per-card **Retry download**).
-    fn retry_failed_items(&mut self) {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
-            &self.settings.yt_dlp_path,
-            &self.settings.ffmpeg_path,
-            &self.settings.ffprobe_path,
-        );
-        if !has_yt {
-            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
-            self.refresh_deps();
-            return;
-        }
-        let failed_no_url = self
-            .items
-            .iter()
-            .filter(|it| {
-                it.status == ItemStatus::Failed && !self.item_has_redownload_target(it)
-            })
-            .count();
-        let ids: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|it| {
-                it.status == ItemStatus::Failed && self.item_has_redownload_target(it)
-            })
-            .map(|it| it.item_id)
-            .collect();
-        if ids.is_empty() {
-            if self.status_failed > 0 {
-                self.append_log(
-                    "No failed items have a video URL to retry. Check the row or re-add the link.",
-                );
-            } else {
-                self.append_log("No failed downloads to retry.");
-            }
-            return;
-        }
-        self.persist_settings();
-        self.refresh_done_file_lookup();
-        for id in &ids {
-            self.prepare_item_redownload_reset(*id);
-        }
-        self.refresh_done_file_lookup();
-        self.update_status();
-        self.schedule_queue_save();
-        self.append_log(&format!(
-            "Retrying {} failed download(s).{}",
-            ids.len(),
-            if failed_no_url > 0 {
-                format!(" Skipped {failed_no_url} without a URL.")
-            } else {
-                String::new()
-            }
-        ));
-        self.spawn_download_workers(ids);
-    }
-
-    fn maybe_auto_start_downloads(&mut self) {
-        if self.downloads_paused || !self.settings.auto_start_downloads {
-            return;
-        }
-        let has_idle_items = self
-            .items
-            .iter()
-            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
-        if has_idle_items {
-            self.start_downloads();
-        }
-    }
-
     fn probe_done_item_resolution_if_missing(&mut self, item_id: u64) {
         let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
             return;
@@ -1165,7 +862,7 @@ impl PydlApp {
         }
     }
 
-    fn update_status(&mut self) {
+    pub(super) fn update_status(&mut self) {
         let counts = app_state::compute_status_counts(&self.items);
         self.status_resolving = counts.resolving;
         self.status_ready = counts.ready;
@@ -1192,7 +889,7 @@ impl PydlApp {
         keys.into_iter().filter(|k| !k.is_empty()).collect()
     }
 
-    fn refresh_input_line_info(&mut self) {
+    pub(super) fn refresh_input_line_info(&mut self) {
         let lines: Vec<String> = self
             .input_urls
             .lines()
@@ -1310,256 +1007,8 @@ impl PydlApp {
         ));
     }
 
-    fn collect_idle_download_item_ids(&self) -> Vec<u64> {
-        let mut ids: Vec<(u64, u64)> = self
-            .items
-            .iter()
-            .filter(|it| it.status == ItemStatus::Idle && it.error.is_none())
-            .map(|it| {
-                let order = if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                };
-                (order, it.item_id)
-            })
-            .collect();
-        ids.sort_by_key(|(order, _)| *order);
-        ids.into_iter().map(|(_, id)| id).collect()
-    }
-
-    fn spawn_download_workers(&mut self, pending_ids: Vec<u64>) {
-        if self.downloads_paused {
-            self.append_log("Downloads are paused. Click Resume to continue.");
-            return;
-        }
-        if pending_ids.is_empty() {
-            self.append_log("Nothing to download.");
-            return;
-        }
-        self.session_complete_notified = false;
-
-        for id in &pending_ids {
-            if let Some(it) = self.items.iter_mut().find(|x| x.item_id == *id) {
-                it.status = ItemStatus::Queued;
-                it.detail = "Queued".to_owned();
-            }
-        }
-        self.update_status();
-        self.schedule_queue_save();
-
-        let mut groups = vec![Vec::<u64>::new(); self.worker_count.max(1)];
-        let groups_len = groups.len();
-        for (idx, iid) in pending_ids.into_iter().enumerate() {
-            groups[idx % groups_len].push(iid);
-        }
-        let download_args = self.download_extra_args();
-        let yt_dlp_bin = self.yt_dlp_bin();
-        let ffmpeg_bin = self.ffmpeg_bin();
-        let output_template = self.output_filename_template();
-
-        for ids in groups.into_iter().filter(|g| !g.is_empty()) {
-            self.queue_running += 1;
-            let urls = ids
-                .iter()
-                .filter_map(|iid| {
-                    self.items.iter().find(|x| x.item_id == *iid).map(|x| {
-                        let cancel_flag = self
-                            .download_cancel_flags
-                            .entry(*iid)
-                            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-                            .clone();
-                        (
-                            *iid,
-                            x.webpage_url.clone(),
-                            x.source_line.clone(),
-                            cancel_flag,
-                        )
-                    })
-                })
-                .collect::<Vec<_>>();
-            background_spawn::spawn_download_worker(
-                &self.runtime,
-                &self.tx,
-                self.output_dir.clone(),
-                output_template.clone(),
-                download_args.clone(),
-                yt_dlp_bin.clone(),
-                ffmpeg_bin.clone(),
-                urls,
-            );
-        }
-    }
-
-    fn start_downloads(&mut self) {
-        if self.downloads_paused {
-            self.append_log("Downloads are paused. Click Resume first.");
-            return;
-        }
-        if self.items.is_empty() {
-            self.append_log("Add URLs first.");
-            return;
-        }
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        self.persist_settings();
-        let pending_ids = self.collect_idle_download_item_ids();
-        self.spawn_download_workers(pending_ids);
-    }
-
-    fn remove_item_by_id(&mut self, item_id: u64) -> bool {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
-            return false;
-        };
-        if self.items[idx].status == ItemStatus::Resolving {
-            self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
-        }
-        self.items.remove(idx);
-        self.textures.remove(&item_id);
-        self.thumbnail_attempted.remove(&item_id);
-        self.thumbnail_inflight.remove(&item_id);
-        self.download_cancel_flags.remove(&item_id);
-        self.cancel_post_actions.remove(&item_id);
-        true
-    }
-
-    fn request_cancel_item(&mut self, item_id: u64, post_action: CancelPostAction) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
-            return;
-        };
-        match self.items[idx].status {
-            ItemStatus::Queued => {
-                self.cancel_post_actions.remove(&item_id);
-                if matches!(post_action, CancelPostAction::Remove) {
-                    let _ = self.remove_item_by_id(item_id);
-                    self.append_log(&format!(
-                        "[item {item_id}] Cancelled and removed from queue."
-                    ));
-                } else {
-                    let it = &mut self.items[idx];
-                    it.status = ItemStatus::Idle;
-                    it.percent = 0.0;
-                    it.speed_text = "-".to_owned();
-                    it.eta_text = "-".to_owned();
-                    it.detail = "Cancelled (ready)".to_owned();
-                    self.append_log(&format!(
-                        "[item {item_id}] Cancelled and moved back to ready."
-                    ));
-                }
-                self.download_cancel_flags.remove(&item_id);
-            }
-            ItemStatus::Downloading => {
-                if let Some(flag) = self.download_cancel_flags.get(&item_id) {
-                    flag.store(true, Ordering::Relaxed);
-                } else {
-                    self.download_cancel_flags
-                        .insert(item_id, Arc::new(AtomicBool::new(true)));
-                }
-                self.cancel_post_actions.insert(item_id, post_action);
-                self.items[idx].detail = match post_action {
-                    CancelPostAction::Ready => "Cancelling… will return to ready".to_owned(),
-                    CancelPostAction::Remove => "Cancelling… will remove row".to_owned(),
-                };
-                self.append_log(&format!("[item {item_id}] Cancel requested."));
-            }
-            _ => return,
-        }
-        self.update_status();
-        self.refresh_input_line_info();
-        self.schedule_queue_save();
-    }
-
-    fn cancel_all_active(&mut self, post_action: CancelPostAction) {
-        let ids: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|it| matches!(it.status, ItemStatus::Queued | ItemStatus::Downloading))
-            .map(|it| it.item_id)
-            .collect();
-        if ids.is_empty() {
-            self.append_log("No active queued/downloading items to cancel.");
-            return;
-        }
-        for item_id in &ids {
-            self.request_cancel_item(*item_id, post_action);
-        }
-        self.append_log(&format!("Cancel requested for {} item(s).", ids.len()));
-    }
-
-    fn item_has_redownload_target(&self, item: &QueueItem) -> bool {
-        let u = item.webpage_url.trim();
-        let s = item.source_line.trim();
-        !u.is_empty() || (!s.is_empty() && Url::parse(s).is_ok())
-    }
-
-    /// Removes a matched output file (if any) and clears progress so the row can be queued again.
-    fn prepare_item_redownload_reset(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
-            return;
-        };
-        if let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) {
-            if let Err(e) = fs::remove_file(&path) {
-                self.append_log(&format!(
-                    "Could not remove old file {}: {e}",
-                    path.to_string_lossy()
-                ));
-            } else {
-                self.append_log(&format!("Removed old file: {}", path.to_string_lossy()));
-            }
-            self.done_file_index.force_refresh();
-            self.refresh_done_file_lookup();
-        }
-        {
-            let it = &mut self.items[idx];
-            it.error = None;
-            it.status = ItemStatus::Idle;
-            it.percent = 0.0;
-            it.size_text = "-".to_owned();
-            it.speed_text = "-".to_owned();
-            it.eta_text = "-".to_owned();
-            it.detail = "Re-downloading…".to_owned();
-        }
-    }
-
-    /// Deletes the matched output file if present, resets the row to idle, and starts a download for this id only.
-    fn redownload_item_id(&mut self, item_id: u64) {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
-            return;
-        };
-        if !self.item_has_redownload_target(&self.items[idx]) {
-            self.append_log(&format!(
-                "[item {item_id}] Cannot re-download: no video URL on this row."
-            ));
-            return;
-        }
-        self.persist_settings();
-        self.refresh_done_file_lookup();
-        self.prepare_item_redownload_reset(item_id);
-        self.refresh_done_file_lookup();
-        self.update_status();
-        self.schedule_queue_save();
-        self.spawn_download_workers(vec![item_id]);
-    }
-
-    /// Same as [`Self::redownload_item_id`] but only allowed from a failed download row (clear UX label).
-    fn retry_download_item_id(&mut self, item_id: u64) {
-        let Some(idx) = self.items.iter().position(|x| x.item_id == item_id) else {
-            return;
-        };
-        if self.items[idx].status != ItemStatus::Failed {
-            return;
-        }
-        self.redownload_item_id(item_id);
-    }
-
     /// Re-run yt-dlp metadata for this row (same URL), replacing the card when resolve completes.
-    fn retry_metadata_item_id(&mut self, item_id: u64) {
+    pub(super) fn retry_metadata_item_id(&mut self, item_id: u64) {
         if self.add_in_progress {
             self.append_log(
                 "Wait for the current \"Add URLs\" / metadata batch to finish before retrying.",

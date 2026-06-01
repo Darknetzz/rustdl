@@ -169,11 +169,6 @@ fn fps_badge_colors(label: &str) -> (Color32, Color32) {
             Color32::from_rgb(120, 85, 40),
             Color32::from_rgb(255, 240, 210),
         )
-    } else if fps > 0.0 {
-        (
-            Color32::from_rgb(70, 70, 80),
-            Color32::from_rgb(220, 220, 228),
-        )
     } else {
         (
             Color32::from_rgb(70, 70, 80),
@@ -208,36 +203,6 @@ pub fn draw_meta_badge(ui: &mut egui::Ui, label: &str, kind: MetaBadgeKind) {
         .show(ui, |ui| {
             ui.label(RichText::new(label).small().strong().color(text_color));
         });
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn resolution_badge_colors_follow_height_buckets() {
-        let (fill_1080, _) = resolution_badge_colors("1920x1080");
-        let (fill_720, _) = resolution_badge_colors("1280x720");
-        assert_ne!(fill_1080, fill_720);
-    }
-
-    #[test]
-    fn codec_badge_colors_distinguish_common_codecs() {
-        let (av1, _) = codec_badge_colors("AV1");
-        let (h264, _) = codec_badge_colors("H264");
-        let (hevc, _) = codec_badge_colors("HEVC");
-        assert_ne!(av1, h264);
-        assert_ne!(h264, hevc);
-    }
-
-    #[test]
-    fn fps_badge_colors_distinguish_common_rates() {
-        let (fps60, _) = fps_badge_colors("60.00 fps");
-        let (fps30, _) = fps_badge_colors("30.00 fps");
-        let (fps24, _) = fps_badge_colors("23.98 fps");
-        assert_ne!(fps60, fps30);
-        assert_ne!(fps30, fps24);
-    }
 }
 
 fn shade(color: Color32, factor: f32) -> Color32 {
@@ -393,4 +358,34 @@ pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Respon
         Color32::from_rgb(227, 242, 253),
         Color32::from_rgb(30, 136, 229),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolution_badge_colors_follow_height_buckets() {
+        let (fill_1080, _) = resolution_badge_colors("1920x1080");
+        let (fill_720, _) = resolution_badge_colors("1280x720");
+        assert_ne!(fill_1080, fill_720);
+    }
+
+    #[test]
+    fn codec_badge_colors_distinguish_common_codecs() {
+        let (av1, _) = codec_badge_colors("AV1");
+        let (h264, _) = codec_badge_colors("H264");
+        let (hevc, _) = codec_badge_colors("HEVC");
+        assert_ne!(av1, h264);
+        assert_ne!(h264, hevc);
+    }
+
+    #[test]
+    fn fps_badge_colors_distinguish_common_rates() {
+        let (fps60, _) = fps_badge_colors("60.00 fps");
+        let (fps30, _) = fps_badge_colors("30.00 fps");
+        let (fps24, _) = fps_badge_colors("23.98 fps");
+        assert_ne!(fps60, fps30);
+        assert_ne!(fps30, fps24);
+    }
 }
