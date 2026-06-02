@@ -150,17 +150,16 @@ mod tests {
     }
 
     #[test]
-    fn dedupe_keys_skips_resolving() {
-        let items = vec![
-            sample_item(1, ItemStatus::Resolving),
-            QueueItem {
-                item_id: 2,
-                source_line: "https://youtube.com/watch?v=abc".to_owned(),
-                status: ItemStatus::Idle,
-                ..Default::default()
-            },
-        ];
+    fn dedupe_keys_include_resolving_source() {
+        let items = vec![QueueItem {
+            item_id: 1,
+            source_line: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            status: ItemStatus::Resolving,
+            ..Default::default()
+        }];
         let keys = app_state::rebuild_dedupe_keys_set(&items);
-        assert!(!keys.is_empty());
+        assert!(keys.contains(&crate::ytdlp::normalize_url_for_dedupe(
+            "https://youtu.be/abc123"
+        )));
     }
 }

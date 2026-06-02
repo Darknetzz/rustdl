@@ -76,18 +76,85 @@ pub fn rebuild_item_index_map(items: &[QueueItem]) -> HashMap<u64, usize> {
 pub fn rebuild_dedupe_keys_set(items: &[QueueItem]) -> HashSet<String> {
     let mut keys = HashSet::new();
     for it in items {
-        if it.status == ItemStatus::Resolving {
-            continue;
-        }
-        keys.insert(ytdlp::normalize_url_for_dedupe(&it.source_line));
-        if !it.webpage_url.is_empty() {
-            keys.insert(ytdlp::normalize_url_for_dedupe(&it.webpage_url));
-        }
-        if !it.video_id.is_empty() {
-            keys.insert(format!("vid:{}", it.video_id));
-        }
+        insert_item_dedupe_keys(&mut keys, it);
     }
     keys.into_iter().filter(|k| !k.is_empty()).collect()
+}
+
+fn insert_item_dedupe_keys(keys: &mut HashSet<String>, it: &QueueItem) {
+    keys.insert(ytdlp::normalize_url_for_dedupe(&it.source_line));
+    if !it.webpage_url.is_empty() {
+        keys.insert(ytdlp::normalize_url_for_dedupe(&it.webpage_url));
+    }
+    if !it.video_id.is_empty() {
+        keys.insert(format!("vid:{}", it.video_id));
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UrlLineClass {
+    Valid,
+    DuplicateInInput,
+    DuplicateExisting,
+    Invalid,
+}
+
+pub fn classify_url_line(
+    line: &str,
+    seen_in_batch: &mut HashSet<String>,
+    existing_keys: &HashSet<String>,
+) -> UrlLineClass {
+    let line = line.trim();
+    if line.is_empty() {
+        return UrlLineClass::Invalid;
+    }
+    if url::Url::parse(line).is_err() {
+        return UrlLineClass::Invalid;
+    }
+    let normalized = ytdlp::normalize_url_for_dedupe(line);
+    if !normalized.is_empty() && existing_keys.contains(&normalized) {
+        return UrlLineClass::DuplicateExisting;
+    }
+    if !normalized.is_empty() && seen_in_batch.contains(&normalized) {
+        return UrlLineClass::DuplicateInInput;
+    }
+    if !normalized.is_empty() {
+        seen_in_batch.insert(normalized);
+    }
+    UrlLineClass::Valid
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct UrlLineFilterStats {
+    pub accepted: usize,
+    pub duplicate_in_input: usize,
+    pub duplicate_existing: usize,
+    pub invalid: usize,
+}
+
+pub fn filter_url_lines_for_queue_add(
+    lines: impl IntoIterator<Item = String>,
+    existing_keys: &HashSet<String>,
+) -> (Vec<String>, UrlLineFilterStats) {
+    let mut seen_in_batch = HashSet::new();
+    let mut accepted = Vec::new();
+    let mut stats = UrlLineFilterStats::default();
+    for line in lines {
+        let line = line.trim().to_owned();
+        if line.is_empty() {
+            continue;
+        }
+        match classify_url_line(&line, &mut seen_in_batch, existing_keys) {
+            UrlLineClass::Valid => {
+                stats.accepted += 1;
+                accepted.push(line);
+            }
+            UrlLineClass::DuplicateInInput => stats.duplicate_in_input += 1,
+            UrlLineClass::DuplicateExisting => stats.duplicate_existing += 1,
+            UrlLineClass::Invalid => stats.invalid += 1,
+        }
+    }
+    (accepted, stats)
 }
 
 /// Build synthetic queue items for profiling / tests (no network).
@@ -153,5 +220,40 @@ mod tests {
     fn item_index_map_matches_len() {
         let items = synthetic_queue_items(200);
         assert_eq!(rebuild_item_index_map(&items).len(), 200);
+    }
+
+    #[test]
+    fn filter_url_lines_skips_queue_duplicates_and_youtube_variants() {
+        let items = vec![QueueItem {
+            item_id: 1,
+            source_line: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            status: ItemStatus::Done,
+            ..Default::default()
+        }];
+        let keys = rebuild_dedupe_keys_set(&items);
+        let (accepted, stats) = filter_url_lines_for_queue_add(
+            vec![
+                "https://youtu.be/abc123".to_owned(),
+                "https://www.youtube.com/watch?v=abc123".to_owned(),
+            ],
+            &keys,
+        );
+        assert!(accepted.is_empty());
+        assert_eq!(stats.duplicate_existing, 2);
+        assert_eq!(stats.duplicate_in_input, 0);
+    }
+
+    #[test]
+    fn filter_url_lines_skips_duplicate_within_batch() {
+        let keys = HashSet::new();
+        let (accepted, stats) = filter_url_lines_for_queue_add(
+            vec![
+                "https://example.com/a".to_owned(),
+                "https://example.com/a".to_owned(),
+            ],
+            &keys,
+        );
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(stats.duplicate_in_input, 1);
     }
 }

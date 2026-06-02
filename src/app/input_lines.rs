@@ -1,8 +1,6 @@
 use std::collections::HashSet;
 
-use url::Url;
-
-use crate::ytdlp;
+use crate::app_state::{self, UrlLineClass};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum InputLineKind {
@@ -25,20 +23,12 @@ pub(crate) fn analyze_input_lines(
     let mut seen_input = HashSet::new();
     let mut out = Vec::new();
     for line in lines {
-        let normalized = ytdlp::normalize_url_for_dedupe(line);
-        let parsed_valid = Url::parse(line).is_ok();
-        let kind = if !parsed_valid {
-            InputLineKind::Invalid
-        } else if !normalized.is_empty() && existing_keys.contains(&normalized) {
-            InputLineKind::DuplicateExisting
-        } else if !normalized.is_empty() && seen_input.contains(&normalized) {
-            InputLineKind::DuplicateInInput
-        } else {
-            InputLineKind::Valid
+        let kind = match app_state::classify_url_line(line, &mut seen_input, existing_keys) {
+            UrlLineClass::Valid => InputLineKind::Valid,
+            UrlLineClass::DuplicateInInput => InputLineKind::DuplicateInInput,
+            UrlLineClass::DuplicateExisting => InputLineKind::DuplicateExisting,
+            UrlLineClass::Invalid => InputLineKind::Invalid,
         };
-        if !normalized.is_empty() {
-            seen_input.insert(normalized);
-        }
         out.push(InputLineInfo {
             line: line.clone(),
             kind,
@@ -73,7 +63,7 @@ pub(crate) fn append_newline_after_pasted_valid_url(
     if last_line.is_empty() {
         return false;
     }
-    if Url::parse(last_line).is_err() {
+    if url::Url::parse(last_line).is_err() {
         return false;
     }
     let sizable_append = input.len().saturating_sub(prev.len()) >= 10;

@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 use crate::app::background_spawn;
 use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
 use crate::app_parsing::normalize_restored_item;
-use crate::app_state::{StatusCounts, TransferTotals};
+use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
 use crate::config::{
     load_activity_log, load_queue_items, load_settings, save_queue_items, save_settings,
     trim_activity_log, AppSettings,
@@ -501,10 +501,29 @@ impl DownloadCore {
         }
     }
 
-    pub fn queue_urls_for_resolve(&mut self, lines: Vec<String>) {
+    pub fn queue_urls_for_resolve(&mut self, lines: Vec<String>) -> UrlLineFilterStats {
         if lines.is_empty() {
             self.append_log("Add at least one URL.");
-            return;
+            return UrlLineFilterStats::default();
+        }
+        self.rebuild_dedupe_keys_cache();
+        let (lines, filter_stats) =
+            app_state::filter_url_lines_for_queue_add(lines, &self.cached_dedupe_keys);
+        let skipped_dup = filter_stats.duplicate_in_input + filter_stats.duplicate_existing;
+        if skipped_dup > 0 {
+            self.append_log(&format!(
+                "Skipped {skipped_dup} duplicate URL(s) already in the queue or input."
+            ));
+        }
+        if filter_stats.invalid > 0 {
+            self.append_log(&format!(
+                "Skipped {} invalid URL(s).",
+                filter_stats.invalid
+            ));
+        }
+        if lines.is_empty() {
+            self.append_log("No new URLs to add (all duplicates or invalid).");
+            return filter_stats;
         }
         let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
@@ -514,7 +533,7 @@ impl DownloadCore {
         if !has_yt {
             self.append_log("yt-dlp not found (check PATH or Settings executable path).");
             self.refresh_deps();
-            return;
+            return filter_stats;
         }
         self.add_in_progress = true;
         self.add_total_urls = 0;
@@ -538,7 +557,7 @@ impl DownloadCore {
         if queued_lines.is_empty() {
             self.add_in_progress = false;
             self.append_log("No new URLs to add (all duplicates).");
-            return;
+            return filter_stats;
         }
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
@@ -548,6 +567,7 @@ impl DownloadCore {
             self.settings.playlist_preview_cap,
             queued_lines,
         );
+        filter_stats
     }
 
     pub fn snapshot_queue(&self) -> Vec<QueueItem> {

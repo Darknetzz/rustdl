@@ -63,6 +63,13 @@ struct AddUrlsBody {
     urls: Vec<String>,
 }
 
+#[derive(Serialize)]
+struct AddUrlsResponse {
+    accepted: usize,
+    skipped_duplicates: usize,
+    skipped_invalid: usize,
+}
+
 #[derive(Deserialize)]
 struct PatchSettingsBody {
     settings: AppSettings,
@@ -192,7 +199,7 @@ async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {
 async fn queue_add(
     State(st): State<ApiState>,
     Json(body): Json<AddUrlsBody>,
-) -> Result<StatusCode, StatusCode> {
+) -> Result<Json<AddUrlsResponse>, StatusCode> {
     let lines: Vec<String> = body
         .urls
         .into_iter()
@@ -203,8 +210,12 @@ async fn queue_add(
         return Err(StatusCode::BAD_REQUEST);
     }
     let mut c = st.core.lock();
-    c.queue_urls_for_resolve(lines);
-    Ok(StatusCode::ACCEPTED)
+    let stats = c.queue_urls_for_resolve(lines);
+    Ok(Json(AddUrlsResponse {
+        accepted: stats.accepted,
+        skipped_duplicates: stats.duplicate_in_input + stats.duplicate_existing,
+        skipped_invalid: stats.invalid,
+    }))
 }
 
 async fn queue_remove(
@@ -341,7 +352,18 @@ async fn thumbnail_proxy(
         let c = st.core.lock();
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
         let item = &c.items[idx];
-        let url = item.thumbnail_url.clone().ok_or(StatusCode::NOT_FOUND)?;
+        let url = item
+            .thumbnail_url
+            .clone()
+            .or_else(|| {
+                let vid = item.video_id.trim();
+                if vid.is_empty() {
+                    None
+                } else {
+                    Some(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"))
+                }
+            })
+            .ok_or(StatusCode::NOT_FOUND)?;
         (url, c.http_client.clone())
     };
     let resp = client.get(&url).send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;

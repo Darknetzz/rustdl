@@ -89,53 +89,313 @@ function scheduleAutoAddFromInput() {
   }, AUTO_ADD_MS);
 }
 
+function showAddFeedback(result) {
+  const el = document.getElementById("add-feedback");
+  if (!el || !result) return;
+  const accepted = result.accepted || 0;
+  const dup = result.skipped_duplicates || 0;
+  const invalid = result.skipped_invalid || 0;
+  if (accepted === 0 && dup === 0 && invalid === 0) {
+    el.classList.add("hidden");
+    return;
+  }
+  const parts = [];
+  if (accepted > 0) parts.push(`Added ${accepted} URL(s).`);
+  if (dup > 0) parts.push(`Skipped ${dup} duplicate(s).`);
+  if (invalid > 0) parts.push(`Skipped ${invalid} invalid line(s).`);
+  el.textContent = parts.join(" ");
+  el.classList.remove("hidden");
+  el.classList.toggle("ok", accepted > 0 && dup === 0 && invalid === 0);
+}
+
+async function postQueueUrls(urls) {
+  const res = await api("/api/queue", {
+    method: "POST",
+    body: JSON.stringify({ urls }),
+  });
+  return res.json();
+}
+
 async function flushAutoAddFromInput() {
   if (!statusFlags.auto_add_pasted_urls || statusFlags.add_in_progress) return;
   const urls = collectUrlsFromInput();
   if (!urls.length) return;
-  await api("/api/queue", { method: "POST", body: JSON.stringify({ urls }) });
-  document.getElementById("url-input").value = "";
+  const result = await postQueueUrls(urls);
+  if ((result.accepted || 0) > 0) {
+    document.getElementById("url-input").value = "";
+  }
+  showAddFeedback(result);
   await refreshAll();
 }
 
-async function refreshQueue() {
-  const res = await api("/api/queue");
-  const data = await res.json();
-  const root = document.getElementById("queue");
-  root.innerHTML = "";
-  for (const item of data.items) {
-    const card = document.createElement("article");
-    card.className = "card";
-    const img = document.createElement("img");
-    img.alt = "";
-    if (item.thumbnail_url && token()) {
-      const t = encodeURIComponent(token());
-      img.src = `/api/thumbnail/${item.item_id}?token=${t}`;
-      img.onerror = () => img.remove();
-    } else {
-      img.remove();
-    }
-    const body = document.createElement("div");
-    const title = document.createElement("p");
-    title.className = "card-title";
-    title.textContent = item.title || item.source_line || "(no title)";
-    const meta = document.createElement("p");
-    meta.className = "card-meta";
-    meta.textContent =
-      `${item.status} · ${item.percent.toFixed(0)}% · ${item.speed_text} · ${item.eta_text}`;
-    if (item.detail) meta.textContent += ` · ${item.detail}`;
-    body.appendChild(title);
-    body.appendChild(meta);
-    const actions = document.createElement("div");
+function statusSlug(status) {
+  return String(status || "Idle").toLowerCase();
+}
+
+function formatDuration(sec) {
+  if (sec == null || sec < 0) return null;
+  const s = Math.floor(sec % 60);
+  const m = Math.floor((sec / 60) % 60);
+  const h = Math.floor(sec / 3600);
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function formatSubtitle(item, hideSubtitle) {
+  if (hideSubtitle) return "";
+  const parts = [];
+  const dur = formatDuration(item.duration);
+  if (dur) parts.push(dur);
+  if (item.uploader && String(item.uploader).trim()) parts.push(String(item.uploader).trim());
+  return parts.join(" · ");
+}
+
+function formatResolution(w, h) {
+  if (!w || !h) return null;
+  return `${w}×${h}`;
+}
+
+function thumbPlaceholderText(item, showThumbnails) {
+  if (!showThumbnails) return "Thumbnails off";
+  if (item.thumbnail_url || (item.video_id && String(item.video_id).trim())) {
+    return "Fetching thumbnail…";
+  }
+  return "No preview available";
+}
+
+function footerStatusText(item) {
+  const slug = statusSlug(item.status);
+  if (slug === "resolving") return "Fetching metadata…";
+  if (slug === "idle" || slug === "queued") {
+    const parts = [`${item.percent.toFixed(1)}%`];
+    if (item.size_text && item.size_text !== "-") parts.push(item.size_text);
+    if (item.speed_text && item.speed_text !== "-") parts.push(item.speed_text);
+    if (item.eta_text && item.eta_text !== "-") parts.push(item.eta_text);
+    return parts.join(" · ");
+  }
+  if (slug === "done") {
+    return `${item.percent.toFixed(1)}% · ${item.size_text || "-"} · ${item.speed_text || "-"} · ${item.eta_text || "-"}`;
+  }
+  return `${item.percent.toFixed(1)}% · ${item.size_text || "-"} · ${item.speed_text || "-"} · ${item.eta_text || "-"}`;
+}
+
+function progressPercent(item) {
+  const slug = statusSlug(item.status);
+  if (slug === "resolving") return 0;
+  if (slug === "done") return 100;
+  return Math.min(100, Math.max(0, Number(item.percent) || 0));
+}
+
+function progressLabel(item) {
+  const slug = statusSlug(item.status);
+  if (slug === "resolving") return "Fetching metadata…";
+  if (slug === "done") return `${item.percent.toFixed(0)}%`;
+  if (slug === "downloading" || slug === "queued") {
+    return `${item.percent.toFixed(0)}%`;
+  }
+  return "";
+}
+
+function canCancel(item) {
+  const slug = statusSlug(item.status);
+  return slug === "queued" || slug === "downloading";
+}
+
+function renderQueueCard(item, settings) {
+  const s = settings || {};
+  const showThumbnails = s.show_thumbnails !== false;
+  const compact = !!s.compact_cards;
+  const hideSubtitle = !!s.hide_card_subtitle;
+  const slug = statusSlug(item.status);
+  const highlightDone = slug === "done" && !item.error;
+
+  const card = document.createElement("article");
+  card.className = "card" + (compact ? " compact" : "") + (highlightDone ? " card-done-highlight" : "");
+
+  const thumb = document.createElement("div");
+  thumb.className = "card-thumb";
+  const placeholder = document.createElement("span");
+  placeholder.className = "card-thumb-placeholder";
+  placeholder.textContent = thumbPlaceholderText(item, showThumbnails);
+
+  const img = document.createElement("img");
+  img.alt = "";
+  const hasThumbSource =
+    showThumbnails &&
+    token() &&
+    (item.thumbnail_url || (item.video_id && String(item.video_id).trim()));
+  if (hasThumbSource) {
+    img.className = "hidden";
+    img.src = `/api/thumbnail/${item.item_id}?token=${encodeURIComponent(token())}`;
+    img.onload = () => {
+      img.classList.remove("hidden");
+      placeholder.classList.add("hidden");
+    };
+    img.onerror = () => {
+      img.classList.add("hidden");
+      placeholder.textContent = "Thumbnail unavailable";
+      placeholder.classList.remove("hidden");
+    };
+    thumb.appendChild(img);
+  }
+  thumb.appendChild(placeholder);
+  card.appendChild(thumb);
+
+  const body = document.createElement("div");
+  body.className = "card-body";
+
+  const title = document.createElement("h3");
+  title.className = "card-title";
+  title.textContent = item.title || item.source_line || "(no title)";
+  body.appendChild(title);
+
+  const subtitleText = formatSubtitle(item, hideSubtitle);
+  const subtitle = document.createElement("p");
+  subtitle.className = "card-subtitle" + (subtitleText ? "" : " hidden");
+  subtitle.textContent = subtitleText || "";
+  body.appendChild(subtitle);
+
+  const progressWrap = document.createElement("div");
+  progressWrap.className = "card-progress";
+  const progressFill = document.createElement("div");
+  progressFill.className = `card-progress-fill status-${slug}`;
+  progressFill.style.width = `${progressPercent(item)}%`;
+  progressWrap.appendChild(progressFill);
+  body.appendChild(progressWrap);
+
+  const progressLabelEl = document.createElement("div");
+  progressLabelEl.className = "card-progress-label";
+  progressLabelEl.textContent = progressLabel(item);
+  body.appendChild(progressLabelEl);
+
+  const detail = (item.detail || "").trim();
+  const detailEl = document.createElement("p");
+  detailEl.className = "card-detail" + (detail && slug !== "resolving" ? "" : " hidden");
+  detailEl.textContent = detail;
+  body.appendChild(detailEl);
+
+  if (item.error) {
+    const errEl = document.createElement("p");
+    errEl.className = "card-error";
+    errEl.textContent = item.error;
+    body.appendChild(errEl);
+  }
+
+  const badges = document.createElement("div");
+  badges.className = "card-badges";
+  const res = formatResolution(item.width, item.height);
+  if (res) {
+    const resBadge = document.createElement("span");
+    resBadge.className = "meta-badge";
+    resBadge.textContent = res;
+    badges.appendChild(resBadge);
+  }
+  if (
+    (slug === "idle" || slug === "queued") &&
+    item.size_text &&
+    item.size_text !== "-"
+  ) {
+    const sizeBadge = document.createElement("span");
+    sizeBadge.className = "meta-badge";
+    sizeBadge.textContent = item.size_text.startsWith("~")
+      ? item.size_text
+      : `~${item.size_text}`;
+    badges.appendChild(sizeBadge);
+  }
+  const chip = document.createElement("span");
+  chip.className = `status-chip status-${slug}`;
+  chip.textContent = item.status || "Idle";
+  badges.appendChild(chip);
+  body.appendChild(badges);
+
+  const footer = document.createElement("p");
+  footer.className = `card-footer status-${slug}`;
+  footer.textContent = footerStatusText(item);
+  body.appendChild(footer);
+
+  card.appendChild(body);
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
     cancel.textContent = "Cancel";
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
-    card.appendChild(img);
-    card.appendChild(body);
+  }
+  card.appendChild(actions);
+
+  return card;
+}
+
+function renderQueueCardListRow(item) {
+  const slug = statusSlug(item.status);
+  const card = document.createElement("article");
+  card.className = "card";
+
+  const thumb = document.createElement("div");
+  thumb.className = "card-thumb";
+  const placeholder = document.createElement("span");
+  placeholder.className = "card-thumb-placeholder";
+  placeholder.textContent = "…";
+  const img = document.createElement("img");
+  img.alt = "";
+  if (token() && (item.thumbnail_url || item.video_id)) {
+    img.src = `/api/thumbnail/${item.item_id}?token=${encodeURIComponent(token())}`;
+    img.onload = () => placeholder.classList.add("hidden");
+    img.onerror = () => img.classList.add("hidden");
+    thumb.appendChild(img);
+  }
+  thumb.appendChild(placeholder);
+  card.appendChild(thumb);
+
+  const body = document.createElement("div");
+  body.className = "card-body";
+  const chip = document.createElement("span");
+  chip.className = `status-chip status-${slug}`;
+  chip.textContent = item.status;
+  const title = document.createElement("span");
+  title.className = "card-title";
+  title.style.display = "inline";
+  title.textContent = " " + (item.title || item.source_line);
+  body.appendChild(chip);
+  body.appendChild(title);
+  if (slug === "downloading" || slug === "queued") {
+    const pct = document.createElement("span");
+    pct.className = "card-footer";
+    pct.textContent = ` ${item.percent.toFixed(0)}%`;
+    body.appendChild(pct);
+  }
+  card.appendChild(body);
+
+  if (canCancel(item)) {
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "secondary";
+    cancel.textContent = "Cancel";
+    cancel.onclick = () => cancelItem(item.item_id);
+    actions.appendChild(cancel);
     card.appendChild(actions);
+  }
+
+  return card;
+}
+
+async function refreshQueue() {
+  const res = await api("/api/queue");
+  const data = await res.json();
+  const root = document.getElementById("queue");
+  const settings = cachedSettings || {};
+  root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
+  root.innerHTML = "";
+  for (const item of data.items) {
+    const card = settings.card_list_layout
+      ? renderQueueCardListRow(item)
+      : renderQueueCard(item, settings);
     root.appendChild(card);
   }
 }
@@ -153,8 +413,23 @@ async function cancelItem(id) {
   await refreshAll();
 }
 
+async function refreshSettingsCache() {
+  try {
+    const res = await api("/api/settings");
+    const data = await res.json();
+    cachedSettings = data.settings;
+  } catch {
+    /* settings optional until connected */
+  }
+}
+
 async function refreshAll() {
-  await Promise.all([refreshStatus(), refreshQueue(), refreshLogs()]);
+  await Promise.all([
+    refreshStatus(),
+    refreshSettingsCache(),
+    refreshQueue(),
+    refreshLogs(),
+  ]);
 }
 
 function connectSse() {
