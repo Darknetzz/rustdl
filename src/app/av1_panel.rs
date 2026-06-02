@@ -89,6 +89,7 @@ struct Av1BatchSummary {
     completed: usize,
     completed_input_bytes: u64,
     completed_output_bytes: u64,
+    pending_count: usize,
     pending_input_bytes: u64,
 }
 
@@ -97,6 +98,7 @@ fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
         completed: 0,
         completed_input_bytes: 0,
         completed_output_bytes: 0,
+        pending_count: 0,
         pending_input_bytes: 0,
     };
     for item in items {
@@ -105,6 +107,7 @@ fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
             ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
         );
         if pending {
+            summary.pending_count += 1;
             summary.pending_input_bytes =
                 summary.pending_input_bytes.saturating_add(item.input_bytes);
             continue;
@@ -759,20 +762,27 @@ impl PydlApp {
 
     fn draw_av1_batch_summary_row(&self, ui: &mut egui::Ui) {
         let batch = compute_av1_batch_summary(&self.av1_items);
-        if batch.completed > 0 {
-            let saved = batch
-                .completed_input_bytes
-                .saturating_sub(batch.completed_output_bytes);
-            let pct = if batch.completed_input_bytes > 0 {
-                (saved as f64 / batch.completed_input_bytes as f64) * 100.0
-            } else {
-                0.0
-            };
-            let theme = &self.settings.theme;
-            let done_color = status_color(ItemStatus::Done);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                ui.label(RichText::new("Summary:").color(text_muted(theme)));
+        if batch.completed == 0 && batch.pending_count == 0 {
+            return;
+        }
+
+        let theme = &self.settings.theme;
+        let done_color = status_color(ItemStatus::Done);
+        let pending_color = status_color(ItemStatus::Idle);
+        let saved = batch
+            .completed_input_bytes
+            .saturating_sub(batch.completed_output_bytes);
+        let pct = if batch.completed_input_bytes > 0 {
+            (saved as f64 / batch.completed_input_bytes as f64) * 100.0
+        } else {
+            0.0
+        };
+
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.label(RichText::new("Summary:").color(text_muted(theme)));
+
+            if batch.completed > 0 {
                 ui.label(RichText::new(format!("{} completed", batch.completed)).color(done_color));
                 draw_av1_bytes_arrow(
                     ui,
@@ -785,14 +795,24 @@ impl PydlApp {
                     RichText::new(format!("saved {} ({pct:.1}%)", human_bytes_ui(saved),))
                         .color(done_color),
                 );
-            });
-        }
-        if batch.pending_input_bytes > 0 {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Pending input:").color(text_muted(&self.settings.theme)));
-                ui.label(human_bytes_ui(batch.pending_input_bytes));
-            });
-        }
+            }
+
+            if batch.pending_count > 0 {
+                if batch.completed > 0 {
+                    ui.label(RichText::new("·").color(text_muted(theme)));
+                }
+                let remaining = if batch.pending_input_bytes > 0 {
+                    format!(
+                        "{} file(s) · {} remaining",
+                        batch.pending_count,
+                        human_bytes_ui(batch.pending_input_bytes),
+                    )
+                } else {
+                    format!("{} file(s) remaining", batch.pending_count)
+                };
+                ui.label(RichText::new(remaining).color(pending_color));
+            }
+        });
     }
 
     fn draw_av1_queue_card(&self, ui: &mut egui::Ui, it: &Av1QueueItem) {
