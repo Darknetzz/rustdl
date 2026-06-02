@@ -275,11 +275,12 @@ pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = ui.available_width();
+    let width = ui.max_rect().width();
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
-        egui::Layout::top_down(egui::Align::LEFT),
+        egui::Layout::top_down(egui::Align::Min),
         |ui| {
+            ui.set_min_width(width);
             ui.set_width(width);
             add_contents(ui)
         },
@@ -294,12 +295,17 @@ fn alert_box<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     with_full_width(ui, |ui| {
+        let width = ui.available_width();
         egui::Frame::none()
             .fill(bg)
             .stroke(egui::Stroke::new(1.0, border))
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
-            .show(ui, add_contents)
+            .show(ui, |ui| {
+                ui.set_min_width(width);
+                ui.set_width(width);
+                add_contents(ui)
+            })
             .inner
     })
 }

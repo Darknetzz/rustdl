@@ -75,7 +75,9 @@ impl eframe::App for PydlApp {
                             self.about_open = true;
                         }
                     });
-                    ui.with_layout(
+                    let right_w = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(right_w.max(0.0), 0.0),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
                             if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true)
@@ -100,32 +102,34 @@ impl eframe::App for PydlApp {
                                 &format!("{} Settings", ui_icons::SETTINGS),
                                 true,
                             )
-                            .on_hover_text(
-                                "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
-                            )
                             .clicked()
                             {
                                 self.settings_open = true;
                             }
                             ui.vertical(|ui| {
                                 ui.spacing_mut().item_spacing.y = 1.0;
-                                draw_precheck_status(
-                                    ui,
-                                    "yt-dlp",
-                                    self.has_yt_dlp,
-                                    &self.yt_dlp_version,
-                                );
-                                draw_precheck_status(
-                                    ui,
-                                    "ffmpeg",
-                                    self.has_ffmpeg,
-                                    &self.ffmpeg_version,
-                                );
-                                draw_precheck_status(
-                                    ui,
-                                    "ffprobe",
-                                    self.has_ffprobe,
-                                    &self.ffprobe_version,
+                                ui.with_layout(
+                                    egui::Layout::top_down(egui::Align::Max),
+                                    |ui| {
+                                        draw_precheck_status(
+                                            ui,
+                                            "yt-dlp",
+                                            self.has_yt_dlp,
+                                            &self.yt_dlp_version,
+                                        );
+                                        draw_precheck_status(
+                                            ui,
+                                            "ffmpeg",
+                                            self.has_ffmpeg,
+                                            &self.ffmpeg_version,
+                                        );
+                                        draw_precheck_status(
+                                            ui,
+                                            "ffprobe",
+                                            self.has_ffprobe,
+                                            &self.ffprobe_version,
+                                        );
+                                    },
                                 );
                             });
                         },
@@ -136,7 +140,7 @@ impl eframe::App for PydlApp {
                 );
                 if self.show_restore_banner && self.restored_items_count > 0 {
                     alert_warning(ui, |ui| {
-                        ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
                             ui.label(
                                 RichText::new(format!(
                                     "Restored {} item(s) from previous session.",
@@ -144,15 +148,22 @@ impl eframe::App for PydlApp {
                                 ))
                                 .color(ALERT_WARNING_TEXT),
                             );
-                            if warning_button(
-                                ui,
-                                &format!("{} Dismiss", ui_icons::DISMISS),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.show_restore_banner = false;
-                            }
+                            let tail_w = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(tail_w.max(0.0), 0.0),
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if warning_button(
+                                        ui,
+                                        &format!("{} Dismiss", ui_icons::DISMISS),
+                                        true,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.show_restore_banner = false;
+                                    }
+                                },
+                            );
                         });
                     });
                 }
