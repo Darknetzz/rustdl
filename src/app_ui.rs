@@ -273,9 +273,22 @@ const ALERT_DANGER_BG: Color32 = Color32::from_rgb(248, 215, 218);
 const ALERT_DANGER_BORDER: Color32 = Color32::from_rgb(245, 194, 199);
 pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
 
+/// Horizontal inset for the main window content area ([`content_panel_frame`]).
+pub const CONTENT_MARGIN_H: f32 = 16.0;
+pub const CONTENT_MARGIN_V: f32 = 10.0;
+
+pub fn content_panel_frame() -> egui::Frame {
+    egui::Frame::default().inner_margin(egui::Margin {
+        left: CONTENT_MARGIN_H,
+        right: CONTENT_MARGIN_H,
+        top: CONTENT_MARGIN_V,
+        bottom: CONTENT_MARGIN_V,
+    })
+}
+
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = ui.max_rect().width();
+    let width = ui.available_width();
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),

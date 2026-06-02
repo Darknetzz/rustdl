@@ -45,8 +45,8 @@ use crate::app_parsing::{
 };
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
-    alert_danger, alert_warning, centered_button_row, danger_button, draw_status_dot,
-    with_full_width,
+    alert_danger, alert_warning, centered_button_row, content_panel_frame, danger_button,
+    draw_status_dot, with_full_width,
     modal_backdrop, secondary_button, status_color, success_button, warning_button,
     ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };

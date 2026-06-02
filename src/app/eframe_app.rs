@@ -55,7 +55,9 @@ impl eframe::App for PydlApp {
         let trigger_add = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default()
+            .frame(content_panel_frame())
+            .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 ui.horizontal(|ui| {
                     ui.horizontal(|ui| {
@@ -80,6 +82,7 @@ impl eframe::App for PydlApp {
                         egui::vec2(right_w.max(0.0), 0.0),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
+                            ui.add_space(4.0);
                             if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true)
                                 .clicked()
                             {
@@ -784,17 +787,22 @@ impl eframe::App for PydlApp {
                         ui.set_width(ui.available_width());
                         ui.horizontal(|ui| {
                             ui.label(RichText::new("Videos").strong());
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let dock_label = if self.settings.logs_docked {
-                                    format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                                } else {
-                                    format!("{} Dock log", ui_icons::DOCK_LOG)
-                                };
-                                if secondary_button(ui, &dock_label, true).clicked() {
-                                    self.settings.logs_docked = !self.settings.logs_docked;
-                                    self.persist_settings();
-                                }
-                            });
+                            let tail_w = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(tail_w.max(0.0), 0.0),
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    let dock_label = if self.settings.logs_docked {
+                                        format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                                    } else {
+                                        format!("{} Dock log", ui_icons::DOCK_LOG)
+                                    };
+                                    if secondary_button(ui, &dock_label, true).clicked() {
+                                        self.settings.logs_docked = !self.settings.logs_docked;
+                                        self.persist_settings();
+                                    }
+                                },
+                            );
                         });
                         let dock_log =
                             self.settings.logs_open && self.settings.logs_docked;
