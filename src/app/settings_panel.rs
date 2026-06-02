@@ -8,6 +8,21 @@ use crate::ui_icons;
 
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
+/// Browser-openable URL for the LAN web UI (maps `0.0.0.0` to this machine).
+fn web_ui_browser_url(bind_address: &str) -> String {
+    let bind = bind_address.trim();
+    let with_scheme = if bind.starts_with("http://") || bind.starts_with("https://") {
+        if bind.ends_with('/') {
+            bind.to_owned()
+        } else {
+            format!("{bind}/")
+        }
+    } else {
+        format!("http://{bind}/")
+    };
+    with_scheme.replace("://0.0.0.0", "://127.0.0.1")
+}
+
 fn draw_effective_command_preview(ui: &mut egui::Ui, command_preview: &str) {
     let text_color = if ui.visuals().dark_mode {
         Color32::from_rgb(150, 215, 255)
@@ -233,10 +248,21 @@ impl PydlApp {
                             );
                         }
                         if self.settings.web_ui_enabled {
-                            let addr = self.settings.web_bind_address.trim();
-                            ui.label(format!(
-                                "Open http://{addr}/ in a browser on this network, then paste the API token."
-                            ));
+                            let url = web_ui_browser_url(&self.settings.web_bind_address);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label("Open");
+                                ui.hyperlink_to(&url, &url);
+                                ui.label("in a browser, then paste the API token.");
+                            });
+                            if self.settings.web_bind_address.trim().contains("0.0.0.0") {
+                                ui.label(
+                                    RichText::new(
+                                        "On other devices on your LAN, use this PC's IP address instead of 127.0.0.1.",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                            }
                         }
                         ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
