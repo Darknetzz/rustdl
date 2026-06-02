@@ -99,16 +99,33 @@ pub enum UrlLineClass {
     Invalid,
 }
 
+/// True when `line` is an absolute http(s) URL with a host (rejects `error:`, `help:`, etc.).
+pub fn is_queueable_http_url(line: &str) -> bool {
+    let line = line.trim();
+    if line.is_empty() {
+        return false;
+    }
+    let Ok(url) = url::Url::parse(line) else {
+        return false;
+    };
+    match url.scheme().to_ascii_lowercase().as_str() {
+        "http" | "https" => {}
+        _ => return false,
+    }
+    match url.host() {
+        Some(url::Host::Domain(d)) => !d.is_empty(),
+        Some(url::Host::Ipv4(_) | url::Host::Ipv6(_)) => true,
+        None => false,
+    }
+}
+
 pub fn classify_url_line(
     line: &str,
     seen_in_batch: &mut HashSet<String>,
     existing_keys: &HashSet<String>,
 ) -> UrlLineClass {
     let line = line.trim();
-    if line.is_empty() {
-        return UrlLineClass::Invalid;
-    }
-    if url::Url::parse(line).is_err() {
+    if line.is_empty() || !is_queueable_http_url(line) {
         return UrlLineClass::Invalid;
     }
     let normalized = ytdlp::normalize_url_for_dedupe(line);
@@ -241,6 +258,31 @@ mod tests {
         assert!(accepted.is_empty());
         assert_eq!(stats.duplicate_existing, 2);
         assert_eq!(stats.duplicate_in_input, 0);
+    }
+
+    #[test]
+    fn is_queueable_http_url_rejects_rustc_style_lines() {
+        assert!(!is_queueable_http_url(
+            "error: could not compile `rustdl` (lib) due to 1 previous error"
+        ));
+        assert!(!is_queueable_http_url("help: consider changing this to be mutable"));
+        assert!(!is_queueable_http_url("mailto:test@example.com"));
+        assert!(is_queueable_http_url("https://www.youtube.com/watch?v=abc123"));
+        assert!(is_queueable_http_url("http://127.0.0.1:8765/"));
+    }
+
+    #[test]
+    fn classify_url_line_marks_rustc_output_invalid() {
+        let mut seen = HashSet::new();
+        let keys = HashSet::new();
+        assert_eq!(
+            classify_url_line(
+                "error: could not compile `rustdl` (lib) due to 1 previous error",
+                &mut seen,
+                &keys
+            ),
+            UrlLineClass::Invalid
+        );
     }
 
     #[test]

@@ -63,7 +63,7 @@ pub(crate) fn append_newline_after_pasted_valid_url(
     if last_line.is_empty() {
         return false;
     }
-    if url::Url::parse(last_line).is_err() {
+    if !app_state::is_queueable_http_url(last_line) {
         return false;
     }
     let sizable_append = input.len().saturating_sub(prev.len()) >= 10;

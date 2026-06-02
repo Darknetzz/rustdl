@@ -3,8 +3,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use url::Url;
-
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
@@ -226,7 +224,7 @@ impl PydlApp {
     pub(super) fn item_has_redownload_target(&self, item: &QueueItem) -> bool {
         let u = item.webpage_url.trim();
         let s = item.source_line.trim();
-        !u.is_empty() || (!s.is_empty() && Url::parse(s).is_ok())
+        !u.is_empty() || (!s.is_empty() && crate::app_state::is_queueable_http_url(s))
     }
 
     fn prepare_item_redownload_reset(&mut self, item_id: u64) {

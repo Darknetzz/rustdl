@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 
+use crate::app_state::is_queueable_http_url;
 use crate::config::{load_settings, AppSettings};
 use crate::profiles::{all_profiles, find_profile, load_profiles};
 use crate::ytdlp;
@@ -35,8 +36,8 @@ pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     let yt_dlp = yt_dlp_bin(&settings);
     let ffmpeg = settings.ffmpeg_path.trim().to_owned();
     let url = opts.url.trim().to_owned();
-    if url.is_empty() {
-        return Err(anyhow!("URL is empty"));
+    if !is_queueable_http_url(&url) {
+        return Err(anyhow!("not a valid http(s) URL: {url}"));
     }
     let template = output_filename_template(&settings);
     if opts.dry_run {
