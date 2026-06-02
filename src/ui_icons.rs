@@ -27,6 +27,9 @@ pub const REMOVE: &str = m::ICON_DELETE;
 
 pub const NAV_DOWNLOADER: &str = m::ICON_CLOUD_DOWNLOAD;
 pub const NAV_AV1: &str = m::ICON_VIDEO_SETTINGS;
+pub const VIDEOS: &str = m::ICON_VIDEO_LIBRARY;
+pub const DOCK_VIDEOS: &str = m::ICON_DOCK_TO_BOTTOM;
+pub const UNDOCK_VIDEOS: &str = m::ICON_OPEN_IN_NEW;
 pub const DOCK_LOG: &str = m::ICON_DOCK_TO_BOTTOM;
 pub const UNDOCK_LOG: &str = m::ICON_OPEN_IN_NEW;
 pub const SHOW_ALL: &str = m::ICON_LIST;

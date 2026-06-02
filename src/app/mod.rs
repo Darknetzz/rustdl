@@ -18,6 +18,7 @@ mod av1_panel;
 pub(crate) mod background_spawn;
 pub(crate) mod core_sync;
 mod cards;
+mod videos_panel;
 pub(crate) mod done_file_index;
 mod download_control;
 mod eframe_app;
@@ -551,6 +552,7 @@ impl PydlApp {
     }
 
     fn focus_queue_group(&mut self, group: &'static str) {
+        self.ensure_videos_window_open();
         self.queue_group_focus = Some(group);
         self.scroll_to_queue_group = Some(group);
     }

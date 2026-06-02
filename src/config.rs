@@ -55,6 +55,16 @@ pub struct AppSettings {
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
     pub card_list_layout: bool,
+    /// Show video queue docked in the main window (vs separate window).
+    #[serde(default = "default_videos_docked")]
+    pub videos_docked: bool,
+    /// Floating video window visible when `videos_docked` is false.
+    #[serde(default = "default_videos_open")]
+    pub videos_open: bool,
+    #[serde(default = "default_video_float_width")]
+    pub video_float_width: f32,
+    #[serde(default = "default_video_float_height")]
+    pub video_float_height: f32,
     /// Show activity log docked under the video queue (vs floating window).
     #[serde(default = "default_logs_docked")]
     pub logs_docked: bool,
@@ -209,6 +219,22 @@ fn default_av1_remember_queue() -> bool {
     true
 }
 
+fn default_videos_docked() -> bool {
+    true
+}
+
+fn default_videos_open() -> bool {
+    true
+}
+
+fn default_video_float_width() -> f32 {
+    920.0
+}
+
+fn default_video_float_height() -> f32 {
+    640.0
+}
+
 fn default_logs_docked() -> bool {
     true
 }
@@ -271,6 +297,10 @@ impl Default for AppSettings {
             enqueue_downloads_to_av1: false,
             ui_scale: 1.08,
             card_list_layout: false,
+            videos_docked: true,
+            videos_open: true,
+            video_float_width: default_video_float_width(),
+            video_float_height: default_video_float_height(),
             logs_docked: true,
             logs_open: false,
             log_dock_height: 180.0,
@@ -424,6 +454,8 @@ pub fn load_settings() -> AppSettings {
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
+    cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
+    cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);
     cfg.av1_max_width = cfg.av1_max_width.clamp(320, 7680);
     cfg.av1_min_shrink_percent = cfg.av1_min_shrink_percent.clamp(0.0, 95.0);
     let preset = cfg.av1_size_preset.trim().to_ascii_lowercase();

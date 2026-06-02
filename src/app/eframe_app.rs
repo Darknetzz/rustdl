@@ -695,107 +695,71 @@ impl eframe::App for PydlApp {
                     self.start_downloads();
                 }
 
-                // Dedicated scroll region with a finite height so the card grid always scrolls.
-                // Activity log lives in a separate window ("Logs" button).
                 const RESERVE_BOTTOM_PX: f32 = 20.0;
                 let min_card_viewport = if self.settings.compact_cards {
                     260.0
                 } else {
                     335.0
                 };
-                let video_scroll_h =
+                let bottom_h =
                     (ui.available_height() - RESERVE_BOTTOM_PX).max(min_card_viewport);
 
-                egui::Frame::dark_canvas(ui.style())
-                    .fill(BG_CANVAS)
-                    .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
-                    .inner_margin(egui::Margin::same(10.0))
-                    .rounding(egui::Rounding::same(8.0))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Videos").strong());
-                            let tail_w = ui.available_width();
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(tail_w.max(0.0), 0.0),
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    let dock_label = if self.settings.logs_docked {
-                                        format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                                    } else {
-                                        format!("{} Dock log", ui_icons::DOCK_LOG)
-                                    };
-                                    if secondary_button(ui, &dock_label, true).clicked() {
-                                        self.settings.logs_docked = !self.settings.logs_docked;
-                                        self.persist_settings();
-                                    }
-                                },
-                            );
-                        });
-                        let dock_log =
-                            self.settings.logs_open && self.settings.logs_docked;
-                        let log_h = if dock_log {
-                            self.settings.log_dock_height.clamp(80.0, 480.0)
-                        } else {
-                            0.0
-                        };
-                        let cards_h = if dock_log {
-                            (video_scroll_h - log_h - 12.0).max(120.0)
-                        } else {
-                            video_scroll_h
-                        };
-                        egui::ScrollArea::vertical()
-                            .id_salt("rustdl_videos_scroll")
-                            .auto_shrink([false, false])
-                            .max_height(cards_h)
-                            .animated(true)
-                            .drag_to_scroll(true)
+                if self.settings.videos_docked {
+                    self.draw_docked_videos_section(ui, bottom_h);
+                } else {
+                    self.draw_videos_undocked_strip(ui);
+                    if self.settings.logs_open && self.settings.logs_docked {
+                        let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
+                        egui::Frame::dark_canvas(ui.style())
+                            .fill(BG_CANVAS)
+                            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+                            .inner_margin(egui::Margin::same(10.0))
+                            .rounding(egui::Rounding::same(8.0))
                             .show(ui, |ui| {
-                                if self.items.is_empty() {
-                                    ui.vertical_centered(|ui| {
-                                        ui.add_space(32.0);
-                                        ui.label(
-                                            RichText::new("Nothing here yet").color(TEXT_MUTED),
-                                        );
-                                        ui.label(
-                                            RichText::new(
-                                                "Paste URL(s) and click Add URLs to fetch previews.",
+                                ui.set_width(ui.available_width());
+                                ui.horizontal(|ui| {
+                                    ui.label(RichText::new("Activity log").small().strong());
+                                    let tail_w = ui.available_width();
+                                    ui.allocate_ui_with_layout(
+                                        egui::vec2(tail_w.max(0.0), 0.0),
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if secondary_button(
+                                                ui,
+                                                &format!("{} Undock log", ui_icons::UNDOCK_LOG),
+                                                true,
                                             )
-                                            .small(),
-                                        );
-                                    });
-                                } else {
-                                    let profile = std::env::var("RUSTDL_PROFILE")
-                                        .ok()
-                                        .as_deref()
-                                        == Some("1");
-                                    let t0 = profile.then(std::time::Instant::now);
-                                    self.draw_grouped_cards(ui);
-                                    if let Some(t0) = t0 {
-                                        let ms = t0.elapsed().as_secs_f64() * 1000.0;
-                                        if ms > 8.0 {
-                                            eprintln!(
-                                                "rustdl profile: draw_grouped_cards {} items in {ms:.1}ms",
-                                                self.items.len()
-                                            );
-                                        }
-                                    }
-                                }
-                            });
-                        if dock_log {
-                            ui.add_space(6.0);
-                            ui.label(RichText::new("Activity log").small().strong());
-                            ui.add(
-                                egui::Slider::new(&mut self.settings.log_dock_height, 80.0..=480.0)
+                                            .clicked()
+                                            {
+                                                self.settings.logs_docked = false;
+                                                self.persist_settings();
+                                            }
+                                        },
+                                    );
+                                });
+                                ui.add(
+                                    egui::Slider::new(
+                                        &mut self.settings.log_dock_height,
+                                        80.0..=480.0,
+                                    )
                                     .text("Log height"),
-                            );
-                            self.draw_activity_log_panel(ui);
-                        }
-                    });
+                                );
+                                egui::ScrollArea::vertical()
+                                    .id_salt("rustdl_log_docked_only")
+                                    .max_height(log_h)
+                                    .show(ui, |ui| {
+                                        self.draw_activity_log_panel(ui);
+                                    });
+                            });
+                    }
+                }
         });
 
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
+        if !self.settings.videos_docked {
+            self.draw_videos_window(ctx);
+        }
         if self.settings.logs_open && !self.settings.logs_docked {
             self.draw_logs_window(ctx);
         }
@@ -850,8 +814,23 @@ impl PydlApp {
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
                         self.open_exit_confirm();
                     }
+                    let videos_btn = if self.settings.videos_docked {
+                        format!("{} Videos", ui_icons::VIDEOS)
+                    } else if self.settings.videos_open {
+                        format!("{} Videos", ui_icons::VIDEOS)
+                    } else {
+                        format!("{} Videos (hidden)", ui_icons::VIDEOS)
+                    };
+                    if secondary_button(ui, &videos_btn, true)
+                        .on_hover_text(
+                            "Show video queue in main window or a separate floating window",
+                        )
+                        .clicked()
+                    {
+                        self.toggle_videos_panel();
+                    }
                     if secondary_button(ui, &format!("{} Logs", ui_icons::LOGS), true)
-                        .on_hover_text("View activity log (dock under queue in Settings)")
+                        .on_hover_text("View activity log (dock under queue or separate window)")
                         .clicked()
                     {
                         self.toggle_logs_panel();
