@@ -98,7 +98,7 @@ impl DoneFileIndex {
         &self,
         item: &QueueItem,
     ) -> Option<(PathBuf, SystemTime)> {
-        let mut try_id = |id: &str| -> Option<(PathBuf, SystemTime)> {
+        let try_id = |id: &str| -> Option<(PathBuf, SystemTime)> {
             let id = id.trim();
             if id.is_empty() {
                 None
