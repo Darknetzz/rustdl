@@ -10,7 +10,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_util::io::ReaderStream;
 
-use crate::app::done_file_index::DoneFileIndex;
+use crate::app::done_file_index::{path_is_under_output_dir, DoneFileIndex};
 use crate::models::{ItemStatus, QueueItem};
 use crate::service::core::DownloadCore;
 
@@ -92,17 +92,10 @@ fn ensure_under_output_dir(output_dir: &str, file: &Path) -> Result<PathBuf, Sta
     if !file.is_file() {
         return Err(StatusCode::NOT_FOUND);
     }
-    let output = Path::new(output_dir);
-    if let (Ok(out_canon), Ok(file_canon)) = (output.canonicalize(), file.canonicalize()) {
-        if file_canon.starts_with(&out_canon) {
-            return Ok(file_canon);
-        }
+    if !path_is_under_output_dir(output_dir, file) {
+        return Err(StatusCode::NOT_FOUND);
     }
-    // Index paths come from read_dir under output_dir; trust them if canonicalize fails (e.g. SMB).
-    if file.starts_with(output) {
-        return Ok(file.to_path_buf());
-    }
-    Err(StatusCode::NOT_FOUND)
+    Ok(file.canonicalize().unwrap_or_else(|_| file.to_path_buf()))
 }
 
 pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Response, StatusCode> {

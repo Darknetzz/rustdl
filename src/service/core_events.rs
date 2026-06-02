@@ -138,6 +138,9 @@ impl super::core::DownloadCore {
             it.eta_text = eta;
         }
         it.detail = line.chars().take(160).collect();
+        if let Some(path) = ytdlp::parse_output_path_from_download_log_line(line) {
+            it.local_path = Some(path.to_string_lossy().into_owned());
+        }
         self.transfer_totals_dirty = true;
         self.bump_generation();
     }
@@ -178,6 +181,9 @@ impl super::core::DownloadCore {
             if completed {
                 self.items[idx].percent = 100.0;
                 self.items[idx].eta_text = "0s".to_owned();
+                self.done_file_index.force_refresh();
+                self.refresh_done_file_lookup();
+                self.bind_local_path_for_item(item_id);
             }
             self.items[idx].detail = final_detail.clone();
         }

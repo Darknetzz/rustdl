@@ -40,6 +40,9 @@ pub struct QueueItem {
     /// User-defined queue order (lower = earlier). Defaults to item_id on create.
     #[serde(default)]
     pub sort_order: u64,
+    /// Absolute path to the finished download when known (survives restarts; used for play/thumbnails).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub local_path: Option<String>,
 }
 
 impl Default for QueueItem {
@@ -63,6 +66,7 @@ impl Default for QueueItem {
             eta_text: "-".to_owned(),
             detail: String::new(),
             sort_order: 0,
+            local_path: None,
         }
     }
 }

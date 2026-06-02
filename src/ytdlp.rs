@@ -197,6 +197,25 @@ pub fn youtube_id_from_dedupe_key(key: &str) -> Option<String> {
     }
 }
 
+/// Final path from yt-dlp stdout (`[download] Destination:` or `[Merger] Merging formats into …`).
+pub fn parse_output_path_from_download_log_line(line: &str) -> Option<std::path::PathBuf> {
+    let trimmed = line.trim();
+    if let Some(rest) = trimmed.strip_prefix("[download] Destination: ") {
+        let p = rest.trim().trim_matches('"');
+        if !p.is_empty() {
+            return Some(std::path::PathBuf::from(p));
+        }
+    }
+    if let Some(i) = trimmed.find("Merging formats into ") {
+        let rest = trimmed[i + "Merging formats into ".len()..].trim();
+        let p = rest.trim_matches('"').trim();
+        if !p.is_empty() {
+            return Some(std::path::PathBuf::from(p));
+        }
+    }
+    None
+}
+
 pub fn is_plausible_youtube_video_id(id: &str) -> bool {
     let id = id.trim();
     id.len() == 11

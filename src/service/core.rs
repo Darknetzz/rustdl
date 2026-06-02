@@ -273,6 +273,7 @@ impl DownloadCore {
 
     pub fn refresh_done_file_lookup(&mut self) {
         self.done_file_index.refresh(&self.output_dir);
+        self.backfill_local_paths_for_done_items();
         if self.done_file_index.scan_truncated {
             if !self.done_lookup_truncation_logged {
                 self.done_lookup_truncation_logged = true;
@@ -283,6 +284,40 @@ impl DownloadCore {
             }
         } else {
             self.done_lookup_truncation_logged = false;
+        }
+    }
+
+    /// Records `local_path` on finished rows when a matching file exists in the output folder.
+    pub fn backfill_local_paths_for_done_items(&mut self) {
+        for idx in 0..self.items.len() {
+            if !matches!(
+                self.items[idx].status,
+                ItemStatus::Done | ItemStatus::Failed
+            ) {
+                continue;
+            }
+            if self.items[idx]
+                .local_path
+                .as_ref()
+                .is_some_and(|p| Path::new(p).is_file())
+            {
+                continue;
+            }
+            let item = self.items[idx].clone();
+            if let Some((path, _)) = self.done_file_index.find_path_for_queue_item(&item) {
+                self.items[idx].local_path =
+                    Some(path.to_string_lossy().into_owned());
+            }
+        }
+    }
+
+    pub fn bind_local_path_for_item(&mut self, item_id: u64) {
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let item = self.items[idx].clone();
+        if let Some((path, _)) = self.done_file_index.find_path_for_queue_item(&item) {
+            self.items[idx].local_path = Some(path.to_string_lossy().into_owned());
         }
     }
 

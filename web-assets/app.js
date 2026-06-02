@@ -230,6 +230,16 @@ function toggleCardMedia(item, thumb) {
   el.playsInline = true;
   el.preload = "metadata";
   el.src = mediaStreamUrl(item.item_id);
+  el.addEventListener("error", () => {
+    stopActiveMedia();
+    const ph = thumb.querySelector(".card-thumb-placeholder");
+    if (ph) {
+      ph.textContent = item.playable
+        ? "Playback failed (file missing or blocked)"
+        : "No local file for this item";
+      ph.classList.remove("hidden");
+    }
+  });
   thumb.querySelector("img")?.classList.add("hidden");
   thumb.querySelector(".card-thumb-placeholder")?.classList.add("hidden");
   thumb.appendChild(el);

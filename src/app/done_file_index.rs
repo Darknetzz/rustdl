@@ -9,6 +9,9 @@ use crate::ytdlp;
 /// Max directory entries processed per scan so huge download folders stay responsive.
 pub(crate) const DONE_LOOKUP_MAX_ENTRIES: usize = 50_000;
 
+/// Subfolder depth when indexing the output directory (playlist/uploader templates).
+const DONE_LOOKUP_MAX_DEPTH: u32 = 8;
+
 /// Indexes `video_id` → output file path and last-modified time using `[id]` segments in filenames.
 pub(crate) struct DoneFileIndex {
     pub(crate) lookup: HashMap<String, (PathBuf, SystemTime)>,
@@ -59,18 +62,32 @@ impl DoneFileIndex {
         if !path.is_dir() {
             return;
         }
-        let Ok(entries) = fs::read_dir(path) else {
+        let mut seen = 0usize;
+        self.scan_output_tree(path, &mut seen, 0);
+    }
+
+    fn scan_output_tree(&mut self, dir: &Path, seen: &mut usize, depth: u32) {
+        if depth > DONE_LOOKUP_MAX_DEPTH {
+            return;
+        }
+        let Ok(entries) = fs::read_dir(dir) else {
             return;
         };
-        let mut seen = 0usize;
         for entry in entries.flatten() {
-            seen += 1;
-            if seen > DONE_LOOKUP_MAX_ENTRIES {
+            *seen += 1;
+            if *seen > DONE_LOOKUP_MAX_ENTRIES {
                 self.scan_truncated = true;
-                break;
+                return;
             }
             let p = entry.path();
-            if !p.is_file() {
+            if p.is_dir() {
+                self.scan_output_tree(&p, seen, depth + 1);
+                if self.scan_truncated {
+                    return;
+                }
+                continue;
+            }
+            if !p.is_file() || is_temporary_download_name(&p) {
                 continue;
             }
             let Some(fname) = p.file_name().and_then(|n| n.to_str()) else {
@@ -98,6 +115,15 @@ impl DoneFileIndex {
         &self,
         item: &QueueItem,
     ) -> Option<(PathBuf, SystemTime)> {
+        if let Some(ref saved) = item.local_path {
+            let path = PathBuf::from(saved);
+            if path.is_file() {
+                let mtime = fs::metadata(&path)
+                    .and_then(|m| m.modified())
+                    .unwrap_or(SystemTime::UNIX_EPOCH);
+                return Some((path, mtime));
+            }
+        }
         let try_id = |id: &str| -> Option<(PathBuf, SystemTime)> {
             let id = id.trim();
             if id.is_empty() {
@@ -188,6 +214,42 @@ fn title_hint_fragment(title: &str) -> String {
     s
 }
 
+fn is_temporary_download_name(path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return true;
+    };
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".part")
+        || lower.ends_with(".ytdl")
+        || lower.ends_with(".temp")
+        || lower.ends_with(".tmp")
+}
+
+/// True when `file` is the same as or nested under `output_dir` (handles SMB and Windows casing).
+pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
+    let root = Path::new(output_dir);
+    if file.starts_with(root) {
+        return true;
+    }
+    if let (Ok(root_canon), Ok(file_canon)) = (root.canonicalize(), file.canonicalize()) {
+        if file_canon.starts_with(&root_canon) {
+            return true;
+        }
+    }
+    #[cfg(windows)]
+    {
+        let norm = |p: &Path| {
+            p.to_string_lossy()
+                .replace('/', "\\")
+                .to_ascii_lowercase()
+        };
+        let r = norm(root);
+        let f = norm(file);
+        return !r.is_empty() && (f == r || f.starts_with(&format!("{r}\\")));
+    }
+    false
+}
+
 fn find_unique_by_title_hint(
     index: &DoneFileIndex,
     title: &str,
@@ -242,6 +304,20 @@ mod tests {
     fn filename_index_ids_includes_bare_youtube_stem() {
         let ids = filename_index_ids("dQw4w9WgXcQ.mp4");
         assert!(ids.iter().any(|id| id == "dQw4w9WgXcQ"));
+    }
+
+    #[test]
+    fn path_is_under_output_dir_accepts_nested_file() {
+        let dir = std::env::temp_dir().join("rustdl_done_index_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("clip.mp4");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(super::path_is_under_output_dir(
+            &dir.to_string_lossy(),
+            &file
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
