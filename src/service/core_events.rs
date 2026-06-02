@@ -82,26 +82,23 @@ impl super::core::DownloadCore {
         let keys = ytdlp::dedupe_previews(&self.cached_dedupe_keys, &rows);
         if keys.is_empty() {
             self.append_log(&format!("No new videos found for: {source_line}"));
-            let iid = self.next_item_id;
-            self.next_item_id += 1;
-            let item = if rows.is_empty() {
-                QueueItem {
+            if rows.is_empty() {
+                let iid = self.next_item_id;
+                self.next_item_id += 1;
+                let item = QueueItem {
                     item_id: iid,
                     source_line: source_line.clone(),
                     title: source_line.clone(),
                     error: Some("No preview returned for this URL.".to_owned()),
                     status: ItemStatus::Idle,
                     ..Default::default()
-                }
+                };
+                self.items.insert(0, item);
             } else {
-                let mut it = QueueItem::from_preview(iid, rows[0].clone());
-                it.error = Some(
-                    "This video is already in the list (same as a finished or pending item)."
-                        .to_owned(),
-                );
-                it
-            };
-            self.items.insert(0, item);
+                self.append_log(&format!(
+                    "Already in queue (duplicate): {source_line}"
+                ));
+            }
         } else {
             for pv in keys {
                 let iid = self.next_item_id;

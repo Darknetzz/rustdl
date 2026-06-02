@@ -551,7 +551,13 @@ async fn fetch_thumbnail_image(
     client: &reqwest::Client,
     url: &str,
 ) -> Option<(Vec<u8>, &'static str)> {
-    let mut req = client.get(url);
+    let mut req = client
+        .get(url)
+        .header(
+            axum::http::header::USER_AGENT,
+            format!("rustdl/{}", crate::pkg_version::VERSION),
+        )
+        .header(axum::http::header::ACCEPT, "image/*,*/*;q=0.8");
     if ytdlp::thumbnail_request_needs_referer(url) {
         req = req.header(axum::http::header::REFERER, "https://www.youtube.com/");
     }

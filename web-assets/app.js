@@ -11,12 +11,6 @@ const statusFlags = {
 
 let cachedHasYtDlp = false;
 
-/** @type {Map<number, string>} blob URLs to revoke when an item leaves the queue */
-const thumbObjectUrls = new Map();
-
-/** @type {Map<number, string>} skip re-fetch after 404 until item metadata changes */
-const thumbFailedKeys = new Map();
-
 /** @type {HTMLMediaElement | null} */
 let activeMediaEl = null;
 
@@ -81,11 +75,40 @@ async function refreshStatus() {
   const s = data.status;
   statusFlags.auto_add_pasted_urls = !!data.auto_add_pasted_urls;
   statusFlags.add_in_progress = !!data.add_in_progress;
-  document.getElementById("status-summary").textContent =
-    `Paused: ${data.downloads_paused} · Resolving ${s.resolving} · Ready ${s.ready} · ` +
-    `Queued ${s.queued} · Active ${s.active} · Done ${s.done} · Failed ${s.failed}`;
+  renderStatusSummary(data);
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
+}
+
+function renderStatusSummary(data) {
+  const root = document.getElementById("status-summary");
+  if (!root) return;
+  root.innerHTML = "";
+  root.className = "status-summary";
+
+  const paused = document.createElement("span");
+  paused.className =
+    "status-badge " + (data.downloads_paused ? "status-paused" : "status-live");
+  paused.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${
+    data.downloads_paused ? "Paused" : "Running"
+  }`;
+  root.appendChild(paused);
+
+  const s = data.status;
+  const parts = [
+    ["resolving", s.resolving, "Resolving"],
+    ["ready", s.ready, "Ready"],
+    ["queued", s.queued, "Queued"],
+    ["active", s.active, "Active"],
+    ["done", s.done, "Done"],
+    ["failed", s.failed, "Failed"],
+  ];
+  for (const [slug, count, label] of parts) {
+    const el = document.createElement("span");
+    el.className = `status-badge status-${slug}`;
+    el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${count} ${label}`;
+    root.appendChild(el);
+  }
 }
 
 function collectUrlsFromInput() {
@@ -180,29 +203,6 @@ function itemHasThumbnailSource(item) {
   return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
 }
 
-function thumbSourceKey(item) {
-  return [
-    item.item_id,
-    item.status,
-    item.video_id || "",
-    item.thumbnail_url || "",
-    item.title || "",
-    item.source_line || "",
-  ].join("|");
-}
-
-function pruneThumbCaches(activeIds) {
-  for (const id of thumbObjectUrls.keys()) {
-    if (!activeIds.has(id)) {
-      URL.revokeObjectURL(thumbObjectUrls.get(id));
-      thumbObjectUrls.delete(id);
-    }
-  }
-  for (const id of thumbFailedKeys.keys()) {
-    if (!activeIds.has(id)) thumbFailedKeys.delete(id);
-  }
-}
-
 function stopActiveMedia() {
   if (!activeMediaEl) return;
   activeMediaEl.pause();
@@ -260,54 +260,37 @@ function appendPlayButton(actions, item, thumb) {
   actions.appendChild(play);
 }
 
-async function loadCardThumbnail(img, placeholder, itemId) {
-  const prev = thumbObjectUrls.get(itemId);
-  if (prev) {
-    URL.revokeObjectURL(prev);
-    thumbObjectUrls.delete(itemId);
-  }
-  const res = await fetch(`/api/thumbnail/${itemId}`, { headers: headers() });
-  if (!res.ok) throw new Error(`thumbnail ${res.status}`);
-  const blob = await res.blob();
-  if (blob.size < 32) {
-    throw new Error("thumbnail empty");
-  }
-  const objectUrl = URL.createObjectURL(blob);
-  thumbObjectUrls.set(itemId, objectUrl);
-  img.src = objectUrl;
-  img.classList.remove("hidden");
-  placeholder.classList.add("hidden");
+function thumbnailApiUrl(itemId) {
+  const t = token();
+  if (!t) return null;
+  return `/api/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
-function queueCardThumbnailLoad(img, placeholder, item) {
-  const key = thumbSourceKey(item);
-  if (thumbFailedKeys.get(item.item_id) === key) {
-    img.classList.add("hidden");
-    placeholder.textContent = "Thumbnail unavailable";
-    placeholder.classList.remove("hidden");
+function attachCardThumbnail(img, placeholder, item, showThumbnails) {
+  img.classList.add("hidden");
+  placeholder.classList.remove("hidden");
+  placeholder.textContent = thumbPlaceholderText(item, showThumbnails);
+
+  if (!showThumbnails || !itemHasThumbnailSource(item)) {
     return;
   }
-  const cachedUrl = thumbObjectUrls.get(item.item_id);
-  if (cachedUrl) {
-    img.src = cachedUrl;
+  const url = thumbnailApiUrl(item.item_id);
+  if (!url) {
+    placeholder.textContent = "Save API token to load thumbnails";
+    return;
+  }
+
+  img.onload = () => {
     img.classList.remove("hidden");
     placeholder.classList.add("hidden");
-    return;
-  }
-  loadCardThumbnail(img, placeholder, item.item_id)
-    .then(() => {
-      thumbFailedKeys.delete(item.item_id);
-    })
-    .catch((err) => {
-      thumbFailedKeys.set(item.item_id, key);
-      img.classList.add("hidden");
-      const msg =
-        err instanceof Error && err.message.startsWith("thumbnail 401")
-          ? "Thumbnail denied (check API token)"
-          : "Thumbnail unavailable";
-      placeholder.textContent = msg;
-      placeholder.classList.remove("hidden");
-    });
+  };
+  img.onerror = () => {
+    img.classList.add("hidden");
+    img.removeAttribute("src");
+    placeholder.textContent = "Thumbnail unavailable";
+    placeholder.classList.remove("hidden");
+  };
+  img.src = url;
 }
 
 function footerStatusText(item) {
@@ -415,9 +398,7 @@ function renderQueueCard(item, settings) {
   img.alt = "";
   img.className = "hidden";
   thumb.appendChild(img);
-  if (showThumbnails && token() && itemHasThumbnailSource(item)) {
-    queueCardThumbnailLoad(img, placeholder, item);
-  }
+  attachCardThumbnail(img, placeholder, item, showThumbnails);
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
 
@@ -528,9 +509,7 @@ function renderQueueCardListRow(item) {
   img.alt = "";
   img.className = "hidden";
   thumb.appendChild(img);
-  if (token() && itemHasThumbnailSource(item)) {
-    queueCardThumbnailLoad(img, placeholder, item);
-  }
+  attachCardThumbnail(img, placeholder, item, true);
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
 
@@ -579,8 +558,6 @@ async function refreshQueue() {
   const data = await res.json();
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
-  const activeIds = new Set(data.items.map((item) => item.item_id));
-  pruneThumbCaches(activeIds);
   stopActiveMedia();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";

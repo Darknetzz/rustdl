@@ -189,7 +189,8 @@ impl DownloadCore {
             generation: 1,
         };
         core.rebuild_item_index();
-        core.sync_status_fields_from_counts();
+        core.update_status();
+        core.invalidate_queue_caches();
         core.refresh_deps();
         core.refresh_done_file_lookup();
         (Arc::new(Mutex::new(core)), rx)

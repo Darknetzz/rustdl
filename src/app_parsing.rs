@@ -196,6 +196,14 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
     if item.sort_order == 0 {
         item.sort_order = item.item_id;
     }
+    const DUPLICATE_MSG: &str = "already in the list";
+    if item
+        .error
+        .as_deref()
+        .is_some_and(|e| e.to_ascii_lowercase().contains(DUPLICATE_MSG))
+    {
+        item.error = None;
+    }
     match item.status {
         ItemStatus::Done | ItemStatus::Failed => {}
         _ => {
