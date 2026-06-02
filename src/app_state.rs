@@ -99,21 +99,22 @@ pub enum UrlLineClass {
     Invalid,
 }
 
-/// Best URL to pass to yt-dlp for a queue row (webpage URL preferred, else http(s) source line).
-pub fn item_redownload_url(item: &QueueItem) -> Option<&str> {
+/// Best URL to pass to yt-dlp for a queue row (validated webpage URL, http(s) source line, or YouTube id).
+pub fn resolve_item_download_url(item: &QueueItem) -> Option<String> {
     let web = item.webpage_url.trim();
-    if !web.is_empty() {
-        return Some(web);
+    if is_queueable_http_url(web) {
+        return Some(web.to_owned());
     }
     let src = item.source_line.trim();
     if is_queueable_http_url(src) {
-        return Some(src);
+        return Some(src.to_owned());
     }
-    None
+    ytdlp::youtube_video_id_from_item(item)
+        .map(|id| format!("https://www.youtube.com/watch?v={id}"))
 }
 
 pub fn item_has_redownload_target(item: &QueueItem) -> bool {
-    item_redownload_url(item).is_some()
+    resolve_item_download_url(item).is_some()
 }
 
 /// True when `line` is an absolute http(s) URL with a host (rejects `error:`, `help:`, etc.).
@@ -275,6 +276,46 @@ mod tests {
         assert!(accepted.is_empty());
         assert_eq!(stats.duplicate_existing, 2);
         assert_eq!(stats.duplicate_in_input, 0);
+    }
+
+    #[test]
+    fn resolve_item_download_url_prefers_valid_webpage_url() {
+        let item = QueueItem {
+            webpage_url: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            source_line: "https://youtu.be/other".to_owned(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_item_download_url(&item).as_deref(),
+            Some("https://www.youtube.com/watch?v=abc123")
+        );
+    }
+
+    #[test]
+    fn resolve_item_download_url_skips_invalid_webpage_and_uses_source_line() {
+        let item = QueueItem {
+            webpage_url: "error: stream did not contain valid UTF-8".to_owned(),
+            source_line: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_item_download_url(&item).as_deref(),
+            Some("https://www.youtube.com/watch?v=abc123")
+        );
+    }
+
+    #[test]
+    fn resolve_item_download_url_falls_back_to_video_id() {
+        let item = QueueItem {
+            video_id: "dQw4w9WgXcQ".to_owned(),
+            webpage_url: "not a url".to_owned(),
+            source_line: "playlist import".to_owned(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_item_download_url(&item).as_deref(),
+            Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        );
     }
 
     #[test]

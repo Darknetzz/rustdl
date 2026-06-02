@@ -93,18 +93,14 @@ impl PydlApp {
             let urls = ids
                 .iter()
                 .filter_map(|iid| {
-                    self.items.iter().find(|x| x.item_id == *iid).map(|x| {
+                    self.items.iter().find(|x| x.item_id == *iid).and_then(|x| {
+                        let target_url = crate::app_state::resolve_item_download_url(x)?;
                         let cancel_flag = self
                             .download_cancel_flags
                             .entry(*iid)
                             .or_insert_with(|| Arc::new(AtomicBool::new(false)))
                             .clone();
-                        (
-                            *iid,
-                            x.webpage_url.clone(),
-                            x.source_line.clone(),
-                            cancel_flag,
-                        )
+                        Some((*iid, target_url, cancel_flag))
                     })
                 })
                 .collect::<Vec<_>>();

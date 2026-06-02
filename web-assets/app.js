@@ -613,12 +613,21 @@ async function cancelItem(id) {
 
 async function readApiError(res, fallback) {
   try {
-    const body = await res.json();
+    const body = await res.clone().json();
     if (body && typeof body.error === "string" && body.error.trim()) {
       return body.error.trim();
     }
   } catch {
     /* ignore */
+  }
+  try {
+    const text = (await res.text()).trim();
+    if (text) return text;
+  } catch {
+    /* ignore */
+  }
+  if (res.status === 503) {
+    return "Web UI is unavailable (API token not configured in rustdl Settings).";
   }
   return fallback;
 }

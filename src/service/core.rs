@@ -43,6 +43,8 @@ pub enum RedownloadError {
     InvalidOutputDir,
     ItemNotFound,
     NoUrl,
+    NoYtDlp,
+    DownloadsPaused,
 }
 
 impl RedownloadError {
@@ -51,6 +53,8 @@ impl RedownloadError {
             Self::InvalidOutputDir => "Choose a valid output folder in Settings.",
             Self::ItemNotFound => "Item not found in the queue.",
             Self::NoUrl => "No video URL on this row (cannot re-download).",
+            Self::NoYtDlp => "yt-dlp not found (check PATH or Settings executable path).",
+            Self::DownloadsPaused => "Downloads are paused. Click Resume first.",
         }
     }
 }
@@ -546,6 +550,17 @@ impl DownloadCore {
             ));
             return Err(RedownloadError::NoUrl);
         }
+        if self.downloads_paused {
+            self.append_log("Downloads are paused. Click Resume first.");
+            return Err(RedownloadError::DownloadsPaused);
+        }
+        if !self.has_yt_dlp {
+            self.refresh_deps();
+        }
+        if !self.has_yt_dlp {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            return Err(RedownloadError::NoYtDlp);
+        }
         self.persist_settings();
         self.refresh_done_file_lookup();
         self.prepare_item_redownload_reset(item_id);
@@ -590,31 +605,28 @@ impl DownloadCore {
         let yt_dlp_bin = self.yt_dlp_bin();
         let ffmpeg_bin = self.ffmpeg_bin();
         let output_template = output_filename_template(&self.settings);
+        let output_dir = self.effective_output_dir();
 
         for ids in groups.into_iter().filter(|g| !g.is_empty()) {
             self.queue_running += 1;
             let urls = ids
                 .iter()
                 .filter_map(|iid| {
-                    self.items.iter().find(|x| x.item_id == *iid).map(|x| {
+                    self.items.iter().find(|x| x.item_id == *iid).and_then(|x| {
+                        let target_url = app_state::resolve_item_download_url(x)?;
                         let cancel_flag = self
                             .download_cancel_flags
                             .entry(*iid)
                             .or_insert_with(|| Arc::new(AtomicBool::new(false)))
                             .clone();
-                        (
-                            *iid,
-                            x.webpage_url.clone(),
-                            x.source_line.clone(),
-                            cancel_flag,
-                        )
+                        Some((*iid, target_url, cancel_flag))
                     })
                 })
                 .collect::<Vec<_>>();
             background_spawn::spawn_download_worker(
                 &self.runtime,
                 &self.ui_event_bus(),
-                self.output_dir.clone(),
+                output_dir.clone(),
                 output_template.clone(),
                 download_args.clone(),
                 yt_dlp_bin.clone(),

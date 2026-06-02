@@ -134,12 +134,12 @@ pub(crate) fn spawn_download_worker(
     extra_args: Vec<String>,
     yt_bin: String,
     ffmpeg_path: String,
-    urls: Vec<(u64, String, String, Arc<AtomicBool>)>,
+    urls: Vec<(u64, String, Arc<AtomicBool>)>,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        for (item_id, web, source, cancel_flag) in urls {
+        for (item_id, target_url, cancel_flag) in urls {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 try_send_ui(
                     &bus,
@@ -151,7 +151,6 @@ pub(crate) fn spawn_download_worker(
                 );
                 continue;
             }
-            let target = if web.is_empty() { source } else { web };
             try_send_ui(
                 &bus,
                 UiEvent::DownloadLine {
@@ -160,7 +159,7 @@ pub(crate) fn spawn_download_worker(
                 },
             );
             let res = ytdlp::stream_download_with_bins(
-                &target,
+                &target_url,
                 &output_dir,
                 &output_filename_template,
                 &extra_args,
@@ -196,7 +195,7 @@ pub(crate) fn spawn_download_worker(
                             },
                         );
                         let retry_res = ytdlp::stream_download_with_bins(
-                            &target,
+                            &target_url,
                             &output_dir,
                             &output_filename_template,
                             &retry_args,
