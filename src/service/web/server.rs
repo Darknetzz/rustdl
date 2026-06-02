@@ -9,6 +9,21 @@ use crate::config::AppSettings;
 use crate::service::core::SharedCore;
 use crate::service::web::api::{ApiState, api_router};
 
+/// Browser-openable URL for the LAN web UI (maps `0.0.0.0` to this machine).
+pub fn web_ui_browser_url(bind_address: &str) -> String {
+    let bind = bind_address.trim();
+    let with_scheme = if bind.starts_with("http://") || bind.starts_with("https://") {
+        if bind.ends_with('/') {
+            bind.to_owned()
+        } else {
+            format!("{bind}/")
+        }
+    } else {
+        format!("http://{bind}/")
+    };
+    with_scheme.replace("://0.0.0.0", "://127.0.0.1")
+}
+
 pub struct WebServerHandle {
     shutdown_tx: Option<oneshot::Sender<()>>,
     join: Option<JoinHandle<()>>,
@@ -82,4 +97,25 @@ pub fn spawn_web_server(
         shutdown_tx: Some(shutdown_tx),
         join: Some(join),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::web_ui_browser_url;
+
+    #[test]
+    fn web_ui_browser_url_maps_wildcard_bind() {
+        assert_eq!(
+            web_ui_browser_url("0.0.0.0:8765"),
+            "http://127.0.0.1:8765/"
+        );
+    }
+
+    #[test]
+    fn web_ui_browser_url_adds_scheme() {
+        assert_eq!(
+            web_ui_browser_url("127.0.0.1:8765"),
+            "http://127.0.0.1:8765/"
+        );
+    }
 }

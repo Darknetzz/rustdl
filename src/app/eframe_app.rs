@@ -833,6 +833,12 @@ impl PydlApp {
                                 self.has_yt_dlp,
                                 &self.yt_dlp_version,
                             );
+                            if self.settings.web_ui_enabled && self.web_server.is_some() {
+                                let url = crate::service::web::web_ui_browser_url(
+                                    &self.settings.web_bind_address,
+                                );
+                                draw_web_ui_header_link(ui, &url);
+                            }
                         });
                     });
                 },

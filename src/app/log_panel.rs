@@ -413,6 +413,25 @@ pub(crate) fn compact_tool_version_display(version: &str) -> String {
     }
 }
 
+pub(crate) fn draw_web_ui_header_link(ui: &mut egui::Ui, url: &str) {
+    let label = web_ui_link_label(url);
+    ui.hyperlink_to(RichText::new(label).small().strong(), url)
+        .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
+}
+
+fn web_ui_link_label(url: &str) -> String {
+    let trimmed = url.trim_end_matches('/');
+    let host = trimmed
+        .strip_prefix("http://")
+        .or_else(|| trimmed.strip_prefix("https://"))
+        .unwrap_or(trimmed);
+    if host.is_empty() {
+        "Web UI".to_owned()
+    } else {
+        format!("Web UI · {host}")
+    }
+}
+
 pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool, version: &str) {
     let (icon, fg, text) = if ok {
         ("✔", Color32::from_rgb(132, 235, 156), "OK")
@@ -461,6 +480,19 @@ mod version_display_tests {
         assert_eq!(
             compact_tool_version_display("ffmpeg version N-124724-g6f1de91492"),
             "N-124724"
+        );
+    }
+}
+
+#[cfg(test)]
+mod web_ui_link_tests {
+    use super::web_ui_link_label;
+
+    #[test]
+    fn label_includes_host() {
+        assert_eq!(
+            web_ui_link_label("http://127.0.0.1:8765/"),
+            "Web UI · 127.0.0.1:8765"
         );
     }
 }

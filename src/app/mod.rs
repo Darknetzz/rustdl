@@ -36,7 +36,8 @@ pub(crate) use events::UiEvent;
 pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
-    attach_paste_context_menu, draw_input_line_summary, draw_precheck_status, log_line_color,
+    attach_paste_context_menu, draw_input_line_summary, draw_precheck_status,
+    draw_web_ui_header_link, log_line_color,
     LOG_COLOR_ERROR, LOG_COLOR_WARN,
 };
 

@@ -8,21 +8,6 @@ use crate::ui_icons;
 
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
-/// Browser-openable URL for the LAN web UI (maps `0.0.0.0` to this machine).
-fn web_ui_browser_url(bind_address: &str) -> String {
-    let bind = bind_address.trim();
-    let with_scheme = if bind.starts_with("http://") || bind.starts_with("https://") {
-        if bind.ends_with('/') {
-            bind.to_owned()
-        } else {
-            format!("{bind}/")
-        }
-    } else {
-        format!("http://{bind}/")
-    };
-    with_scheme.replace("://0.0.0.0", "://127.0.0.1")
-}
-
 fn draw_effective_command_preview(ui: &mut egui::Ui, command_preview: &str) {
     let text_color = if ui.visuals().dark_mode {
         Color32::from_rgb(150, 215, 255)
@@ -254,7 +239,8 @@ impl PydlApp {
                             );
                         }
                         if self.settings.web_ui_enabled {
-                            let url = web_ui_browser_url(&self.settings.web_bind_address);
+                            let url =
+                                crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
                             ui.horizontal_wrapped(|ui| {
                                 ui.label("Open");
                                 ui.hyperlink_to(&url, &url);
