@@ -76,7 +76,7 @@ impl super::core::DownloadCore {
             self.items.remove(idx);
             self.rebuild_item_index();
         }
-        let keys = ytdlp::dedupe_previews(self.cached_dedupe_keys.clone(), &rows);
+        let keys = ytdlp::dedupe_previews(&self.cached_dedupe_keys, &rows);
         if keys.is_empty() {
             self.append_log(&format!("No new videos found for: {source_line}"));
             let iid = self.next_item_id;

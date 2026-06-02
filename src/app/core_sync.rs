@@ -87,15 +87,21 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
     app.core_generation = core.generation;
-    if app.settings.show_thumbnails {
-        for item in &app.items {
-            if previous_item_ids.contains(&item.item_id) {
-                continue;
-            }
-            if let Some(url) = item.thumbnail_url.clone() {
-                app.queue_thumbnail_load(item.item_id, url);
-            }
-        }
+    let new_thumbnails: Vec<(u64, String)> = if app.settings.show_thumbnails {
+        app.items
+            .iter()
+            .filter(|it| !previous_item_ids.contains(&it.item_id))
+            .filter_map(|it| {
+                it.thumbnail_url
+                    .clone()
+                    .map(|url| (it.item_id, url))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for (item_id, url) in new_thumbnails {
+        app.queue_thumbnail_load(item_id, url);
     }
 }
 

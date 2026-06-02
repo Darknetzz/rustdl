@@ -991,53 +991,17 @@ impl PydlApp {
     }
 
     fn queue_urls_for_resolve(&mut self, lines: Vec<String>) {
-        if lines.is_empty() {
-            self.append_log("Add at least one URL.");
-            return;
+        let shared = self.shared_core.clone();
+        {
+            let mut core = shared.lock();
+            core_sync::sync_app_to_core(self, &mut core);
+            core.queue_urls_for_resolve(lines);
         }
-        let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
-            &self.settings.yt_dlp_path,
-            &self.settings.ffmpeg_path,
-            &self.settings.ffprobe_path,
-        );
-        if !has_yt {
-            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
-            self.refresh_deps();
-            return;
+        {
+            let core = shared.lock();
+            core_sync::sync_core_to_app(&core, self);
         }
-        self.add_in_progress = true;
-        self.add_total_urls = 0;
-        self.add_processed_urls = 0;
-        self.add_current_url = None;
-        let mut queued_lines = Vec::new();
-        for line in lines {
-            let iid = self.next_item_id;
-            self.next_item_id += 1;
-            let item = QueueItem::pending_metadata(iid, line.clone());
-            self.items.insert(0, item.clone());
-            self.on_item_inserted(&item);
-            self.pending_resolve_ids.insert(line.clone(), iid);
-            queued_lines.push(line);
-        }
-        self.add_total_urls = queued_lines.len();
-        self.sync_status_fields_from_counts();
-        self.invalidate_queue_caches();
-        self.schedule_queue_save();
-        if queued_lines.is_empty() {
-            self.add_in_progress = false;
-            self.append_log("No new URLs to add (all duplicates).");
-            return;
-        }
-        let yt_dlp_bin = self.yt_dlp_bin();
-        let metadata_args = self.metadata_extra_args();
-        background_spawn::spawn_url_resolve_pipeline(
-            &self.runtime,
-            &self.tx,
-            yt_dlp_bin,
-            metadata_args,
-            self.settings.playlist_preview_cap,
-            queued_lines,
-        );
+        self.refresh_input_line_info();
     }
 
     fn add_urls(&mut self, now: f64) {

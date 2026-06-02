@@ -48,11 +48,6 @@ impl PydlApp {
         self.sync_status_fields_from_counts();
     }
 
-    pub(super) fn on_item_inserted(&mut self, item: &QueueItem) {
-        app_state::inc_status_count(&mut self.status_counts, item.status);
-        self.sync_status_fields_from_counts();
-    }
-
     pub(super) fn recompute_status(&mut self) {
         self.status_counts = app_state::compute_status_counts(&self.items);
         self.sync_status_fields_from_counts();
@@ -97,14 +92,6 @@ impl PydlApp {
             self.items[idx].status = new;
             self.apply_status_delta(old, new);
         }
-    }
-
-    pub(super) fn set_item_status_by_id(&mut self, item_id: u64, new: ItemStatus) -> bool {
-        let Some(idx) = self.item_idx(item_id) else {
-            return false;
-        };
-        self.set_item_status_at(idx, new);
-        true
     }
 
     pub(super) fn mark_transfer_totals_dirty(&mut self) {

@@ -32,19 +32,6 @@ impl PydlApp {
         self.start_downloads();
     }
 
-    pub(super) fn maybe_auto_start_downloads(&mut self) {
-        if self.downloads_paused || !self.settings.auto_start_downloads {
-            return;
-        }
-        let has_idle_items = self
-            .items
-            .iter()
-            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
-        if has_idle_items {
-            self.start_downloads();
-        }
-    }
-
     fn collect_idle_download_item_ids(&self) -> Vec<u64> {
         let mut ids: Vec<(u64, u64)> = self
             .items

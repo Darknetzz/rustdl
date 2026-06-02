@@ -3,9 +3,7 @@ use std::sync::Once;
 use crossbeam_channel::Sender;
 use eframe::egui;
 
-use crate::app_parsing::{
-    av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready,
-};
+use crate::app_parsing::{av1_detail_is_user_cancellation, reset_av1_item_to_ready};
 
 static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 
@@ -26,8 +24,7 @@ pub(crate) fn try_send_ui(tx: &Sender<UiEvent>, event: UiEvent) -> bool {
         }
     }
 }
-use crate::models::{ItemStatus, QueueItem, VideoPreview};
-use crate::ytdlp;
+use crate::models::{ItemStatus, VideoPreview};
 
 use super::PydlApp;
 
