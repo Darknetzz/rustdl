@@ -37,6 +37,12 @@ From the monorepo root (`code`):
 cargo run --manifest-path Rust/rustdl/Cargo.toml
 ```
 
+## Versioning and changelog
+
+- App version comes from `Cargo.toml` (shown in **About** and `rustdl --version`).
+- User-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/) style).
+- For a release: bump `version` in `Cargo.toml`, finalize `CHANGELOG.md`, commit, and push tag `rustdl-vX.Y.Z` (see `.github/workflows/rustdl-release.yml`).
+
 ## Development checks
 
 Run these before opening a PR (from `Rust/rustdl/`, or prefix each with `cargo ... --manifest-path Rust/rustdl/Cargo.toml` from the monorepo root):

@@ -1,10 +1,33 @@
 # Changelog
 
-All notable changes to this project are documented in this file.
+All notable changes to **rustdl** are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+When releasing, bump `version` in `Cargo.toml`, add a dated section below, and tag `rustdl-vX.Y.Z` for GitHub release builds.
 
 ## [Unreleased]
+
+## [0.1.1] - 2026-06-02
+
+### Added
+
+- Compact tool-version labels in the header (build date when available; full string on hover).
+
+### Changed
+
+- Main window header: title on the left; yt-dlp/ffmpeg/ffprobe status and Settings / Logs / Exit on one row, right-aligned.
+- Restore-session banner and Downloader / AV1 mode bar use the full content width.
+- Main panel content inset (horizontal padding) so controls do not sit on the window edge.
+
+### Fixed
+
+- **Windows:** No extra console window when launching the GUI from Explorer (Windows GUI subsystem).
+- **Windows:** Child processes (yt-dlp, ffmpeg, PowerShell theme probe, etc.) no longer flash a console.
+
+## [0.1.0] - 2026-03-30
+
+Initial published version: desktop GUI for yt-dlp with queue, previews, settings, and download progress.
 
 ### Added
 
@@ -24,9 +47,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-## [0.1.0] - 2026-03-30
-
-Initial published version: desktop GUI for yt-dlp with queue, previews, settings, and download progress.
-
-[Unreleased]: https://github.com/Darknetzz/code/commits/main/Rust/rustdl
-[0.1.0]: https://github.com/Darknetzz/code/tree/main/Rust/rustdl
+[Unreleased]: https://github.com/Darknetzz/code/compare/rustdl-v0.1.1...main/Rust/rustdl
+[0.1.1]: https://github.com/Darknetzz/code/compare/rustdl-v0.1.0...rustdl-v0.1.1
+[0.1.0]: https://github.com/Darknetzz/code/tree/rustdl-v0.1.0/Rust/rustdl

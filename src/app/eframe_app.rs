@@ -59,85 +59,8 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                ui.horizontal(|ui| {
-                    ui.horizontal(|ui| {
-                        let sz = egui::vec2(40.0, 40.0);
-                        let img = ui.add(
-                            egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                                .sense(egui::Sense::click()),
-                        );
-                        let title = ui.add(
-                            egui::Label::new(RichText::new("rustdl").heading())
-                                .sense(egui::Sense::click()),
-                        );
-                        let header = img
-                            .union(title)
-                            .on_hover_text("About rustdl — click to open");
-                        if header.clicked() {
-                            self.about_open = true;
-                        }
-                    });
-                    let right_w = ui.available_width();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(right_w.max(0.0), 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            ui.add_space(4.0);
-                            if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true)
-                                .clicked()
-                            {
-                                self.open_exit_confirm();
-                            }
-                            if secondary_button(
-                                ui,
-                                &format!("{} Logs", ui_icons::LOGS),
-                                true,
-                            )
-                            .on_hover_text(
-                                "View activity log (dock under queue in Settings)",
-                            )
-                            .clicked()
-                            {
-                                self.toggle_logs_panel();
-                            }
-                            if secondary_button(
-                                ui,
-                                &format!("{} Settings", ui_icons::SETTINGS),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.settings_open = true;
-                            }
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 1.0;
-                                ui.with_layout(
-                                    egui::Layout::top_down(egui::Align::Max),
-                                    |ui| {
-                                        draw_precheck_status(
-                                            ui,
-                                            "yt-dlp",
-                                            self.has_yt_dlp,
-                                            &self.yt_dlp_version,
-                                        );
-                                        draw_precheck_status(
-                                            ui,
-                                            "ffmpeg",
-                                            self.has_ffmpeg,
-                                            &self.ffmpeg_version,
-                                        );
-                                        draw_precheck_status(
-                                            ui,
-                                            "ffprobe",
-                                            self.has_ffprobe,
-                                            &self.ffprobe_version,
-                                        );
-                                    },
-                                );
-                            });
-                        },
-                    );
-                });
+                ui.set_width(ui.available_width());
+                self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
@@ -883,5 +806,83 @@ impl eframe::App for PydlApp {
         self.flush_av1_queue_to_disk();
         self.flush_log_to_disk();
         let _ = save_settings(&self.settings);
+    }
+}
+
+impl PydlApp {
+    /// Title on the left; tool status and window actions on one row, top-aligned, inset from the right.
+    fn draw_main_header(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.horizontal(|ui| {
+                let sz = egui::vec2(40.0, 40.0);
+                let img = ui.add(
+                    egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                        .sense(egui::Sense::click()),
+                );
+                let title = ui.add(
+                    egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()),
+                );
+                let header = img
+                    .union(title)
+                    .on_hover_text("About rustdl — click to open");
+                if header.clicked() {
+                    self.about_open = true;
+                }
+            });
+            let right_w = ui.available_width();
+            if right_w <= 0.0 {
+                return;
+            }
+            ui.allocate_ui_with_layout(
+                egui::vec2(right_w, 0.0),
+                egui::Layout::right_to_left(egui::Align::Min),
+                |ui| {
+                    ui.add_space(HEADER_RIGHT_INSET);
+                    if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
+                        self.open_exit_confirm();
+                    }
+                    if secondary_button(ui, &format!("{} Logs", ui_icons::LOGS), true)
+                        .on_hover_text("View activity log (dock under queue in Settings)")
+                        .clicked()
+                    {
+                        self.toggle_logs_panel();
+                    }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Settings", ui_icons::SETTINGS),
+                        true,
+                    )
+                    .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
+                    .clicked()
+                    {
+                        self.settings_open = true;
+                    }
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            draw_precheck_status(
+                                ui,
+                                "ffprobe",
+                                self.has_ffprobe,
+                                &self.ffprobe_version,
+                            );
+                            draw_precheck_status(
+                                ui,
+                                "ffmpeg",
+                                self.has_ffmpeg,
+                                &self.ffmpeg_version,
+                            );
+                            draw_precheck_status(
+                                ui,
+                                "yt-dlp",
+                                self.has_yt_dlp,
+                                &self.yt_dlp_version,
+                            );
+                        });
+                    });
+                },
+            );
+        });
     }
 }

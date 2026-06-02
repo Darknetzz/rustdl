@@ -274,8 +274,10 @@ const ALERT_DANGER_BORDER: Color32 = Color32::from_rgb(245, 194, 199);
 pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
 
 /// Horizontal inset for the main window content area ([`content_panel_frame`]).
-pub const CONTENT_MARGIN_H: f32 = 16.0;
-pub const CONTENT_MARGIN_V: f32 = 10.0;
+pub const CONTENT_MARGIN_H: f32 = 20.0;
+pub const CONTENT_MARGIN_V: f32 = 12.0;
+/// Extra inset before right-aligned header controls (inside the content margin).
+pub const HEADER_RIGHT_INSET: f32 = 4.0;
 
 pub fn content_panel_frame() -> egui::Frame {
     egui::Frame::default().inner_margin(egui::Margin {
