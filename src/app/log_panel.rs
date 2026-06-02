@@ -148,17 +148,30 @@ impl PydlApp {
         if !self.settings.logs_open {
             return;
         }
-        let mut open = self.settings.logs_open;
-        egui::Window::new("Activity log")
+        let mut open = true;
+        let response = egui::Window::new("Activity log")
             .open(&mut open)
             .default_size([640.0, 440.0])
             .min_width(400.0)
             .min_height(260.0)
             .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui.button("Close").clicked() {
+                            self.settings.logs_open = false;
+                            self.persist_settings();
+                        }
+                    });
+                });
                 self.draw_activity_log_panel(ui);
             });
-        if open != self.settings.logs_open {
-            self.settings.logs_open = open;
+        if !open {
+            self.settings.logs_open = false;
+            self.persist_settings();
+        }
+        if response.is_none() && self.settings.logs_open {
+            // Window was closed via the title-bar X.
+            self.settings.logs_open = false;
             self.persist_settings();
         }
     }

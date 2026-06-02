@@ -549,6 +549,9 @@ impl PydlApp {
 
     fn toggle_logs_panel(&mut self) {
         self.settings.logs_open = !self.settings.logs_open;
+        if !self.settings.logs_open {
+            self.settings.logs_docked = false;
+        }
         self.persist_settings();
     }
 

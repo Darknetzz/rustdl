@@ -586,6 +586,9 @@ impl PydlApp {
     }
 
     pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
+        if self.item_index_by_id.len() != self.items.len() {
+            self.rebuild_item_index();
+        }
         let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
         for label in groups {
             if self.queue_group_focus.is_some_and(|f| f != label) {
@@ -655,7 +658,7 @@ impl PydlApp {
                         });
                 } else {
                     let row_width = ui.available_width().max(1.0);
-                    let card_min_h = if self.settings.compact_cards {
+                    let card_h = if self.settings.compact_cards {
                         240.0
                     } else {
                         360.0
@@ -664,15 +667,21 @@ impl PydlApp {
                         .id_salt(format!("rustdl_cards_{label}"))
                         .auto_shrink([false, false])
                         .max_width(row_width)
-                        .min_scrolled_height(card_min_h)
+                        .max_height(card_h + 16.0)
                         .animated(true)
                         .drag_to_scroll(true)
                         .show(ui, |ui| {
-                            ui.set_min_height(card_min_h);
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                                 for id in &ids {
-                                    if let Some(idx) = self.item_idx(*id) {
+                                    let idx = self
+                                        .item_idx(*id)
+                                        .or_else(|| {
+                                            self.items
+                                                .iter()
+                                                .position(|it| it.item_id == *id)
+                                        });
+                                    if let Some(idx) = idx {
                                         self.draw_card(ui, idx, false);
                                     }
                                 }

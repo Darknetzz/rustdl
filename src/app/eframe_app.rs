@@ -4,11 +4,8 @@ impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         {
             let shared = self.shared_core.clone();
-            let gen = shared.lock().generation;
-            if gen != self.core_generation {
-                let core = shared.lock();
-                core_sync::sync_core_to_app(&core, self);
-            }
+            let core = shared.lock();
+            core_sync::sync_core_to_app(&core, self);
         }
         #[cfg(windows)]
         crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
@@ -807,6 +804,10 @@ impl eframe::App for PydlApp {
         self.input_urls_snapshot = self.input_urls.clone();
         self.draw_exit_confirm_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
+        {
+            let shared = self.shared_core.clone();
+            core_sync::push_app_to_core(self, &shared);
+        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -892,9 +893,5 @@ impl PydlApp {
                 },
             );
         });
-        {
-            let shared = self.shared_core.clone();
-            core_sync::push_app_to_core(self, &shared);
-        }
     }
 }
