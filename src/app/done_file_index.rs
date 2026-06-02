@@ -237,4 +237,28 @@ mod tests {
             vec!["xyz".to_owned()]
         );
     }
+
+    #[test]
+    fn filename_index_ids_includes_bare_youtube_stem() {
+        let ids = filename_index_ids("dQw4w9WgXcQ.mp4");
+        assert!(ids.iter().any(|id| id == "dQw4w9WgXcQ"));
+    }
+
+    #[test]
+    fn find_path_for_queue_item_matches_title_bracket_id() {
+        let mut index = DoneFileIndex::new();
+        index.lookup.insert(
+            "dQw4w9WgXcQ".to_owned(),
+            (
+                PathBuf::from("/tmp/My Song [dQw4w9WgXcQ].mp4"),
+                SystemTime::UNIX_EPOCH,
+            ),
+        );
+        let item = QueueItem {
+            video_id: String::new(),
+            title: "My Song [dQw4w9WgXcQ]".to_owned(),
+            ..QueueItem::default()
+        };
+        assert!(index.find_path_for_queue_item(&item).is_some());
+    }
 }

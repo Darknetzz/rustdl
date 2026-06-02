@@ -9,8 +9,11 @@ const statusFlags = {
   add_in_progress: false,
 };
 
-/** @type {Map<number, string>} blob URLs to revoke on queue refresh */
+/** @type {Map<number, string>} blob URLs to revoke when an item leaves the queue */
 const thumbObjectUrls = new Map();
+
+/** @type {Map<number, string>} skip re-fetch after 404 until item metadata changes */
+const thumbFailedKeys = new Map();
 
 /** @type {HTMLMediaElement | null} */
 let activeMediaEl = null;
@@ -174,11 +177,27 @@ function itemHasThumbnailSource(item) {
   return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
 }
 
-function revokeAllThumbObjectUrls() {
-  for (const url of thumbObjectUrls.values()) {
-    URL.revokeObjectURL(url);
+function thumbSourceKey(item) {
+  return [
+    item.item_id,
+    item.status,
+    item.video_id || "",
+    item.thumbnail_url || "",
+    item.title || "",
+    item.source_line || "",
+  ].join("|");
+}
+
+function pruneThumbCaches(activeIds) {
+  for (const id of thumbObjectUrls.keys()) {
+    if (!activeIds.has(id)) {
+      URL.revokeObjectURL(thumbObjectUrls.get(id));
+      thumbObjectUrls.delete(id);
+    }
   }
-  thumbObjectUrls.clear();
+  for (const id of thumbFailedKeys.keys()) {
+    if (!activeIds.has(id)) thumbFailedKeys.delete(id);
+  }
 }
 
 function stopActiveMedia() {
@@ -248,15 +267,34 @@ async function loadCardThumbnail(img, placeholder, itemId) {
 }
 
 function queueCardThumbnailLoad(img, placeholder, item) {
-  loadCardThumbnail(img, placeholder, item.item_id).catch((err) => {
+  const key = thumbSourceKey(item);
+  if (thumbFailedKeys.get(item.item_id) === key) {
     img.classList.add("hidden");
-    const msg =
-      err instanceof Error && err.message.startsWith("thumbnail 401")
-        ? "Thumbnail denied (check API token)"
-        : "Thumbnail unavailable";
-    placeholder.textContent = msg;
+    placeholder.textContent = "Thumbnail unavailable";
     placeholder.classList.remove("hidden");
-  });
+    return;
+  }
+  const cachedUrl = thumbObjectUrls.get(item.item_id);
+  if (cachedUrl) {
+    img.src = cachedUrl;
+    img.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+    return;
+  }
+  loadCardThumbnail(img, placeholder, item.item_id)
+    .then(() => {
+      thumbFailedKeys.delete(item.item_id);
+    })
+    .catch((err) => {
+      thumbFailedKeys.set(item.item_id, key);
+      img.classList.add("hidden");
+      const msg =
+        err instanceof Error && err.message.startsWith("thumbnail 401")
+          ? "Thumbnail denied (check API token)"
+          : "Thumbnail unavailable";
+      placeholder.textContent = msg;
+      placeholder.classList.remove("hidden");
+    });
 }
 
 function footerStatusText(item) {
@@ -476,7 +514,8 @@ async function refreshQueue() {
   const data = await res.json();
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
-  revokeAllThumbObjectUrls();
+  const activeIds = new Set(data.items.map((item) => item.item_id));
+  pruneThumbCaches(activeIds);
   stopActiveMedia();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";

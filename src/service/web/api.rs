@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 
 use crate::app::UiEvent;
 use crate::config::AppSettings;
-use crate::models::{ItemStatus, QueueItem};
+use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, SharedCore};
 use crate::service::web::media;
@@ -402,21 +402,20 @@ async fn thumbnail_proxy(
     let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
+        if !c.has_ffmpeg {
+            c.refresh_deps();
+        }
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
-        let item = &c.items[idx];
-        let urls = thumbnail_url_candidates(item);
         let output_dir = c.output_dir.clone();
         let index = &c.done_file_index;
         let ffmpeg_path = c.settings.ffmpeg_path.clone();
         let has_ffmpeg = c.has_ffmpeg;
-        let local_video = if matches!(item.status, ItemStatus::Done | ItemStatus::Failed) {
-            media::resolve_item_media_path_from_index(&output_dir, index, item)
-                .ok()
-                .filter(|p| media::media_kind_for_path(p) == Some(media::MediaKind::Video))
-        } else {
-            None
-        };
-        (urls, c.http_client.clone(), local_video, ffmpeg_path, has_ffmpeg)
+        let item = c.items[idx].clone();
+        let urls = thumbnail_url_candidates(&item);
+        let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
+            .ok()
+            .filter(|p| media::media_kind_for_path(p).is_some());
+        (urls, c.http_client.clone(), local_media, ffmpeg_path, has_ffmpeg)
     };
     if let Some(path) = local_thumb.as_ref() {
         if let Some(bytes) = extract_local_video_thumbnail(path, &ffmpeg_path, has_ffmpeg).await {
