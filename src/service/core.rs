@@ -136,12 +136,7 @@ impl DownloadCore {
             .max()
             .unwrap_or(0)
             .saturating_add(1);
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(15))
-            .user_agent(format!("rustdl/{}", crate::pkg_version::VERSION))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let http_client = build_http_client(&settings);
         let mut core = Self {
             runtime,
             tx,
@@ -333,6 +328,7 @@ impl DownloadCore {
         } else {
             String::new()
         };
+        self.http_client = build_http_client(&self.settings);
     }
 
     pub fn refresh_done_file_lookup(&mut self) {
@@ -956,4 +952,18 @@ fn tool_json(name: &str, ok: bool, version: &str, configured_path: &str) -> serd
         "version_short": short,
         "configured_path": configured_path.trim(),
     })
+}
+
+fn build_http_client(settings: &crate::config::AppSettings) -> reqwest::Client {
+    let mut builder = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(15))
+        .user_agent(format!("rustdl/{}", crate::pkg_version::VERSION));
+    let proxy = settings.yt_proxy.trim();
+    if !proxy.is_empty() {
+        if let Ok(p) = reqwest::Proxy::all(proxy) {
+            builder = builder.proxy(p);
+        }
+    }
+    builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }

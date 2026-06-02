@@ -11,6 +11,9 @@ const statusFlags = {
 
 let cachedHasYtDlp = false;
 
+/** Skip re-fetching thumbnails that already returned 404 until item metadata changes. */
+const thumbFailedKeys = new Set();
+
 /** @type {HTMLMediaElement | null} */
 let activeMediaEl = null;
 
@@ -203,6 +206,23 @@ function itemHasThumbnailSource(item) {
   return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
 }
 
+function thumbCacheKey(item) {
+  return [
+    item.item_id,
+    item.video_id || "",
+    item.thumbnail_url || "",
+    item.source_line || "",
+    item.webpage_url || "",
+  ].join("|");
+}
+
+function pruneThumbFailedKeys(activeItems) {
+  const active = new Set(activeItems.map((item) => thumbCacheKey(item)));
+  for (const key of thumbFailedKeys) {
+    if (!active.has(key)) thumbFailedKeys.delete(key);
+  }
+}
+
 function stopActiveMedia() {
   if (!activeMediaEl) return;
   activeMediaEl.pause();
@@ -279,12 +299,19 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
     placeholder.textContent = "Save API token to load thumbnails";
     return;
   }
+  const cacheKey = thumbCacheKey(item);
+  if (thumbFailedKeys.has(cacheKey)) {
+    placeholder.textContent = "Thumbnail unavailable";
+    return;
+  }
 
   img.onload = () => {
     img.classList.remove("hidden");
     placeholder.classList.add("hidden");
+    thumbFailedKeys.delete(cacheKey);
   };
   img.onerror = () => {
+    thumbFailedKeys.add(cacheKey);
     img.classList.add("hidden");
     img.removeAttribute("src");
     placeholder.textContent = "Thumbnail unavailable";
@@ -558,6 +585,7 @@ async function refreshQueue() {
   const data = await res.json();
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
+  pruneThumbFailedKeys(data.items);
   stopActiveMedia();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";
