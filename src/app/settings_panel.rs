@@ -189,15 +189,41 @@ impl PydlApp {
                                 )
                                 .changed();
                         });
-                        ui.horizontal(|ui| {
-                            ui.label("API token");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(&mut self.settings.web_auth_token)
-                                        .password(true),
+                        {
+                            let show_token_id = ui.id().with("web_token_visible");
+                            let mut show_token = ui.ctx().data_mut(|d| {
+                                *d.get_temp_mut_or(show_token_id, false)
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("API token");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.web_auth_token,
+                                        )
+                                        .password(!show_token),
+                                    )
+                                    .changed();
+                                if ui.checkbox(&mut show_token, "Show").changed() {
+                                    ui.ctx().data_mut(|d| {
+                                        *d.get_temp_mut_or(show_token_id, false) = show_token;
+                                    });
+                                }
+                                let can_copy = !self.settings.web_auth_token.trim().is_empty();
+                                if secondary_button(
+                                    ui,
+                                    &format!("{} Copy", ui_icons::COPY_CLIPBOARD),
+                                    can_copy,
                                 )
-                                .changed();
-                        });
+                                .on_hover_text("Copy API token to clipboard")
+                                .clicked()
+                                {
+                                    ui.ctx()
+                                        .copy_text(self.settings.web_auth_token.clone());
+                                    self.append_log("Web API token copied to clipboard.");
+                                }
+                            });
+                        }
                         if ui.button("Generate new API token").clicked() {
                             self.settings.web_auth_token =
                                 crate::config::generate_web_auth_token();
