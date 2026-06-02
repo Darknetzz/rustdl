@@ -289,6 +289,45 @@ pub fn content_panel_frame() -> egui::Frame {
     })
 }
 
+const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
+const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
+
+/// Split remaining main-panel height between scrollable controls and a docked video queue.
+pub struct MainColumnSplit {
+    pub controls_max_height: f32,
+    pub videos_height: f32,
+}
+
+pub fn compute_main_column_split(
+    available_height: f32,
+    videos_docked: bool,
+    compact_cards: bool,
+) -> MainColumnSplit {
+    let h = available_height.max(0.0);
+    if !videos_docked {
+        return MainColumnSplit {
+            controls_max_height: h,
+            videos_height: 0.0,
+        };
+    }
+    let min_videos = if compact_cards { 180.0 } else { 220.0 };
+    if h <= MIN_CONTROLS_SCROLL_H + min_videos {
+        let videos_h = (h * 0.45).clamp(120.0, (h - 60.0).max(120.0));
+        let controls_h = (h - videos_h).max(60.0);
+        return MainColumnSplit {
+            controls_max_height: controls_h,
+            videos_height: videos_h,
+        };
+    }
+    let videos_h = (h * VIDEOS_DOCKED_HEIGHT_RATIO)
+        .max(min_videos)
+        .min(h - MIN_CONTROLS_SCROLL_H);
+    MainColumnSplit {
+        controls_max_height: h - videos_h,
+        videos_height: videos_h,
+    }
+}
+
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let width = ui.available_width();
@@ -418,5 +457,19 @@ mod tests {
         let (fps24, _) = fps_badge_colors("23.98 fps");
         assert_ne!(fps60, fps30);
         assert_ne!(fps30, fps24);
+    }
+
+    #[test]
+    fn main_column_split_fits_viewport() {
+        let split = compute_main_column_split(600.0, true, false);
+        assert!(split.controls_max_height >= 100.0);
+        assert!(split.videos_height >= 220.0);
+        assert!((split.controls_max_height + split.videos_height - 600.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn main_column_split_never_exceeds_available() {
+        let split = compute_main_column_split(280.0, true, false);
+        assert!(split.controls_max_height + split.videos_height <= 280.0 + 0.01);
     }
 }

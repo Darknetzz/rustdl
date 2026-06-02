@@ -11,8 +11,12 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **LAN web UI** (Settings → Shared): optional HTTP server with token auth, REST API, SSE progress stream, and embedded web pages to control the downloader queue from other devices on the local network.
-- Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
 - AV1 Converter: undock the encode queue to a floating window (same controls as Downloader **Videos**).
+
+### Changed
+
+- Main panel layout: controls scroll when space is tight; docked video queue stays visible at the bottom instead of extending past the window.
+- Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
 
 ## [0.1.1] - 2026-06-02
 

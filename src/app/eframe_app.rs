@@ -213,6 +213,19 @@ impl eframe::App for PydlApp {
                     return;
                 }
 
+                let main_split = compute_main_column_split(
+                    ui.available_height(),
+                    self.settings.videos_docked,
+                    self.settings.compact_cards,
+                );
+
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_downloader_controls")
+                    .auto_shrink([false, false])
+                    .max_height(main_split.controls_max_height)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
                     ui.label(
@@ -696,17 +709,10 @@ impl eframe::App for PydlApp {
                     self.start_downloads();
                 }
 
-                const RESERVE_BOTTOM_PX: f32 = 20.0;
-                let min_card_viewport = if self.settings.compact_cards {
-                    260.0
-                } else {
-                    335.0
-                };
-                let bottom_h =
-                    (ui.available_height() - RESERVE_BOTTOM_PX).max(min_card_viewport);
+                    }); // downloader controls scroll
 
                 if self.settings.videos_docked {
-                    self.draw_docked_videos_section(ui, bottom_h);
+                    self.draw_docked_videos_section(ui, main_split.videos_height);
                 } else {
                     self.draw_videos_undocked_strip(ui);
                     if self.settings.logs_open && self.settings.logs_docked {

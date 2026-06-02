@@ -6,8 +6,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    danger_button, draw_meta_badge, draw_status_dot, secondary_button, status_color,
-    status_dot_with_label, success_button, MetaBadgeKind,
+    compute_main_column_split, danger_button, draw_meta_badge, draw_status_dot,
+    secondary_button, status_color, status_dot_with_label, success_button, MetaBadgeKind,
 };
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
@@ -442,6 +442,19 @@ impl PydlApp {
     }
 
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
+        let main_split = compute_main_column_split(
+            ui.available_height(),
+            self.settings.videos_docked,
+            self.settings.compact_cards,
+        );
+
+        egui::ScrollArea::vertical()
+            .id_salt("rustdl_av1_controls")
+            .auto_shrink([false, false])
+            .max_height(main_split.controls_max_height)
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("AV1 Converter").heading());
             ui.label(
@@ -565,13 +578,11 @@ impl PydlApp {
                 self.clear_av1_queue();
             }
         });
-        const RESERVE_BOTTOM_PX: f32 = 20.0;
-        const MIN_QUEUE_VIEWPORT: f32 = 220.0;
-        let bottom_h =
-            (ui.available_height() - RESERVE_BOTTOM_PX).max(MIN_QUEUE_VIEWPORT);
+
+            }); // av1 controls scroll
 
         if self.settings.videos_docked {
-            self.draw_docked_videos_section(ui, bottom_h);
+            self.draw_docked_videos_section(ui, main_split.videos_height);
         } else {
             self.draw_videos_undocked_strip(ui);
             if self.settings.logs_open && self.settings.logs_docked {
