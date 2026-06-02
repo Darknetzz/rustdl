@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::Receiver;
 use eframe::egui;
 use eframe::egui::{Color32, RichText, TextureHandle};
 use tokio::runtime::Runtime;
