@@ -275,7 +275,7 @@ function appendPlayButton(actions, item, thumb) {
   const play = document.createElement("button");
   play.type = "button";
   play.className = "primary";
-  play.textContent = "Play";
+  setButtonLabel(play, ICON.playCircle, "Play");
   play.onclick = () => toggleCardMedia(item, thumb);
   actions.appendChild(play);
 }
@@ -368,7 +368,7 @@ function appendRemoveButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "secondary";
-  btn.textContent = "Remove";
+  setButtonLabel(btn, ICON.remove, "Remove");
   btn.title = "Remove this row from the queue (does not delete the file on disk).";
   btn.onclick = () =>
     removeQueueItem(item.item_id).catch((e) => alert(e.message || String(e)));
@@ -380,7 +380,7 @@ function appendDeleteFileButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "danger";
-  btn.textContent = "Delete file";
+  setButtonLabel(btn, ICON.deleteForever, "Delete file");
   btn.title = "Delete the downloaded file on disk. The queue row stays until you remove it.";
   btn.onclick = () => {
     const name = item.media_filename || "this file";
@@ -396,7 +396,8 @@ function appendRedownloadButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "secondary";
-  btn.textContent = slug === "failed" ? "Retry download" : "Re-download";
+  const label = slug === "failed" ? "Retry download" : "Re-download";
+  setButtonLabel(btn, ICON.refresh, label);
   btn.title =
     "Deletes the matched file in the output folder (if found), then downloads this URL again with current quality settings.";
   btn.onclick = () =>
@@ -510,7 +511,7 @@ function renderQueueCard(item, settings) {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
-    cancel.textContent = "Cancel";
+    setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
   }
@@ -566,7 +567,7 @@ function renderQueueCardListRow(item) {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
-    cancel.textContent = "Cancel";
+    setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
   }
@@ -982,6 +983,8 @@ document.getElementById("btn-apply-profile").onclick = () => {
 document.querySelectorAll(".preset-btn").forEach((btn) => {
   btn.onclick = () => applyProfile(btn.dataset.profile).catch(console.error);
 });
+
+applyStaticButtonIcons();
 
 if (token()) {
   document.getElementById("token-input").value = token();

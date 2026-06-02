@@ -18,6 +18,9 @@ pub fn static_router() -> Router {
         .route("/index.html", get(index))
         .route("/app.js", get(app_js))
         .route("/style.css", get(style_css))
+        .route("/material-icons.css", get(material_icons_css))
+        .route("/icons.js", get(icons_js))
+        .route("/fonts/material-icons.woff2", get(material_icons_font))
         .route("/favicon.ico", get(favicon))
         .route("/favicon.png", get(favicon))
 }
@@ -32,6 +35,18 @@ async fn app_js() -> impl IntoResponse {
 
 async fn style_css() -> impl IntoResponse {
     serve("style.css", "text/css; charset=utf-8")
+}
+
+async fn material_icons_css() -> impl IntoResponse {
+    serve("material-icons.css", "text/css; charset=utf-8")
+}
+
+async fn icons_js() -> impl IntoResponse {
+    serve("icons.js", "text/javascript; charset=utf-8")
+}
+
+async fn material_icons_font() -> impl IntoResponse {
+    serve("fonts/material-icons.woff2", "font/woff2")
 }
 
 async fn favicon() -> impl IntoResponse {

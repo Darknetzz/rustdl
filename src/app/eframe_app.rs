@@ -500,7 +500,7 @@ impl eframe::App for PydlApp {
                     }
                     if secondary_button(
                         ui,
-                        &format!("{} Export URLs", ui_icons::IMPORT_FILE),
+                        &format!("{} Export URLs", ui_icons::EXPORT),
                         !self.items.is_empty(),
                     )
                     .clicked()
@@ -544,7 +544,7 @@ impl eframe::App for PydlApp {
                     }
                     if danger_button(
                         ui,
-                        &format!("{} Clear list", ui_icons::DISMISS),
+                        &format!("{} Clear list", ui_icons::CLEAR_QUEUE),
                         true,
                     )
                     .clicked()

@@ -8,6 +8,7 @@ pub const CLEAR_QUEUE: &str = m::ICON_CLEAR_ALL;
 /// Open activity / download log window.
 pub const LOGS: &str = m::ICON_ARTICLE;
 pub const IMPORT_FILE: &str = m::ICON_DESCRIPTION;
+pub const EXPORT: &str = m::ICON_UPLOAD;
 pub const USE_DOWNLOADS: &str = m::ICON_DOWNLOAD;
 pub const OPEN_FOLDER: &str = m::ICON_FOLDER_OPEN;
 pub const BROWSE: &str = m::ICON_FOLDER_OPEN;
@@ -18,12 +19,14 @@ pub const CANCEL_TO_REMOVE: &str = m::ICON_DELETE_FOREVER;
 pub const RECHECK: &str = m::ICON_SEARCH;
 pub const SCAN: &str = m::ICON_SCAN;
 pub const SETTINGS: &str = m::ICON_SETTINGS;
-#[allow(dead_code)]
 pub const SAVE: &str = m::ICON_SAVE;
 pub const DISMISS: &str = m::ICON_CLOSE;
+pub const CLOSE: &str = m::ICON_CLOSE;
 pub const EXIT: &str = m::ICON_EXIT_TO_APP;
 pub const ADD: &str = m::ICON_ADD;
 pub const REMOVE: &str = m::ICON_DELETE;
+pub const TOKEN: &str = m::ICON_VPN_KEY;
+pub const RESET: &str = m::ICON_RESTART_ALT;
 
 pub const NAV_DOWNLOADER: &str = m::ICON_CLOUD_DOWNLOAD;
 pub const NAV_AV1: &str = m::ICON_VIDEO_SETTINGS;

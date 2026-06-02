@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>rustdl</title>
   <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="stylesheet" href="/material-icons.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -14,11 +15,11 @@
       <div id="tools-status" class="tools-status" aria-label="PATH checks"></div>
     </div>
     <div class="topbar-actions">
-      <button type="button" id="btn-refresh-tools" class="secondary" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
-      <button type="button" id="btn-pause" class="secondary">Pause</button>
-      <button type="button" id="btn-resume" class="secondary">Resume</button>
-      <button type="button" id="btn-start" class="primary">Start downloads</button>
-      <button type="button" id="btn-settings" class="secondary">Settings</button>
+      <button type="button" id="btn-refresh-tools" class="secondary" data-icon="sync" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
+      <button type="button" id="btn-pause" class="secondary" data-icon="pause">Pause</button>
+      <button type="button" id="btn-resume" class="secondary" data-icon="play_arrow">Resume</button>
+      <button type="button" id="btn-start" class="primary" data-icon="download">Start downloads</button>
+      <button type="button" id="btn-settings" class="secondary" data-icon="settings">Settings</button>
     </div>
   </header>
 
@@ -27,7 +28,7 @@
     <p class="hint">Enter the API token from rustdl Settings → Shared → Web UI. Traffic is HTTP on your LAN; use only on networks you trust.</p>
     <form id="auth-form">
       <label>API token <input type="password" id="token-input" autocomplete="off" /></label>
-      <button type="submit" id="btn-save-token" class="primary">Save token</button>
+      <button type="submit" id="btn-save-token" class="primary" data-icon="save">Save token</button>
     </form>
     <p id="auth-status" class="status"></p>
   </section>
@@ -37,8 +38,8 @@
       <h2>Add URLs</h2>
       <textarea id="url-input" rows="3" placeholder="One URL per line"></textarea>
       <div class="row add-panel-actions">
-        <button type="button" id="btn-add" class="primary">Add URLs</button>
-        <button type="button" id="btn-clear-url-input" class="secondary" title="Clear the URL text box">Clear input</button>
+        <button type="button" id="btn-add" class="primary" data-icon="add">Add URLs</button>
+        <button type="button" id="btn-clear-url-input" class="secondary" data-icon="clear_all" title="Clear the URL text box">Clear input</button>
       </div>
       <p id="add-feedback" class="add-feedback hidden" role="status"></p>
     </section>
@@ -47,11 +48,11 @@
       <div class="summary" id="status-summary"></div>
       <div class="queue-toolbar row">
         <span class="hint">Queue:</span>
-        <button type="button" id="btn-clear-finished" class="secondary" title="Remove done and failed rows">Clear finished</button>
-        <button type="button" id="btn-clear-done" class="secondary" title="Remove done rows only">Clear done</button>
-        <button type="button" id="btn-clear-failed" class="secondary" title="Remove failed rows only">Clear failed</button>
-        <button type="button" id="btn-clear-inactive" class="secondary" title="Remove all rows except queued/downloading">Clear inactive</button>
-        <button type="button" id="btn-clear-all" class="danger" title="Remove every row (cancels active downloads)">Clear all</button>
+        <button type="button" id="btn-clear-finished" class="secondary" data-icon="clear_all" title="Remove done and failed rows">Clear finished</button>
+        <button type="button" id="btn-clear-done" class="secondary" data-icon="delete" title="Remove done rows only">Clear done</button>
+        <button type="button" id="btn-clear-failed" class="secondary" data-icon="delete" title="Remove failed rows only">Clear failed</button>
+        <button type="button" id="btn-clear-inactive" class="secondary" data-icon="remove_circle_outline" title="Remove all rows except queued/downloading">Clear inactive</button>
+        <button type="button" id="btn-clear-all" class="danger" data-icon="delete_forever" title="Remove every row (cancels active downloads)">Clear all</button>
       </div>
       <div id="queue" class="queue"></div>
     </section>
@@ -59,7 +60,7 @@
     <section class="panel">
       <div class="row log-header">
         <h2>Activity log</h2>
-        <button type="button" id="btn-clear-log" class="secondary">Clear log</button>
+        <button type="button" id="btn-clear-log" class="secondary" data-icon="clear_all">Clear log</button>
       </div>
       <pre id="log-view" class="log-view"></pre>
     </section>
@@ -70,8 +71,8 @@
       <div class="settings-header">
         <h2>Settings</h2>
         <div class="settings-tabs" role="tablist">
-          <button type="button" class="settings-tab active" data-tab="shared" role="tab">Shared</button>
-          <button type="button" class="settings-tab" data-tab="downloader" role="tab">Downloader</button>
+          <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
+          <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
         </div>
       </div>
       <div class="settings-scroll">
@@ -107,14 +108,14 @@
             <label>Active profile
               <select id="set-active-profile"></select>
             </label>
-            <button type="button" id="btn-apply-profile" class="secondary">Apply profile</button>
+            <button type="button" id="btn-apply-profile" class="secondary" data-icon="check">Apply profile</button>
           </div>
           <div class="preset-row">
             <span class="hint">Presets:</span>
-            <button type="button" class="secondary preset-btn" data-profile="Best quality">Best quality</button>
-            <button type="button" class="secondary preset-btn" data-profile="Audio only">Audio only</button>
-            <button type="button" class="secondary preset-btn" data-profile="Fast download">Fast download</button>
-            <button type="button" class="secondary preset-btn" data-profile="Archive mode">Archive mode</button>
+            <button type="button" class="secondary preset-btn" data-icon="star" data-profile="Best quality">Best quality</button>
+            <button type="button" class="secondary preset-btn" data-icon="music_note" data-profile="Audio only">Audio only</button>
+            <button type="button" class="secondary preset-btn" data-icon="bolt" data-profile="Fast download">Fast download</button>
+            <button type="button" class="secondary preset-btn" data-icon="archive" data-profile="Archive mode">Archive mode</button>
           </div>
 
           <h3>Output and quality</h3>
@@ -177,12 +178,13 @@
         </div>
       </div>
       <div class="dialog-actions">
-        <button type="button" id="btn-settings-cancel" class="secondary">Cancel</button>
-        <button type="submit" class="primary">Save settings</button>
+        <button type="button" id="btn-settings-cancel" class="secondary" data-icon="close">Cancel</button>
+        <button type="submit" class="primary" data-icon="save">Save settings</button>
       </div>
     </form>
   </dialog>
 
+  <script src="/icons.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

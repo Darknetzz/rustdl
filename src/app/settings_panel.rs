@@ -230,7 +230,12 @@ impl PydlApp {
                                 }
                             });
                         }
-                        if ui.button("Generate new API token").clicked() {
+                        if secondary_button(
+                            ui,
+                            &format!("{} Generate new API token", ui_icons::TOKEN),
+                            true,
+                        )
+                        .clicked() {
                             self.settings.web_auth_token =
                                 crate::config::generate_web_auth_token();
                             changed = true;
@@ -282,7 +287,7 @@ impl PydlApp {
                         ui.horizontal_wrapped(|ui| {
                             if secondary_button(
                                 ui,
-                                &format!("{} Export settings", ui_icons::IMPORT_FILE),
+                                &format!("{} Export settings", ui_icons::EXPORT),
                                 true,
                             )
                             .clicked()
@@ -335,7 +340,12 @@ impl PydlApp {
                                     }
                                 }
                             }
-                            if secondary_button(ui, "Reset to defaults", true).clicked() {
+                            if secondary_button(
+                                ui,
+                                &format!("{} Reset to defaults", ui_icons::RESET),
+                                true,
+                            )
+                            .clicked() {
                                 let keep_output = self.settings.output_dir.clone();
                                 self.settings = crate::config::AppSettings::default();
                                 self.settings.output_dir = keep_output.clone();
@@ -408,7 +418,12 @@ impl PydlApp {
                                 }
                             });
                         ui.horizontal_wrapped(|ui| {
-                            if secondary_button(ui, "Save current as profile…", true).clicked()
+                            if secondary_button(
+                                ui,
+                                &format!("{} Save current as profile…", ui_icons::SAVE),
+                                true,
+                            )
+                            .clicked()
                             {
                                 self.new_profile_name_buffer = Some(String::new());
                             }
@@ -422,7 +437,11 @@ impl PydlApp {
                             ui.horizontal(|ui| {
                                 ui.label("Profile name");
                                 ui.text_edit_singleline(&mut name_buf);
-                                save_clicked = secondary_button(ui, "Save", !name_buf.trim().is_empty())
+                                save_clicked = secondary_button(
+                                    ui,
+                                    &format!("{} Save", ui_icons::SAVE),
+                                    !name_buf.trim().is_empty(),
+                                )
                                     .clicked();
                             });
                             if save_clicked {
@@ -446,7 +465,12 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("User profiles file").strong());
                         ui.horizontal_wrapped(|ui| {
-                            if secondary_button(ui, "Export profiles", true).clicked() {
+                            if secondary_button(
+                                ui,
+                                &format!("{} Export profiles", ui_icons::EXPORT),
+                                true,
+                            )
+                            .clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .set_file_name("rustdl_profiles.json")
                                     .save_file()
@@ -464,7 +488,12 @@ impl PydlApp {
                                     }
                                 }
                             }
-                            if secondary_button(ui, "Import profiles", true).clicked() {
+                            if secondary_button(
+                                ui,
+                                &format!("{} Import profiles", ui_icons::IMPORT_FILE),
+                                true,
+                            )
+                            .clicked() {
                                 if let Some(path) = rfd::FileDialog::new()
                                     .add_filter("JSON", &["json"])
                                     .pick_file()

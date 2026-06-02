@@ -157,7 +157,7 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Close").clicked() {
+                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true).clicked() {
                             self.settings.logs_open = false;
                             self.persist_settings();
                         }
@@ -276,7 +276,13 @@ impl PydlApp {
                             let label = egui::Label::new(widget).wrap().selectable(true);
                             let r = ui.add(label);
                             r.context_menu(|ui| {
-                                if ui.button("Copy line").clicked() {
+                                if secondary_button(
+                                    ui,
+                                    &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                    true,
+                                )
+                                .clicked()
+                                {
                                     ui.ctx().copy_text((*line).clone());
                                     ui.close_menu();
                                 }

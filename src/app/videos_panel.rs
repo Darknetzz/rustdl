@@ -367,7 +367,7 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.button("Close").clicked() {
+                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true).clicked() {
                             self.settings.videos_open = false;
                             self.persist_settings();
                         }
