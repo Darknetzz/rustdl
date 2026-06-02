@@ -1,13 +1,12 @@
 //! Video queue: docked under main controls or in a floating window (Downloader and AV1).
 
-use eframe::egui::{self, RichText};
+use eframe::egui::{self, Color32, RichText};
 
-use crate::app_ui::{secondary_button, status_color};
+use crate::app_ui::{draw_status_dot, secondary_button, status_color};
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 
-use super::av1_panel::av1_item_is_skipped;
 use super::PydlApp;
 
 impl PydlApp {
@@ -45,6 +44,11 @@ impl PydlApp {
     }
 
     fn draw_downloader_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+        if !self.items.is_empty() {
+            ui.add_space(4.0);
+            self.draw_downloader_queue_status_row(ui);
+            ui.add_space(6.0);
+        }
         egui::ScrollArea::vertical()
             .id_salt("rustdl_videos_scroll")
             .auto_shrink([false, false])
@@ -146,76 +150,99 @@ impl PydlApp {
                 self.settings.videos_open = true;
                 self.persist_settings();
             }
-            if self.av1_mode {
-                self.draw_av1_undocked_strip_counts(ui);
-            } else {
-                self.draw_downloader_undocked_strip_counts(ui);
-            }
         });
+        if self.av1_mode {
+            if !self.av1_items.is_empty() {
+                self.draw_av1_queue_status_row(ui);
+            }
+        } else if !self.items.is_empty() {
+            self.draw_downloader_queue_status_row(ui);
+        }
     }
 
-    fn draw_downloader_undocked_strip_counts(&mut self, ui: &mut egui::Ui) {
-        if self.status_done > 0 {
-            let label = format!("{} done", self.status_done);
-            if ui
-                .add(
-                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Done)))
-                        .sense(egui::Sense::click()),
-                )
-                .clicked()
-            {
-                self.focus_queue_group("Done");
-            }
+    /// Colored per-status counts for the downloader queue (main panel, undocked strip, videos panel).
+    pub(super) fn draw_downloader_queue_status_row(&mut self, ui: &mut egui::Ui) {
+        let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
+        if self.status_resolving > 0 {
+            parts.push((
+                "resolving",
+                self.status_resolving,
+                status_color(ItemStatus::Resolving),
+            ));
         }
         if self.status_ready > 0 {
-            let label = format!("{} ready", self.status_ready);
-            if ui
-                .add(
-                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Idle)))
-                        .sense(egui::Sense::click()),
-                )
-                .clicked()
-            {
-                self.focus_queue_group("Ready");
-            }
+            parts.push((
+                "ready",
+                self.status_ready,
+                status_color(ItemStatus::Idle),
+            ));
         }
-    }
-
-    fn draw_av1_undocked_strip_counts(&mut self, ui: &mut egui::Ui) {
-        let ready = self
-            .av1_items
-            .iter()
-            .filter(|i| i.status == ItemStatus::Idle)
-            .count();
-        let done = self
-            .av1_items
-            .iter()
-            .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
-            .count();
-        if done > 0 {
-            let label = format!("{done} done");
-            if ui
-                .add(
-                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Done)))
-                        .sense(egui::Sense::click()),
-                )
-                .clicked()
-            {
-                self.focus_queue_group("Done");
-            }
+        if self.status_queued > 0 {
+            parts.push((
+                "queued",
+                self.status_queued,
+                status_color(ItemStatus::Queued),
+            ));
         }
-        if ready > 0 {
-            let label = format!("{ready} ready");
-            if ui
-                .add(
-                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Idle)))
-                        .sense(egui::Sense::click()),
-                )
-                .clicked()
-            {
-                self.focus_queue_group("Ready");
-            }
+        if self.status_active > 0 {
+            parts.push((
+                "active",
+                self.status_active,
+                status_color(ItemStatus::Downloading),
+            ));
         }
+        if self.status_done > 0 {
+            parts.push(("done", self.status_done, status_color(ItemStatus::Done)));
+        }
+        if self.status_failed > 0 {
+            parts.push((
+                "failed",
+                self.status_failed,
+                status_color(ItemStatus::Failed),
+            ));
+        }
+        if parts.is_empty() {
+            return;
+        }
+        ui.horizontal_wrapped(|ui| {
+            let heading = if self.items.is_empty() {
+                "Downloads:".to_owned()
+            } else {
+                format!("Downloads ({}):", self.items.len())
+            };
+            ui.label(RichText::new(heading).color(TEXT_MUTED));
+            if self.queue_group_focus.is_some()
+                && ui
+                    .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
+                    .clicked()
+            {
+                self.queue_group_focus = None;
+            }
+            for (idx, (name, count, color)) in parts.iter().enumerate() {
+                let suffix = if idx + 1 == parts.len() { "" } else { "," };
+                let group = match *name {
+                    "ready" => "Ready",
+                    "queued" | "active" => "Active",
+                    "done" => "Done",
+                    "failed" => "Issues",
+                    "resolving" => "Resolving",
+                    _ => "Active",
+                };
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 5.0;
+                    draw_status_dot(ui, *color);
+                    let label = format!("{count} {name}{suffix}");
+                    let r = ui.add(
+                        egui::Label::new(RichText::new(label).color(*color))
+                            .sense(egui::Sense::click()),
+                    );
+                    if r.clicked() {
+                        self.focus_queue_group(group);
+                    }
+                    r.on_hover_text(format!("Show {group} items"));
+                });
+            }
+        });
     }
 
     /// Activity log docked in the main panel when the video queue is undocked.

@@ -717,9 +717,14 @@ impl PydlApp {
         }
     }
 
-    fn draw_av1_queue_status_row(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_av1_queue_status_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Queue:").color(text_muted(&self.settings.theme)));
+            let heading = if self.av1_items.is_empty() {
+                "Queue:".to_owned()
+            } else {
+                format!("Queue ({}):", self.av1_items.len())
+            };
+            ui.label(RichText::new(heading).color(text_muted(&self.settings.theme)));
             let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
             let ready = self
                 .av1_items
