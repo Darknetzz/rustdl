@@ -107,7 +107,6 @@ pub struct PydlApp {
     pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
     ui_bus: crate::app::events::UiEventBus,
-    tx: Sender<UiEvent>,
     rx: Receiver<UiEvent>,
 
     input_urls: String,
@@ -231,10 +230,7 @@ impl PydlApp {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
         let (rustdl_service, rx) = crate::service::RustdlService::new(runtime.clone());
         let shared_core = rustdl_service.shared_core();
-        let core_guard = shared_core.lock();
-        let tx = core_guard.tx.clone();
-        let ui_bus = core_guard.ui_event_bus();
-        drop(core_guard);
+        let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
         if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
             settings.web_auth_token = crate::config::generate_web_auth_token();
@@ -297,7 +293,6 @@ impl PydlApp {
             web_server,
             runtime,
             ui_bus,
-            tx,
             rx,
             input_urls: String::new(),
             output_dir: settings.output_dir.clone(),
