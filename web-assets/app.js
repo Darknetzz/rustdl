@@ -354,6 +354,32 @@ function canRedownload(item) {
   return slug === "done" || slug === "failed";
 }
 
+function appendRemoveButton(actions, item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  btn.textContent = "Remove";
+  btn.title = "Remove this row from the queue (does not delete the file on disk).";
+  btn.onclick = () =>
+    removeQueueItem(item.item_id).catch((e) => alert(e.message || String(e)));
+  actions.appendChild(btn);
+}
+
+function appendDeleteFileButton(actions, item) {
+  if (!item.can_delete_file) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "danger";
+  btn.textContent = "Delete file";
+  btn.title = "Delete the downloaded file on disk. The queue row stays until you remove it.";
+  btn.onclick = () => {
+    const name = item.media_filename || "this file";
+    if (!confirm(`Delete ${name} from the output folder?`)) return;
+    deleteQueueItemFile(item.item_id).catch((e) => alert(e.message || String(e)));
+  };
+  actions.appendChild(btn);
+}
+
 function appendRedownloadButton(actions, item) {
   if (!canRedownload(item)) return;
   const slug = statusSlug(item.status);
@@ -481,6 +507,8 @@ function renderQueueCard(item, settings) {
     actions.appendChild(cancel);
   }
   appendRedownloadButton(actions, item);
+  appendDeleteFileButton(actions, item);
+  appendRemoveButton(actions, item);
   card.appendChild(actions);
 
   return card;
@@ -537,6 +565,8 @@ function renderQueueCardListRow(item) {
     actions.appendChild(cancel);
   }
   appendRedownloadButton(actions, item);
+  appendDeleteFileButton(actions, item);
+  appendRemoveButton(actions, item);
   if (actions.childElementCount > 0) {
     card.appendChild(actions);
   }
@@ -583,6 +613,47 @@ async function redownloadItem(id) {
     );
   }
   await refreshAll();
+}
+
+async function removeQueueItem(id) {
+  const res = await api(`/api/queue/${id}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error("Could not remove this item from the queue.");
+  }
+  await refreshAll();
+}
+
+async function deleteQueueItemFile(id) {
+  const res = await api(`/api/queue/${id}/file`, { method: "DELETE" });
+  if (!res.ok && res.status !== 204) {
+    throw new Error("Could not delete the file (not found on disk or permission denied).");
+  }
+  await refreshAll();
+}
+
+async function clearQueue(filter, confirmMessage) {
+  if (confirmMessage && !confirm(confirmMessage)) return;
+  const res = await api("/api/queue/clear", {
+    method: "POST",
+    body: JSON.stringify({ filter }),
+  });
+  if (!res.ok) {
+    throw new Error("Queue clear failed.");
+  }
+  const data = await res.json();
+  if (data.removed === 0) {
+    alert("Nothing to remove for that filter.");
+  }
+  await refreshAll();
+}
+
+async function clearActivityLog() {
+  await api("/api/logs/clear", { method: "POST" });
+  await refreshLogs();
+}
+
+function clearUrlInput() {
+  document.getElementById("url-input").value = "";
 }
 
 async function refreshSettingsCache() {
@@ -811,6 +882,38 @@ document.getElementById("btn-add").onclick = async () => {
   clearTimeout(autoAddTimer);
   await flushAutoAddFromInput();
 };
+
+document.getElementById("btn-clear-url-input").onclick = () => clearUrlInput();
+
+document.getElementById("btn-clear-finished").onclick = () =>
+  clearQueue("finished", "Remove all done and failed items from the queue?").catch((e) =>
+    alert(e.message || String(e))
+  );
+
+document.getElementById("btn-clear-done").onclick = () =>
+  clearQueue("done", "Remove all done items from the queue?").catch((e) =>
+    alert(e.message || String(e))
+  );
+
+document.getElementById("btn-clear-failed").onclick = () =>
+  clearQueue("failed", "Remove all failed items from the queue?").catch((e) =>
+    alert(e.message || String(e))
+  );
+
+document.getElementById("btn-clear-inactive").onclick = () =>
+  clearQueue(
+    "inactive",
+    "Remove all items except those queued or downloading? Active downloads are not cancelled."
+  ).catch((e) => alert(e.message || String(e)));
+
+document.getElementById("btn-clear-all").onclick = () =>
+  clearQueue(
+    "all",
+    "Remove every item from the queue? Downloads in progress will be cancelled."
+  ).catch((e) => alert(e.message || String(e)));
+
+document.getElementById("btn-clear-log").onclick = () =>
+  clearActivityLog().catch((e) => alert(e.message || String(e)));
 
 document.getElementById("url-input").addEventListener("input", scheduleAutoAddFromInput);
 

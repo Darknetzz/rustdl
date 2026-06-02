@@ -114,6 +114,33 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 
 .summary { color: var(--muted); margin-bottom: 0.85rem; font-size: 0.9rem; }
 
+.queue-toolbar {
+  margin-bottom: 0.75rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.queue-toolbar .hint {
+  margin-right: 0.25rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.add-panel-actions {
+  margin-top: 0.5rem;
+  align-items: center;
+}
+
+.log-header {
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.log-header h2 {
+  margin: 0;
+}
+
 .add-feedback {
   margin: 0.5rem 0 0;
   font-size: 0.88rem;

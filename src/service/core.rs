@@ -16,8 +16,8 @@ use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
 use crate::config::{
-    load_activity_log, load_queue_items, load_settings, save_queue_items, save_settings,
-    trim_activity_log, AppSettings,
+    load_activity_log, load_queue_items, load_settings, save_activity_log, save_queue_items,
+    save_settings, trim_activity_log, AppSettings,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
@@ -36,6 +36,21 @@ const QUEUE_SAVE_DEBOUNCE: Duration = Duration::from_millis(400);
 pub enum CancelPostAction {
     Ready,
     Remove,
+}
+
+/// Bulk queue cleanup modes (web UI and API).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum QueueClearFilter {
+    /// Done rows only.
+    Done,
+    /// Failed rows only.
+    Failed,
+    /// Done and failed.
+    Finished,
+    /// Everything except queued/downloading (matches desktop “Clear list”).
+    Inactive,
+    /// Entire queue (active downloads are cancelled and removed).
+    All,
 }
 
 pub struct DownloadCore {
@@ -588,6 +603,126 @@ impl DownloadCore {
         true
     }
 
+    /// Removes a row; queued/downloading items are cancelled first (remove when cancel completes).
+    pub fn remove_item_from_queue(&mut self, item_id: u64) -> bool {
+        let Some(idx) = self.item_idx(item_id) else {
+            return false;
+        };
+        match self.items[idx].status {
+            ItemStatus::Queued => {
+                self.download_cancel_flags.remove(&item_id);
+                self.cancel_post_actions.remove(&item_id);
+                self.remove_item_by_id(item_id)
+            }
+            ItemStatus::Downloading => {
+                self.request_cancel_item(item_id, CancelPostAction::Remove);
+                true
+            }
+            _ => self.remove_item_by_id(item_id),
+        }
+    }
+
+    pub fn delete_item_file_on_disk(&mut self, item_id: u64) -> bool {
+        let Some(idx) = self.item_idx(item_id) else {
+            return false;
+        };
+        self.refresh_done_file_lookup();
+        let item = self.items[idx].clone();
+        let output_dir = self.output_dir.clone();
+        let Some(path) = self
+            .done_file_index
+            .find_path_for_queue_item(&output_dir, &item)
+            .or_else(|| self.done_file_index.find_path_in_index(&item))
+            .map(|(p, _)| p)
+        else {
+            return false;
+        };
+        match fs::remove_file(&path) {
+            Ok(()) => {
+                self.append_log(&format!("Deleted file: {}", path.to_string_lossy()));
+                self.items[idx].local_path = None;
+                self.done_file_index.force_refresh();
+                self.bump_generation();
+                true
+            }
+            Err(e) => {
+                self.append_log(&format!(
+                    "Failed to delete file {}: {e}",
+                    path.to_string_lossy()
+                ));
+                false
+            }
+        }
+    }
+
+    pub fn clear_activity_log(&mut self) {
+        self.log_lines.clear();
+        if let Err(err) = save_activity_log(&self.log_lines) {
+            eprintln!("rustdl: failed to save activity log: {err}");
+        }
+        self.log_save_deadline = None;
+        self.bump_generation();
+    }
+
+    pub fn clear_queue(&mut self, filter: QueueClearFilter) -> usize {
+        let removed = match filter {
+            QueueClearFilter::Inactive => {
+                let before = self.items.len();
+                self.items.retain(|it| {
+                    matches!(
+                        it.status,
+                        ItemStatus::Queued | ItemStatus::Downloading
+                    )
+                });
+                self.pending_resolve_ids
+                    .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                before.saturating_sub(self.items.len())
+            }
+            QueueClearFilter::All => {
+                let ids: Vec<u64> = self.items.iter().map(|it| it.item_id).collect();
+                let mut n = 0usize;
+                for id in ids {
+                    if self.remove_item_from_queue(id) {
+                        n += 1;
+                    }
+                }
+                n
+            }
+            other => {
+                let ids: Vec<u64> = self
+                    .items
+                    .iter()
+                    .filter(|it| queue_clear_matches(it.status, other))
+                    .map(|it| it.item_id)
+                    .collect();
+                let mut n = 0usize;
+                for id in ids {
+                    if self.remove_item_from_queue(id) {
+                        n += 1;
+                    }
+                }
+                n
+            }
+        };
+        if removed > 0 {
+            self.rebuild_item_index();
+            self.invalidate_queue_caches();
+            self.update_status();
+            self.flush_queue_to_disk();
+            self.bump_generation();
+            self.append_log(&format!("Removed {removed} item(s) from the queue."));
+        }
+        removed
+    }
+
+    pub fn item_has_file_on_disk(&self, item: &QueueItem) -> bool {
+        let output_dir = self.output_dir.as_str();
+        self.done_file_index
+            .find_path_for_queue_item(output_dir, item)
+            .or_else(|| self.done_file_index.find_path_in_index(item))
+            .is_some()
+    }
+
     pub fn request_cancel_item(&mut self, item_id: u64, post_action: CancelPostAction) {
         let Some(idx) = self.item_idx(item_id) else {
             return;
@@ -737,6 +872,17 @@ impl DownloadCore {
             "ffmpeg": tool_json("ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, &self.settings.ffmpeg_path),
             "ffprobe": tool_json("ffprobe", self.has_ffprobe, &self.ffprobe_version, &self.settings.ffprobe_path),
         })
+    }
+}
+
+fn queue_clear_matches(status: ItemStatus, filter: QueueClearFilter) -> bool {
+    match filter {
+        QueueClearFilter::Done => status == ItemStatus::Done,
+        QueueClearFilter::Failed => status == ItemStatus::Failed,
+        QueueClearFilter::Finished => {
+            matches!(status, ItemStatus::Done | ItemStatus::Failed)
+        }
+        QueueClearFilter::Inactive | QueueClearFilter::All => false,
     }
 }
 

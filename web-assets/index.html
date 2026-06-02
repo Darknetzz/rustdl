@@ -35,17 +35,31 @@
     <section class="panel add-panel">
       <h2>Add URLs</h2>
       <textarea id="url-input" rows="3" placeholder="One URL per line"></textarea>
-      <button type="button" id="btn-add" class="primary">Add URLs</button>
+      <div class="row add-panel-actions">
+        <button type="button" id="btn-add" class="primary">Add URLs</button>
+        <button type="button" id="btn-clear-url-input" class="secondary" title="Clear the URL text box">Clear input</button>
+      </div>
       <p id="add-feedback" class="add-feedback hidden" role="status"></p>
     </section>
 
     <section class="panel">
       <div class="summary" id="status-summary"></div>
+      <div class="queue-toolbar row">
+        <span class="hint">Queue:</span>
+        <button type="button" id="btn-clear-finished" class="secondary" title="Remove done and failed rows">Clear finished</button>
+        <button type="button" id="btn-clear-done" class="secondary" title="Remove done rows only">Clear done</button>
+        <button type="button" id="btn-clear-failed" class="secondary" title="Remove failed rows only">Clear failed</button>
+        <button type="button" id="btn-clear-inactive" class="secondary" title="Remove all rows except queued/downloading">Clear inactive</button>
+        <button type="button" id="btn-clear-all" class="danger" title="Remove every row (cancels active downloads)">Clear all</button>
+      </div>
       <div id="queue" class="queue"></div>
     </section>
 
     <section class="panel">
-      <h2>Activity log</h2>
+      <div class="row log-header">
+        <h2>Activity log</h2>
+        <button type="button" id="btn-clear-log" class="secondary">Clear log</button>
+      </div>
       <pre id="log-view" class="log-view"></pre>
     </section>
   </main>

@@ -16,7 +16,7 @@ use crate::app::UiEvent;
 use crate::config::AppSettings;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
-use crate::service::core::{CancelPostAction, SharedCore};
+use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
 use crate::service::web::media;
 use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
@@ -63,6 +63,7 @@ struct QueueItemView {
     media_kind: Option<String>,
     media_filename: Option<String>,
     can_redownload: bool,
+    can_delete_file: bool,
 }
 
 #[derive(Serialize)]
@@ -80,6 +81,16 @@ struct AddUrlsResponse {
     accepted: usize,
     skipped_duplicates: usize,
     skipped_invalid: usize,
+}
+
+#[derive(Deserialize)]
+struct QueueClearBody {
+    filter: String,
+}
+
+#[derive(Serialize)]
+struct QueueClearResponse {
+    removed: usize,
 }
 
 #[derive(Deserialize)]
@@ -120,6 +131,9 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/queue", get(queue_list))
         .route("/api/queue", post(queue_add))
         .route("/api/queue/{id}", axum::routing::delete(queue_remove))
+        .route("/api/queue/clear", post(queue_clear))
+        .route("/api/queue/{id}/file", axum::routing::delete(queue_delete_file))
+        .route("/api/logs/clear", post(logs_clear))
         .route("/api/downloads/start", post(downloads_start))
         .route("/api/downloads/pause", post(downloads_pause))
         .route("/api/downloads/resume", post(downloads_resume))
@@ -224,12 +238,14 @@ async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {
             };
             let media_filename = media::item_media_filename(&c, &item);
             let can_redownload = c.item_has_redownload_target(&item);
+            let can_delete_file = c.item_has_file_on_disk(&item);
             QueueItemView {
                 item,
                 playable,
                 media_kind,
                 media_filename,
                 can_redownload,
+                can_delete_file,
             }
         })
         .collect();
@@ -278,11 +294,51 @@ async fn queue_remove(
     Path(id): Path<u64>,
 ) -> StatusCode {
     let mut c = st.core.lock();
-    if c.remove_item_by_id(id) {
+    if c.remove_item_from_queue(id) {
+        c.bump_generation();
         StatusCode::NO_CONTENT
     } else {
         StatusCode::NOT_FOUND
     }
+}
+
+fn parse_queue_clear_filter(raw: &str) -> Option<QueueClearFilter> {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "done" => Some(QueueClearFilter::Done),
+        "failed" => Some(QueueClearFilter::Failed),
+        "finished" | "completed" => Some(QueueClearFilter::Finished),
+        "inactive" | "clear_list" => Some(QueueClearFilter::Inactive),
+        "all" => Some(QueueClearFilter::All),
+        _ => None,
+    }
+}
+
+async fn queue_clear(
+    State(st): State<ApiState>,
+    Json(body): Json<QueueClearBody>,
+) -> Result<Json<QueueClearResponse>, StatusCode> {
+    let filter = parse_queue_clear_filter(&body.filter).ok_or(StatusCode::BAD_REQUEST)?;
+    let mut c = st.core.lock();
+    let removed = c.clear_queue(filter);
+    Ok(Json(QueueClearResponse { removed }))
+}
+
+async fn queue_delete_file(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+) -> StatusCode {
+    let mut c = st.core.lock();
+    if c.delete_item_file_on_disk(id) {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
+}
+
+async fn logs_clear(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.clear_activity_log();
+    StatusCode::OK
 }
 
 async fn downloads_start(State(st): State<ApiState>) -> StatusCode {
