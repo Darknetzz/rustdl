@@ -322,7 +322,7 @@ fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
     });
 }
 
-fn is_video_path(path: &Path) -> bool {
+pub fn is_video_path(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
         .map(|ext| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext)))

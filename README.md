@@ -60,6 +60,7 @@ cargo test --all-targets --all-features
 - Light / dark / system theme; last mode (Downloader vs AV1) remembered across restarts.
 - Desktop notification when a download session finishes (where supported by the OS).
 - AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
+- Optional: enqueue each completed video download into the AV1 converter queue (Settings → Downloader).
 
 ## Modes
 
@@ -95,6 +96,7 @@ Settings are split into tabs:
 | UI scale | Global UI zoom factor (`0.85..=1.5`), useful for larger/smaller display density |
 | Auto-add pasted URLs after a short delay | When enabled, valid pasted URLs are auto-queued for metadata fetch; when disabled, use **Add URLs** manually |
 | Auto-start downloads when new items become ready | Optional. When enabled, starts downloads automatically after metadata resolution completes |
+| Enqueue completed downloads in AV1 converter queue | After a successful video download, adds the output file to the AV1 queue (skipped for audio-only / MP3 extraction) |
 | Autoscroll log to latest line | Keeps the log viewer pinned to the newest lines while logs are appended |
 | Parallel downloads | Number of concurrent worker queues used when starting downloads (`1..=6`) |
 | Max log chars | Maximum in-memory log buffer length before older characters are trimmed |

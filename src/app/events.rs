@@ -401,6 +401,7 @@ impl PydlApp {
                     }
                     if completed {
                         self.probe_done_item_resolution_if_missing(item_id);
+                        self.enqueue_completed_download_to_av1(item_id);
                     }
                     self.download_cancel_flags.remove(&item_id);
                     self.queue_running = self.queue_running.saturating_sub(1);

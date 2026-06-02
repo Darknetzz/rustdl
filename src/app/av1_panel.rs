@@ -300,12 +300,29 @@ impl PydlApp {
             return;
         }
 
+        let added = self.push_av1_plan_items(plan);
+
+        if added > 0 {
+            self.append_log(&format!("AV1: added {added} video(s) to queue as ready."));
+            self.schedule_av1_queue_save();
+        } else {
+            self.append_log("AV1: all video(s) from path(s) are already in the queue.");
+        }
+        remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
+        self.schedule_av1_queue_save();
+    }
+
+    /// Adds plan items not already in the AV1 queue. Returns how many were added.
+    pub(super) fn push_av1_plan_items(&mut self, plan: Vec<av1_transcode::Av1PlanItem>) -> usize {
+        if plan.is_empty() {
+            return 0;
+        }
         let existing: HashSet<String> = self
             .av1_items
             .iter()
             .map(|item| normalize_av1_source_key(&item.source_path))
             .collect();
-
+        let cfg = self.av1_config();
         let ffmpeg_path = cfg.ffmpeg_path.clone();
         let ffprobe_path = cfg.ffprobe_path.clone();
         let mut added = 0usize;
@@ -350,15 +367,47 @@ impl PydlApp {
             }
             added += 1;
         }
-
         if added > 0 {
-            self.append_log(&format!("AV1: added {added} video(s) to queue as ready."));
             self.schedule_av1_queue_save();
-        } else {
-            self.append_log("AV1: all video(s) from path(s) are already in the queue.");
         }
-        remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
-        self.schedule_av1_queue_save();
+        added
+    }
+
+    pub(super) fn enqueue_completed_download_to_av1(&mut self, item_id: u64) {
+        if !self.settings.enqueue_downloads_to_av1 || self.settings.ffmpeg_extract_audio_mp3 {
+            return;
+        }
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let item = self.items[idx].clone();
+        let Some((path, _)) = self.find_downloaded_file_for_item(&item) else {
+            return;
+        };
+        if !av1_transcode::is_video_path(&path) {
+            return;
+        }
+        let source = path.to_string_lossy().into_owned();
+        let plan = av1_transcode::collect_plan(
+            &[Av1Input {
+                source_path: source,
+            }],
+            &self.av1_config(),
+        );
+        let added = self.push_av1_plan_items(plan);
+        if added > 0 {
+            let label = item.title.trim();
+            let label = if label.is_empty() {
+                path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("download")
+            } else {
+                label
+            };
+            self.append_log(&format!(
+                "AV1: enqueued \"{label}\" from completed download."
+            ));
+        }
     }
 
     pub(super) fn queue_av1_restored_assets(&mut self) {

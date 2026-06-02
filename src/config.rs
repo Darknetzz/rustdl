@@ -48,6 +48,9 @@ pub struct AppSettings {
     pub hide_card_subtitle: bool,
     pub auto_add_pasted_urls: bool,
     pub auto_start_downloads: bool,
+    /// After a successful download, add the output file to the AV1 converter queue.
+    #[serde(default)]
+    pub enqueue_downloads_to_av1: bool,
     pub ui_scale: f32,
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
@@ -247,6 +250,7 @@ impl Default for AppSettings {
             hide_card_subtitle: false,
             auto_add_pasted_urls: true,
             auto_start_downloads: true,
+            enqueue_downloads_to_av1: false,
             ui_scale: 1.08,
             card_list_layout: false,
             logs_docked: true,

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Downloader setting: enqueue completed video downloads in the AV1 converter queue.
 - Shared `ytdlp_download_args` module: CLI and GUI use the same yt-dlp argument builder (with unit tests).
 - Headless CLI: `--dry-run`, batch downloads from `@file.txt` or `-` (stdin).
 - GUI: **Import queue** from `.txt`, **Open output folder** on completed cards, download speed limit setting (`--limit-rate`).

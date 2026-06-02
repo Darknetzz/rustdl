@@ -270,6 +270,12 @@ impl PydlApp {
                                 "Auto-start downloads when new items become ready",
                             )
                             .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.enqueue_downloads_to_av1,
+                                "Enqueue completed downloads in AV1 converter queue",
+                            )
+                            .changed();
                         ui.horizontal(|ui| {
                             ui.label("Parallel downloads");
                             changed |= ui
