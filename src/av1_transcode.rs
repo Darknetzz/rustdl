@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use eframe::egui;
 
-use crate::external_tools::resolve_executable;
+use crate::external_tools::{no_console_window, resolve_executable};
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
 const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
@@ -152,7 +152,9 @@ pub fn encoder_indicator_color(enc: &EncoderChoice) -> egui::Color32 {
 }
 
 fn encoder_supported(ffmpeg_bin: &str, encoder: &str) -> bool {
-    let Ok(out) = Command::new(ffmpeg_bin)
+    let mut cmd = Command::new(ffmpeg_bin);
+    no_console_window(&mut cmd);
+    let Ok(out) = cmd
         .arg("-hide_banner")
         .arg("-encoders")
         .stdout(Stdio::piped())
@@ -173,6 +175,7 @@ fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
         "format=nv12"
     };
     let mut cmd = Command::new(ffmpeg_bin);
+    no_console_window(&mut cmd);
     cmd.arg("-hide_banner").arg("-loglevel").arg("error").args([
         "-f",
         "lavfi",
@@ -377,7 +380,9 @@ struct FfprobeMediaRoot {
 
 pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Av1InputMedia> {
     let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
-    let out = Command::new(ffprobe)
+    let mut cmd = Command::new(ffprobe);
+    no_console_window(&mut cmd);
+    let out = cmd
         .args([
             "-v",
             "error",
@@ -495,7 +500,9 @@ pub fn parse_ffmpeg_speed(value: &str) -> Option<f64> {
 
 pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
-    let out = Command::new(ffmpeg)
+    let mut cmd = Command::new(ffmpeg);
+    no_console_window(&mut cmd);
+    let out = cmd
         .args([
             "-hide_banner",
             "-loglevel",
@@ -651,6 +658,7 @@ where
     let vf = build_video_filter_chain(enc.hw_type, cfg.max_width, pix_fmt);
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
+    no_console_window(&mut cmd);
     cmd.arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")

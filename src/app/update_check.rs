@@ -3,6 +3,7 @@ use std::process::Command;
 use reqwest::Client;
 
 use crate::app_parsing::is_version_newer;
+use crate::external_tools::no_console_window;
 use crate::pkg_version;
 
 /// Parses GitHub `releases/latest` JSON body into tag (without leading `v`) and release page URL.
@@ -55,7 +56,9 @@ pub(crate) fn detect_github_repo() -> Option<(String, String)> {
             return Some(parsed);
         }
     }
-    let out = Command::new("git")
+    let mut cmd = Command::new("git");
+    no_console_window(&mut cmd);
+    let out = cmd
         .args(["config", "--get", "remote.origin.url"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())

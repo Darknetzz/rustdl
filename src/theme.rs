@@ -81,7 +81,11 @@ pub fn visuals_for_theme(theme: &str) -> Visuals {
             #[cfg(windows)]
             {
                 use std::process::Command;
-                let dark = Command::new("powershell")
+
+                use crate::external_tools::no_console_window;
+                let mut cmd = Command::new("powershell");
+                no_console_window(&mut cmd);
+                let dark = cmd
                     .args([
                         "-NoProfile",
                         "-Command",

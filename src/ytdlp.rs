@@ -13,7 +13,9 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command as TokioCommand;
 use url::Url;
 
-use crate::external_tools::{executable_exists, resolve_executable, which};
+use crate::external_tools::{
+    executable_exists, no_console_window, no_console_window_tokio, resolve_executable, which,
+};
 use crate::models::VideoPreview;
 
 pub const PROGRESS_PREFIX: &str = "progress:";
@@ -69,7 +71,9 @@ fn resolve_exe_for_version_spawn(custom_path: &str, default_exe: &str) -> String
 /// First non-empty line from stdout, else stderr (e.g. `ffmpeg -version` prints the banner to stderr).
 /// Does not require exit code 0; some launcher shims return non-zero while still printing a version line.
 fn read_version_from_exe(exe: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(exe)
+    let mut cmd = Command::new(exe);
+    no_console_window(&mut cmd);
+    let output = cmd
         .args(args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -338,7 +342,9 @@ pub fn probe_video_audio_stream_presence(
     ffprobe_path: &str,
 ) -> Option<(bool, bool)> {
     let ffprobe = resolve_ffprobe_exe(ffprobe_path);
-    let out = Command::new(&ffprobe)
+    let mut cmd = Command::new(&ffprobe);
+    no_console_window(&mut cmd);
+    let out = cmd
         .args([
             "-v",
             "error",
@@ -360,7 +366,9 @@ pub fn probe_video_audio_stream_presence(
 
 pub fn probe_video_resolution_with_path(file_path: &str, ffprobe_path: &str) -> Option<(u32, u32)> {
     let ffprobe = resolve_ffprobe_exe(ffprobe_path);
-    let out = Command::new(&ffprobe)
+    let mut cmd = Command::new(&ffprobe);
+    no_console_window(&mut cmd);
+    let out = cmd
         .args([
             "-v",
             "error",
@@ -448,6 +456,7 @@ pub fn resolve_url_to_previews_with_bin(
     }
     let bin = resolve_executable(yt_dlp_path, "yt-dlp");
     let mut cmd = Command::new(&bin);
+    no_console_window(&mut cmd);
     cmd.args(["-J", "--no-warnings", "--skip-download"]);
     for arg in extra_args {
         cmd.arg(arg);
@@ -590,6 +599,7 @@ where
     };
     let output_template = format!("{output_dir}/{template}");
     let mut cmd = TokioCommand::new(resolve_executable(yt_dlp_path, "yt-dlp"));
+    no_console_window_tokio(&mut cmd);
     cmd.arg("--newline")
         .arg("--progress-template")
         .arg(format!(
