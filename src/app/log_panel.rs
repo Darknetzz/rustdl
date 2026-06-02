@@ -414,21 +414,30 @@ pub(crate) fn compact_tool_version_display(version: &str) -> String {
 }
 
 pub(crate) fn draw_web_ui_header_link(ui: &mut egui::Ui, url: &str) {
-    let label = web_ui_link_label(url);
-    ui.hyperlink_to(RichText::new(label).small().strong(), url)
-        .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
+    const WEB_UI_OK: Color32 = Color32::from_rgb(132, 235, 156);
+    let host = web_ui_link_host(url);
+    let body = if host.is_empty() {
+        "✔ Web UI".to_owned()
+    } else {
+        format!("✔ Web UI · {host}")
+    };
+    ui.hyperlink_to(
+        RichText::new(body).small().color(WEB_UI_OK).strong(),
+        url,
+    )
+    .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
 }
 
-fn web_ui_link_label(url: &str) -> String {
+fn web_ui_link_host(url: &str) -> String {
     let trimmed = url.trim_end_matches('/');
     let host = trimmed
         .strip_prefix("http://")
         .or_else(|| trimmed.strip_prefix("https://"))
         .unwrap_or(trimmed);
     if host.is_empty() {
-        "Web UI".to_owned()
+        String::new()
     } else {
-        format!("Web UI · {host}")
+        host.to_owned()
     }
 }
 
@@ -486,13 +495,13 @@ mod version_display_tests {
 
 #[cfg(test)]
 mod web_ui_link_tests {
-    use super::web_ui_link_label;
+    use super::web_ui_link_host;
 
     #[test]
-    fn label_includes_host() {
+    fn host_from_url() {
         assert_eq!(
-            web_ui_link_label("http://127.0.0.1:8765/"),
-            "Web UI · 127.0.0.1:8765"
+            web_ui_link_host("http://127.0.0.1:8765/"),
+            "127.0.0.1:8765"
         );
     }
 }

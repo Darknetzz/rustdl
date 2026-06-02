@@ -19,6 +19,7 @@
   --failed: #ef5350;
   --thumb-bg: #202024;
   --done-fill: rgba(56, 142, 60, 0.18);
+  --backdrop: rgba(0, 0, 0, 0.58);
 }
 
 * { box-sizing: border-box; }
@@ -468,6 +469,13 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   width: calc(100% - 2rem);
   max-height: calc(100vh - 2rem);
   padding: 0;
+  margin: auto;
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.45);
+}
+
+.settings-dialog::backdrop,
+dialog::backdrop {
+  background: var(--backdrop);
 }
 
 .settings-dialog form {
