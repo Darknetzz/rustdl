@@ -106,6 +106,7 @@ pub struct PydlApp {
     pub(crate) core_generation: u64,
     pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
+    ui_bus: crate::app::events::UiEventBus,
     tx: Sender<UiEvent>,
     rx: Receiver<UiEvent>,
 
@@ -230,7 +231,10 @@ impl PydlApp {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
         let (rustdl_service, rx) = crate::service::RustdlService::new(runtime.clone());
         let shared_core = rustdl_service.shared_core();
-        let tx = shared_core.lock().tx.clone();
+        let core_guard = shared_core.lock();
+        let tx = core_guard.tx.clone();
+        let ui_bus = core_guard.ui_event_bus();
+        drop(core_guard);
         let mut settings = load_settings();
         if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
             settings.web_auth_token = crate::config::generate_web_auth_token();
@@ -292,6 +296,7 @@ impl PydlApp {
             core_generation: shared_core.lock().generation,
             web_server,
             runtime,
+            ui_bus,
             tx,
             rx,
             input_urls: String::new(),
@@ -864,7 +869,7 @@ impl PydlApp {
         }
         self.update_check_in_progress = true;
         self.update_status_text = "Checking for updates...".to_owned();
-        background_spawn::spawn_update_check(&self.runtime, &self.tx, self.http_client.clone());
+        background_spawn::spawn_update_check(&self.runtime, &self.ui_bus, self.http_client.clone());
     }
 
     fn open_release_url(&mut self) {
@@ -1114,7 +1119,7 @@ impl PydlApp {
         let metadata_args = self.metadata_extra_args();
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
-            &self.tx,
+            &self.ui_bus,
             yt_dlp_bin,
             metadata_args,
             self.settings.playlist_preview_cap,

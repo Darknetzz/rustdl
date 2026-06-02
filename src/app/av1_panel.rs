@@ -1024,7 +1024,7 @@ impl PydlApp {
         self.av1_running = true;
         super::background_spawn::spawn_av1_worker(
             &self.runtime,
-            &self.tx,
+            &self.ui_bus,
             cfg,
             jobs,
             self.av1_cancel_flag.clone(),

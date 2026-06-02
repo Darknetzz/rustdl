@@ -50,7 +50,7 @@ impl PydlApp {
             return;
         }
         self.thumbnail_inflight.insert(item_id);
-        let tx = self.tx.clone();
+        let bus = self.ui_bus.clone();
         let rt = self.runtime.clone();
         let client = self.http_client.clone();
         let sem = self.thumb_semaphore.clone();
@@ -58,7 +58,7 @@ impl PydlApp {
             let permit = sem.acquire_owned().await;
             let Ok(_permit) = permit else {
                 try_send_ui(
-                    &tx,
+                    &bus,
                     UiEvent::ThumbnailFetched {
                         item_id,
                         image: None,
@@ -82,7 +82,7 @@ impl PydlApp {
                     .ok()
                     .flatten(),
             };
-            try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, image });
+            try_send_ui(&bus, UiEvent::ThumbnailFetched { item_id, image });
         });
     }
 
@@ -101,7 +101,7 @@ impl PydlApp {
         self.thumbnail_inflight.insert(item_id);
         background_spawn::spawn_av1_local_thumbnail(
             &self.runtime,
-            &self.tx,
+            &self.ui_bus,
             item_id,
             file_path,
             ffmpeg_path,
@@ -120,7 +120,7 @@ impl PydlApp {
         self.av1_media_inflight.insert(item_id);
         background_spawn::spawn_av1_media_probe(
             &self.runtime,
-            &self.tx,
+            &self.ui_bus,
             item_id,
             file_path,
             ffprobe_path,

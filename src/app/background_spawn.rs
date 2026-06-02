@@ -1,10 +1,9 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
-use crossbeam_channel::Sender;
 use tokio::runtime::Runtime;
 
-use crate::app::events::{try_send_ui, UiEvent};
+use crate::app::events::{try_send_ui, UiEvent, UiEventBus};
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::VideoPreview;
 use crate::pkg_version;
@@ -31,8 +30,12 @@ fn should_retry_without_embed_thumbnail(extra_args: &[String], err_text: &str) -
         || msg.contains("conversion failed")
 }
 
-pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, tx: &Sender<UiEvent>, client: reqwest::Client) {
-    let tx = tx.clone();
+pub(crate) fn spawn_update_check(
+    rt: &Arc<Runtime>,
+    bus: &UiEventBus,
+    client: reqwest::Client,
+) {
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let result = super::update_check::check_latest_release_async(&client).await;
@@ -48,7 +51,7 @@ pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, tx: &Sender<UiEvent>, client
             Err(e) => (None, None, false, format!("Update check failed: {e}")),
         };
         try_send_ui(
-            &tx,
+            &bus,
             UiEvent::UpdateCheckDone {
                 latest_version,
                 release_url,
@@ -61,19 +64,19 @@ pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, tx: &Sender<UiEvent>, client
 
 pub(crate) fn spawn_url_resolve_pipeline(
     rt: &Arc<Runtime>,
-    tx: &Sender<UiEvent>,
+    bus: &UiEventBus,
     yt_dlp_bin: String,
     metadata_args: Vec<String>,
     playlist_cap: usize,
     queued_lines: Vec<String>,
 ) {
-    let tx = tx.clone();
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let total = queued_lines.len();
         for (idx, line) in queued_lines.into_iter().enumerate() {
             try_send_ui(
-                &tx,
+                &bus,
                 UiEvent::AddProgress {
                     processed: idx,
                     total,
@@ -103,14 +106,14 @@ pub(crate) fn spawn_url_resolve_pipeline(
                 }],
             };
             try_send_ui(
-                &tx,
+                &bus,
                 UiEvent::AddResolved {
                     rows,
                     source_line: line.clone(),
                 },
             );
             try_send_ui(
-                &tx,
+                &bus,
                 UiEvent::AddProgress {
                     processed: idx + 1,
                     total,
@@ -118,14 +121,14 @@ pub(crate) fn spawn_url_resolve_pipeline(
                 },
             );
         }
-        try_send_ui(&tx, UiEvent::AddDone);
+        try_send_ui(&bus, UiEvent::AddDone);
     });
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_download_worker(
     rt: &Arc<Runtime>,
-    tx: &Sender<UiEvent>,
+    bus: &UiEventBus,
     output_dir: String,
     output_filename_template: String,
     extra_args: Vec<String>,
@@ -133,13 +136,13 @@ pub(crate) fn spawn_download_worker(
     ffmpeg_path: String,
     urls: Vec<(u64, String, String, Arc<AtomicBool>)>,
 ) {
-    let tx = tx.clone();
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         for (item_id, web, source, cancel_flag) in urls {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 try_send_ui(
-                    &tx,
+                    &bus,
                     UiEvent::DownloadDone {
                         item_id,
                         ok: false,
@@ -150,7 +153,7 @@ pub(crate) fn spawn_download_worker(
             }
             let target = if web.is_empty() { source } else { web };
             try_send_ui(
-                &tx,
+                &bus,
                 UiEvent::DownloadLine {
                     item_id,
                     line: "starting".to_owned(),
@@ -165,14 +168,14 @@ pub(crate) fn spawn_download_worker(
                 &ffmpeg_path,
                 cancel_flag.clone(),
                 |line| {
-                    try_send_ui(&tx, UiEvent::DownloadLine { item_id, line });
+                    try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });
                 },
             )
             .await;
             match res {
                 Ok(_) => {
                     try_send_ui(
-                        &tx,
+                        &bus,
                         UiEvent::DownloadDone {
                             item_id,
                             ok: true,
@@ -185,7 +188,7 @@ pub(crate) fn spawn_download_worker(
                     if should_retry_without_embed_thumbnail(&extra_args, &err_text) {
                         let retry_args = remove_embed_thumbnail_arg(&extra_args);
                         try_send_ui(
-                            &tx,
+                            &bus,
                             UiEvent::DownloadLine {
                                 item_id,
                                 line: "Embed thumbnail failed; retrying without --embed-thumbnail."
@@ -201,14 +204,14 @@ pub(crate) fn spawn_download_worker(
                             &ffmpeg_path,
                             cancel_flag.clone(),
                             |line| {
-                                try_send_ui(&tx, UiEvent::DownloadLine { item_id, line });
+                                try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });
                             },
                         )
                         .await;
                         match retry_res {
                             Ok(_) => {
                                 try_send_ui(
-                                    &tx,
+                                    &bus,
                                     UiEvent::DownloadDone {
                                         item_id,
                                         ok: true,
@@ -220,7 +223,7 @@ pub(crate) fn spawn_download_worker(
                             }
                             Err(retry_e) => {
                                 try_send_ui(
-                                    &tx,
+                                    &bus,
                                     UiEvent::DownloadDone {
                                         item_id,
                                         ok: false,
@@ -234,7 +237,7 @@ pub(crate) fn spawn_download_worker(
                         }
                     }
                     try_send_ui(
-                        &tx,
+                        &bus,
                         UiEvent::DownloadDone {
                             item_id,
                             ok: false,
@@ -249,12 +252,12 @@ pub(crate) fn spawn_download_worker(
 
 pub(crate) fn spawn_av1_local_thumbnail(
     rt: &Arc<Runtime>,
-    tx: &Sender<UiEvent>,
+    bus: &UiEventBus,
     item_id: u64,
     file_path: std::path::PathBuf,
     ffmpeg_path: String,
 ) {
-    let tx = tx.clone();
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let image = tokio::task::spawn_blocking(move || {
@@ -263,18 +266,18 @@ pub(crate) fn spawn_av1_local_thumbnail(
         .await
         .ok()
         .flatten();
-        let _ = try_send_ui(&tx, UiEvent::ThumbnailFetched { item_id, image });
+        let _ = try_send_ui(&bus, UiEvent::ThumbnailFetched { item_id, image });
     });
 }
 
 pub(crate) fn spawn_av1_media_probe(
     rt: &Arc<Runtime>,
-    tx: &Sender<UiEvent>,
+    bus: &UiEventBus,
     item_id: u64,
     file_path: std::path::PathBuf,
     ffprobe_path: String,
 ) {
-    let tx = tx.clone();
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let media = tokio::task::spawn_blocking(move || {
@@ -284,18 +287,18 @@ pub(crate) fn spawn_av1_media_probe(
         .ok()
         .flatten()
         .unwrap_or_default();
-        let _ = try_send_ui(&tx, UiEvent::Av1MediaProbed { item_id, media });
+        let _ = try_send_ui(&bus, UiEvent::Av1MediaProbed { item_id, media });
     });
 }
 
 pub(crate) fn spawn_av1_worker(
     rt: &Arc<Runtime>,
-    tx: &Sender<UiEvent>,
+    bus: &UiEventBus,
     cfg: Av1Config,
     jobs: Vec<(u64, Av1Input, String)>,
     cancel_flag: Arc<AtomicBool>,
 ) {
-    let tx = tx.clone();
+    let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let enc = av1_transcode::detect_encoder_with_override(
@@ -312,7 +315,7 @@ pub(crate) fn spawn_av1_worker(
             };
             if let Some(ms) = av1_transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
                 let _ = try_send_ui(
-                    &tx,
+                    &bus,
                     UiEvent::Av1Duration {
                         item_id,
                         duration_ms: ms,
@@ -320,7 +323,7 @@ pub(crate) fn spawn_av1_worker(
                 );
             }
             let _ = try_send_ui(
-                &tx,
+                &bus,
                 UiEvent::Av1Line {
                     item_id,
                     line: format!("starting with {} ({})", enc.encoder, enc.hw_type),
@@ -329,7 +332,7 @@ pub(crate) fn spawn_av1_worker(
             let item_for_primary = item.clone();
             let res = tokio::task::spawn_blocking({
                 let cfg = cfg.clone();
-                let tx = tx.clone();
+                let bus = bus.clone();
                 let enc = enc.clone();
                 let cancel_flag = cancel_flag.clone();
                 move || {
@@ -339,7 +342,7 @@ pub(crate) fn spawn_av1_worker(
                         &enc,
                         Some(cancel_flag),
                         |line| {
-                            let _ = try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                            let _ = try_send_ui(&bus, UiEvent::Av1Line { item_id, line });
                         },
                     )
                 }
@@ -348,7 +351,7 @@ pub(crate) fn spawn_av1_worker(
             match res {
                 Ok(Ok(final_path)) => {
                     let _ = try_send_ui(
-                        &tx,
+                        &bus,
                         UiEvent::Av1Done {
                             item_id,
                             ok: true,
@@ -361,7 +364,7 @@ pub(crate) fn spawn_av1_worker(
                     let err_text = e.to_string();
                     if err_text.to_ascii_lowercase().starts_with("skipped") {
                         let _ = try_send_ui(
-                            &tx,
+                            &bus,
                             UiEvent::Av1Done {
                                 item_id,
                                 ok: true,
@@ -374,7 +377,7 @@ pub(crate) fn spawn_av1_worker(
                     // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
                     if enc.encoder != "libsvtav1" {
                         let _ = try_send_ui(
-                            &tx,
+                            &bus,
                             UiEvent::Av1Line {
                                 item_id,
                                 line: format!(
@@ -390,7 +393,7 @@ pub(crate) fn spawn_av1_worker(
                         };
                         let retry = tokio::task::spawn_blocking({
                             let cfg = cfg.clone();
-                            let tx = tx.clone();
+                            let bus = bus.clone();
                             let item = item.clone();
                             let cancel_flag = cancel_flag.clone();
                             move || {
@@ -401,7 +404,7 @@ pub(crate) fn spawn_av1_worker(
                                     Some(cancel_flag),
                                     |line| {
                                         let _ =
-                                            try_send_ui(&tx, UiEvent::Av1Line { item_id, line });
+                                            try_send_ui(&bus, UiEvent::Av1Line { item_id, line });
                                     },
                                 )
                             }
@@ -410,7 +413,7 @@ pub(crate) fn spawn_av1_worker(
                         match retry {
                             Ok(Ok(final_path)) => {
                                 let _ = try_send_ui(
-                                    &tx,
+                                    &bus,
                                     UiEvent::Av1Done {
                                         item_id,
                                         ok: true,
@@ -424,7 +427,7 @@ pub(crate) fn spawn_av1_worker(
                             }
                             Ok(Err(retry_err)) => {
                                 let _ = try_send_ui(
-                                    &tx,
+                                    &bus,
                                     UiEvent::Av1Done {
                                         item_id,
                                         ok: false,
@@ -438,7 +441,7 @@ pub(crate) fn spawn_av1_worker(
                             }
                             Err(retry_join_err) => {
                                 let _ = try_send_ui(
-                                    &tx,
+                                    &bus,
                                     UiEvent::Av1Done {
                                         item_id,
                                         ok: false,
@@ -453,7 +456,7 @@ pub(crate) fn spawn_av1_worker(
                         }
                     }
                     let _ = try_send_ui(
-                        &tx,
+                        &bus,
                         UiEvent::Av1Done {
                             item_id,
                             ok: false,
@@ -464,7 +467,7 @@ pub(crate) fn spawn_av1_worker(
                 }
                 Err(e) => {
                     let _ = try_send_ui(
-                        &tx,
+                        &bus,
                         UiEvent::Av1Done {
                             item_id,
                             ok: false,
@@ -475,7 +478,7 @@ pub(crate) fn spawn_av1_worker(
                 }
             }
         }
-        let _ = try_send_ui(&tx, UiEvent::Av1BatchDone);
+        let _ = try_send_ui(&bus, UiEvent::Av1BatchDone);
     });
 }
 

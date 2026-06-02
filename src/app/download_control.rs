@@ -110,7 +110,7 @@ impl PydlApp {
                 .collect::<Vec<_>>();
             background_spawn::spawn_download_worker(
                 &self.runtime,
-                &self.tx,
+                &self.ui_bus,
                 self.output_dir.clone(),
                 output_template.clone(),
                 download_args.clone(),

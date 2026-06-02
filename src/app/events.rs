@@ -2,6 +2,7 @@ use std::sync::Once;
 
 use crossbeam_channel::Sender;
 use eframe::egui;
+use tokio::sync::broadcast;
 
 use crate::app_parsing::{av1_detail_is_user_cancellation, reset_av1_item_to_ready};
 
@@ -10,19 +11,37 @@ static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 /// Upper bound on UI work per frame so one burst of download lines cannot freeze the window.
 const MAX_UI_EVENTS_PER_FRAME: usize = 128;
 
-/// Sends an event to the UI thread. Logs once to stderr if the channel is disconnected.
-pub(crate) fn try_send_ui(tx: &Sender<UiEvent>, event: UiEvent) -> bool {
-    match tx.send(event) {
-        Ok(()) => true,
-        Err(_) => {
-            UI_CHANNEL_CLOSED_WARN.call_once(|| {
-                eprintln!(
-                    "rustdl: UI event channel closed; background tasks may not update the window."
-                );
-            });
-            false
+/// Delivers UI events to the egui thread and the shared [`DownloadCore`] event loop.
+#[derive(Clone)]
+pub struct UiEventBus {
+    tx: Sender<UiEvent>,
+    broadcast: broadcast::Sender<UiEvent>,
+}
+
+impl UiEventBus {
+    pub fn new(tx: Sender<UiEvent>, broadcast: broadcast::Sender<UiEvent>) -> Self {
+        Self { tx, broadcast }
+    }
+
+    pub fn publish(&self, event: UiEvent) -> bool {
+        let _ = self.broadcast.send(event.clone());
+        match self.tx.send(event) {
+            Ok(()) => true,
+            Err(_) => {
+                UI_CHANNEL_CLOSED_WARN.call_once(|| {
+                    eprintln!(
+                        "rustdl: UI event channel closed; background tasks may not update the window."
+                    );
+                });
+                false
+            }
         }
     }
+}
+
+/// Publishes an event to the GUI and DownloadCore (see [`UiEventBus::publish`]).
+pub(crate) fn try_send_ui(bus: &UiEventBus, event: UiEvent) -> bool {
+    bus.publish(event)
 }
 use crate::models::{ItemStatus, VideoPreview};
 

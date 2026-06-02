@@ -21,7 +21,7 @@ use crate::config::{
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
-use crate::app::events::{try_send_ui, UiEvent};
+use crate::app::events::{UiEvent, UiEventBus};
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
     build_download_extra_args, build_redownload_extra_args, metadata_extra_args,
@@ -178,9 +178,12 @@ impl DownloadCore {
         (Arc::new(Mutex::new(core)), rx)
     }
 
+    pub fn ui_event_bus(&self) -> UiEventBus {
+        UiEventBus::new(self.tx.clone(), self.event_broadcast.clone())
+    }
+
     pub fn emit_event(&self, event: UiEvent) {
-        let _ = self.event_broadcast.send(event.clone());
-        let _ = try_send_ui(&self.tx, event);
+        let _ = self.ui_event_bus().publish(event);
     }
 
     pub fn subscribe_events(&self) -> broadcast::Receiver<UiEvent> {
@@ -558,7 +561,7 @@ impl DownloadCore {
                 .collect::<Vec<_>>();
             background_spawn::spawn_download_worker(
                 &self.runtime,
-                &self.tx,
+                &self.ui_event_bus(),
                 self.output_dir.clone(),
                 output_template.clone(),
                 download_args.clone(),
@@ -840,7 +843,7 @@ impl DownloadCore {
         }
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
-            &self.tx,
+            &self.ui_event_bus(),
             self.yt_dlp_bin(),
             self.metadata_extra_args(),
             self.settings.playlist_preview_cap,
