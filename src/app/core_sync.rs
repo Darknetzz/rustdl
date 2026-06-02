@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::service::core::{DownloadCore, SharedCore};
 use super::PydlApp;
 
@@ -45,6 +47,7 @@ pub fn sync_app_to_core(app: &PydlApp, core: &mut DownloadCore) {
 }
 
 pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
+    let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
     app.output_dir = core.output_dir.clone();
     app.worker_count = core.worker_count;
     app.status_resolving = core.status_resolving;
@@ -84,6 +87,16 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
     app.core_generation = core.generation;
+    if app.settings.show_thumbnails {
+        for item in &app.items {
+            if previous_item_ids.contains(&item.item_id) {
+                continue;
+            }
+            if let Some(url) = item.thumbnail_url.clone() {
+                app.queue_thumbnail_load(item.item_id, url);
+            }
+        }
+    }
 }
 
 pub fn push_app_to_core(app: &PydlApp, shared: &SharedCore) {

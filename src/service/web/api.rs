@@ -36,6 +36,9 @@ struct StatusResponse {
     version: &'static str,
     downloads_paused: bool,
     queue_running: usize,
+    add_in_progress: bool,
+    auto_add_pasted_urls: bool,
+    auto_start_downloads: bool,
     status: StatusCountsJson,
     tools: serde_json::Value,
 }
@@ -130,6 +133,9 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         version: crate::pkg_version::VERSION,
         downloads_paused: c.downloads_paused,
         queue_running: c.queue_running,
+        add_in_progress: c.add_in_progress,
+        auto_add_pasted_urls: c.settings.auto_add_pasted_urls,
+        auto_start_downloads: c.settings.auto_start_downloads,
         status: StatusCountsJson {
             resolving: c.status_resolving,
             ready: c.status_ready,

@@ -242,132 +242,17 @@ impl PydlApp {
             };
             processed += 1;
             match ev {
-                UiEvent::AddResolved { rows, source_line } => {
-                    let Some(iid) = self.pending_resolve_ids.remove(&source_line) else {
-                        continue;
-                    };
-                    if let Some(idx) = self.item_idx(iid) {
-                        let removed = self.items.remove(idx);
-                        self.on_item_removed(&removed);
-                    } else {
-                        continue;
-                    }
-                    let deduped = ytdlp::dedupe_previews(self.dedupe_keys(), &rows);
-                    if deduped.is_empty() {
-                        self.append_log(&format!("No new videos found for: {source_line}"));
-                        // Keep a visible card: otherwise the resolving row vanishes and it looks broken.
-                        let iid = self.next_item_id;
-                        self.next_item_id += 1;
-                        if rows.is_empty() {
-                            let item = QueueItem {
-                                item_id: iid,
-                                source_line: source_line.clone(),
-                                title: source_line.clone(),
-                                error: Some("No preview returned for this URL.".to_owned()),
-                                status: ItemStatus::Idle,
-                                ..Default::default()
-                            };
-                            self.items.insert(0, item.clone());
-                            self.on_item_inserted(&item);
-                        } else {
-                            let mut it = QueueItem::from_preview(iid, rows[0].clone());
-                            it.error = Some(
-                                "This video is already in the list (same as a finished or pending item)."
-                                    .to_owned(),
-                            );
-                            self.items.insert(0, it.clone());
-                            self.on_item_inserted(&it);
-                        }
-                    } else {
-                        for pv in deduped {
-                            let iid = self.next_item_id;
-                            self.next_item_id += 1;
-                            if let Some(ref err) = pv.error {
-                                self.append_log(&format!(
-                                    "[item {iid}] Metadata fetch failed: {err}"
-                                ));
-                            }
-                            let item = QueueItem::from_preview(iid, pv.clone());
-                            self.items.insert(0, item.clone());
-                            self.on_item_inserted(&item);
-                            if self.settings.show_thumbnails {
-                                if let Some(url) = pv.thumbnail_url.clone() {
-                                    self.queue_thumbnail_load(iid, url);
-                                }
-                            }
-                        }
-                    }
-                    self.sync_status_fields_from_counts();
-                    self.invalidate_queue_caches();
-                    self.refresh_input_line_info();
-                    self.schedule_queue_save();
-                    self.maybe_auto_start_downloads();
-                }
-                UiEvent::AddProgress {
-                    processed,
-                    total,
-                    current,
-                } => {
-                    self.add_processed_urls = processed.min(total);
-                    self.add_total_urls = total;
-                    self.add_current_url = current;
-                }
-                UiEvent::AddDone => {
-                    self.add_in_progress = false;
-                    self.add_processed_urls = self.add_total_urls;
-                    self.add_current_url = None;
-                    self.maybe_auto_start_downloads();
-                }
+                // Queue resolve/progress and download state are applied on DownloadCore
+                // (see service/core_events.rs); the GUI syncs from core each frame.
+                UiEvent::AddResolved { .. } | UiEvent::AddProgress { .. } | UiEvent::AddDone => {}
                 UiEvent::DownloadLine { item_id, line } => {
-                    if let Some(idx) = self.item_idx(item_id) {
-                        let old = self.items[idx].status;
-                        if old != ItemStatus::Downloading {
-                            self.set_item_status_at(idx, ItemStatus::Downloading);
-                        }
-                        let it = &mut self.items[idx];
-                        let (pct, size) = ytdlp::parse_progress_line(&line);
-                        if let Some(p) = pct {
-                            it.percent = p.clamp(0.0, 100.0);
-                        }
-                        if let Some(sz) = size {
-                            it.size_text = sz;
-                        }
-                        if let Some((speed, eta)) = parse_speed_eta(&line) {
-                            it.speed_text = speed;
-                            it.eta_text = eta;
-                        }
-                        it.detail = line.chars().take(160).collect::<String>();
-                    }
                     self.maybe_append_download_log(ctx, item_id, &line);
-                    self.mark_transfer_totals_dirty();
                 }
                 UiEvent::DownloadDone {
                     item_id,
                     ok,
                     detail,
                 } => {
-                    if let Some(post_action) = self.cancel_post_actions.remove(&item_id) {
-                        self.download_cancel_flags.remove(&item_id);
-                        match post_action {
-                            super::CancelPostAction::Ready => {
-                                if let Some(idx) = self.item_idx(item_id) {
-                                    self.set_item_status_at(idx, ItemStatus::Idle);
-                                    let it = &mut self.items[idx];
-                                    it.percent = 0.0;
-                                    it.speed_text = "-".to_owned();
-                                    it.eta_text = "-".to_owned();
-                                    it.detail = "Cancelled (ready)".to_owned();
-                                }
-                            }
-                            super::CancelPostAction::Remove => {
-                                let _ = self.remove_item_by_id(item_id);
-                            }
-                        }
-                        self.queue_running = self.queue_running.saturating_sub(1);
-                        self.refresh_input_line_info();
-                        self.schedule_queue_save();
-                        continue;
-                    }
                     let mut completed = ok;
                     let mut final_detail = detail;
                     if ok {
@@ -379,27 +264,16 @@ impl PydlApp {
                             self.append_log(&format!("[item {item_id}] {msg}"));
                         }
                     }
-                    if let Some(idx) = self.item_idx(item_id) {
-                        let new_status = if completed {
-                            ItemStatus::Done
-                        } else {
-                            ItemStatus::Failed
-                        };
-                        self.set_item_status_by_id(item_id, new_status);
-                        let it = &mut self.items[idx];
-                        it.percent = if completed { 100.0 } else { it.percent };
-                        it.detail = final_detail.clone();
-                        if completed {
-                            it.eta_text = "0s".to_owned();
+                    if !completed && ok {
+                        if let Some(idx) = self.item_idx(item_id) {
+                            self.set_item_status_at(idx, ItemStatus::Failed);
+                            let it = &mut self.items[idx];
+                            it.detail = final_detail.clone();
                         }
-                    }
-                    if !completed {
                         let summary = final_detail.trim();
-                        if summary.is_empty() {
-                            self.append_log(&format!("[item {item_id}] Download failed."));
-                        } else {
+                        if !summary.is_empty() {
                             self.append_log(&format!(
-                                "[item {item_id}] Download failed: {summary}"
+                                "[item {item_id}] Post-download verification failed: {summary}"
                             ));
                         }
                     }
@@ -407,8 +281,6 @@ impl PydlApp {
                         self.probe_done_item_resolution_if_missing(item_id);
                         self.enqueue_completed_download_to_av1(item_id);
                     }
-                    self.download_cancel_flags.remove(&item_id);
-                    self.queue_running = self.queue_running.saturating_sub(1);
                     self.mark_transfer_totals_dirty();
                     self.schedule_queue_save();
                 }

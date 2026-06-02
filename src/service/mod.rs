@@ -1,6 +1,7 @@
 //! Shared download service and LAN web control plane.
 
 pub mod core;
+pub mod core_events;
 pub mod web;
 
 pub use core::{CancelPostAction, DownloadCore, SharedCore};
@@ -14,7 +15,8 @@ pub struct RustdlService {
 
 impl RustdlService {
     pub fn new(runtime: Arc<tokio::runtime::Runtime>) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
-        let (core, rx) = DownloadCore::new_shared(runtime);
+        let (core, rx) = DownloadCore::new_shared(runtime.clone());
+        core_events::spawn_core_event_loop(runtime, core.clone());
         (
             Self {
                 core: core.clone(),

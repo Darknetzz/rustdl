@@ -2,6 +2,13 @@ const TOKEN_KEY = "rustdl_web_token";
 
 let cachedSettings = null;
 
+const AUTO_ADD_MS = 700;
+let autoAddTimer = null;
+const statusFlags = {
+  auto_add_pasted_urls: false,
+  add_in_progress: false,
+};
+
 function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -61,10 +68,34 @@ async function refreshStatus() {
   const res = await api("/api/status");
   const data = await res.json();
   const s = data.status;
+  statusFlags.auto_add_pasted_urls = !!data.auto_add_pasted_urls;
+  statusFlags.add_in_progress = !!data.add_in_progress;
   document.getElementById("status-summary").textContent =
     `Paused: ${data.downloads_paused} · Resolving ${s.resolving} · Ready ${s.ready} · ` +
     `Queued ${s.queued} · Active ${s.active} · Done ${s.done} · Failed ${s.failed}`;
   renderTools(data.tools);
+}
+
+function collectUrlsFromInput() {
+  const text = document.getElementById("url-input").value;
+  return text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+}
+
+function scheduleAutoAddFromInput() {
+  if (!statusFlags.auto_add_pasted_urls) return;
+  clearTimeout(autoAddTimer);
+  autoAddTimer = setTimeout(() => {
+    flushAutoAddFromInput().catch(() => {});
+  }, AUTO_ADD_MS);
+}
+
+async function flushAutoAddFromInput() {
+  if (!statusFlags.auto_add_pasted_urls || statusFlags.add_in_progress) return;
+  const urls = collectUrlsFromInput();
+  if (!urls.length) return;
+  await api("/api/queue", { method: "POST", body: JSON.stringify({ urls }) });
+  document.getElementById("url-input").value = "";
+  await refreshAll();
 }
 
 async function refreshQueue() {
@@ -325,13 +356,11 @@ document.getElementById("btn-save-token").onclick = () => {
 document.getElementById("btn-refresh-tools").onclick = () => refreshToolsOnly().catch(() => {});
 
 document.getElementById("btn-add").onclick = async () => {
-  const text = document.getElementById("url-input").value;
-  const urls = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
-  if (!urls.length) return;
-  await api("/api/queue", { method: "POST", body: JSON.stringify({ urls }) });
-  document.getElementById("url-input").value = "";
-  await refreshAll();
+  clearTimeout(autoAddTimer);
+  await flushAutoAddFromInput();
 };
+
+document.getElementById("url-input").addEventListener("input", scheduleAutoAddFromInput);
 
 document.getElementById("btn-start").onclick = async () => {
   await api("/api/downloads/start", { method: "POST" });
@@ -358,6 +387,7 @@ document.getElementById("settings-form").onsubmit = async (e) => {
   const patch = collectSettingsForm(cachedSettings);
   await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
   cachedSettings = patch;
+  statusFlags.auto_add_pasted_urls = !!patch.auto_add_pasted_urls;
   document.getElementById("settings-dialog").close();
   await refreshAll();
 };
