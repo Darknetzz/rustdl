@@ -742,7 +742,7 @@ async function applyProfile(name) {
   await refreshToolsOnly();
 }
 
-document.getElementById("btn-save-token").onclick = () => {
+function saveTokenFromForm() {
   const v = document.getElementById("token-input").value.trim();
   if (!v) return;
   localStorage.setItem(TOKEN_KEY, v);
@@ -753,7 +753,12 @@ document.getElementById("btn-save-token").onclick = () => {
       e instanceof Error ? e.message : String(e);
   });
   connectSse();
-};
+}
+
+document.getElementById("auth-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  saveTokenFromForm();
+});
 
 document.getElementById("btn-refresh-tools").onclick = () => refreshToolsOnly().catch(() => {});
 

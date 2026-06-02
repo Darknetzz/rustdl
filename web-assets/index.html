@@ -24,8 +24,10 @@
   <section id="auth-panel" class="panel">
     <h2>Connect</h2>
     <p class="hint">Enter the API token from rustdl Settings → Shared → Web UI. Traffic is HTTP on your LAN; use only on networks you trust.</p>
-    <label>API token <input type="password" id="token-input" autocomplete="off" /></label>
-    <button type="button" id="btn-save-token" class="primary">Save token</button>
+    <form id="auth-form">
+      <label>API token <input type="password" id="token-input" autocomplete="off" /></label>
+      <button type="submit" id="btn-save-token" class="primary">Save token</button>
+    </form>
     <p id="auth-status" class="status"></p>
   </section>
 
