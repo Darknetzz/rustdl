@@ -15,6 +15,7 @@ use tokio_stream::StreamExt;
 use crate::app::UiEvent;
 use crate::config::AppSettings;
 use crate::models::QueueItem;
+use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, SharedCore};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
@@ -36,6 +37,7 @@ struct StatusResponse {
     downloads_paused: bool,
     queue_running: usize,
     status: StatusCountsJson,
+    tools: serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -79,6 +81,17 @@ struct TokenQuery {
     token: Option<String>,
 }
 
+#[derive(Serialize)]
+struct ProfilesResponse {
+    active: String,
+    profiles: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct ApplyProfileBody {
+    name: String,
+}
+
 pub fn api_router(state: ApiState) -> Router {
     let protected = Router::new()
         .route("/api/status", get(status))
@@ -91,6 +104,9 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/downloads/cancel/{id}", post(downloads_cancel))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
+        .route("/api/profiles", get(profiles_list))
+        .route("/api/profiles/apply", post(profiles_apply))
+        .route("/api/tools/refresh", post(tools_refresh))
         .route("/api/logs", get(logs_get))
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/{id}", get(thumbnail_proxy))
@@ -122,7 +138,42 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             done: c.status_done,
             failed: c.status_failed,
         },
+        tools: c.tools_status_json(),
     })
+}
+
+async fn profiles_list(State(st): State<ApiState>) -> Json<ProfilesResponse> {
+    let c = st.core.lock();
+    Json(ProfilesResponse {
+        active: c.settings.active_profile.clone(),
+        profiles: all_profiles(&c.profile_store)
+            .into_iter()
+            .map(|p| p.name)
+            .collect(),
+    })
+}
+
+async fn profiles_apply(
+    State(st): State<ApiState>,
+    Json(body): Json<ApplyProfileBody>,
+) -> Result<StatusCode, StatusCode> {
+    let mut c = st.core.lock();
+    let profile = find_profile(&c.profile_store, body.name.trim())
+        .ok_or(StatusCode::NOT_FOUND)?;
+    profile.apply_to(&mut c.settings);
+    c.settings.active_profile = profile.name.clone();
+    c.output_dir = c.settings.output_dir.clone();
+    c.worker_count = c.settings.worker_count.clamp(1, 6);
+    c.persist_settings();
+    c.refresh_deps();
+    c.bump_generation();
+    Ok(StatusCode::OK)
+}
+
+async fn tools_refresh(State(st): State<ApiState>) -> Json<serde_json::Value> {
+    let mut c = st.core.lock();
+    c.refresh_deps();
+    Json(c.tools_status_json())
 }
 
 async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {

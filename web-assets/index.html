@@ -8,8 +8,12 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>rustdl</h1>
+    <div class="topbar-left">
+      <h1>rustdl</h1>
+      <div id="tools-status" class="tools-status" aria-label="PATH checks"></div>
+    </div>
     <div class="topbar-actions">
+      <button type="button" id="btn-refresh-tools" class="secondary" title="Re-check yt-dlp, ffmpeg, ffprobe">Refresh tools</button>
       <button type="button" id="btn-pause" class="secondary">Pause</button>
       <button type="button" id="btn-resume" class="secondary">Resume</button>
       <button type="button" id="btn-start" class="primary">Start downloads</button>
@@ -43,26 +47,120 @@
     </section>
   </main>
 
-  <dialog id="settings-dialog">
+  <dialog id="settings-dialog" class="settings-dialog">
     <form method="dialog" id="settings-form">
-      <h2>Downloader settings</h2>
-      <label>Output folder <input type="text" id="set-output-dir" /></label>
-      <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
-      <label>Quality preset
-        <select id="set-quality">
-          <option value="best">Best</option>
-          <option value="1080p">1080p</option>
-          <option value="720p">720p</option>
-          <option value="audio">Audio</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
-      <label>Auto-start downloads <input type="checkbox" id="set-auto-start" /></label>
-      <label>yt-dlp extra args <input type="text" id="set-extra-args" /></label>
-      <p class="hint" id="command-preview"></p>
+      <div class="settings-header">
+        <h2>Settings</h2>
+        <div class="settings-tabs" role="tablist">
+          <button type="button" class="settings-tab active" data-tab="shared" role="tab">Shared</button>
+          <button type="button" class="settings-tab" data-tab="downloader" role="tab">Downloader</button>
+        </div>
+      </div>
+      <div class="settings-scroll">
+        <div id="settings-tab-shared" class="settings-panel active" role="tabpanel">
+          <h3>Global</h3>
+          <label class="check"><input type="checkbox" id="set-show-thumbnails" /> Show thumbnails in cards</label>
+          <label class="check"><input type="checkbox" id="set-compact-cards" /> Use compact cards</label>
+          <label class="check"><input type="checkbox" id="set-hide-subtitle" /> Hide card subtitle/uploader</label>
+          <label class="check"><input type="checkbox" id="set-card-list" /> List layout for queue cards</label>
+          <label class="check"><input type="checkbox" id="set-autoscroll-log" /> Autoscroll log to latest line</label>
+          <label class="check"><input type="checkbox" id="set-log-relative" /> Relative timestamps in activity log</label>
+          <label>Max log chars <input type="number" id="set-log-max" min="2000" max="200000" step="1000" /></label>
+
+          <h3>Shared executables</h3>
+          <p class="hint">Used by the downloader and AV1 converter. Leave empty to use PATH.</p>
+          <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
+          <label>ffprobe path <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" /></label>
+        </div>
+
+        <div id="settings-tab-downloader" class="settings-panel" role="tabpanel" hidden>
+          <h3>Behavior</h3>
+          <label class="check"><input type="checkbox" id="set-auto-add" /> Auto-add pasted URLs after a short delay</label>
+          <label class="check"><input type="checkbox" id="set-auto-start" /> Auto-start downloads when new items become ready</label>
+          <label class="check"><input type="checkbox" id="set-enqueue-av1" /> Enqueue completed downloads in AV1 converter queue</label>
+          <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
+          <label>Output folder <input type="text" id="set-output-dir" /></label>
+
+          <h3>Downloader executables</h3>
+          <label>yt-dlp path <input type="text" id="set-yt-dlp-path" placeholder="yt-dlp or full path" /></label>
+
+          <h3>Download profile</h3>
+          <div class="row">
+            <label>Active profile
+              <select id="set-active-profile"></select>
+            </label>
+            <button type="button" id="btn-apply-profile" class="secondary">Apply profile</button>
+          </div>
+          <div class="preset-row">
+            <span class="hint">Presets:</span>
+            <button type="button" class="secondary preset-btn" data-profile="Best quality">Best quality</button>
+            <button type="button" class="secondary preset-btn" data-profile="Audio only">Audio only</button>
+            <button type="button" class="secondary preset-btn" data-profile="Fast download">Fast download</button>
+            <button type="button" class="secondary preset-btn" data-profile="Archive mode">Archive mode</button>
+          </div>
+
+          <h3>Output and quality</h3>
+          <label>Output filename template (-o) <input type="text" id="set-output-template" /></label>
+          <label>Quality preset
+            <select id="set-quality">
+              <option value="best">Best</option>
+              <option value="1080p">1080p max</option>
+              <option value="720p">720p max</option>
+              <option value="audio">Audio best</option>
+              <option value="custom">Custom (-f)</option>
+            </select>
+          </label>
+          <label id="wrap-quality-custom" class="hidden">Custom format (-f)
+            <input type="text" id="set-quality-custom" placeholder="bestvideo+bestaudio/best" />
+          </label>
+          <label>Merge container
+            <select id="set-merge-container">
+              <option value="default">Default</option>
+              <option value="mp4">MP4</option>
+              <option value="mkv">MKV</option>
+              <option value="webm">WebM</option>
+            </select>
+          </label>
+          <label>Playlist preview limit <input type="number" id="set-playlist-cap" min="1" max="500" /></label>
+
+          <h3>Network and archive</h3>
+          <label>Download archive (--download-archive) <input type="text" id="set-download-archive" /></label>
+          <label>Proxy URL (--proxy) <input type="text" id="set-proxy" placeholder="http://127.0.0.1:8080" /></label>
+          <label>Speed limit (--limit-rate) <input type="text" id="set-limit-rate" placeholder="50K, 4M" /></label>
+          <label class="check"><input type="checkbox" id="set-sponsorblock-remove" /> Remove SponsorBlock segments</label>
+          <label>SponsorBlock mark <input type="text" id="set-sponsorblock-mark" placeholder="sponsor,intro" /></label>
+
+          <h3>Retries</h3>
+          <label class="check"><input type="checkbox" id="set-unlimited-retries" /> Unlimited HTTP and fragment retries</label>
+          <label>Retry count (when not unlimited) <input type="number" id="set-retry-count" min="1" max="999" /></label>
+
+          <h3>Cookies and impersonate</h3>
+          <label>Cookies (file or browser) <input type="text" id="set-cookies" /></label>
+          <label>Impersonate <input type="text" id="set-impersonate" placeholder="chrome" /></label>
+
+          <h3>yt-dlp options</h3>
+          <label>Extra args (space-separated) <textarea id="set-extra-args" rows="2"></textarea></label>
+          <label class="check"><input type="checkbox" id="set-embed-thumbnail" /> Embed thumbnail</label>
+          <label class="check"><input type="checkbox" id="set-embed-metadata" /> Embed metadata</label>
+          <label class="check"><input type="checkbox" id="set-ignore-errors" /> Ignore errors</label>
+          <label class="check"><input type="checkbox" id="set-restrict-filenames" /> Restrict filenames</label>
+          <label class="check"><input type="checkbox" id="set-write-info-json" /> Write info JSON</label>
+          <label class="check"><input type="checkbox" id="set-write-auto-subs" /> Write auto subtitles</label>
+
+          <h3>Post-process (ffmpeg)</h3>
+          <label>Post-processor args <input type="text" id="set-ffmpeg-post-args" /></label>
+          <label class="check"><input type="checkbox" id="set-ffmpeg-faststart" /> Enable faststart</label>
+          <label class="check"><input type="checkbox" id="set-ffmpeg-remux-mp4" /> Remux video to mp4</label>
+          <label class="check"><input type="checkbox" id="set-ffmpeg-mp3" /> Extract audio as mp3</label>
+          <label class="check"><input type="checkbox" id="set-verify-streams" /> Verify output has video and audio (ffprobe)</label>
+
+          <h3>Command preview</h3>
+          <pre id="command-preview" class="command-preview"></pre>
+        </div>
+      </div>
       <div class="dialog-actions">
         <button type="button" id="btn-settings-cancel" class="secondary">Cancel</button>
-        <button type="submit" class="primary">Save</button>
+        <button type="submit" class="primary">Save settings</button>
       </div>
     </form>
   </dialog>

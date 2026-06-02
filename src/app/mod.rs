@@ -23,7 +23,7 @@ mod download_control;
 mod eframe_app;
 pub(crate) mod events;
 mod input_lines;
-mod log_panel;
+pub(crate) mod log_panel;
 mod queue_cache;
 mod queue_persist;
 mod settings_panel;

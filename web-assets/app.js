@@ -1,5 +1,7 @@
 const TOKEN_KEY = "rustdl_web_token";
 
+let cachedSettings = null;
+
 function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -31,6 +33,30 @@ function showApp() {
   document.getElementById("app-main").classList.remove("hidden");
 }
 
+function renderTools(tools) {
+  const root = document.getElementById("tools-status");
+  if (!root || !tools) return;
+  root.innerHTML = "";
+  for (const key of ["yt_dlp", "ffmpeg", "ffprobe"]) {
+    const t = tools[key];
+    if (!t) continue;
+    const el = document.createElement("span");
+    el.className = "tool-badge " + (t.ok ? "ok" : "missing");
+    const short = t.version_short ? ` · ${t.version_short}` : "";
+    const pathHint = t.configured_path ? ` · ${t.configured_path}` : "";
+    el.textContent = `${t.ok ? "✔" : "✖"} ${t.name} ${t.status}${short}`;
+    if (t.version) el.title = t.version + pathHint;
+    else if (pathHint) el.title = pathHint.trim();
+    root.appendChild(el);
+  }
+}
+
+async function refreshToolsOnly() {
+  const res = await api("/api/tools/refresh", { method: "POST" });
+  const tools = await res.json();
+  renderTools(tools);
+}
+
 async function refreshStatus() {
   const res = await api("/api/status");
   const data = await res.json();
@@ -38,6 +64,7 @@ async function refreshStatus() {
   document.getElementById("status-summary").textContent =
     `Paused: ${data.downloads_paused} · Resolving ${s.resolving} · Ready ${s.ready} · ` +
     `Queued ${s.queued} · Active ${s.active} · Done ${s.done} · Failed ${s.failed}`;
+  renderTools(data.tools);
 }
 
 async function refreshQueue() {
@@ -53,9 +80,7 @@ async function refreshQueue() {
     if (item.thumbnail_url && token()) {
       const t = encodeURIComponent(token());
       img.src = `/api/thumbnail/${item.item_id}?token=${t}`;
-      img.onerror = () => {
-        img.remove();
-      };
+      img.onerror = () => img.remove();
     } else {
       img.remove();
     }
@@ -87,7 +112,9 @@ async function refreshQueue() {
 async function refreshLogs() {
   const res = await api("/api/logs");
   const data = await res.json();
-  document.getElementById("log-view").textContent = data.lines.join("\n");
+  const log = document.getElementById("log-view");
+  log.textContent = data.lines.join("\n");
+  log.scrollTop = log.scrollHeight;
 }
 
 async function cancelItem(id) {
@@ -110,6 +137,178 @@ function connectSse() {
   };
 }
 
+function setCheck(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.checked = !!v;
+}
+
+function setVal(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.value = v ?? "";
+}
+
+function updateQualityCustomVisibility() {
+  const sel = document.getElementById("set-quality");
+  const wrap = document.getElementById("wrap-quality-custom");
+  if (!sel || !wrap) return;
+  wrap.classList.toggle("hidden", sel.value !== "custom");
+}
+
+function populateProfiles(profilesResp) {
+  const sel = document.getElementById("set-active-profile");
+  if (!sel) return;
+  sel.innerHTML = "";
+  for (const name of profilesResp.profiles || []) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    if (name === profilesResp.active) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+function populateSettingsForm(s, commandPreview) {
+  setCheck("set-show-thumbnails", s.show_thumbnails);
+  setCheck("set-compact-cards", s.compact_cards);
+  setCheck("set-hide-subtitle", s.hide_card_subtitle);
+  setCheck("set-card-list", s.card_list_layout);
+  setCheck("set-autoscroll-log", s.autoscroll_log);
+  setCheck("set-log-relative", s.log_relative_time);
+  setVal("set-log-max", s.log_max_chars);
+  setVal("set-ffmpeg-path", s.ffmpeg_path);
+  setVal("set-ffprobe-path", s.ffprobe_path);
+
+  setCheck("set-auto-add", s.auto_add_pasted_urls);
+  setCheck("set-auto-start", s.auto_start_downloads);
+  setCheck("set-enqueue-av1", s.enqueue_downloads_to_av1);
+  setVal("set-workers", s.worker_count);
+  setVal("set-output-dir", s.output_dir);
+  setVal("set-yt-dlp-path", s.yt_dlp_path);
+
+  setVal("set-output-template", s.output_filename_template);
+  setVal("set-quality", s.quality_preset);
+  setVal("set-quality-custom", s.quality_format_custom);
+  setVal("set-merge-container", s.merge_container);
+  setVal("set-playlist-cap", s.playlist_preview_cap);
+  setVal("set-download-archive", s.yt_download_archive);
+  setVal("set-proxy", s.yt_proxy);
+  setVal("set-limit-rate", s.yt_limit_rate);
+  setCheck("set-sponsorblock-remove", s.yt_sponsorblock_remove);
+  setVal("set-sponsorblock-mark", s.yt_sponsorblock_mark);
+
+  setCheck("set-unlimited-retries", s.yt_dlp_unlimited_retries);
+  setVal("set-retry-count", s.yt_dlp_retry_count);
+  setVal("set-cookies", s.yt_dlp_cookies);
+  setVal("set-impersonate", s.yt_dlp_impersonate);
+  setVal("set-extra-args", s.yt_dlp_extra_args);
+  setCheck("set-embed-thumbnail", s.embed_thumbnail);
+  setCheck("set-embed-metadata", s.yt_embed_metadata);
+  setCheck("set-ignore-errors", s.yt_ignore_errors);
+  setCheck("set-restrict-filenames", s.yt_restrict_filenames);
+  setCheck("set-write-info-json", s.yt_write_info_json);
+  setCheck("set-write-auto-subs", s.yt_write_auto_subs);
+
+  setVal("set-ffmpeg-post-args", s.ffmpeg_post_args);
+  setCheck("set-ffmpeg-faststart", s.ffmpeg_faststart);
+  setCheck("set-ffmpeg-remux-mp4", s.ffmpeg_remux_mp4);
+  setCheck("set-ffmpeg-mp3", s.ffmpeg_extract_audio_mp3);
+  setCheck("set-verify-streams", s.verify_output_video_audio);
+
+  document.getElementById("command-preview").textContent = commandPreview || "";
+  updateQualityCustomVisibility();
+}
+
+function collectSettingsForm(base) {
+  const s = { ...base };
+  s.show_thumbnails = document.getElementById("set-show-thumbnails").checked;
+  s.compact_cards = document.getElementById("set-compact-cards").checked;
+  s.hide_card_subtitle = document.getElementById("set-hide-subtitle").checked;
+  s.card_list_layout = document.getElementById("set-card-list").checked;
+  s.autoscroll_log = document.getElementById("set-autoscroll-log").checked;
+  s.log_relative_time = document.getElementById("set-log-relative").checked;
+  s.log_max_chars = parseInt(document.getElementById("set-log-max").value, 10) || 28000;
+  s.ffmpeg_path = document.getElementById("set-ffmpeg-path").value;
+  s.ffprobe_path = document.getElementById("set-ffprobe-path").value;
+
+  s.auto_add_pasted_urls = document.getElementById("set-auto-add").checked;
+  s.auto_start_downloads = document.getElementById("set-auto-start").checked;
+  s.enqueue_downloads_to_av1 = document.getElementById("set-enqueue-av1").checked;
+  s.worker_count = parseInt(document.getElementById("set-workers").value, 10) || 3;
+  s.output_dir = document.getElementById("set-output-dir").value;
+  s.yt_dlp_path = document.getElementById("set-yt-dlp-path").value;
+  s.active_profile = document.getElementById("set-active-profile").value;
+
+  s.output_filename_template = document.getElementById("set-output-template").value;
+  s.quality_preset = document.getElementById("set-quality").value;
+  s.quality_format_custom = document.getElementById("set-quality-custom").value;
+  s.merge_container = document.getElementById("set-merge-container").value;
+  s.playlist_preview_cap =
+    parseInt(document.getElementById("set-playlist-cap").value, 10) || 20;
+  s.yt_download_archive = document.getElementById("set-download-archive").value;
+  s.yt_proxy = document.getElementById("set-proxy").value;
+  s.yt_limit_rate = document.getElementById("set-limit-rate").value;
+  s.yt_sponsorblock_remove = document.getElementById("set-sponsorblock-remove").checked;
+  s.yt_sponsorblock_mark = document.getElementById("set-sponsorblock-mark").value;
+
+  s.yt_dlp_unlimited_retries = document.getElementById("set-unlimited-retries").checked;
+  s.yt_dlp_retry_count = parseInt(document.getElementById("set-retry-count").value, 10) || 10;
+  s.yt_dlp_cookies = document.getElementById("set-cookies").value;
+  s.yt_dlp_impersonate = document.getElementById("set-impersonate").value;
+  s.yt_dlp_extra_args = document.getElementById("set-extra-args").value;
+  s.embed_thumbnail = document.getElementById("set-embed-thumbnail").checked;
+  s.yt_embed_metadata = document.getElementById("set-embed-metadata").checked;
+  s.yt_ignore_errors = document.getElementById("set-ignore-errors").checked;
+  s.yt_restrict_filenames = document.getElementById("set-restrict-filenames").checked;
+  s.yt_write_info_json = document.getElementById("set-write-info-json").checked;
+  s.yt_write_auto_subs = document.getElementById("set-write-auto-subs").checked;
+
+  s.ffmpeg_post_args = document.getElementById("set-ffmpeg-post-args").value;
+  s.ffmpeg_faststart = document.getElementById("set-ffmpeg-faststart").checked;
+  s.ffmpeg_remux_mp4 = document.getElementById("set-ffmpeg-remux-mp4").checked;
+  s.ffmpeg_extract_audio_mp3 = document.getElementById("set-ffmpeg-mp3").checked;
+  s.verify_output_video_audio = document.getElementById("set-verify-streams").checked;
+
+  if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
+  s.worker_count = Math.min(6, Math.max(1, s.worker_count));
+  s.playlist_preview_cap = Math.min(500, Math.max(1, s.playlist_preview_cap));
+  return s;
+}
+
+function switchSettingsTab(name) {
+  document.querySelectorAll(".settings-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === name);
+  });
+  document.getElementById("settings-tab-shared").hidden = name !== "shared";
+  document.getElementById("settings-tab-downloader").hidden = name !== "downloader";
+}
+
+async function openSettingsDialog() {
+  const [settingsRes, profilesRes] = await Promise.all([
+    api("/api/settings"),
+    api("/api/profiles"),
+  ]);
+  const settingsData = await settingsRes.json();
+  const profilesData = await profilesRes.json();
+  cachedSettings = settingsData.settings;
+  populateSettingsForm(cachedSettings, settingsData.command_preview);
+  populateProfiles(profilesData);
+  document.getElementById("settings-dialog").showModal();
+}
+
+async function applyProfile(name) {
+  await api("/api/profiles/apply", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  const res = await api("/api/settings");
+  const data = await res.json();
+  cachedSettings = data.settings;
+  populateSettingsForm(cachedSettings, data.command_preview);
+  const profilesRes = await api("/api/profiles");
+  populateProfiles(await profilesRes.json());
+  await refreshToolsOnly();
+}
+
 document.getElementById("btn-save-token").onclick = () => {
   const v = document.getElementById("token-input").value.trim();
   if (!v) return;
@@ -123,14 +322,13 @@ document.getElementById("btn-save-token").onclick = () => {
   connectSse();
 };
 
+document.getElementById("btn-refresh-tools").onclick = () => refreshToolsOnly().catch(() => {});
+
 document.getElementById("btn-add").onclick = async () => {
   const text = document.getElementById("url-input").value;
   const urls = text.split(/\n+/).map((s) => s.trim()).filter(Boolean);
   if (!urls.length) return;
-  await api("/api/queue", {
-    method: "POST",
-    body: JSON.stringify({ urls }),
-  });
+  await api("/api/queue", { method: "POST", body: JSON.stringify({ urls }) });
   document.getElementById("url-input").value = "";
   await refreshAll();
 };
@@ -148,18 +346,7 @@ document.getElementById("btn-resume").onclick = async () => {
   await refreshAll();
 };
 
-document.getElementById("btn-settings").onclick = async () => {
-  const res = await api("/api/settings");
-  const data = await res.json();
-  const s = data.settings;
-  document.getElementById("set-output-dir").value = s.output_dir || "";
-  document.getElementById("set-workers").value = s.worker_count || 3;
-  document.getElementById("set-quality").value = s.quality_preset || "best";
-  document.getElementById("set-auto-start").checked = !!s.auto_start_downloads;
-  document.getElementById("set-extra-args").value = s.yt_dlp_extra_args || "";
-  document.getElementById("command-preview").textContent = data.command_preview || "";
-  document.getElementById("settings-dialog").showModal();
-};
+document.getElementById("btn-settings").onclick = () => openSettingsDialog().catch(console.error);
 
 document.getElementById("btn-settings-cancel").onclick = () => {
   document.getElementById("settings-dialog").close();
@@ -167,21 +354,28 @@ document.getElementById("btn-settings-cancel").onclick = () => {
 
 document.getElementById("settings-form").onsubmit = async (e) => {
   e.preventDefault();
-  const res = await api("/api/settings");
-  const data = await res.json();
-  const s = data.settings;
-  s.output_dir = document.getElementById("set-output-dir").value;
-  s.worker_count = parseInt(document.getElementById("set-workers").value, 10) || 3;
-  s.quality_preset = document.getElementById("set-quality").value;
-  s.auto_start_downloads = document.getElementById("set-auto-start").checked;
-  s.yt_dlp_extra_args = document.getElementById("set-extra-args").value;
-  await api("/api/settings", {
-    method: "POST",
-    body: JSON.stringify({ settings: s }),
-  });
+  if (!cachedSettings) return;
+  const patch = collectSettingsForm(cachedSettings);
+  await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
+  cachedSettings = patch;
   document.getElementById("settings-dialog").close();
   await refreshAll();
 };
+
+document.querySelectorAll(".settings-tab").forEach((btn) => {
+  btn.onclick = () => switchSettingsTab(btn.dataset.tab);
+});
+
+document.getElementById("set-quality").onchange = updateQualityCustomVisibility;
+
+document.getElementById("btn-apply-profile").onclick = () => {
+  const name = document.getElementById("set-active-profile").value;
+  if (name) applyProfile(name).catch(console.error);
+};
+
+document.querySelectorAll(".preset-btn").forEach((btn) => {
+  btn.onclick = () => applyProfile(btn.dataset.profile).catch(console.error);
+});
 
 if (token()) {
   document.getElementById("token-input").value = token();

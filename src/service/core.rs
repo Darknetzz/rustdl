@@ -563,6 +563,28 @@ impl DownloadCore {
         self.output_dir = self.settings.output_dir.clone();
         self.worker_count = self.settings.worker_count.clamp(1, 6);
         self.persist_settings();
+        self.refresh_deps();
         self.bump_generation();
     }
+
+    pub fn tools_status_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "yt_dlp": tool_json("yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, &self.settings.yt_dlp_path),
+            "ffmpeg": tool_json("ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, &self.settings.ffmpeg_path),
+            "ffprobe": tool_json("ffprobe", self.has_ffprobe, &self.ffprobe_version, &self.settings.ffprobe_path),
+        })
+    }
+}
+
+fn tool_json(name: &str, ok: bool, version: &str, configured_path: &str) -> serde_json::Value {
+    let version = version.trim();
+    let short = crate::app::log_panel::compact_tool_version_display(version);
+    serde_json::json!({
+        "name": name,
+        "ok": ok,
+        "status": if ok { "OK" } else { "Missing" },
+        "version": version,
+        "version_short": short,
+        "configured_path": configured_path.trim(),
+    })
 }
