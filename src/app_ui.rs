@@ -273,15 +273,27 @@ const ALERT_DANGER_BG: Color32 = Color32::from_rgb(248, 215, 218);
 const ALERT_DANGER_BORDER: Color32 = Color32::from_rgb(245, 194, 199);
 pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
 
+/// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
+pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let width = ui.available_width();
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, 0.0),
+        egui::Layout::top_down(egui::Align::LEFT),
+        |ui| {
+            ui.set_width(width);
+            add_contents(ui)
+        },
+    )
+    .inner
+}
+
 fn alert_box<R>(
     ui: &mut egui::Ui,
     bg: Color32,
     border: Color32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let width = ui.available_width();
-    ui.scope(|ui| {
-        ui.set_width(width);
+    with_full_width(ui, |ui| {
         egui::Frame::none()
             .fill(bg)
             .stroke(egui::Stroke::new(1.0, border))
@@ -290,7 +302,6 @@ fn alert_box<R>(
             .show(ui, add_contents)
             .inner
     })
-    .inner
 }
 
 /// Bordered warning strip matching Bootstrap `alert alert-warning` (full container width).

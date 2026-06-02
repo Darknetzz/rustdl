@@ -2,6 +2,8 @@ use std::time::SystemTime;
 
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 use crate::app_ui::{danger_button, secondary_button};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
@@ -359,36 +361,57 @@ pub(crate) fn attach_paste_context_menu(
     });
 }
 
-pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool, version: &str) {
-    fn compact_version(v: &str) -> String {
-        let t = v.trim();
-        if t.is_empty() {
-            return String::new();
-        }
-        let mut s = t.to_owned();
-        if let Some((head, _)) = s.split_once(" Copyright") {
-            s = head.to_owned();
-        }
-        if let Some((head, _)) = s.split_once(" built with") {
-            s = head.to_owned();
-        }
-        if s.chars().count() > 42 {
-            let mut short = s.chars().take(41).collect::<String>();
-            short.push('…');
-            short
-        } else {
-            s
+static TOOL_VERSION_DATE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\d{4}[-./]\d{2}[-./]\d{2}").expect("date regex"));
+static TOOL_VERSION_N_REV: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"N-\d+").expect("n-rev regex"));
+
+/// Short label for the header tool strip; prefers build/release date, full string on hover.
+pub(crate) fn compact_tool_version_display(version: &str) -> String {
+    let t = version.trim();
+    if t.is_empty() {
+        return String::new();
+    }
+    let lower = t.to_ascii_lowercase();
+    if let Some(idx) = lower.find("built on ") {
+        let tail = t[idx + "built on ".len()..].trim();
+        if let Some(m) = TOOL_VERSION_DATE.find(tail) {
+            return m.as_str().replace('.', "-");
         }
     }
+    if let Some(m) = TOOL_VERSION_DATE.find_iter(t).last() {
+        return m.as_str().replace('.', "-");
+    }
+    let mut short = t;
+    if let Some((head, _)) = short.split_once(" Copyright") {
+        short = head.trim();
+    }
+    if let Some((head, _)) = short.split_once(" built with") {
+        short = head.trim();
+    }
+    if let Some(m) = TOOL_VERSION_N_REV.find(short) {
+        return m.as_str().to_owned();
+    }
+    let n = short.chars().count();
+    if n <= 14 {
+        short.to_owned()
+    } else {
+        short.chars().take(13).collect::<String>() + "…"
+    }
+}
+
+pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool, version: &str) {
     let (icon, fg, text) = if ok {
         ("✔", Color32::from_rgb(132, 235, 156), "OK")
     } else {
         ("✖", Color32::from_rgb(70, 15, 15), "Missing")
     };
     let v = version.trim();
-    let cv = compact_version(v);
-    let body = if ok && !v.is_empty() {
-        format!("{icon} {tool_name}: {text} — {cv}")
+    let cv = compact_tool_version_display(v);
+    let body = if ok && !cv.is_empty() {
+        format!("{icon} {tool_name} {text} · {cv}")
+    } else if ok {
+        format!("{icon} {tool_name} {text}")
     } else {
         format!("{icon} {tool_name}: {text}")
     };
@@ -399,5 +422,32 @@ pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool,
     );
     if ok && !v.is_empty() {
         response.on_hover_text(v);
+    }
+}
+
+#[cfg(test)]
+mod version_display_tests {
+    use super::compact_tool_version_display;
+
+    #[test]
+    fn prefers_calendar_date() {
+        assert_eq!(
+            compact_tool_version_display("2024.05.25.234532"),
+            "2024-05-25"
+        );
+        assert_eq!(
+            compact_tool_version_display(
+                "ffmpeg version N-124724-g6f1de91492 Copyright (c) built on 2026-06-02"
+            ),
+            "2026-06-02"
+        );
+    }
+
+    #[test]
+    fn falls_back_to_n_rev() {
+        assert_eq!(
+            compact_tool_version_display("ffmpeg version N-124724-g6f1de91492"),
+            "N-124724"
+        );
     }
 }
