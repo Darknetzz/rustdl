@@ -9,7 +9,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Deserialize;
 use serde_json::Value;
-use tokio::io::{AsyncBufReadExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, BufReader};
 use tokio::process::Command as TokioCommand;
 use url::Url;
 
@@ -700,6 +700,26 @@ fn push_line_tail(deque: &mut VecDeque<String>, line: String) {
     deque.push_back(line);
 }
 
+fn decode_subprocess_line(mut buf: Vec<u8>) -> String {
+    while matches!(buf.last(), Some(b'\n') | Some(b'\r')) {
+        buf.pop();
+    }
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+/// Reads one line from a subprocess stream, decoding as UTF-8 lossily.
+/// yt-dlp/ffmpeg on Windows may emit console code-page bytes that are not valid UTF-8.
+async fn next_line_lossy<R: AsyncRead + Unpin>(
+    reader: &mut BufReader<R>,
+) -> Result<Option<String>> {
+    let mut buf = Vec::new();
+    let n = reader.read_until(b'\n', &mut buf).await?;
+    if n == 0 {
+        return Ok(None);
+    }
+    Ok(Some(decode_subprocess_line(buf)))
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn stream_download_with_bins<F>(
     url: &str,
@@ -751,8 +771,8 @@ where
         .stderr
         .take()
         .ok_or_else(|| anyhow!("failed to read stderr"))?;
-    let mut out_lines = BufReader::new(stdout).lines();
-    let mut err_lines = BufReader::new(stderr).lines();
+    let mut out_reader = BufReader::new(stdout);
+    let mut err_reader = BufReader::new(stderr);
     let mut stderr_tail = VecDeque::with_capacity(STDERR_TAIL_LINES);
 
     loop {
@@ -761,13 +781,13 @@ where
             return Err(anyhow!("Cancelled by user."));
         }
         tokio::select! {
-            line = out_lines.next_line() => {
+            line = async { next_line_lossy(&mut out_reader).await } => {
                 match line? {
                     Some(s) => on_line(s),
                     None => break,
                 }
             }
-            line = err_lines.next_line() => {
+            line = async { next_line_lossy(&mut err_reader).await } => {
                 if let Some(s) = line? {
                     push_line_tail(&mut stderr_tail, s.clone());
                     on_line(s);
@@ -777,7 +797,7 @@ where
         }
     }
 
-    while let Some(line) = err_lines.next_line().await? {
+    while let Some(line) = next_line_lossy(&mut err_reader).await? {
         push_line_tail(&mut stderr_tail, line.clone());
         on_line(line);
     }
@@ -939,6 +959,17 @@ mod tests {
         assert_eq!(
             args,
             vec!["--cookies-from-browser".to_owned(), spec.to_owned()]
+        );
+    }
+
+    #[test]
+    fn decode_subprocess_line_accepts_invalid_utf8() {
+        let raw = b"[download] title \xFF\r\n".to_vec();
+        let line = super::decode_subprocess_line(raw);
+        assert!(line.contains("[download]"));
+        assert_eq!(
+            super::decode_subprocess_line(b"progress:10%\n".to_vec()),
+            "progress:10%"
         );
     }
 
