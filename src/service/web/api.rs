@@ -2,9 +2,9 @@ use std::convert::Infallible;
 use std::time::Duration;
 
 use axum::extract::{Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{IntoResponse, Json};
+use axum::response::{IntoResponse, Json, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use futures_util::stream::Stream;
@@ -22,6 +22,7 @@ use crate::ytdlp_download_args::{build_download_extra_args, output_filename_temp
 
 use super::assets;
 use super::auth;
+use super::media;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -55,8 +56,17 @@ struct StatusCountsJson {
 }
 
 #[derive(Serialize)]
+struct QueueItemView {
+    #[serde(flatten)]
+    item: QueueItem,
+    playable: bool,
+    media_kind: Option<String>,
+    media_filename: Option<String>,
+}
+
+#[derive(Serialize)]
 struct QueueResponse {
-    items: Vec<QueueItem>,
+    items: Vec<QueueItemView>,
 }
 
 #[derive(Deserialize)]
@@ -121,6 +131,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/logs", get(logs_get))
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/{id}", get(thumbnail_proxy))
+        .route("/api/media/{id}", get(media_stream))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
@@ -191,10 +202,49 @@ async fn tools_refresh(State(st): State<ApiState>) -> Json<serde_json::Value> {
 }
 
 async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {
-    let c = st.core.lock();
-    Json(QueueResponse {
-        items: c.snapshot_queue(),
-    })
+    let mut c = st.core.lock();
+    c.refresh_done_file_lookup();
+    let items = c
+        .snapshot_queue()
+        .into_iter()
+        .map(|item| {
+            let playable = media::item_media_playable(&c, &item);
+            let media_kind = if playable {
+                media::resolve_item_media_path(&c, &item)
+                    .ok()
+                    .and_then(|p| media::media_kind_for_path(&p))
+                    .map(|k| match k {
+                        media::MediaKind::Video => "video".to_owned(),
+                        media::MediaKind::Audio => "audio".to_owned(),
+                    })
+            } else {
+                None
+            };
+            let media_filename = media::item_media_filename(&c, &item);
+            QueueItemView {
+                item,
+                playable,
+                media_kind,
+                media_filename,
+            }
+        })
+        .collect();
+    Json(QueueResponse { items })
+}
+
+async fn media_stream(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    headers: HeaderMap,
+) -> Result<Response, StatusCode> {
+    let path = {
+        let mut c = st.core.lock();
+        c.refresh_done_file_lookup();
+        let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
+        let item = &c.items[idx];
+        media::resolve_item_media_path(&c, item)?
+    };
+    media::stream_media_path(&path, &headers).await
 }
 
 async fn queue_add(

@@ -12,6 +12,9 @@ const statusFlags = {
 /** @type {Map<number, string>} blob URLs to revoke on queue refresh */
 const thumbObjectUrls = new Map();
 
+/** @type {HTMLMediaElement | null} */
+let activeMediaEl = null;
+
 function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -176,6 +179,53 @@ function revokeAllThumbObjectUrls() {
     URL.revokeObjectURL(url);
   }
   thumbObjectUrls.clear();
+}
+
+function stopActiveMedia() {
+  if (!activeMediaEl) return;
+  activeMediaEl.pause();
+  const thumb = activeMediaEl.closest(".card-thumb");
+  if (thumb) {
+    thumb.querySelector("img")?.classList.remove("hidden");
+    thumb.querySelector(".card-thumb-placeholder")?.classList.remove("hidden");
+  }
+  activeMediaEl.remove();
+  activeMediaEl = null;
+}
+
+function mediaStreamUrl(itemId) {
+  return `/api/media/${itemId}?token=${encodeURIComponent(token())}`;
+}
+
+function toggleCardMedia(item, thumb) {
+  const existing = thumb.querySelector(".card-media");
+  if (existing) {
+    stopActiveMedia();
+    return;
+  }
+  stopActiveMedia();
+  const tag = item.media_kind === "audio" ? "audio" : "video";
+  const el = document.createElement(tag);
+  el.className = "card-media";
+  el.controls = true;
+  el.playsInline = true;
+  el.preload = "metadata";
+  el.src = mediaStreamUrl(item.item_id);
+  thumb.querySelector("img")?.classList.add("hidden");
+  thumb.querySelector(".card-thumb-placeholder")?.classList.add("hidden");
+  thumb.appendChild(el);
+  activeMediaEl = el;
+  el.play().catch(() => {});
+}
+
+function appendPlayButton(actions, item, thumb) {
+  if (!item.playable) return;
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "primary";
+  play.textContent = "Play";
+  play.onclick = () => toggleCardMedia(item, thumb);
+  actions.appendChild(play);
 }
 
 async function loadCardThumbnail(img, placeholder, itemId) {
@@ -346,6 +396,7 @@ function renderQueueCard(item, settings) {
 
   const actions = document.createElement("div");
   actions.className = "card-actions";
+  appendPlayButton(actions, item, thumb);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
@@ -398,15 +449,18 @@ function renderQueueCardListRow(item) {
   }
   card.appendChild(body);
 
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  appendPlayButton(actions, item, thumb);
   if (canCancel(item)) {
-    const actions = document.createElement("div");
-    actions.className = "card-actions";
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
     cancel.textContent = "Cancel";
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
+  }
+  if (actions.childElementCount > 0) {
     card.appendChild(actions);
   }
 
@@ -419,6 +473,7 @@ async function refreshQueue() {
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
   revokeAllThumbObjectUrls();
+  stopActiveMedia();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";
   for (const item of data.items) {
