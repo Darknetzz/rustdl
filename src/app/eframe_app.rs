@@ -58,21 +58,78 @@ impl eframe::App for PydlApp {
         egui::CentralPanel::default().show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 ui.horizontal(|ui| {
-                    let sz = egui::vec2(40.0, 40.0);
-                    let img = ui.add(
-                        egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                            .sense(egui::Sense::click()),
+                    ui.horizontal(|ui| {
+                        let sz = egui::vec2(40.0, 40.0);
+                        let img = ui.add(
+                            egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                                .sense(egui::Sense::click()),
+                        );
+                        let title = ui.add(
+                            egui::Label::new(RichText::new("rustdl").heading())
+                                .sense(egui::Sense::click()),
+                        );
+                        let header = img
+                            .union(title)
+                            .on_hover_text("About rustdl — click to open");
+                        if header.clicked() {
+                            self.about_open = true;
+                        }
+                    });
+                    ui.with_layout(
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true)
+                                .clicked()
+                            {
+                                self.open_exit_confirm();
+                            }
+                            if secondary_button(
+                                ui,
+                                &format!("{} Logs", ui_icons::LOGS),
+                                true,
+                            )
+                            .on_hover_text(
+                                "View activity log (dock under queue in Settings)",
+                            )
+                            .clicked()
+                            {
+                                self.toggle_logs_panel();
+                            }
+                            if secondary_button(
+                                ui,
+                                &format!("{} Settings", ui_icons::SETTINGS),
+                                true,
+                            )
+                            .on_hover_text(
+                                "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
+                            )
+                            .clicked()
+                            {
+                                self.settings_open = true;
+                            }
+                            ui.separator();
+                            draw_precheck_status(
+                                ui,
+                                "ffprobe",
+                                self.has_ffprobe,
+                                &self.ffprobe_version,
+                            );
+                            ui.separator();
+                            draw_precheck_status(
+                                ui,
+                                "ffmpeg",
+                                self.has_ffmpeg,
+                                &self.ffmpeg_version,
+                            );
+                            ui.separator();
+                            draw_precheck_status(
+                                ui,
+                                "yt-dlp",
+                                self.has_yt_dlp,
+                                &self.yt_dlp_version,
+                            );
+                        },
                     );
-                    let title = ui.add(
-                        egui::Label::new(RichText::new("rustdl").heading())
-                            .sense(egui::Sense::click()),
-                    );
-                    let header = img
-                        .union(title)
-                        .on_hover_text("About rustdl — click to open");
-                    if header.clicked() {
-                        self.about_open = true;
-                    }
                 });
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -125,38 +182,6 @@ impl eframe::App for PydlApp {
                         });
                     });
                 }
-                ui.horizontal(|ui| {
-                    if secondary_button(
-                        ui,
-                        &format!("{} Settings", ui_icons::SETTINGS),
-                        true,
-                    )
-                    .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
-                    .clicked()
-                    {
-                        self.settings_open = true;
-                    }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Logs", ui_icons::LOGS),
-                        true,
-                    )
-                    .on_hover_text("View activity log (dock under queue in Settings)")
-                    .clicked()
-                    {
-                        self.toggle_logs_panel();
-                    }
-                    if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                        self.open_exit_confirm();
-                    }
-                });
-                ui.horizontal_wrapped(|ui| {
-                    draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
-                    ui.separator();
-                    draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
-                    ui.separator();
-                    draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
-                });
                 let mut nav_frame = egui::Frame::group(ui.style());
                 nav_frame.fill = Color32::from_rgb(28, 32, 38);
                 nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
