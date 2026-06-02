@@ -498,7 +498,8 @@ pub fn parse_ffmpeg_speed(value: &str) -> Option<f64> {
     }
 }
 
-pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
+/// PNG frame via ffmpeg (1s into the file). Used by GUI and web thumbnail fallback.
+pub fn extract_thumbnail_png_bytes(file_path: &Path, ffmpeg_path: &str) -> Option<Vec<u8>> {
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     let mut cmd = Command::new(ffmpeg);
     no_console_window(&mut cmd);
@@ -523,10 +524,15 @@ pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::Co
         .stderr(Stdio::null())
         .output()
         .ok()?;
-    if !out.status.success() || out.stdout.is_empty() {
+    if !out.status.success() || out.stdout.len() < 64 {
         return None;
     }
-    let dyn_img = image::load_from_memory(&out.stdout).ok()?;
+    Some(out.stdout)
+}
+
+pub fn extract_thumbnail(file_path: &Path, ffmpeg_path: &str) -> Option<egui::ColorImage> {
+    let png = extract_thumbnail_png_bytes(file_path, ffmpeg_path)?;
+    let dyn_img = image::load_from_memory(&png).ok()?;
     let rgba = dyn_img.to_rgba8();
     let size = [rgba.width() as usize, rgba.height() as usize];
     Some(egui::ColorImage::from_rgba_unmultiplied(

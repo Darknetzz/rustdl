@@ -197,6 +197,31 @@ pub fn youtube_id_from_dedupe_key(key: &str) -> Option<String> {
     }
 }
 
+fn is_plausible_youtube_video_id(id: &str) -> bool {
+    let id = id.trim();
+    id.len() == 11
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+}
+
+/// Bracketed segments in a title/filename stem (`Title [id]`).
+fn bracket_ids_in_stem(stem: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut rest = stem;
+    while let Some(i) = rest.find('[') {
+        rest = &rest[i + 1..];
+        if let Some(j) = rest.find(']') {
+            let inner = rest[..j].trim();
+            if !inner.is_empty() {
+                out.push(inner.to_owned());
+            }
+            rest = &rest[j + 1..];
+        } else {
+            break;
+        }
+    }
+    out
+}
+
 /// Best-effort YouTube id for thumbnail fallbacks when metadata fields are missing.
 pub fn youtube_video_id_from_item(item: &crate::models::QueueItem) -> Option<String> {
     let vid = item.video_id.trim();
@@ -209,7 +234,21 @@ pub fn youtube_video_id_from_item(item: &crate::models::QueueItem) -> Option<Str
             return Some(id);
         }
     }
-    None
+    bracket_ids_in_stem(&item.title)
+        .into_iter()
+        .find(|id| is_plausible_youtube_video_id(id))
+}
+
+fn push_ytimg_candidates(out: &mut Vec<String>, vid: &str) {
+    let mut push = |url: String| {
+        if !out.iter().any(|u| u == &url) {
+            out.push(url);
+        }
+    };
+    push(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"));
+    push(format!("https://i.ytimg.com/vi/{vid}/mqdefault.jpg"));
+    push(format!("https://i.ytimg.com/vi_webp/{vid}/maxresdefault.webp"));
+    push(format!("https://i.ytimg.com/vi/{vid}/default.jpg"));
 }
 
 pub fn normalize_thumbnail_url(raw: &str) -> String {
@@ -235,6 +274,10 @@ pub fn thumbnail_request_needs_referer(url: &str) -> bool {
 
 pub fn thumbnail_url_candidates(item: &crate::models::QueueItem) -> Vec<String> {
     let mut out = Vec::new();
+    // Prefer stable YouTube CDN URLs when we know the id (metadata URLs often expire).
+    if let Some(vid) = youtube_video_id_from_item(item) {
+        push_ytimg_candidates(&mut out, &vid);
+    }
     let mut push = |raw: String| {
         let url = normalize_thumbnail_url(&raw);
         if url.is_empty() || out.iter().any(|u| u == &url) {
@@ -244,11 +287,6 @@ pub fn thumbnail_url_candidates(item: &crate::models::QueueItem) -> Vec<String> 
     };
     if let Some(u) = item.thumbnail_url.as_ref() {
         push(u.clone());
-    }
-    if let Some(vid) = youtube_video_id_from_item(item) {
-        push(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"));
-        push(format!("https://i.ytimg.com/vi/{vid}/mqdefault.jpg"));
-        push(format!("https://i.ytimg.com/vi/{vid}/default.jpg"));
     }
     out
 }

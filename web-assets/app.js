@@ -237,8 +237,8 @@ async function loadCardThumbnail(img, placeholder, itemId) {
   const res = await fetch(`/api/thumbnail/${itemId}`, { headers: headers() });
   if (!res.ok) throw new Error(`thumbnail ${res.status}`);
   const blob = await res.blob();
-  if (!blob.type.startsWith("image/") && blob.size < 64) {
-    throw new Error("not an image");
+  if (blob.size < 32) {
+    throw new Error("thumbnail empty");
   }
   const objectUrl = URL.createObjectURL(blob);
   thumbObjectUrls.set(itemId, objectUrl);
@@ -248,9 +248,13 @@ async function loadCardThumbnail(img, placeholder, itemId) {
 }
 
 function queueCardThumbnailLoad(img, placeholder, item) {
-  loadCardThumbnail(img, placeholder, item.item_id).catch(() => {
+  loadCardThumbnail(img, placeholder, item.item_id).catch((err) => {
     img.classList.add("hidden");
-    placeholder.textContent = "Thumbnail unavailable";
+    const msg =
+      err instanceof Error && err.message.startsWith("thumbnail 401")
+        ? "Thumbnail denied (check API token)"
+        : "Thumbnail unavailable";
+    placeholder.textContent = msg;
     placeholder.classList.remove("hidden");
   });
 }

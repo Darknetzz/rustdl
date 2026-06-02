@@ -17,12 +17,12 @@ use crate::config::AppSettings;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, SharedCore};
+use crate::service::web::media;
 use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
 use super::assets;
 use super::auth;
-use super::media;
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -399,25 +399,48 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (candidates, client) = {
-        let c = st.core.lock();
+    let (candidates, client, local_thumb) = {
+        let mut c = st.core.lock();
+        c.refresh_done_file_lookup();
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
-        let urls = thumbnail_url_candidates(&c.items[idx]);
-        if urls.is_empty() {
-            return Err(StatusCode::NOT_FOUND);
-        }
-        (urls, c.http_client.clone())
+        let item = &c.items[idx];
+        let urls = thumbnail_url_candidates(item);
+        let local = media::resolve_item_media_path(&c, item)
+            .ok()
+            .filter(|p| media::media_kind_for_path(p) == Some(media::MediaKind::Video))
+            .map(|p| (p, c.settings.ffmpeg_path.clone(), c.has_ffmpeg));
+        (urls, c.http_client.clone(), local)
     };
     for url in candidates {
         if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
-            return Ok((
-                StatusCode::OK,
-                [(axum::http::header::CONTENT_TYPE, content_type)],
-                bytes,
-            ));
+            return Ok(thumbnail_response(bytes, content_type));
+        }
+    }
+    if let Some((path, ffmpeg_path, has_ffmpeg)) = local_thumb {
+        if has_ffmpeg {
+            let path2 = path.clone();
+            let ffmpeg = ffmpeg_path.clone();
+            if let Some(bytes) =
+                tokio::task::spawn_blocking(move || {
+                    crate::av1_transcode::extract_thumbnail_png_bytes(&path2, &ffmpeg)
+                })
+                .await
+                .ok()
+                .flatten()
+            {
+                return Ok(thumbnail_response(bytes, "image/png"));
+            }
         }
     }
     Err(StatusCode::NOT_FOUND)
+}
+
+fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, content_type)],
+        bytes,
+    )
 }
 
 async fn fetch_thumbnail_image(
@@ -438,7 +461,13 @@ async fn fetch_thumbnail_image(
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
     let bytes = resp.bytes().await.ok()?.to_vec();
-    if bytes.len() < 64 || !looks_like_image_bytes(&bytes) {
+    if bytes.len() < 32 {
+        return None;
+    }
+    let mime_is_image = mime
+        .as_deref()
+        .is_some_and(|m| m.to_ascii_lowercase().starts_with("image/"));
+    if !mime_is_image && !looks_like_image_bytes(&bytes) {
         return None;
     }
     let content_type = mime
@@ -453,7 +482,11 @@ fn looks_like_image_bytes(bytes: &[u8]) -> bool {
         || bytes.starts_with(b"\xff\xd8\xff")
         || bytes.starts_with(b"GIF87a")
         || bytes.starts_with(b"GIF89a")
-        || bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP")
+        || is_webp(bytes)
+}
+
+fn is_webp(bytes: &[u8]) -> bool {
+    bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP"
 }
 
 fn content_type_from_mime(mime: &str) -> Option<&'static str> {
