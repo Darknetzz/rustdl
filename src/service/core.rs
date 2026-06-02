@@ -194,6 +194,30 @@ impl DownloadCore {
         self.item_index_by_id.get(&item_id).copied()
     }
 
+    /// Resolves `item_id` to a row index, rebuilding the map when it is stale.
+    pub fn resolve_item_idx(&mut self, item_id: u64) -> Option<usize> {
+        if let Some(idx) = self.item_idx(item_id) {
+            if self
+                .items
+                .get(idx)
+                .is_some_and(|it| it.item_id == item_id)
+            {
+                return Some(idx);
+            }
+        }
+        self.rebuild_item_index();
+        if let Some(idx) = self.item_idx(item_id) {
+            if self
+                .items
+                .get(idx)
+                .is_some_and(|it| it.item_id == item_id)
+            {
+                return Some(idx);
+            }
+        }
+        self.items.iter().position(|it| it.item_id == item_id)
+    }
+
     pub fn rebuild_item_index(&mut self) {
         self.item_index_by_id.clear();
         for (idx, it) in self.items.iter().enumerate() {
@@ -592,7 +616,7 @@ impl DownloadCore {
     }
 
     pub fn remove_item_by_id(&mut self, item_id: u64) -> bool {
-        let Some(idx) = self.item_idx(item_id) else {
+        let Some(idx) = self.resolve_item_idx(item_id) else {
             return false;
         };
         if self.items[idx].status == ItemStatus::Resolving {
@@ -608,7 +632,7 @@ impl DownloadCore {
 
     /// Removes a row; queued/downloading items are cancelled first (remove when cancel completes).
     pub fn remove_item_from_queue(&mut self, item_id: u64) -> bool {
-        let Some(idx) = self.item_idx(item_id) else {
+        let Some(idx) = self.resolve_item_idx(item_id) else {
             return false;
         };
         match self.items[idx].status {

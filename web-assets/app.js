@@ -617,8 +617,12 @@ async function redownloadItem(id) {
 
 async function removeQueueItem(id) {
   const res = await api(`/api/queue/${id}`, { method: "DELETE" });
-  if (!res.ok && res.status !== 204) {
-    throw new Error("Could not remove this item from the queue.");
+  if (!res.ok) {
+    const hint =
+      res.status === 404
+        ? "Item not found (try Refresh or restart rustdl)."
+        : `Server returned ${res.status}.`;
+    throw new Error(`Could not remove this item from the queue. ${hint}`);
   }
   await refreshAll();
 }

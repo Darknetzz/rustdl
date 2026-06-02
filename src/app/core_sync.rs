@@ -13,7 +13,6 @@ pub fn sync_app_to_core(app: &PydlApp, core: &mut DownloadCore) {
     core.status_done = app.status_done;
     core.status_failed = app.status_failed;
     core.status_counts = app.status_counts;
-    core.item_index_by_id = app.item_index_by_id.clone();
     core.cached_dedupe_keys = app.cached_dedupe_keys.clone();
     core.cached_transfer_totals = app.cached_transfer_totals.clone();
     core.transfer_totals_dirty = app.transfer_totals_dirty;
@@ -27,6 +26,7 @@ pub fn sync_app_to_core(app: &PydlApp, core: &mut DownloadCore) {
     core.settings = app.settings.clone();
     core.profile_store = app.profile_store.clone();
     core.items = app.items.clone();
+    core.rebuild_item_index();
     core.pending_resolve_ids = app.pending_resolve_ids.clone();
     core.next_item_id = app.next_item_id;
     core.add_in_progress = app.add_in_progress;
@@ -57,7 +57,6 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.status_done = core.status_done;
     app.status_failed = core.status_failed;
     app.status_counts = core.status_counts;
-    app.item_index_by_id = core.item_index_by_id.clone();
     app.cached_dedupe_keys = core.cached_dedupe_keys.clone();
     app.cached_transfer_totals = core.cached_transfer_totals.clone();
     app.transfer_totals_dirty = core.transfer_totals_dirty;
@@ -71,6 +70,7 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.settings = core.settings.clone();
     app.profile_store = core.profile_store.clone();
     app.items = core.items.clone();
+    app.rebuild_item_index();
     app.pending_resolve_ids = core.pending_resolve_ids.clone();
     app.next_item_id = core.next_item_id;
     app.add_in_progress = core.add_in_progress;
