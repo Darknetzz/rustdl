@@ -17,6 +17,7 @@ use crate::config::AppSettings;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, SharedCore};
+use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
 use super::assets;
@@ -348,36 +349,82 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (url, client) = {
+    let (candidates, client) = {
         let c = st.core.lock();
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
-        let item = &c.items[idx];
-        let url = item
-            .thumbnail_url
-            .clone()
-            .or_else(|| {
-                let vid = item.video_id.trim();
-                if vid.is_empty() {
-                    None
-                } else {
-                    Some(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"))
-                }
-            })
-            .ok_or(StatusCode::NOT_FOUND)?;
-        (url, c.http_client.clone())
+        let urls = thumbnail_url_candidates(&c.items[idx]);
+        if urls.is_empty() {
+            return Err(StatusCode::NOT_FOUND);
+        }
+        (urls, c.http_client.clone())
     };
-    let resp = client.get(&url).send().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
-    let status = resp.status();
-    let content_type = resp
+    for url in candidates {
+        if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
+            return Ok((
+                StatusCode::OK,
+                [(axum::http::header::CONTENT_TYPE, content_type)],
+                bytes,
+            ));
+        }
+    }
+    Err(StatusCode::NOT_FOUND)
+}
+
+async fn fetch_thumbnail_image(
+    client: &reqwest::Client,
+    url: &str,
+) -> Option<(Vec<u8>, &'static str)> {
+    let mut req = client.get(url);
+    if ytdlp::thumbnail_request_needs_referer(url) {
+        req = req.header(axum::http::header::REFERER, "https://www.youtube.com/");
+    }
+    let resp = req.send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let mime = resp
         .headers()
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .unwrap_or("image/jpeg")
-        .to_owned();
-    let bytes = resp.bytes().await.map_err(|_| StatusCode::BAD_GATEWAY)?;
-    Ok((
-        StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK),
-        [(axum::http::header::CONTENT_TYPE, content_type)],
-        bytes,
-    ))
+        .map(str::to_owned);
+    let bytes = resp.bytes().await.ok()?.to_vec();
+    if bytes.len() < 64 || !looks_like_image_bytes(&bytes) {
+        return None;
+    }
+    let content_type = mime
+        .as_deref()
+        .and_then(content_type_from_mime)
+        .unwrap_or_else(|| content_type_from_bytes(&bytes));
+    Some((bytes, content_type))
+}
+
+fn looks_like_image_bytes(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(b"\xff\xd8\xff")
+        || bytes.starts_with(b"GIF87a")
+        || bytes.starts_with(b"GIF89a")
+        || bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP")
+}
+
+fn content_type_from_mime(mime: &str) -> Option<&'static str> {
+    let m = mime.split(';').next()?.trim().to_ascii_lowercase();
+    match m.as_str() {
+        "image/png" => Some("image/png"),
+        "image/jpeg" | "image/jpg" => Some("image/jpeg"),
+        "image/gif" => Some("image/gif"),
+        "image/webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+fn content_type_from_bytes(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"\x89PNG") {
+        "image/png"
+    } else if bytes.starts_with(b"GIF") {
+        "image/gif"
+    } else if bytes.starts_with(b"RIFF") {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    }
 }

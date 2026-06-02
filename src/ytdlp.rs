@@ -187,6 +187,72 @@ pub fn normalize_url_for_dedupe(input: &str) -> String {
     out
 }
 
+/// YouTube video id from a normalized dedupe key (`youtube:…`) or an empty string.
+pub fn youtube_id_from_dedupe_key(key: &str) -> Option<String> {
+    let id = key.strip_prefix("youtube:")?.trim();
+    if id.is_empty() {
+        None
+    } else {
+        Some(id.to_owned())
+    }
+}
+
+/// Best-effort YouTube id for thumbnail fallbacks when metadata fields are missing.
+pub fn youtube_video_id_from_item(item: &crate::models::QueueItem) -> Option<String> {
+    let vid = item.video_id.trim();
+    if !vid.is_empty() {
+        return Some(vid.to_owned());
+    }
+    for url in [&item.webpage_url, &item.source_line] {
+        let key = normalize_url_for_dedupe(url);
+        if let Some(id) = youtube_id_from_dedupe_key(&key) {
+            return Some(id);
+        }
+    }
+    None
+}
+
+pub fn normalize_thumbnail_url(raw: &str) -> String {
+    let s = raw.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    if s.starts_with("//") {
+        format!("https:{s}")
+    } else {
+        s.to_owned()
+    }
+}
+
+/// Ordered remote URLs to try when loading a queue card thumbnail.
+pub fn thumbnail_request_needs_referer(url: &str) -> bool {
+    let u = url.to_ascii_lowercase();
+    u.contains("ytimg.com")
+        || u.contains("ggpht.com")
+        || u.contains("googleusercontent.com")
+        || u.contains("youtube.com")
+}
+
+pub fn thumbnail_url_candidates(item: &crate::models::QueueItem) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |raw: String| {
+        let url = normalize_thumbnail_url(&raw);
+        if url.is_empty() || out.iter().any(|u| u == &url) {
+            return;
+        }
+        out.push(url);
+    };
+    if let Some(u) = item.thumbnail_url.as_ref() {
+        push(u.clone());
+    }
+    if let Some(vid) = youtube_video_id_from_item(item) {
+        push(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"));
+        push(format!("https://i.ytimg.com/vi/{vid}/mqdefault.jpg"));
+        push(format!("https://i.ytimg.com/vi/{vid}/default.jpg"));
+    }
+    out
+}
+
 fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
     let title = entry
         .get("title")
@@ -707,6 +773,30 @@ mod tests {
         let a = normalize_url_for_dedupe("https://example.com/x?b=2&a=1");
         let b = normalize_url_for_dedupe("https://example.com/x?a=1&b=2");
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn thumbnail_url_candidates_normalize_and_fallback() {
+        let item = crate::models::QueueItem {
+            source_line: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            thumbnail_url: Some("//i.ytimg.com/vi/abc123/hqdefault.jpg".to_owned()),
+            ..Default::default()
+        };
+        let urls = thumbnail_url_candidates(&item);
+        assert!(urls[0].starts_with("https://"));
+        assert!(urls.iter().any(|u| u.contains("hqdefault")));
+    }
+
+    #[test]
+    fn youtube_video_id_from_item_uses_source_line() {
+        let item = crate::models::QueueItem {
+            source_line: "https://youtu.be/xyz987".to_owned(),
+            ..Default::default()
+        };
+        assert_eq!(
+            youtube_video_id_from_item(&item).as_deref(),
+            Some("xyz987")
+        );
     }
 
     #[test]

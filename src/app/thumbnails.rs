@@ -66,9 +66,14 @@ impl PydlApp {
                 );
                 return;
             };
-            let bytes = match client.get(&url).send().await {
-                Ok(resp) => resp.bytes().await.ok().map(|b| b.to_vec()),
-                Err(_) => None,
+            let fetch_url = crate::ytdlp::normalize_thumbnail_url(&url);
+            let mut req = client.get(&fetch_url);
+            if crate::ytdlp::thumbnail_request_needs_referer(&fetch_url) {
+                req = req.header("Referer", "https://www.youtube.com/");
+            }
+            let bytes = match req.send().await {
+                Ok(resp) if resp.status().is_success() => resp.bytes().await.ok().map(|b| b.to_vec()),
+                _ => None,
             };
             let image = match bytes {
                 None => None,

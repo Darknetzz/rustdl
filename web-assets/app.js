@@ -9,6 +9,9 @@ const statusFlags = {
   add_in_progress: false,
 };
 
+/** @type {Map<number, string>} blob URLs to revoke on queue refresh */
+const thumbObjectUrls = new Map();
+
 function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
@@ -157,10 +160,49 @@ function formatResolution(w, h) {
 
 function thumbPlaceholderText(item, showThumbnails) {
   if (!showThumbnails) return "Thumbnails off";
-  if (item.thumbnail_url || (item.video_id && String(item.video_id).trim())) {
-    return "Fetching thumbnail…";
-  }
+  if (itemHasThumbnailSource(item)) return "Fetching thumbnail…";
   return "No preview available";
+}
+
+function itemHasThumbnailSource(item) {
+  if (item.thumbnail_url) return true;
+  if (item.video_id && String(item.video_id).trim()) return true;
+  const line = item.source_line || item.webpage_url || "";
+  return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
+}
+
+function revokeAllThumbObjectUrls() {
+  for (const url of thumbObjectUrls.values()) {
+    URL.revokeObjectURL(url);
+  }
+  thumbObjectUrls.clear();
+}
+
+async function loadCardThumbnail(img, placeholder, itemId) {
+  const prev = thumbObjectUrls.get(itemId);
+  if (prev) {
+    URL.revokeObjectURL(prev);
+    thumbObjectUrls.delete(itemId);
+  }
+  const res = await fetch(`/api/thumbnail/${itemId}`, { headers: headers() });
+  if (!res.ok) throw new Error(`thumbnail ${res.status}`);
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/") && blob.size < 64) {
+    throw new Error("not an image");
+  }
+  const objectUrl = URL.createObjectURL(blob);
+  thumbObjectUrls.set(itemId, objectUrl);
+  img.src = objectUrl;
+  img.classList.remove("hidden");
+  placeholder.classList.add("hidden");
+}
+
+function queueCardThumbnailLoad(img, placeholder, item) {
+  loadCardThumbnail(img, placeholder, item.item_id).catch(() => {
+    img.classList.add("hidden");
+    placeholder.textContent = "Thumbnail unavailable";
+    placeholder.classList.remove("hidden");
+  });
 }
 
 function footerStatusText(item) {
@@ -220,23 +262,10 @@ function renderQueueCard(item, settings) {
 
   const img = document.createElement("img");
   img.alt = "";
-  const hasThumbSource =
-    showThumbnails &&
-    token() &&
-    (item.thumbnail_url || (item.video_id && String(item.video_id).trim()));
-  if (hasThumbSource) {
-    img.className = "hidden";
-    img.src = `/api/thumbnail/${item.item_id}?token=${encodeURIComponent(token())}`;
-    img.onload = () => {
-      img.classList.remove("hidden");
-      placeholder.classList.add("hidden");
-    };
-    img.onerror = () => {
-      img.classList.add("hidden");
-      placeholder.textContent = "Thumbnail unavailable";
-      placeholder.classList.remove("hidden");
-    };
-    thumb.appendChild(img);
+  img.className = "hidden";
+  thumb.appendChild(img);
+  if (showThumbnails && token() && itemHasThumbnailSource(item)) {
+    queueCardThumbnailLoad(img, placeholder, item);
   }
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
@@ -342,11 +371,10 @@ function renderQueueCardListRow(item) {
   placeholder.textContent = "…";
   const img = document.createElement("img");
   img.alt = "";
-  if (token() && (item.thumbnail_url || item.video_id)) {
-    img.src = `/api/thumbnail/${item.item_id}?token=${encodeURIComponent(token())}`;
-    img.onload = () => placeholder.classList.add("hidden");
-    img.onerror = () => img.classList.add("hidden");
-    thumb.appendChild(img);
+  img.className = "hidden";
+  thumb.appendChild(img);
+  if (token() && itemHasThumbnailSource(item)) {
+    queueCardThumbnailLoad(img, placeholder, item);
   }
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
@@ -390,6 +418,7 @@ async function refreshQueue() {
   const data = await res.json();
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
+  revokeAllThumbObjectUrls();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";
   for (const item of data.items) {
