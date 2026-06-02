@@ -238,15 +238,19 @@ pub(crate) fn resolve_path_under_output(output_dir: &str, raw: &str) -> Option<P
     }
     let root = Path::new(output_dir);
     let direct = PathBuf::from(raw);
-    let candidates = vec![direct.clone(), root.join(&direct)];
-    #[cfg(windows)]
-    {
-        let norm = raw.replace('/', "\\");
-        if norm != raw {
-            candidates.push(PathBuf::from(&norm));
-            candidates.push(root.join(&norm));
+    let candidates = {
+        #[allow(unused_mut)]
+        let mut v = vec![direct.clone(), root.join(&direct)];
+        #[cfg(windows)]
+        {
+            let norm = raw.replace('/', "\\");
+            if norm != raw {
+                v.push(PathBuf::from(&norm));
+                v.push(root.join(&norm));
+            }
         }
-    }
+        v
+    };
     for path in candidates {
         if path.is_file() && path_is_under_output_dir(output_dir, &path) {
             return Some(path.canonicalize().unwrap_or(path));
