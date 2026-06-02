@@ -1,3 +1,6 @@
+use std::io::Write;
+use std::path::Path;
+
 use crate::app_parsing::split_cli_like;
 use crate::config::{AppSettings, DEFAULT_OUTPUT_FILENAME_TEMPLATE};
 use crate::ytdlp;
@@ -132,6 +135,93 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
     args
 }
 
+/// Args for re-downloading: bypass archive skip and replace an existing output file.
+pub fn build_redownload_extra_args(settings: &AppSettings) -> Vec<String> {
+    let mut args = build_download_extra_args(settings);
+    strip_cli_flag_pair(&mut args, "--download-archive");
+    strip_cli_flag(&mut args, "--no-overwrites");
+    if !args.iter().any(|a| a == "--force-overwrites") {
+        args.push("--force-overwrites".to_owned());
+    }
+    args
+}
+
+fn strip_cli_flag_pair(args: &mut Vec<String>, flag: &str) {
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == flag {
+            args.remove(i);
+            if i < args.len() {
+                args.remove(i);
+            }
+        } else {
+            i += 1;
+        }
+    }
+}
+
+fn strip_cli_flag(args: &mut Vec<String>, flag: &str) {
+    args.retain(|a| a != flag);
+}
+
+fn archive_line_matches_video_id(line: &str, id: &str) -> bool {
+    line == id || line.split_whitespace().last() == Some(id)
+}
+
+/// Remove yt-dlp archive lines for the given video ids (`extractor id` or bare id).
+pub fn remove_video_ids_from_download_archive(
+    archive_path: &str,
+    video_ids: &[String],
+) -> std::io::Result<bool> {
+    let path = archive_path.trim();
+    if path.is_empty() {
+        return Ok(false);
+    }
+    let ids: Vec<&str> = video_ids
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if ids.is_empty() {
+        return Ok(false);
+    }
+    let file = Path::new(path);
+    if !file.is_file() {
+        return Ok(false);
+    }
+    let content = std::fs::read_to_string(file)?;
+    let had_trailing_nl = content.ends_with('\n');
+    let mut removed = false;
+    let kept: Vec<&str> = content
+        .lines()
+        .filter(|line| {
+            let t = line.trim();
+            if t.is_empty() {
+                return true;
+            }
+            let drop = ids.iter().any(|id| archive_line_matches_video_id(t, id));
+            if drop {
+                removed = true;
+            }
+            !drop
+        })
+        .collect();
+    if !removed {
+        return Ok(false);
+    }
+    let mut out = std::fs::File::create(file)?;
+    for (i, line) in kept.iter().enumerate() {
+        if i > 0 {
+            writeln!(out)?;
+        }
+        write!(out, "{line}")?;
+    }
+    if had_trailing_nl || !kept.is_empty() {
+        writeln!(out)?;
+    }
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +311,32 @@ mod tests {
         let args = build_download_extra_args(&s);
         assert!(args.contains(&"--limit-rate".to_owned()));
         assert!(args.contains(&"4M".to_owned()));
+    }
+
+    #[test]
+    fn redownload_args_drop_archive_and_force_overwrite() {
+        let mut s = base_settings();
+        s.yt_download_archive = "/tmp/archive.txt".to_owned();
+        let args = build_redownload_extra_args(&s);
+        assert!(!args.contains(&"--download-archive".to_owned()));
+        assert!(!args.contains(&"/tmp/archive.txt".to_owned()));
+        assert!(args.contains(&"--force-overwrites".to_owned()));
+    }
+
+    #[test]
+    fn remove_video_ids_from_download_archive() {
+        let dir = std::env::temp_dir().join("rustdl_archive_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let archive = dir.join("dl.txt");
+        std::fs::write(&archive, "youtube abc123\nvimeo xyz\n").unwrap();
+        let path = archive.to_string_lossy();
+        let changed =
+            super::remove_video_ids_from_download_archive(&path, &["abc123".to_owned()]).unwrap();
+        assert!(changed);
+        let left = std::fs::read_to_string(&archive).unwrap();
+        assert!(left.contains("vimeo xyz"));
+        assert!(!left.contains("abc123"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

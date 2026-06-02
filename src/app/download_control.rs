@@ -7,7 +7,9 @@ use url::Url;
 
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
-use crate::ytdlp_download_args::output_filename_template;
+use crate::ytdlp_download_args::{
+    build_redownload_extra_args, output_filename_template, remove_video_ids_from_download_archive,
+};
 
 use super::background_spawn;
 use super::{CancelPostAction, PydlApp};
@@ -50,7 +52,11 @@ impl PydlApp {
         ids.into_iter().map(|(_, id)| id).collect()
     }
 
-    pub(super) fn spawn_download_workers(&mut self, pending_ids: Vec<u64>) {
+    pub(super) fn spawn_download_workers(
+        &mut self,
+        pending_ids: Vec<u64>,
+        force_redownload: bool,
+    ) {
         if self.downloads_paused {
             self.append_log("Downloads are paused. Click Resume to continue.");
             return;
@@ -75,7 +81,11 @@ impl PydlApp {
         for (idx, iid) in pending_ids.into_iter().enumerate() {
             groups[idx % groups_len].push(iid);
         }
-        let download_args = self.download_extra_args();
+        let download_args = if force_redownload {
+            build_redownload_extra_args(&self.settings)
+        } else {
+            self.download_extra_args()
+        };
         let yt_dlp_bin = self.yt_dlp_bin();
         let ffmpeg_bin = self.ffmpeg_bin();
         let output_template = output_filename_template(&self.settings);
@@ -128,7 +138,7 @@ impl PydlApp {
         }
         self.persist_settings();
         let pending_ids = self.collect_idle_download_item_ids();
-        self.spawn_download_workers(pending_ids);
+        self.spawn_download_workers(pending_ids, false);
     }
 
     pub(super) fn remove_item_by_id(&mut self, item_id: u64) -> bool {
@@ -223,7 +233,13 @@ impl PydlApp {
         let Some(idx) = self.item_idx(item_id) else {
             return;
         };
-        if let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) {
+        let item = self.items[idx].clone();
+        self.items[idx].local_path = None;
+        let path_to_remove = self
+            .find_downloaded_file_for_item(&item)
+            .or_else(|| self.done_file_index.find_path_in_index(&item))
+            .map(|(p, _)| p);
+        if let Some(path) = path_to_remove {
             if let Err(e) = fs::remove_file(&path) {
                 self.append_log(&format!(
                     "Could not remove old file {}: {e}",
@@ -234,6 +250,30 @@ impl PydlApp {
             }
             self.done_file_index.force_refresh();
             self.refresh_done_file_lookup();
+        }
+        let archive = self.settings.yt_download_archive.trim();
+        if !archive.is_empty() {
+            let mut ids = Vec::new();
+            if !item.video_id.trim().is_empty() {
+                ids.push(item.video_id.trim().to_owned());
+            }
+            for url in [item.webpage_url.as_str(), item.source_line.as_str()] {
+                let key = ytdlp::normalize_url_for_dedupe(url);
+                if let Some(id) = ytdlp::youtube_id_from_dedupe_key(&key) {
+                    if !ids.iter().any(|x| x == &id) {
+                        ids.push(id);
+                    }
+                }
+            }
+            match remove_video_ids_from_download_archive(archive, &ids) {
+                Ok(true) => {
+                    self.append_log("Removed video from download archive (re-download).");
+                }
+                Ok(false) => {}
+                Err(e) => {
+                    self.append_log(&format!("Could not update download archive: {e}"));
+                }
+            }
         }
         {
             let it = &mut self.items[idx];
@@ -267,7 +307,7 @@ impl PydlApp {
         self.refresh_done_file_lookup();
         self.update_status();
         self.schedule_queue_save();
-        self.spawn_download_workers(vec![item_id]);
+        self.spawn_download_workers(vec![item_id], true);
     }
 
     pub(super) fn retry_download_item_id(&mut self, item_id: u64) {
@@ -333,6 +373,6 @@ impl PydlApp {
                 String::new()
             }
         ));
-        self.spawn_download_workers(ids);
+        self.spawn_download_workers(ids, true);
     }
 }
