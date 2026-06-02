@@ -105,6 +105,8 @@ pub(crate) use crate::service::CancelPostAction;
 pub struct PydlApp {
     pub(crate) shared_core: crate::service::SharedCore,
     pub(crate) core_generation: u64,
+    /// Set when the desktop UI mutates the queue; pushed to [`DownloadCore`] on the next sync.
+    pub(crate) queue_dirty: bool,
     pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
     ui_bus: crate::app::events::UiEventBus,
@@ -291,6 +293,7 @@ impl PydlApp {
         let mut app = Self {
             shared_core: shared_core.clone(),
             core_generation: shared_core.lock().generation,
+            queue_dirty: false,
             web_server,
             runtime,
             ui_bus,
@@ -403,7 +406,9 @@ impl PydlApp {
             ));
         }
         app.refresh_deps();
-        core_sync::push_app_to_core(&app, &app.shared_core);
+        app.queue_dirty = true;
+        let shared = app.shared_core.clone();
+        core_sync::push_app_to_core(&mut app, &shared);
         if app.settings.web_ui_enabled {
             app.restart_web_server();
         }

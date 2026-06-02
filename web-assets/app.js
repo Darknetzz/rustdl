@@ -605,12 +605,24 @@ async function cancelItem(id) {
   await refreshAll();
 }
 
+async function readApiError(res, fallback) {
+  try {
+    const body = await res.json();
+    if (body && typeof body.error === "string" && body.error.trim()) {
+      return body.error.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback;
+}
+
 async function redownloadItem(id) {
   const res = await api(`/api/downloads/redownload/${id}`, { method: "POST" });
   if (!res.ok) {
-    throw new Error(
-      "Re-download could not start (missing URL, invalid output folder, or yt-dlp unavailable)."
-    );
+    const fallback =
+      "Re-download could not start (missing URL, invalid output folder, or yt-dlp unavailable).";
+    throw new Error(await readApiError(res, fallback));
   }
   await refreshAll();
 }
@@ -618,11 +630,11 @@ async function redownloadItem(id) {
 async function removeQueueItem(id) {
   const res = await api(`/api/queue/${id}`, { method: "DELETE" });
   if (!res.ok) {
-    const hint =
+    const fallback =
       res.status === 404
-        ? "Item not found (try Refresh or restart rustdl)."
-        : `Server returned ${res.status}.`;
-    throw new Error(`Could not remove this item from the queue. ${hint}`);
+        ? "Item not found in the queue."
+        : `Could not remove this item (HTTP ${res.status}).`;
+    throw new Error(await readApiError(res, fallback));
   }
   await refreshAll();
 }

@@ -99,6 +99,23 @@ pub enum UrlLineClass {
     Invalid,
 }
 
+/// Best URL to pass to yt-dlp for a queue row (webpage URL preferred, else http(s) source line).
+pub fn item_redownload_url(item: &QueueItem) -> Option<&str> {
+    let web = item.webpage_url.trim();
+    if !web.is_empty() {
+        return Some(web);
+    }
+    let src = item.source_line.trim();
+    if is_queueable_http_url(src) {
+        return Some(src);
+    }
+    None
+}
+
+pub fn item_has_redownload_target(item: &QueueItem) -> bool {
+    item_redownload_url(item).is_some()
+}
+
 /// True when `line` is an absolute http(s) URL with a host (rejects `error:`, `help:`, etc.).
 pub fn is_queueable_http_url(line: &str) -> bool {
     let line = line.trim();

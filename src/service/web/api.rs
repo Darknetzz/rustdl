@@ -71,6 +71,11 @@ struct QueueResponse {
     items: Vec<QueueItemView>,
 }
 
+#[derive(Serialize)]
+struct ApiErrorBody {
+    error: String,
+}
+
 #[derive(Deserialize)]
 struct AddUrlsBody {
     urls: Vec<String>,
@@ -292,13 +297,18 @@ async fn queue_add(
 async fn queue_remove(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
-) -> StatusCode {
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
     if c.remove_item_from_queue(id) {
         c.bump_generation();
-        StatusCode::NO_CONTENT
+        Ok(StatusCode::NO_CONTENT)
     } else {
-        StatusCode::NOT_FOUND
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "Item not found in the queue.".to_owned(),
+            }),
+        ))
     }
 }
 
@@ -371,12 +381,16 @@ async fn downloads_cancel(
 async fn downloads_redownload(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
-) -> StatusCode {
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
-    if c.redownload_item_id(id) {
-        StatusCode::OK
-    } else {
-        StatusCode::BAD_REQUEST
+    match c.redownload_item_id(id) {
+        Ok(()) => Ok(StatusCode::OK),
+        Err(reason) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: reason.message().to_owned(),
+            }),
+        )),
     }
 }
 

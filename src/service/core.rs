@@ -38,6 +38,23 @@ pub enum CancelPostAction {
     Remove,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RedownloadError {
+    InvalidOutputDir,
+    ItemNotFound,
+    NoUrl,
+}
+
+impl RedownloadError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::InvalidOutputDir => "Choose a valid output folder in Settings.",
+            Self::ItemNotFound => "Item not found in the queue.",
+            Self::NoUrl => "No video URL on this row (cannot re-download).",
+        }
+    }
+}
+
 /// Bulk queue cleanup modes (web UI and API).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueueClearFilter {
@@ -438,13 +455,24 @@ impl DownloadCore {
     }
 
     pub fn item_has_redownload_target(&self, item: &QueueItem) -> bool {
-        let u = item.webpage_url.trim();
-        let s = item.source_line.trim();
-        !u.is_empty() || (!s.is_empty() && app_state::is_queueable_http_url(s))
+        app_state::item_has_redownload_target(item)
+    }
+
+    fn effective_output_dir(&self) -> String {
+        let trimmed = self.output_dir.trim();
+        if trimmed.is_empty() {
+            self.settings.output_dir.trim().to_owned()
+        } else {
+            trimmed.to_owned()
+        }
+    }
+
+    fn output_dir_is_valid(&self) -> bool {
+        Path::new(&self.effective_output_dir()).is_dir()
     }
 
     fn prepare_item_redownload_reset(&mut self, item_id: u64) {
-        let Some(idx) = self.item_idx(item_id) else {
+        let Some(idx) = self.resolve_item_idx(item_id) else {
             return;
         };
         let item = self.items[idx].clone();
@@ -503,20 +531,23 @@ impl DownloadCore {
         self.set_item_status_at(idx, ItemStatus::Idle);
     }
 
-    /// Re-fetch the same URL, replacing any matched file. Returns false when the row or output folder is invalid.
-    pub fn redownload_item_id(&mut self, item_id: u64) -> bool {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return false;
+    /// Re-fetch the same URL, replacing any matched file.
+    pub fn redownload_item_id(&mut self, item_id: u64) -> Result<(), RedownloadError> {
+        if self.output_dir.trim().is_empty() {
+            self.output_dir = self.settings.output_dir.clone();
         }
-        let Some(idx) = self.item_idx(item_id) else {
-            return false;
+        if !self.output_dir_is_valid() {
+            self.append_log("Choose a valid output folder.");
+            return Err(RedownloadError::InvalidOutputDir);
+        }
+        let Some(idx) = self.resolve_item_idx(item_id) else {
+            return Err(RedownloadError::ItemNotFound);
         };
         if !self.item_has_redownload_target(&self.items[idx]) {
             self.append_log(&format!(
                 "[item {item_id}] Cannot re-download: no video URL on this row."
             ));
-            return false;
+            return Err(RedownloadError::NoUrl);
         }
         self.persist_settings();
         self.refresh_done_file_lookup();
@@ -526,7 +557,7 @@ impl DownloadCore {
         self.schedule_queue_save();
         self.bump_generation();
         self.spawn_download_workers(vec![item_id], true);
-        true
+        Ok(())
     }
 
     pub fn spawn_download_workers(&mut self, pending_ids: Vec<u64>, force_redownload: bool) {

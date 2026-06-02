@@ -3,28 +3,7 @@ use std::collections::HashSet;
 use crate::service::core::{DownloadCore, SharedCore};
 use super::PydlApp;
 
-pub fn sync_app_to_core(app: &PydlApp, core: &mut DownloadCore) {
-    core.output_dir = app.output_dir.clone();
-    core.worker_count = app.worker_count;
-    core.status_resolving = app.status_resolving;
-    core.status_ready = app.status_ready;
-    core.status_queued = app.status_queued;
-    core.status_active = app.status_active;
-    core.status_done = app.status_done;
-    core.status_failed = app.status_failed;
-    core.status_counts = app.status_counts;
-    core.cached_dedupe_keys = app.cached_dedupe_keys.clone();
-    core.cached_transfer_totals = app.cached_transfer_totals.clone();
-    core.transfer_totals_dirty = app.transfer_totals_dirty;
-    core.has_yt_dlp = app.has_yt_dlp;
-    core.has_ffmpeg = app.has_ffmpeg;
-    core.has_ffprobe = app.has_ffprobe;
-    core.yt_dlp_version = app.yt_dlp_version.clone();
-    core.ffmpeg_version = app.ffmpeg_version.clone();
-    core.ffprobe_version = app.ffprobe_version.clone();
-    core.log_lines = app.log_lines.clone();
-    core.settings = app.settings.clone();
-    core.profile_store = app.profile_store.clone();
+fn sync_queue_fields(app: &PydlApp, core: &mut DownloadCore) {
     core.items = app.items.clone();
     core.rebuild_item_index();
     core.pending_resolve_ids = app.pending_resolve_ids.clone();
@@ -40,10 +19,41 @@ pub fn sync_app_to_core(app: &PydlApp, core: &mut DownloadCore) {
         .iter()
         .map(|(k, v)| (*k, *v))
         .collect();
-    core.downloads_paused = app.downloads_paused;
-    core.session_complete_notified = app.session_complete_notified;
+    core.status_resolving = app.status_resolving;
+    core.status_ready = app.status_ready;
+    core.status_queued = app.status_queued;
+    core.status_active = app.status_active;
+    core.status_done = app.status_done;
+    core.status_failed = app.status_failed;
+    core.status_counts = app.status_counts;
+    core.cached_dedupe_keys = app.cached_dedupe_keys.clone();
+    core.cached_transfer_totals = app.cached_transfer_totals.clone();
+    core.transfer_totals_dirty = app.transfer_totals_dirty;
     core.download_log_throttle = app.download_log_throttle.clone();
     core.bump_generation();
+}
+
+/// Copies app state into the shared core. Queue rows are only pushed when the desktop UI
+/// marked them dirty (or the core queue is still empty) so web API changes are not overwritten.
+pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
+    core.output_dir = app.output_dir.clone();
+    core.worker_count = app.worker_count;
+    core.has_yt_dlp = app.has_yt_dlp;
+    core.has_ffmpeg = app.has_ffmpeg;
+    core.has_ffprobe = app.has_ffprobe;
+    core.yt_dlp_version = app.yt_dlp_version.clone();
+    core.ffmpeg_version = app.ffmpeg_version.clone();
+    core.ffprobe_version = app.ffprobe_version.clone();
+    core.log_lines = app.log_lines.clone();
+    core.settings = app.settings.clone();
+    core.profile_store = app.profile_store.clone();
+    core.downloads_paused = app.downloads_paused;
+    core.session_complete_notified = app.session_complete_notified;
+
+    if app.queue_dirty || core.items.is_empty() {
+        sync_queue_fields(app, core);
+        app.queue_dirty = false;
+    }
 }
 
 pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
@@ -87,6 +97,7 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
     app.core_generation = core.generation;
+    app.queue_dirty = false;
     let new_thumbnails: Vec<(u64, String)> = if app.settings.show_thumbnails {
         app.items
             .iter()
@@ -105,7 +116,7 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     }
 }
 
-pub fn push_app_to_core(app: &PydlApp, shared: &SharedCore) {
+pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {
     let mut core = shared.lock();
     sync_app_to_core(app, &mut core);
 }

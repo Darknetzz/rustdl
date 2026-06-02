@@ -1001,7 +1001,8 @@ impl PydlApp {
                 self.settings.av1_min_shrink_percent.clamp(0.0, 95.0);
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             self.persist_settings();
-            super::core_sync::push_app_to_core(self, &self.shared_core);
+            let shared = self.shared_core.clone();
+            super::core_sync::push_app_to_core(self, &shared);
             self.restart_web_server();
             self.flush_log_to_disk();
             if executable_paths_changed {

@@ -155,6 +155,7 @@ impl PydlApp {
         self.download_cancel_flags.remove(&item_id);
         self.cancel_post_actions.remove(&item_id);
         self.invalidate_queue_caches();
+        self.mark_queue_dirty();
         true
     }
 
@@ -202,6 +203,7 @@ impl PydlApp {
         self.update_status();
         self.refresh_input_line_info();
         self.schedule_queue_save();
+        self.mark_queue_dirty();
     }
 
     pub(super) fn cancel_all_active(&mut self, post_action: CancelPostAction) {
@@ -222,9 +224,7 @@ impl PydlApp {
     }
 
     pub(super) fn item_has_redownload_target(&self, item: &QueueItem) -> bool {
-        let u = item.webpage_url.trim();
-        let s = item.source_line.trim();
-        !u.is_empty() || (!s.is_empty() && crate::app_state::is_queueable_http_url(s))
+        crate::app_state::item_has_redownload_target(item)
     }
 
     fn prepare_item_redownload_reset(&mut self, item_id: u64) {
@@ -283,6 +283,7 @@ impl PydlApp {
             it.detail = "Re-downloading…".to_owned();
         }
         self.set_item_status_at(idx, ItemStatus::Idle);
+        self.mark_queue_dirty();
     }
 
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
@@ -306,6 +307,7 @@ impl PydlApp {
         self.update_status();
         self.schedule_queue_save();
         self.spawn_download_workers(vec![item_id], true);
+        self.mark_queue_dirty();
     }
 
     pub(super) fn retry_download_item_id(&mut self, item_id: u64) {
@@ -372,5 +374,6 @@ impl PydlApp {
             }
         ));
         self.spawn_download_workers(ids, true);
+        self.mark_queue_dirty();
     }
 }

@@ -12,6 +12,10 @@ pub(super) const THUMBNAIL_QUEUE_SOFT_CAP: usize = 50;
 pub(super) const THUMBNAIL_DECODE_MAX_WIDTH: u32 = 320;
 
 impl PydlApp {
+    pub(super) fn mark_queue_dirty(&mut self) {
+        self.queue_dirty = true;
+    }
+
     pub(super) fn rebuild_item_index(&mut self) {
         self.item_index_by_id = app_state::rebuild_item_index_map(&self.items);
     }

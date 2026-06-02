@@ -618,6 +618,7 @@ impl eframe::App for PydlApp {
                         self.update_status();
                         self.refresh_input_line_info();
                         self.schedule_queue_save();
+                        self.mark_queue_dirty();
                     }
                     if self.status_failed > 0
                         && warning_button(
