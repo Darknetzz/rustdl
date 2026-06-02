@@ -92,6 +92,7 @@ impl QueueItem {
             eta_text: "-".to_owned(),
             detail: "Fetching metadata...".to_owned(),
             sort_order: item_id,
+            local_path: None,
         }
     }
 
@@ -128,6 +129,7 @@ impl QueueItem {
             eta_text: "-".to_owned(),
             detail: String::new(),
             sort_order: item_id,
+            local_path: None,
         }
     }
 }
