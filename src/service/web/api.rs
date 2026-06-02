@@ -62,6 +62,7 @@ struct QueueItemView {
     playable: bool,
     media_kind: Option<String>,
     media_filename: Option<String>,
+    can_redownload: bool,
 }
 
 #[derive(Serialize)]
@@ -123,6 +124,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/downloads/pause", post(downloads_pause))
         .route("/api/downloads/resume", post(downloads_resume))
         .route("/api/downloads/cancel/{id}", post(downloads_cancel))
+        .route("/api/downloads/redownload/{id}", post(downloads_redownload))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route("/api/profiles", get(profiles_list))
@@ -221,11 +223,13 @@ async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {
                 None
             };
             let media_filename = media::item_media_filename(&c, &item);
+            let can_redownload = c.item_has_redownload_target(&item);
             QueueItemView {
                 item,
                 playable,
                 media_kind,
                 media_filename,
+                can_redownload,
             }
         })
         .collect();
@@ -306,6 +310,18 @@ async fn downloads_cancel(
     let mut c = st.core.lock();
     c.request_cancel_item(id, CancelPostAction::Ready);
     StatusCode::OK
+}
+
+async fn downloads_redownload(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+) -> StatusCode {
+    let mut c = st.core.lock();
+    if c.redownload_item_id(id) {
+        StatusCode::OK
+    } else {
+        StatusCode::BAD_REQUEST
+    }
 }
 
 async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {

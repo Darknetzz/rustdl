@@ -9,6 +9,8 @@ const statusFlags = {
   add_in_progress: false,
 };
 
+let cachedHasYtDlp = false;
+
 /** @type {Map<number, string>} blob URLs to revoke when an item leaves the queue */
 const thumbObjectUrls = new Map();
 
@@ -83,6 +85,7 @@ async function refreshStatus() {
     `Paused: ${data.downloads_paused} · Resolving ${s.resolving} · Ready ${s.ready} · ` +
     `Queued ${s.queued} · Active ${s.active} · Done ${s.done} · Failed ${s.failed}`;
   renderTools(data.tools);
+  cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
 }
 
 function collectUrlsFromInput() {
@@ -345,6 +348,26 @@ function canCancel(item) {
   return slug === "queued" || slug === "downloading";
 }
 
+function canRedownload(item) {
+  if (!item.can_redownload || !cachedHasYtDlp) return false;
+  const slug = statusSlug(item.status);
+  return slug === "done" || slug === "failed";
+}
+
+function appendRedownloadButton(actions, item) {
+  if (!canRedownload(item)) return;
+  const slug = statusSlug(item.status);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  btn.textContent = slug === "failed" ? "Retry download" : "Re-download";
+  btn.title =
+    "Deletes the matched file in the output folder (if found), then downloads this URL again with current quality settings.";
+  btn.onclick = () =>
+    redownloadItem(item.item_id).catch((e) => alert(e.message || String(e)));
+  actions.appendChild(btn);
+}
+
 function renderQueueCard(item, settings) {
   const s = settings || {};
   const showThumbnails = s.show_thumbnails !== false;
@@ -457,6 +480,7 @@ function renderQueueCard(item, settings) {
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
   }
+  appendRedownloadButton(actions, item);
   card.appendChild(actions);
 
   return card;
@@ -512,6 +536,7 @@ function renderQueueCardListRow(item) {
     cancel.onclick = () => cancelItem(item.item_id);
     actions.appendChild(cancel);
   }
+  appendRedownloadButton(actions, item);
   if (actions.childElementCount > 0) {
     card.appendChild(actions);
   }
@@ -547,6 +572,16 @@ async function refreshLogs() {
 
 async function cancelItem(id) {
   await api(`/api/downloads/cancel/${id}`, { method: "POST" });
+  await refreshAll();
+}
+
+async function redownloadItem(id) {
+  const res = await api(`/api/downloads/redownload/${id}`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(
+      "Re-download could not start (missing URL, invalid output folder, or yt-dlp unavailable)."
+    );
+  }
   await refreshAll();
 }
 
