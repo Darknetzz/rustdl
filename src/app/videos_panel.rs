@@ -1,12 +1,13 @@
-//! Video queue: docked under main controls or in a floating window.
+//! Video queue: docked under main controls or in a floating window (Downloader and AV1).
 
 use eframe::egui::{self, RichText};
 
 use crate::app_ui::{secondary_button, status_color};
-use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::models::ItemStatus;
+use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 
+use super::av1_panel::av1_item_is_skipped;
 use super::PydlApp;
 
 impl PydlApp {
@@ -26,8 +27,24 @@ impl PydlApp {
         }
     }
 
+    fn videos_window_title(&self) -> &'static str {
+        if self.av1_mode {
+            "AV1 queue"
+        } else {
+            "Videos"
+        }
+    }
+
     /// Scrollable card grid (shared by docked panel and floating window).
-    pub(super) fn draw_video_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+        if self.av1_mode {
+            self.draw_av1_queue_cards(ui, max_height);
+        } else {
+            self.draw_downloader_queue_cards(ui, max_height);
+        }
+    }
+
+    fn draw_downloader_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
         egui::ScrollArea::vertical()
             .id_salt("rustdl_videos_scroll")
             .auto_shrink([false, false])
@@ -65,7 +82,12 @@ impl PydlApp {
 
     fn draw_videos_header_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Videos").strong());
+            let heading = if self.av1_mode {
+                "AV1 queue"
+            } else {
+                "Videos"
+            };
+            ui.label(RichText::new(heading).strong());
             let tail_w = ui.available_width();
             ui.allocate_ui_with_layout(
                 egui::vec2(tail_w.max(0.0), 0.0),
@@ -88,14 +110,16 @@ impl PydlApp {
                         }
                         self.persist_settings();
                     }
-                    let log_dock_label = if self.settings.logs_docked {
-                        format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                    } else {
-                        format!("{} Dock log", ui_icons::DOCK_LOG)
-                    };
-                    if secondary_button(ui, &log_dock_label, true).clicked() {
-                        self.settings.logs_docked = !self.settings.logs_docked;
-                        self.persist_settings();
+                    if self.settings.videos_docked {
+                        let log_dock_label = if self.settings.logs_docked {
+                            format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                        } else {
+                            format!("{} Dock log", ui_icons::DOCK_LOG)
+                        };
+                        if secondary_button(ui, &log_dock_label, true).clicked() {
+                            self.settings.logs_docked = !self.settings.logs_docked;
+                            self.persist_settings();
+                        }
                     }
                 },
             );
@@ -105,10 +129,12 @@ impl PydlApp {
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            ui.label(
-                RichText::new("Video queue is in a separate window.")
-                    .color(TEXT_MUTED),
-            );
+            let strip_label = if self.av1_mode {
+                "AV1 queue is in a separate window."
+            } else {
+                "Video queue is in a separate window."
+            };
+            ui.label(RichText::new(strip_label).color(TEXT_MUTED));
             if !self.settings.videos_open
                 && secondary_button(
                     ui,
@@ -120,35 +146,124 @@ impl PydlApp {
                 self.settings.videos_open = true;
                 self.persist_settings();
             }
-            if self.status_done > 0 {
-                let label = format!("{} done", self.status_done);
-                if ui
-                    .add(
-                        egui::Label::new(
-                            RichText::new(label).color(status_color(ItemStatus::Done)),
-                        )
-                        .sense(egui::Sense::click()),
-                    )
-                    .clicked()
-                {
-                    self.focus_queue_group("Done");
-                }
-            }
-            if self.status_ready > 0 {
-                let label = format!("{} ready", self.status_ready);
-                if ui
-                    .add(
-                        egui::Label::new(
-                            RichText::new(label).color(status_color(ItemStatus::Idle)),
-                        )
-                        .sense(egui::Sense::click()),
-                    )
-                    .clicked()
-                {
-                    self.focus_queue_group("Ready");
-                }
+            if self.av1_mode {
+                self.draw_av1_undocked_strip_counts(ui);
+            } else {
+                self.draw_downloader_undocked_strip_counts(ui);
             }
         });
+    }
+
+    fn draw_downloader_undocked_strip_counts(&mut self, ui: &mut egui::Ui) {
+        if self.status_done > 0 {
+            let label = format!("{} done", self.status_done);
+            if ui
+                .add(
+                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Done)))
+                        .sense(egui::Sense::click()),
+                )
+                .clicked()
+            {
+                self.focus_queue_group("Done");
+            }
+        }
+        if self.status_ready > 0 {
+            let label = format!("{} ready", self.status_ready);
+            if ui
+                .add(
+                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Idle)))
+                        .sense(egui::Sense::click()),
+                )
+                .clicked()
+            {
+                self.focus_queue_group("Ready");
+            }
+        }
+    }
+
+    fn draw_av1_undocked_strip_counts(&mut self, ui: &mut egui::Ui) {
+        let ready = self
+            .av1_items
+            .iter()
+            .filter(|i| i.status == ItemStatus::Idle)
+            .count();
+        let done = self
+            .av1_items
+            .iter()
+            .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
+            .count();
+        if done > 0 {
+            let label = format!("{done} done");
+            if ui
+                .add(
+                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Done)))
+                        .sense(egui::Sense::click()),
+                )
+                .clicked()
+            {
+                self.focus_queue_group("Done");
+            }
+        }
+        if ready > 0 {
+            let label = format!("{ready} ready");
+            if ui
+                .add(
+                    egui::Label::new(RichText::new(label).color(status_color(ItemStatus::Idle)))
+                        .sense(egui::Sense::click()),
+                )
+                .clicked()
+            {
+                self.focus_queue_group("Ready");
+            }
+        }
+    }
+
+    /// Activity log docked in the main panel when the video queue is undocked.
+    pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui) {
+        let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
+        egui::Frame::dark_canvas(ui.style())
+            .fill(BG_CANVAS)
+            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .inner_margin(egui::Margin::same(10.0))
+            .rounding(egui::Rounding::same(8.0))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Activity log").small().strong());
+                    let tail_w = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(tail_w.max(0.0), 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            if secondary_button(
+                                ui,
+                                &format!("{} Undock log", ui_icons::UNDOCK_LOG),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                self.settings.logs_docked = false;
+                                self.persist_settings();
+                            }
+                        },
+                    );
+                });
+                if ui
+                    .add(egui::Slider::new(
+                        &mut self.settings.log_dock_height,
+                        80.0..=480.0,
+                    ))
+                    .changed()
+                {
+                    self.persist_settings();
+                }
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_log_docked_only")
+                    .max_height(log_h)
+                    .show(ui, |ui| {
+                        self.draw_activity_log_panel(ui);
+                    });
+            });
     }
 
     /// Docked video frame (cards + optional docked log below).
@@ -157,9 +272,21 @@ impl PydlApp {
         ui: &mut egui::Ui,
         video_scroll_h: f32,
     ) {
+        let theme = self.settings.theme.clone();
+        let fill = if self.av1_mode {
+            canvas_bg(&theme)
+        } else {
+            BG_CANVAS
+        };
+        let border = if self.av1_mode {
+            panel_border(&theme)
+        } else {
+            BORDER_PANEL
+        };
+
         egui::Frame::dark_canvas(ui.style())
-            .fill(BG_CANVAS)
-            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .fill(fill)
+            .stroke(egui::Stroke::new(1.0, border))
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
@@ -176,14 +303,19 @@ impl PydlApp {
                 } else {
                     video_scroll_h
                 };
-                self.draw_video_queue_cards(ui, cards_h);
+                self.draw_queue_cards(ui, cards_h);
                 if dock_log {
                     ui.add_space(6.0);
                     ui.label(RichText::new("Activity log").small().strong());
-                    ui.add(
-                        egui::Slider::new(&mut self.settings.log_dock_height, 80.0..=480.0)
-                            .text("Log height"),
-                    );
+                    if ui
+                        .add(egui::Slider::new(
+                            &mut self.settings.log_dock_height,
+                            80.0..=480.0,
+                        ))
+                        .changed()
+                    {
+                        self.persist_settings();
+                    }
                     self.draw_activity_log_panel(ui);
                 }
             });
@@ -198,7 +330,8 @@ impl PydlApp {
             self.settings.video_float_width,
             self.settings.video_float_height,
         );
-        let response = egui::Window::new("Videos")
+        let title = self.videos_window_title().to_owned();
+        let response = egui::Window::new(title)
             .open(&mut open)
             .default_size(default_size)
             .min_width(480.0)
@@ -224,7 +357,7 @@ impl PydlApp {
                     });
                 });
                 let h = ui.available_height().max(200.0);
-                self.draw_video_queue_cards(ui, h);
+                self.draw_queue_cards(ui, h);
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();

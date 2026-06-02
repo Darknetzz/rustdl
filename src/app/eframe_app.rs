@@ -710,48 +710,7 @@ impl eframe::App for PydlApp {
                 } else {
                     self.draw_videos_undocked_strip(ui);
                     if self.settings.logs_open && self.settings.logs_docked {
-                        let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
-                        egui::Frame::dark_canvas(ui.style())
-                            .fill(BG_CANVAS)
-                            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
-                            .inner_margin(egui::Margin::same(10.0))
-                            .rounding(egui::Rounding::same(8.0))
-                            .show(ui, |ui| {
-                                ui.set_width(ui.available_width());
-                                ui.horizontal(|ui| {
-                                    ui.label(RichText::new("Activity log").small().strong());
-                                    let tail_w = ui.available_width();
-                                    ui.allocate_ui_with_layout(
-                                        egui::vec2(tail_w.max(0.0), 0.0),
-                                        egui::Layout::right_to_left(egui::Align::Center),
-                                        |ui| {
-                                            if secondary_button(
-                                                ui,
-                                                &format!("{} Undock log", ui_icons::UNDOCK_LOG),
-                                                true,
-                                            )
-                                            .clicked()
-                                            {
-                                                self.settings.logs_docked = false;
-                                                self.persist_settings();
-                                            }
-                                        },
-                                    );
-                                });
-                                ui.add(
-                                    egui::Slider::new(
-                                        &mut self.settings.log_dock_height,
-                                        80.0..=480.0,
-                                    )
-                                    .text("Log height"),
-                                );
-                                egui::ScrollArea::vertical()
-                                    .id_salt("rustdl_log_docked_only")
-                                    .max_height(log_h)
-                                    .show(ui, |ui| {
-                                        self.draw_activity_log_panel(ui);
-                                    });
-                            });
+                        self.draw_docked_log_only_section(ui);
                     }
                 }
         });

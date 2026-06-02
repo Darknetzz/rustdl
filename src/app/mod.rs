@@ -61,7 +61,7 @@ use crate::models::Av1QueueItem;
 use crate::models::{ItemStatus, QueueItem};
 use crate::pkg_version;
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
-use crate::theme::{self, BG_CANVAS, BG_LOG, BORDER_PANEL, TEXT_MUTED};
+use crate::theme::{self, BG_LOG, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{

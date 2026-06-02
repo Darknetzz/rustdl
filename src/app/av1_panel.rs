@@ -12,7 +12,7 @@ use crate::app_ui::{
 use crate::av1_transcode::{self, Av1Config, Av1Input};
 use crate::models::{Av1QueueItem, ItemStatus};
 use crate::theme;
-use crate::theme::{canvas_bg, panel_border, text_muted};
+use crate::theme::{text_muted};
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -62,7 +62,7 @@ fn draw_av1_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) 
     }
 }
 
-fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
+pub(crate) fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
 }
 
@@ -567,69 +567,52 @@ impl PydlApp {
         });
         const RESERVE_BOTTOM_PX: f32 = 20.0;
         const MIN_QUEUE_VIEWPORT: f32 = 220.0;
-        let dock_log = self.settings.logs_docked;
-        let log_h = if dock_log {
-            self.settings.log_dock_height.clamp(80.0, 480.0) + 36.0
-        } else {
-            0.0
-        };
-        let queue_scroll_h =
-            (ui.available_height() - RESERVE_BOTTOM_PX - log_h).max(MIN_QUEUE_VIEWPORT);
+        let bottom_h =
+            (ui.available_height() - RESERVE_BOTTOM_PX).max(MIN_QUEUE_VIEWPORT);
 
-        egui::Frame::dark_canvas(ui.style())
-            .fill(canvas_bg(&self.settings.theme))
-            .stroke(egui::Stroke::new(1.0, panel_border(&self.settings.theme)))
-            .inner_margin(egui::Margin::same(10.0))
-            .rounding(egui::Rounding::same(8.0))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.label(RichText::new("Videos").strong());
-                if !self.av1_items.is_empty() {
-                    ui.add_space(4.0);
-                    self.draw_av1_queue_status_row(ui);
-                    self.draw_av1_batch_summary_row(ui);
-                }
-                ui.add_space(6.0);
-                egui::ScrollArea::vertical()
-                    .id_salt("av1_queue_scroll")
-                    .auto_shrink([false, false])
-                    .max_height(queue_scroll_h)
-                    .animated(true)
-                    .drag_to_scroll(true)
-                    .show(ui, |ui| {
-                        if self.av1_items.is_empty() {
-                            ui.vertical_centered(|ui| {
-                                ui.add_space(32.0);
-                                ui.label(
-                                    RichText::new("Nothing here yet")
-                                        .color(text_muted(&self.settings.theme)),
-                                );
-                                ui.label(
-                                    RichText::new(
-                                        "Browse, drop, or scan paths to add videos to the queue.",
-                                    )
-                                    .small(),
-                                );
-                            });
-                            return;
-                        }
-                        self.draw_av1_grouped_cards(ui);
-                    });
-            });
-        if dock_log {
-            ui.add_space(6.0);
-            ui.label(RichText::new("Activity log").small().strong());
-            if ui
-                .add(egui::Slider::new(
-                    &mut self.settings.log_dock_height,
-                    80.0..=480.0,
-                ))
-                .changed()
-            {
-                self.persist_settings();
+        if self.settings.videos_docked {
+            self.draw_docked_videos_section(ui, bottom_h);
+        } else {
+            self.draw_videos_undocked_strip(ui);
+            if self.settings.logs_open && self.settings.logs_docked {
+                self.draw_docked_log_only_section(ui);
             }
-            self.draw_activity_log_panel(ui);
         }
+    }
+
+    /// AV1 queue scroll area (docked panel or floating window).
+    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+        if !self.av1_items.is_empty() {
+            ui.add_space(4.0);
+            self.draw_av1_queue_status_row(ui);
+            self.draw_av1_batch_summary_row(ui);
+            ui.add_space(6.0);
+        }
+        egui::ScrollArea::vertical()
+            .id_salt("av1_queue_scroll")
+            .auto_shrink([false, false])
+            .max_height(max_height.max(120.0))
+            .animated(true)
+            .drag_to_scroll(true)
+            .show(ui, |ui| {
+                if self.av1_items.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(32.0);
+                        ui.label(
+                            RichText::new("Nothing here yet")
+                                .color(text_muted(&self.settings.theme)),
+                        );
+                        ui.label(
+                            RichText::new(
+                                "Browse, drop, or scan paths to add videos to the queue.",
+                            )
+                            .small(),
+                        );
+                    });
+                    return;
+                }
+                self.draw_av1_grouped_cards(ui);
+            });
     }
 
     fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {

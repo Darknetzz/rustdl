@@ -125,7 +125,7 @@ impl PydlApp {
                         changed |= ui
                             .checkbox(
                                 &mut self.settings.videos_docked,
-                                "Dock video queue in main window",
+                                "Dock video / AV1 queue in main window",
                             )
                             .changed();
                         changed |= ui
