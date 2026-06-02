@@ -498,8 +498,21 @@ pub fn parse_ffmpeg_speed(value: &str) -> Option<f64> {
     }
 }
 
-/// PNG frame via ffmpeg (1s into the file). Used by GUI and web thumbnail fallback.
+/// PNG frame via ffmpeg. Used by GUI and web thumbnail fallback.
 pub fn extract_thumbnail_png_bytes(file_path: &Path, ffmpeg_path: &str) -> Option<Vec<u8>> {
+    for seek in ["00:00:00.000", "00:00:01.000", "00:00:03.000"] {
+        if let Some(bytes) = extract_thumbnail_png_bytes_at(file_path, ffmpeg_path, seek) {
+            return Some(bytes);
+        }
+    }
+    None
+}
+
+fn extract_thumbnail_png_bytes_at(
+    file_path: &Path,
+    ffmpeg_path: &str,
+    seek: &str,
+) -> Option<Vec<u8>> {
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     let mut cmd = Command::new(ffmpeg);
     no_console_window(&mut cmd);
@@ -509,7 +522,7 @@ pub fn extract_thumbnail_png_bytes(file_path: &Path, ffmpeg_path: &str) -> Optio
             "-loglevel",
             "error",
             "-ss",
-            "00:00:01.000",
+            seek,
             "-i",
             &file_path.to_string_lossy(),
             "-frames:v",

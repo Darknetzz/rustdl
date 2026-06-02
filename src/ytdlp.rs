@@ -197,7 +197,7 @@ pub fn youtube_id_from_dedupe_key(key: &str) -> Option<String> {
     }
 }
 
-fn is_plausible_youtube_video_id(id: &str) -> bool {
+pub fn is_plausible_youtube_video_id(id: &str) -> bool {
     let id = id.trim();
     id.len() == 11
         && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')

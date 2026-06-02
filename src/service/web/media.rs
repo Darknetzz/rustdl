@@ -10,6 +10,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_util::io::ReaderStream;
 
+use crate::app::done_file_index::DoneFileIndex;
 use crate::models::{ItemStatus, QueueItem};
 use crate::service::core::DownloadCore;
 
@@ -69,28 +70,39 @@ pub fn item_media_filename(core: &DownloadCore, item: &QueueItem) -> Option<Stri
 }
 
 pub fn resolve_item_media_path(core: &DownloadCore, item: &QueueItem) -> Result<PathBuf, StatusCode> {
-    let id = item.video_id.trim();
-    if id.is_empty() {
-        return Err(StatusCode::NOT_FOUND);
-    }
     let (path, _) = core
         .done_file_index
-        .find(id)
+        .find_path_for_queue_item(item)
         .ok_or(StatusCode::NOT_FOUND)?;
     ensure_under_output_dir(&core.output_dir, &path)
 }
 
+pub fn resolve_item_media_path_from_index(
+    output_dir: &str,
+    index: &DoneFileIndex,
+    item: &QueueItem,
+) -> Result<PathBuf, StatusCode> {
+    let (path, _) = index
+        .find_path_for_queue_item(item)
+        .ok_or(StatusCode::NOT_FOUND)?;
+    ensure_under_output_dir(output_dir, &path)
+}
+
 fn ensure_under_output_dir(output_dir: &str, file: &Path) -> Result<PathBuf, StatusCode> {
-    let output = Path::new(output_dir);
-    let output_canon = output
-        .canonicalize()
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-    let file_canon = file.canonicalize().map_err(|_| StatusCode::NOT_FOUND)?;
-    if file_canon.starts_with(&output_canon) {
-        Ok(file_canon)
-    } else {
-        Err(StatusCode::NOT_FOUND)
+    if !file.is_file() {
+        return Err(StatusCode::NOT_FOUND);
     }
+    let output = Path::new(output_dir);
+    if let (Ok(out_canon), Ok(file_canon)) = (output.canonicalize(), file.canonicalize()) {
+        if file_canon.starts_with(&out_canon) {
+            return Ok(file_canon);
+        }
+    }
+    // Index paths come from read_dir under output_dir; trust them if canonicalize fails (e.g. SMB).
+    if file.starts_with(output) {
+        return Ok(file.to_path_buf());
+    }
+    Err(StatusCode::NOT_FOUND)
 }
 
 pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Response, StatusCode> {

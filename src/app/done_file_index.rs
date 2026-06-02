@@ -3,6 +3,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::models::QueueItem;
+use crate::ytdlp;
+
 /// Max directory entries processed per scan so huge download folders stay responsive.
 pub(crate) const DONE_LOOKUP_MAX_ENTRIES: usize = 50_000;
 
@@ -76,7 +79,7 @@ impl DoneFileIndex {
             let mtime = fs::metadata(&p)
                 .and_then(|m| m.modified())
                 .unwrap_or(SystemTime::UNIX_EPOCH);
-            for id in bracket_ids_in_filename(fname) {
+            for id in filename_index_ids(fname) {
                 self.lookup.insert(id, (p.clone(), mtime));
             }
         }
@@ -88,6 +91,35 @@ impl DoneFileIndex {
             return None;
         }
         self.lookup.get(id).cloned()
+    }
+
+    /// Match a queue row to an on-disk download using id fields, URLs, title hints, etc.
+    pub(crate) fn find_path_for_queue_item(
+        &self,
+        item: &QueueItem,
+    ) -> Option<(PathBuf, SystemTime)> {
+        let mut try_id = |id: &str| -> Option<(PathBuf, SystemTime)> {
+            let id = id.trim();
+            if id.is_empty() {
+                None
+            } else {
+                self.find(id)
+            }
+        };
+        if let Some(hit) = try_id(&item.video_id) {
+            return Some(hit);
+        }
+        if let Some(vid) = ytdlp::youtube_video_id_from_item(item) {
+            if let Some(hit) = try_id(&vid) {
+                return Some(hit);
+            }
+        }
+        for id in title_bracket_ids(&item.title) {
+            if let Some(hit) = try_id(&id) {
+                return Some(hit);
+            }
+        }
+        find_unique_by_title_hint(self, &item.title)
     }
 }
 
@@ -104,7 +136,7 @@ pub(crate) fn bracket_ids_in_filename(file_name: &str) -> Vec<String> {
         if let Some(j) = rest.find(']') {
             let inner = rest[..j].trim();
             if !inner.is_empty() {
-                out.push(inner.to_owned());
+                push_unique(&mut out, inner);
             }
             rest = &rest[j + 1..];
         } else {
@@ -112,6 +144,71 @@ pub(crate) fn bracket_ids_in_filename(file_name: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Ids extracted from a filename for the done-file lookup table.
+pub(crate) fn filename_index_ids(file_name: &str) -> Vec<String> {
+    let stem = file_name
+        .rsplit_once('.')
+        .map(|(s, _)| s)
+        .unwrap_or(file_name);
+    let mut out = bracket_ids_in_filename(file_name);
+    if ytdlp::is_plausible_youtube_video_id(stem) {
+        push_unique(&mut out, stem);
+    }
+    if let Some(last) = stem.rsplit(" - ").next() {
+        let last = last.trim();
+        if ytdlp::is_plausible_youtube_video_id(last) {
+            push_unique(&mut out, last);
+        }
+    }
+    out
+}
+
+fn title_bracket_ids(title: &str) -> Vec<String> {
+    bracket_ids_in_filename(title)
+}
+
+fn push_unique(out: &mut Vec<String>, id: &str) {
+    let id = id.trim();
+    if id.is_empty() || out.iter().any(|x| x == id) {
+        return;
+    }
+    out.push(id.to_owned());
+}
+
+fn title_hint_fragment(title: &str) -> String {
+    let before_bracket = title.split('[').next().unwrap_or(title).trim();
+    let mut s: String = before_bracket
+        .chars()
+        .take(48)
+        .filter(|c| !matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|'))
+        .collect();
+    s = s.trim().to_ascii_lowercase();
+    s
+}
+
+fn find_unique_by_title_hint(
+    index: &DoneFileIndex,
+    title: &str,
+) -> Option<(PathBuf, SystemTime)> {
+    let hint = title_hint_fragment(title);
+    if hint.len() < 6 {
+        return None;
+    }
+    let mut hit: Option<(PathBuf, SystemTime)> = None;
+    for (path, mtime) in index.lookup.values() {
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if stem.to_ascii_lowercase().contains(&hint) {
+            if hit.is_some() {
+                return None;
+            }
+            hit = Some((path.clone(), *mtime));
+        }
+    }
+    hit
 }
 
 #[cfg(test)]

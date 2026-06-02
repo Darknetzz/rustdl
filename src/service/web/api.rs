@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 
 use crate::app::UiEvent;
 use crate::config::AppSettings;
-use crate::models::QueueItem;
+use crate::models::{ItemStatus, QueueItem};
 use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, SharedCore};
 use crate::service::web::media;
@@ -399,40 +399,59 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let (candidates, client, local_thumb) = {
+    let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
         let item = &c.items[idx];
         let urls = thumbnail_url_candidates(item);
-        let local = media::resolve_item_media_path(&c, item)
-            .ok()
-            .filter(|p| media::media_kind_for_path(p) == Some(media::MediaKind::Video))
-            .map(|p| (p, c.settings.ffmpeg_path.clone(), c.has_ffmpeg));
-        (urls, c.http_client.clone(), local)
+        let output_dir = c.output_dir.clone();
+        let index = &c.done_file_index;
+        let ffmpeg_path = c.settings.ffmpeg_path.clone();
+        let has_ffmpeg = c.has_ffmpeg;
+        let local_video = if matches!(item.status, ItemStatus::Done | ItemStatus::Failed) {
+            media::resolve_item_media_path_from_index(&output_dir, index, item)
+                .ok()
+                .filter(|p| media::media_kind_for_path(p) == Some(media::MediaKind::Video))
+        } else {
+            None
+        };
+        (urls, c.http_client.clone(), local_video, ffmpeg_path, has_ffmpeg)
     };
+    if let Some(path) = local_thumb.as_ref() {
+        if let Some(bytes) = extract_local_video_thumbnail(path, &ffmpeg_path, has_ffmpeg).await {
+            return Ok(thumbnail_response(bytes, "image/png"));
+        }
+    }
     for url in candidates {
         if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
             return Ok(thumbnail_response(bytes, content_type));
         }
     }
-    if let Some((path, ffmpeg_path, has_ffmpeg)) = local_thumb {
-        if has_ffmpeg {
-            let path2 = path.clone();
-            let ffmpeg = ffmpeg_path.clone();
-            if let Some(bytes) =
-                tokio::task::spawn_blocking(move || {
-                    crate::av1_transcode::extract_thumbnail_png_bytes(&path2, &ffmpeg)
-                })
-                .await
-                .ok()
-                .flatten()
-            {
-                return Ok(thumbnail_response(bytes, "image/png"));
-            }
+    if let Some(path) = local_thumb {
+        if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
+            return Ok(thumbnail_response(bytes, "image/png"));
         }
     }
     Err(StatusCode::NOT_FOUND)
+}
+
+async fn extract_local_video_thumbnail(
+    path: &std::path::Path,
+    ffmpeg_path: &str,
+    has_ffmpeg: bool,
+) -> Option<Vec<u8>> {
+    if !has_ffmpeg {
+        return None;
+    }
+    let path = path.to_path_buf();
+    let ffmpeg_path = ffmpeg_path.to_owned();
+    tokio::task::spawn_blocking(move || {
+        crate::av1_transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
+    })
+    .await
+    .ok()
+    .flatten()
 }
 
 fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
