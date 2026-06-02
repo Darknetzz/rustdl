@@ -228,6 +228,9 @@ impl PydlApp {
                             self.settings.web_auth_token =
                                 crate::config::generate_web_auth_token();
                             changed = true;
+                            self.append_log(
+                                "New web API token generated. Copy it (Copy button) and update browsers that use the web UI.",
+                            );
                         }
                         if self.settings.web_ui_enabled {
                             let addr = self.settings.web_bind_address.trim();
@@ -966,8 +969,8 @@ impl PydlApp {
                 self.settings.av1_min_shrink_percent.clamp(0.0, 95.0);
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             self.persist_settings();
-            self.restart_web_server();
             super::core_sync::push_app_to_core(self, &self.shared_core);
+            self.restart_web_server();
             self.flush_log_to_disk();
             if executable_paths_changed {
                 self.refresh_deps();

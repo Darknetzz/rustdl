@@ -51,15 +51,13 @@ pub fn spawn_web_server(
             return None;
         }
     };
-    let token = settings.web_auth_token.trim().to_owned();
-    if token.is_empty() {
+    if settings.web_auth_token.trim().is_empty() {
         eprintln!("rustdl: web UI requires a non-empty auth token (see Settings → Shared)");
         return None;
     }
 
     let state = ApiState {
         core: core.clone(),
-        token,
     };
     let app = api_router(state);
 

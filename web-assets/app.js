@@ -19,7 +19,9 @@ async function api(path, options = {}) {
   if (res.status === 401) {
     document.getElementById("auth-panel").classList.remove("hidden");
     document.getElementById("app-main").classList.add("hidden");
-    throw new Error("unauthorized");
+    throw new Error(
+      "Token rejected. Copy the current API token from rustdl Settings → Shared (LAN web UI), paste it below, then click Save token."
+    );
   }
   return res;
 }
@@ -109,7 +111,8 @@ document.getElementById("btn-save-token").onclick = () => {
   document.getElementById("auth-status").textContent = "Token saved.";
   showApp();
   refreshAll().catch((e) => {
-    document.getElementById("auth-status").textContent = String(e);
+    document.getElementById("auth-status").textContent =
+      e instanceof Error ? e.message : String(e);
   });
   connectSse();
 };

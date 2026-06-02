@@ -24,7 +24,10 @@ use super::auth;
 #[derive(Clone)]
 pub struct ApiState {
     pub core: SharedCore,
-    pub token: String,
+}
+
+fn expected_token(st: &ApiState) -> String {
+    st.core.lock().settings.web_auth_token.clone()
 }
 
 #[derive(Serialize)]
@@ -94,7 +97,8 @@ pub fn api_router(state: ApiState) -> Router {
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
-                auth::require_token(st.token.clone(), req, next).await
+                let expected = expected_token(&st);
+                auth::require_token(expected, req, next).await
             },
         ))
         .with_state(state.clone());
@@ -228,16 +232,12 @@ async fn events_sse(
     Query(q): Query<TokenQuery>,
     headers: axum::http::HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    let ok = q
-        .token
-        .as_deref()
-        .map(|t| t == st.token)
-        .unwrap_or(false)
+    let expected = expected_token(&st);
+    let ok = auth::token_matches(&expected, q.token.as_deref())
         || headers
             .get(auth::AUTH_HEADER)
             .and_then(|v| v.to_str().ok())
-            .map(|t| t == st.token)
-            .unwrap_or(false);
+            .is_some_and(|t| auth::token_matches(&expected, Some(t)));
     if !ok {
         return Err(StatusCode::UNAUTHORIZED);
     }
