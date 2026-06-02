@@ -138,8 +138,13 @@ impl super::core::DownloadCore {
             it.eta_text = eta;
         }
         it.detail = line.chars().take(160).collect();
-        if let Some(path) = ytdlp::parse_output_path_from_download_log_line(line) {
-            it.local_path = Some(path.to_string_lossy().into_owned());
+        if let Some(raw) = ytdlp::parse_output_path_from_download_log_line(line) {
+            let raw = raw.to_string_lossy();
+            if let Some(path) =
+                crate::app::done_file_index::resolve_path_under_output(&self.output_dir, &raw)
+            {
+                it.local_path = Some(path.to_string_lossy().into_owned());
+            }
         }
         self.transfer_totals_dirty = true;
         self.bump_generation();

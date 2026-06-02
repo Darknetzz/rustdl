@@ -578,7 +578,8 @@ impl PydlApp {
             return false;
         }
         match label {
-            "Done" | "Ready" => false,
+            "Done" => false,
+            "Ready" => self.items.len() <= 12,
             "Issues" => true,
             _ => self.queue_search.is_empty(),
         }
@@ -653,16 +654,21 @@ impl PydlApp {
                             }
                         });
                 } else {
-                    let row_width = ui.available_width();
-                    let card_min_w = if row_width < 720.0 { 220.0 } else { 280.0 };
-                    let _ = card_min_w;
+                    let row_width = ui.available_width().max(1.0);
+                    let card_min_h = if self.settings.compact_cards {
+                        240.0
+                    } else {
+                        360.0
+                    };
                     egui::ScrollArea::horizontal()
                         .id_salt(format!("rustdl_cards_{label}"))
                         .auto_shrink([false, false])
                         .max_width(row_width)
+                        .min_scrolled_height(card_min_h)
                         .animated(true)
                         .drag_to_scroll(true)
                         .show(ui, |ui| {
+                            ui.set_min_height(card_min_h);
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                                 for id in &ids {

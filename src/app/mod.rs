@@ -803,7 +803,8 @@ impl PydlApp {
         &self,
         item: &QueueItem,
     ) -> Option<(PathBuf, std::time::SystemTime)> {
-        self.done_file_index.find_path_for_queue_item(item)
+        self.done_file_index
+            .find_path_for_queue_item(&self.output_dir, item)
     }
 
     fn open_file_path(&mut self, file_path: &Path) {

@@ -10,7 +10,7 @@ use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
 use tokio_util::io::ReaderStream;
 
-use crate::app::done_file_index::{path_is_under_output_dir, DoneFileIndex};
+use crate::app::done_file_index::DoneFileIndex;
 use crate::models::{ItemStatus, QueueItem};
 use crate::service::core::DownloadCore;
 
@@ -72,9 +72,9 @@ pub fn item_media_filename(core: &DownloadCore, item: &QueueItem) -> Option<Stri
 pub fn resolve_item_media_path(core: &DownloadCore, item: &QueueItem) -> Result<PathBuf, StatusCode> {
     let (path, _) = core
         .done_file_index
-        .find_path_for_queue_item(item)
+        .find_path_for_queue_item(&core.output_dir, item)
         .ok_or(StatusCode::NOT_FOUND)?;
-    ensure_under_output_dir(&core.output_dir, &path)
+    Ok(path)
 }
 
 pub fn resolve_item_media_path_from_index(
@@ -82,20 +82,10 @@ pub fn resolve_item_media_path_from_index(
     index: &DoneFileIndex,
     item: &QueueItem,
 ) -> Result<PathBuf, StatusCode> {
-    let (path, _) = index
-        .find_path_for_queue_item(item)
-        .ok_or(StatusCode::NOT_FOUND)?;
-    ensure_under_output_dir(output_dir, &path)
-}
-
-fn ensure_under_output_dir(output_dir: &str, file: &Path) -> Result<PathBuf, StatusCode> {
-    if !file.is_file() {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    if !path_is_under_output_dir(output_dir, file) {
-        return Err(StatusCode::NOT_FOUND);
-    }
-    Ok(file.canonicalize().unwrap_or_else(|_| file.to_path_buf()))
+    index
+        .find_path_for_queue_item(output_dir, item)
+        .map(|(path, _)| path)
+        .ok_or(StatusCode::NOT_FOUND)
 }
 
 pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Response, StatusCode> {

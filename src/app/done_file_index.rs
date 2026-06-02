@@ -113,17 +113,22 @@ impl DoneFileIndex {
     /// Match a queue row to an on-disk download using id fields, URLs, title hints, etc.
     pub(crate) fn find_path_for_queue_item(
         &self,
+        output_dir: &str,
         item: &QueueItem,
     ) -> Option<(PathBuf, SystemTime)> {
         if let Some(ref saved) = item.local_path {
-            let path = PathBuf::from(saved);
-            if path.is_file() {
+            if let Some(path) = resolve_path_under_output(output_dir, saved) {
                 let mtime = fs::metadata(&path)
                     .and_then(|m| m.modified())
                     .unwrap_or(SystemTime::UNIX_EPOCH);
                 return Some((path, mtime));
             }
         }
+        self.find_path_in_index(item)
+    }
+
+    /// Index-only lookup (video id, title brackets, title hint).
+    pub(crate) fn find_path_in_index(&self, item: &QueueItem) -> Option<(PathBuf, SystemTime)> {
         let try_id = |id: &str| -> Option<(PathBuf, SystemTime)> {
             let id = id.trim();
             if id.is_empty() {
@@ -223,6 +228,31 @@ fn is_temporary_download_name(path: &Path) -> bool {
         || lower.ends_with(".ytdl")
         || lower.ends_with(".temp")
         || lower.ends_with(".tmp")
+}
+
+/// Resolve a stored or relative path to a file under `output_dir`.
+pub(crate) fn resolve_path_under_output(output_dir: &str, raw: &str) -> Option<PathBuf> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    let root = Path::new(output_dir);
+    let direct = PathBuf::from(raw);
+    let candidates = vec![direct.clone(), root.join(&direct)];
+    #[cfg(windows)]
+    {
+        let norm = raw.replace('/', "\\");
+        if norm != raw {
+            candidates.push(PathBuf::from(&norm));
+            candidates.push(root.join(&norm));
+        }
+    }
+    for path in candidates {
+        if path.is_file() && path_is_under_output_dir(output_dir, &path) {
+            return Some(path.canonicalize().unwrap_or(path));
+        }
+    }
+    None
 }
 
 /// True when `file` is the same as or nested under `output_dir` (handles SMB and Windows casing).
@@ -338,6 +368,23 @@ mod tests {
             title: "My Song [dQw4w9WgXcQ]".to_owned(),
             ..QueueItem::default()
         };
-        assert!(index.find_path_for_queue_item(&item).is_some());
+        assert!(index
+            .find_path_for_queue_item("/tmp", &item)
+            .is_some());
+    }
+
+    #[test]
+    fn resolve_path_under_output_joins_relative_destination() {
+        let dir = std::env::temp_dir().join("rustdl_resolve_path_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("clip.mp4");
+        std::fs::write(&file, b"x").unwrap();
+        let dir_s = dir.to_string_lossy().to_string();
+        assert_eq!(
+            super::resolve_path_under_output(&dir_s, "clip.mp4"),
+            Some(file.canonicalize().unwrap_or(file.clone()))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -296,15 +296,20 @@ impl DownloadCore {
             ) {
                 continue;
             }
-            if self.items[idx]
-                .local_path
-                .as_ref()
-                .is_some_and(|p| Path::new(p).is_file())
-            {
-                continue;
+            let output_dir = self.output_dir.clone();
+            if let Some(ref saved) = self.items[idx].local_path {
+                if crate::app::done_file_index::resolve_path_under_output(&output_dir, saved)
+                    .is_some()
+                {
+                    continue;
+                }
+                self.items[idx].local_path = None;
             }
             let item = self.items[idx].clone();
-            if let Some((path, _)) = self.done_file_index.find_path_for_queue_item(&item) {
+            if let Some((path, _)) = self
+                .done_file_index
+                .find_path_for_queue_item(&output_dir, &item)
+            {
                 self.items[idx].local_path =
                     Some(path.to_string_lossy().into_owned());
             }
@@ -315,8 +320,12 @@ impl DownloadCore {
         let Some(idx) = self.item_idx(item_id) else {
             return;
         };
+        let output_dir = self.output_dir.clone();
         let item = self.items[idx].clone();
-        if let Some((path, _)) = self.done_file_index.find_path_for_queue_item(&item) {
+        if let Some((path, _)) = self
+            .done_file_index
+            .find_path_for_queue_item(&output_dir, &item)
+        {
             self.items[idx].local_path = Some(path.to_string_lossy().into_owned());
         }
     }
