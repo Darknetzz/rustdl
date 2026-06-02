@@ -245,9 +245,12 @@ pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
         };
         let r = norm(root);
         let f = norm(file);
-        return !r.is_empty() && (f == r || f.starts_with(&format!("{r}\\")));
+        !r.is_empty() && (f == r || f.starts_with(&format!("{r}\\")))
     }
-    false
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 fn find_unique_by_title_hint(
