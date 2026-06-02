@@ -146,6 +146,24 @@ pub struct AppSettings {
     /// Force ffmpeg encoder for AV1 mode; empty = auto-detect.
     #[serde(default)]
     pub av1_encoder_override: String,
+    /// Enable LAN web UI (HTTP API + built-in pages).
+    #[serde(default)]
+    pub web_ui_enabled: bool,
+    /// Bind address for web UI, e.g. `0.0.0.0:8765`.
+    #[serde(default = "default_web_bind_address")]
+    pub web_bind_address: String,
+    /// Bearer / `X-Rustdl-Token` value required for API access.
+    #[serde(default)]
+    pub web_auth_token: String,
+}
+
+fn default_web_bind_address() -> String {
+    "0.0.0.0:8765".to_owned()
+}
+
+/// Generates a random token when enabling the web UI for the first time.
+pub fn generate_web_auth_token() -> String {
+    uuid::Uuid::new_v4().to_string()
 }
 
 pub const DEFAULT_OUTPUT_FILENAME_TEMPLATE: &str = "%(title)s [%(id)s].%(ext)s";
@@ -284,6 +302,9 @@ impl Default for AppSettings {
             playlist_preview_cap: default_playlist_preview_cap(),
             active_profile: default_active_profile(),
             av1_encoder_override: String::new(),
+            web_ui_enabled: false,
+            web_bind_address: default_web_bind_address(),
+            web_auth_token: String::new(),
         }
     }
 }

@@ -2,6 +2,14 @@ use super::*;
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        {
+            let shared = self.shared_core.clone();
+            let gen = shared.lock().generation;
+            if gen != self.core_generation {
+                let core = shared.lock();
+                core_sync::sync_core_to_app(&core, self);
+            }
+        }
         #[cfg(windows)]
         crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
         #[cfg(not(windows))]
@@ -884,5 +892,9 @@ impl PydlApp {
                 },
             );
         });
+        {
+            let shared = self.shared_core.clone();
+            core_sync::push_app_to_core(self, &shared);
+        }
     }
 }

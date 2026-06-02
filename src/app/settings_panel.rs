@@ -169,6 +169,47 @@ impl PydlApp {
                                 .changed();
                         });
                         ui.separator();
+                        ui.label(RichText::new("LAN web UI").strong());
+                        ui.label(
+                            RichText::new(
+                                "HTTP on your local network with a shared token. Not encrypted — use only on networks you trust.",
+                            )
+                            .color(crate::app_ui::ALERT_WARNING_TEXT),
+                        );
+                        let web_enabled_changed = ui
+                            .checkbox(&mut self.settings.web_ui_enabled, "Enable web UI")
+                            .changed();
+                        changed |= web_enabled_changed;
+                        ui.horizontal(|ui| {
+                            ui.label("Bind address");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.web_bind_address)
+                                        .hint_text("0.0.0.0:8765"),
+                                )
+                                .changed();
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("API token");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.web_auth_token)
+                                        .password(true),
+                                )
+                                .changed();
+                        });
+                        if ui.button("Generate new API token").clicked() {
+                            self.settings.web_auth_token =
+                                crate::config::generate_web_auth_token();
+                            changed = true;
+                        }
+                        if self.settings.web_ui_enabled {
+                            let addr = self.settings.web_bind_address.trim();
+                            ui.label(format!(
+                                "Open http://{addr}/ in a browser on this network, then paste the API token."
+                            ));
+                        }
+                        ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
                         ui.label("Used by the downloader and AV1 converter.");
                         ui.horizontal(|ui| {
@@ -899,6 +940,8 @@ impl PydlApp {
                 self.settings.av1_min_shrink_percent.clamp(0.0, 95.0);
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             self.persist_settings();
+            self.restart_web_server();
+            super::core_sync::push_app_to_core(self, &self.shared_core);
             self.flush_log_to_disk();
             if executable_paths_changed {
                 self.refresh_deps();

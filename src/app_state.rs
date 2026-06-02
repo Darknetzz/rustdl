@@ -10,7 +10,7 @@ pub struct TransferTotals {
     pub with_known_total: usize,
 }
 
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct StatusCounts {
     pub resolving: usize,
     pub ready: usize,

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>rustdl</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>rustdl</h1>
+    <div class="topbar-actions">
+      <button type="button" id="btn-pause" class="secondary">Pause</button>
+      <button type="button" id="btn-resume" class="secondary">Resume</button>
+      <button type="button" id="btn-start" class="primary">Start downloads</button>
+      <button type="button" id="btn-settings" class="secondary">Settings</button>
+    </div>
+  </header>
+
+  <section id="auth-panel" class="panel">
+    <h2>Connect</h2>
+    <p class="hint">Enter the API token from rustdl Settings → Shared → Web UI. Traffic is HTTP on your LAN; use only on networks you trust.</p>
+    <label>API token <input type="password" id="token-input" autocomplete="off" /></label>
+    <button type="button" id="btn-save-token" class="primary">Save token</button>
+    <p id="auth-status" class="status"></p>
+  </section>
+
+  <main id="app-main" class="hidden">
+    <section class="panel add-panel">
+      <h2>Add URLs</h2>
+      <textarea id="url-input" rows="3" placeholder="One URL per line"></textarea>
+      <button type="button" id="btn-add" class="primary">Add URLs</button>
+    </section>
+
+    <section class="panel">
+      <div class="summary" id="status-summary"></div>
+      <div id="queue" class="queue"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Activity log</h2>
+      <pre id="log-view" class="log-view"></pre>
+    </section>
+  </main>
+
+  <dialog id="settings-dialog">
+    <form method="dialog" id="settings-form">
+      <h2>Downloader settings</h2>
+      <label>Output folder <input type="text" id="set-output-dir" /></label>
+      <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
+      <label>Quality preset
+        <select id="set-quality">
+          <option value="best">Best</option>
+          <option value="1080p">1080p</option>
+          <option value="720p">720p</option>
+          <option value="audio">Audio</option>
+          <option value="custom">Custom</option>
+        </select>
+      </label>
+      <label>Auto-start downloads <input type="checkbox" id="set-auto-start" /></label>
+      <label>yt-dlp extra args <input type="text" id="set-extra-args" /></label>
+      <p class="hint" id="command-preview"></p>
+      <div class="dialog-actions">
+        <button type="button" id="btn-settings-cancel" class="secondary">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

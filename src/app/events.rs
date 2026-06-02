@@ -82,6 +82,10 @@ pub(crate) enum UiEvent {
         final_output_path: Option<String>,
     },
     Av1BatchDone,
+    /// Activity log line (web SSE subscribers).
+    LogLine {
+        line: String,
+    },
 }
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
@@ -501,6 +505,7 @@ impl PydlApp {
                     }
                     self.schedule_av1_queue_save();
                 }
+                UiEvent::LogLine { .. } => {}
                 UiEvent::Av1BatchDone => {
                     self.av1_running = false;
                     for item in &mut self.av1_items {

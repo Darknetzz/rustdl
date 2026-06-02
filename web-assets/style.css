@@ -1,0 +1,125 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a2332;
+  --border: #2d3a4f;
+  --text: #e8eef7;
+  --muted: #8b9cb3;
+  --accent: #3d8bfd;
+  --danger: #f07178;
+  --ok: #7fd992;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.topbar h1 { margin: 0; font-size: 1.25rem; }
+
+.topbar-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.panel {
+  margin: 1rem;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.hidden { display: none !important; }
+
+.hint { color: var(--muted); font-size: 0.9rem; }
+
+label { display: block; margin: 0.5rem 0; }
+input, textarea, select {
+  width: 100%;
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 0.85rem;
+  font-weight: 600;
+}
+
+button.primary { background: var(--accent); color: #fff; }
+button.secondary { background: var(--border); color: var(--text); }
+
+.summary { color: var(--muted); margin-bottom: 0.75rem; }
+
+.queue { display: flex; flex-direction: column; gap: 0.65rem; }
+
+.card {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 0.75rem;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.card img {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.card-title { font-weight: 600; margin: 0 0 0.25rem; }
+.card-meta { font-size: 0.85rem; color: var(--muted); }
+.status-done { color: var(--ok); }
+.status-failed { color: var(--danger); }
+
+.log-view {
+  max-height: 240px;
+  overflow: auto;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+dialog {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  max-width: 520px;
+  width: calc(100% - 2rem);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+@media (max-width: 600px) {
+  .card { grid-template-columns: 1fr; }
+  .card img { width: 100%; height: auto; max-height: 120px; }
+}

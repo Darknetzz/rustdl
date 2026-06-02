@@ -67,6 +67,19 @@ cargo test --all-targets --all-features
 - Desktop notification when a download session finishes (where supported by the OS).
 - AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
 - Optional: enqueue each completed video download into the AV1 converter queue (Settings → Downloader).
+- Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → Shared → *LAN web UI*).
+
+## LAN web UI
+
+When enabled in **Settings → Shared**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to add URLs, start/pause downloads, edit core downloader settings, and watch the activity log.
+
+**Security notes:**
+
+- Traffic is plain **HTTP** (no TLS). Anyone who can reach the bind address and knows the token can control downloads and read queue metadata.
+- Use only on a **trusted home LAN**. Do not expose the port to the public internet without a reverse proxy, TLS, and stronger authentication.
+- Generate a new token if you suspect it was leaked. Disabling the web UI stops the HTTP server on the next settings save (or when you restart the app).
+
+AV1 converter mode is not available over the web UI (desktop only).
 
 ## Modes
 
@@ -102,6 +115,7 @@ Settings are split into tabs:
 | UI scale | Global UI zoom factor (`0.85..=1.5`), useful for larger/smaller display density |
 | Auto-add pasted URLs after a short delay | When enabled, valid pasted URLs are auto-queued for metadata fetch; when disabled, use **Add URLs** manually |
 | Auto-start downloads when new items become ready | Optional. When enabled, starts downloads automatically after metadata resolution completes |
+| **LAN web UI** (enable, bind address, API token) | Serves HTTP control plane for the downloader on your local network; see [LAN web UI](#lan-web-ui) |
 | Enqueue completed downloads in AV1 converter queue | After a successful video download, adds the output file to the AV1 queue (skipped for audio-only / MP3 extraction) |
 | Autoscroll log to latest line | Keeps the log viewer pinned to the newest lines while logs are appended |
 | Parallel downloads | Number of concurrent worker queues used when starting downloads (`1..=6`) |

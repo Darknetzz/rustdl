@@ -8,6 +8,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- **LAN web UI** (Settings → Shared): optional HTTP server with token auth, REST API, SSE progress stream, and embedded web pages to control the downloader queue from other devices on the local network.
+- Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
+
 ## [0.1.1] - 2026-06-02
 
 ### Added

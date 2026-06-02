@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use eframe::egui;
 use eframe::egui::{Color32, RichText, TextureHandle};
 use tokio::runtime::Runtime;
@@ -15,12 +15,13 @@ use tokio::sync::Semaphore;
 
 mod about;
 mod av1_panel;
-mod background_spawn;
+pub(crate) mod background_spawn;
+pub(crate) mod core_sync;
 mod cards;
-mod done_file_index;
+pub(crate) mod done_file_index;
 mod download_control;
 mod eframe_app;
-mod events;
+pub(crate) mod events;
 mod input_lines;
 mod log_panel;
 mod queue_cache;
@@ -52,7 +53,7 @@ use crate::app_ui::{
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_av1_queue_snapshot,
-    load_queue_items, load_settings, rustdl_config_dir, save_settings, trim_activity_log,
+    load_settings, rustdl_config_dir, save_settings, trim_activity_log,
     AppSettings, Av1QueueSnapshot,
 };
 use crate::models::Av1QueueItem;
@@ -98,13 +99,12 @@ enum DownloadPreset {
     ArchiveMode,
 }
 
-#[derive(Clone, Copy)]
-pub(crate) enum CancelPostAction {
-    Ready,
-    Remove,
-}
+pub(crate) use crate::service::CancelPostAction;
 
 pub struct PydlApp {
+    pub(crate) shared_core: crate::service::SharedCore,
+    pub(crate) core_generation: u64,
+    pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
     tx: Sender<UiEvent>,
     rx: Receiver<UiEvent>,
@@ -228,12 +228,18 @@ pub struct PydlApp {
 impl PydlApp {
     pub fn new(cc: &eframe::CreationContext<'_>, runtime: Arc<Runtime>) -> Self {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
-        let (tx, rx) = unbounded();
-        let settings = load_settings();
+        let (rustdl_service, rx) = crate::service::RustdlService::new(runtime.clone());
+        let shared_core = rustdl_service.shared_core();
+        let tx = shared_core.lock().tx.clone();
+        let mut settings = load_settings();
+        if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
+            settings.web_auth_token = crate::config::generate_web_auth_token();
+            let _ = save_settings(&settings);
+        }
         theme::apply_ui_theme(&cc.egui_ctx, &settings.theme);
         let profile_store = load_profiles();
         let log_lines = load_activity_log(settings.log_max_chars);
-        let mut restored_items = load_queue_items();
+        let mut restored_items = shared_core.lock().items.clone();
         for it in &mut restored_items {
             normalize_restored_item(it);
         }
@@ -275,7 +281,16 @@ impl PydlApp {
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
         let applied_theme = settings.theme.clone();
 
+        let web_server = crate::service::web::spawn_web_server(
+            runtime.clone(),
+            shared_core.clone(),
+            &settings,
+        );
+
         let mut app = Self {
+            shared_core: shared_core.clone(),
+            core_generation: shared_core.lock().generation,
+            web_server,
             runtime,
             tx,
             rx,
@@ -387,6 +402,10 @@ impl PydlApp {
             ));
         }
         app.refresh_deps();
+        core_sync::push_app_to_core(&app, &app.shared_core);
+        if app.settings.web_ui_enabled {
+            app.restart_web_server();
+        }
         app.queue_av1_restored_assets();
         app.recompute_status();
         app.invalidate_queue_caches();
@@ -689,6 +708,27 @@ impl PydlApp {
             self.flush_av1_queue_to_disk();
         } else {
             self.clear_av1_queue_persistence();
+        }
+    }
+
+    pub(super) fn restart_web_server(&mut self) {
+        if let Some(mut handle) = self.web_server.take() {
+            handle.stop();
+        }
+        self.web_server = crate::service::web::spawn_web_server(
+            self.runtime.clone(),
+            self.shared_core.clone(),
+            &self.settings,
+        );
+        if self.settings.web_ui_enabled {
+            if self.web_server.is_some() {
+                self.append_log(&format!(
+                    "Web UI enabled on http://{} (token required)",
+                    self.settings.web_bind_address.trim()
+                ));
+            }
+        } else {
+            self.append_log("Web UI disabled.");
         }
     }
 
