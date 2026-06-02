@@ -76,6 +76,9 @@ impl super::core::DownloadCore {
             self.items.remove(idx);
             self.rebuild_item_index();
         }
+        // Pending rows contribute source_line to cached_dedupe_keys at add time; rebuild
+        // after removing the placeholder so we do not treat this URL as a duplicate of itself.
+        self.rebuild_dedupe_keys_cache();
         let keys = ytdlp::dedupe_previews(&self.cached_dedupe_keys, &rows);
         if keys.is_empty() {
             self.append_log(&format!("No new videos found for: {source_line}"));
@@ -218,5 +221,34 @@ impl super::core::DownloadCore {
         if has_idle {
             self.start_downloads();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app_state;
+    use crate::models::{QueueItem, VideoPreview};
+    use crate::ytdlp::{self, normalize_url_for_dedupe};
+
+    #[test]
+    fn dedupe_cache_without_pending_row_allows_resolved_preview() {
+        let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+        let pending = QueueItem::pending_metadata(1, url.to_owned());
+        let keys_with_pending = app_state::rebuild_dedupe_keys_set(&[pending]);
+        assert!(keys_with_pending.contains(&normalize_url_for_dedupe(url)));
+
+        let keys_empty = app_state::rebuild_dedupe_keys_set(&[]);
+        let preview = VideoPreview {
+            webpage_url: url.to_owned(),
+            video_id: "dQw4w9WgXcQ".to_owned(),
+            ..Default::default()
+        };
+        let out = ytdlp::dedupe_previews(&keys_with_pending, std::slice::from_ref(&preview));
+        assert!(
+            out.is_empty(),
+            "stale cache from pending row must not be used after removal"
+        );
+        let out = ytdlp::dedupe_previews(&keys_empty, std::slice::from_ref(&preview));
+        assert_eq!(out.len(), 1);
     }
 }
