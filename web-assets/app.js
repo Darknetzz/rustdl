@@ -51,7 +51,13 @@ async function refreshQueue() {
     const img = document.createElement("img");
     img.alt = "";
     if (item.thumbnail_url && token()) {
-      img.src = `/api/thumbnail/${item.item_id}`;
+      const t = encodeURIComponent(token());
+      img.src = `/api/thumbnail/${item.item_id}?token=${t}`;
+      img.onerror = () => {
+        img.remove();
+      };
+    } else {
+      img.remove();
     }
     const body = document.createElement("div");
     const title = document.createElement("p");
