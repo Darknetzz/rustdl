@@ -581,24 +581,6 @@ impl eframe::App for PydlApp {
                             }
                         });
                     }
-                    button_group(ui, "dl_clear", |g| {
-                        if g.danger(
-                            &format!("{} Clear list", ui_icons::CLEAR_QUEUE),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.items.retain(|x| {
-                                matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
-                            });
-                            self.pending_resolve_ids
-                                .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
-                            self.update_status();
-                            self.refresh_input_line_info();
-                            self.schedule_queue_save();
-                            self.mark_queue_dirty();
-                        }
-                    });
                     if self.status_failed > 0 {
                         button_group(ui, "dl_retry_all", |g| {
                             if g.warning(
@@ -660,6 +642,24 @@ impl eframe::App for PydlApp {
                         });
                         if recheck.clicked() {
                             self.recheck_all_saved_downloads();
+                        }
+                    });
+                    button_group(ui, "dl_clear", |g| {
+                        if g.danger(
+                            &format!("{} Clear list", ui_icons::CLEAR_QUEUE),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.items.retain(|x| {
+                                matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
+                            });
+                            self.pending_resolve_ids
+                                .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                            self.update_status();
+                            self.refresh_input_line_info();
+                            self.schedule_queue_save();
+                            self.mark_queue_dirty();
                         }
                     });
                     if has_idle_items {

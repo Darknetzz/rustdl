@@ -490,7 +490,7 @@ pub fn button_group<R>(
         .stroke(egui::Stroke::new(1.0, BTN_GROUP_BORDER))
         .rounding(egui::Rounding::same(6.0))
         .show(ui, |ui| {
-            ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
                 let mut group = ButtonGroup { ui, index: 0 };
                 add(&mut group)
