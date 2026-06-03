@@ -6,8 +6,10 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 
 use crate::app_state::is_queueable_http_url;
-use crate::config::{load_settings, AppSettings};
+use crate::config::{generate_web_auth_token, load_settings, save_settings, AppSettings};
 use crate::profiles::{all_profiles, find_profile, load_profiles};
+use crate::service::web::{resolve_web_bind_address, spawn_web_server_at, web_ui_browser_url};
+use crate::service::RustdlService;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
@@ -17,6 +19,32 @@ pub struct CliDownloadOptions {
     pub output_dir: Option<String>,
     pub dry_run: bool,
 }
+
+pub struct CliWebOnlyOptions {
+    pub host: Option<String>,
+    pub port: Option<u16>,
+}
+
+/// True when the process should attach to the parent console on Windows (CLI modes).
+pub fn args_want_console(args: &[String]) -> bool {
+    args.first().is_some_and(|a| {
+        matches!(
+            a.as_str(),
+            "--help" | "-h" | "--version" | "-V" | "--download" | "--list-profiles" | "--web-only"
+        )
+    })
+}
+
+#[cfg(windows)]
+pub fn attach_parent_console() {
+    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+
+#[cfg(not(windows))]
+pub fn attach_parent_console() {}
 
 pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     let mut settings = load_settings();
@@ -96,6 +124,82 @@ fn print_dry_run(
             println!("    {}", chunk[0]);
         }
     }
+}
+
+pub fn parse_web_only_args(args: &[String]) -> Result<CliWebOnlyOptions> {
+    let mut host = None;
+    let mut port = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--host" => {
+                i += 1;
+                host = Some(
+                    args.get(i)
+                        .ok_or_else(|| anyhow!("--host requires a value"))?
+                        .clone(),
+                );
+            }
+            "--port" => {
+                i += 1;
+                let raw = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--port requires a number"))?;
+                let p: u16 = raw
+                    .parse()
+                    .map_err(|_| anyhow!("invalid port number: {raw}"))?;
+                port = Some(p);
+            }
+            s => return Err(anyhow!("unknown option: {s}")),
+        }
+        i += 1;
+    }
+    Ok(CliWebOnlyOptions { host, port })
+}
+
+pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
+    let mut settings = load_settings();
+    let bind = resolve_web_bind_address(
+        opts.host.as_deref(),
+        opts.port,
+        &settings.web_bind_address,
+    )
+    .map_err(|e| anyhow!(e.message()))?;
+    settings.web_bind_address = bind.clone();
+    settings.web_ui_enabled = true;
+    if settings.web_auth_token.trim().is_empty() {
+        settings.web_auth_token = generate_web_auth_token();
+        save_settings(&settings)?;
+        eprintln!("rustdl: generated a new API token (saved to settings).");
+    }
+
+    let rt = Arc::new(tokio::runtime::Runtime::new()?);
+    let (service, _rx) = RustdlService::new(rt.clone());
+    let core = service.shared_core();
+    {
+        let mut c = core.lock();
+        c.settings = settings.clone();
+        c.output_dir = settings.output_dir.clone();
+        c.worker_count = settings.worker_count.clamp(1, 6);
+        c.refresh_deps();
+        c.update_status();
+    }
+
+    let token = settings.web_auth_token.trim();
+    let mut handle = spawn_web_server_at(rt.clone(), core, &bind, token)
+        .map_err(|e| anyhow!(e.message()))?;
+
+    let local_url = web_ui_browser_url(&bind);
+    println!("rustdl {} (web-only)", crate::pkg_version::VERSION);
+    println!("  LAN bind:  http://{bind}");
+    println!("  Local URL: {local_url}");
+    println!("  API token: {token}");
+    println!("Press Ctrl+C to stop.");
+
+    tokio::signal::ctrl_c().await?;
+    handle.stop();
+    println!("Stopped.");
+    Ok(())
 }
 
 pub fn parse_cli_download_args(args: &[String]) -> Result<Option<CliDownloadOptions>> {
@@ -247,6 +351,20 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
             }
             true
         }
+        "--web-only" => match parse_web_only_args(&args[1..]) {
+            Ok(opts) => {
+                let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+                if let Err(e) = rt.block_on(run_headless_web(opts)) {
+                    eprintln!("Web server failed: {e:#}");
+                    process::exit(1);
+                }
+                true
+            }
+            Err(e) => {
+                eprintln!("{e:#}");
+                process::exit(2);
+            }
+        },
         s if s.starts_with('-') => {
             eprintln!("Unknown option: {s}");
             eprintln!("Try `rustdl --help`.");
@@ -268,6 +386,7 @@ fn print_help() {
     println!("Usage:");
     println!("  rustdl                          Start the graphical interface");
     println!("  rustdl --download URL [OPTS]    Headless download (no GUI)");
+    println!("  rustdl --web-only [OPTS]        Headless LAN web UI (no GUI)");
     println!("  rustdl --list-profiles          List download profile names");
     println!("  rustdl [OPTIONS]\n");
     println!("Options:");
@@ -279,11 +398,33 @@ fn print_help() {
     println!("  --profile NAME       Apply named profile before download");
     println!("  --output-dir PATH    Override output folder");
     println!("  --dry-run            Print planned download args without executing");
+    println!("  --web-only           Serve the LAN web UI without opening a window");
+    println!("  --host ADDR          Bind host (default: from saved settings, else 0.0.0.0)");
+    println!("  --port PORT          Bind port (default: from saved settings, else 8765)");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_web_only_args_accepts_host_and_port() {
+        let args = vec![
+            "--host".to_owned(),
+            "0.0.0.0".to_owned(),
+            "--port".to_owned(),
+            "8765".to_owned(),
+        ];
+        let opts = parse_web_only_args(&args).unwrap();
+        assert_eq!(opts.host.as_deref(), Some("0.0.0.0"));
+        assert_eq!(opts.port, Some(8765));
+    }
+
+    #[test]
+    fn args_want_console_includes_web_only() {
+        assert!(args_want_console(&["--web-only".to_owned()]));
+        assert!(!args_want_console(&[]));
+    }
 
     #[test]
     fn parse_url_lines_skips_comments_and_blanks() {

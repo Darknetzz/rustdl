@@ -57,6 +57,10 @@ pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
 
 pub fn main_entry() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    #[cfg(windows)]
+    if cli::args_want_console(&args) {
+        cli::attach_parent_console();
+    }
     if !args.is_empty() && cli::run_cli_or_exit(args) {
         return;
     }

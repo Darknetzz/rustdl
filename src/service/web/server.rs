@@ -46,6 +46,50 @@ impl Drop for WebServerHandle {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WebServerStartError {
+    EmptyBind,
+    InvalidBind(String),
+    EmptyToken,
+}
+
+impl WebServerStartError {
+    pub fn message(&self) -> String {
+        match self {
+            Self::EmptyBind => "web bind address is empty".to_owned(),
+            Self::InvalidBind(detail) => format!("invalid web bind address: {detail}"),
+            Self::EmptyToken => {
+                "web UI requires a non-empty auth token (see Settings → Shared)".to_owned()
+            }
+        }
+    }
+}
+
+/// Merges optional `--host` / `--port` overrides with `fallback` (e.g. saved `web_bind_address`).
+pub fn resolve_web_bind_address(
+    host: Option<&str>,
+    port: Option<u16>,
+    fallback: &str,
+) -> Result<String, WebServerStartError> {
+    let fallback = fallback.trim();
+    if host.is_none() && port.is_none() {
+        if fallback.is_empty() {
+            return Err(WebServerStartError::EmptyBind);
+        }
+        return Ok(fallback.to_owned());
+    }
+    let fallback_addr: SocketAddr = fallback.parse().map_err(|e| {
+        WebServerStartError::InvalidBind(format!("{fallback:?}: {e}"))
+    })?;
+    let host = host
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| fallback_addr.ip().to_string());
+    let port = port.unwrap_or(fallback_addr.port());
+    Ok(format!("{host}:{port}"))
+}
+
 pub fn spawn_web_server(
     runtime: Arc<Runtime>,
     core: SharedCore,
@@ -54,21 +98,35 @@ pub fn spawn_web_server(
     if !settings.web_ui_enabled {
         return None;
     }
-    let bind = settings.web_bind_address.trim();
-    if bind.is_empty() {
-        eprintln!("rustdl: web UI enabled but bind address is empty");
-        return None;
-    }
-    let addr: SocketAddr = match bind.parse() {
-        Ok(a) => a,
+    match spawn_web_server_at(
+        runtime,
+        core,
+        settings.web_bind_address.trim(),
+        settings.web_auth_token.trim(),
+    ) {
+        Ok(handle) => Some(handle),
         Err(e) => {
-            eprintln!("rustdl: invalid web bind address {bind:?}: {e}");
-            return None;
+            eprintln!("rustdl: {}", e.message());
+            None
         }
-    };
-    if settings.web_auth_token.trim().is_empty() {
-        eprintln!("rustdl: web UI requires a non-empty auth token (see Settings → Shared)");
-        return None;
+    }
+}
+
+pub fn spawn_web_server_at(
+    runtime: Arc<Runtime>,
+    core: SharedCore,
+    bind: &str,
+    auth_token: &str,
+) -> Result<WebServerHandle, WebServerStartError> {
+    let bind = bind.trim();
+    if bind.is_empty() {
+        return Err(WebServerStartError::EmptyBind);
+    }
+    let addr: SocketAddr = bind
+        .parse()
+        .map_err(|e| WebServerStartError::InvalidBind(format!("{bind:?}: {e}")))?;
+    if auth_token.trim().is_empty() {
+        return Err(WebServerStartError::EmptyToken);
     }
 
     let state = ApiState {
@@ -93,7 +151,7 @@ pub fn spawn_web_server(
         }
     });
 
-    Some(WebServerHandle {
+    Ok(WebServerHandle {
         shutdown_tx: Some(shutdown_tx),
         join: Some(join),
     })
@@ -101,7 +159,7 @@ pub fn spawn_web_server(
 
 #[cfg(test)]
 mod tests {
-    use super::web_ui_browser_url;
+    use super::{resolve_web_bind_address, web_ui_browser_url};
 
     #[test]
     fn web_ui_browser_url_maps_wildcard_bind() {
@@ -116,6 +174,30 @@ mod tests {
         assert_eq!(
             web_ui_browser_url("127.0.0.1:8765"),
             "http://127.0.0.1:8765/"
+        );
+    }
+
+    #[test]
+    fn resolve_web_bind_address_uses_fallback_when_no_overrides() {
+        assert_eq!(
+            resolve_web_bind_address(None, None, "0.0.0.0:8765").unwrap(),
+            "0.0.0.0:8765"
+        );
+    }
+
+    #[test]
+    fn resolve_web_bind_address_overrides_host_and_port() {
+        assert_eq!(
+            resolve_web_bind_address(Some("127.0.0.1"), Some(9000), "0.0.0.0:8765").unwrap(),
+            "127.0.0.1:9000"
+        );
+    }
+
+    #[test]
+    fn resolve_web_bind_address_overrides_port_only() {
+        assert_eq!(
+            resolve_web_bind_address(None, Some(9000), "0.0.0.0:8765").unwrap(),
+            "0.0.0.0:9000"
         );
     }
 }

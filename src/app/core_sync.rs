@@ -3,7 +3,8 @@ use std::collections::HashSet;
 use crate::service::core::{DownloadCore, SharedCore};
 use super::PydlApp;
 
-fn sync_queue_fields(app: &PydlApp, core: &mut DownloadCore) {
+fn sync_queue_fields(app: &mut PydlApp, core: &mut DownloadCore) {
+    app.recompute_status();
     core.items = app.items.clone();
     core.rebuild_item_index();
     core.pending_resolve_ids = app.pending_resolve_ids.clone();

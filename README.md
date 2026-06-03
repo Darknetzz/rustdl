@@ -31,6 +31,15 @@ cargo run -- --download -                  # batch from stdin
 cargo run -- --list-profiles
 ```
 
+Headless web UI (no GUI window; uses saved queue, settings, and profiles):
+
+```bash
+cargo run -- --web-only --host 0.0.0.0 --port 8765
+cargo run -- --web-only                    # bind address from Settings → Shared
+```
+
+On first run without a saved API token, rustdl generates one and prints it. Open the local URL from another device on your LAN with that token (same security notes as the desktop LAN web UI).
+
 From the monorepo root (`code`):
 
 ```bash

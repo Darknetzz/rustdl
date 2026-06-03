@@ -407,6 +407,7 @@ impl PydlApp {
             ));
         }
         app.refresh_deps();
+        app.invalidate_queue_caches();
         app.queue_dirty = true;
         let shared = app.shared_core.clone();
         core_sync::push_app_to_core(&mut app, &shared);
@@ -414,8 +415,6 @@ impl PydlApp {
             app.restart_web_server();
         }
         app.queue_av1_restored_assets();
-        app.recompute_status();
-        app.invalidate_queue_caches();
         app.refresh_input_line_info();
         app
     }
