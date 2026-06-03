@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button};
+use crate::app_ui::{button_group, left_button_row};
 use crate::config::{export_settings_json, import_settings_json, trim_activity_log};
 use crate::profiles::{all_profiles, find_profile, save_user_profile, DownloadProfile};
 use crate::ui_icons;

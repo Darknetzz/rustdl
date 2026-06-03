@@ -5,7 +5,7 @@ use eframe::egui::{Color32, RichText};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::app_ui::{button_group, button_toolbar_wrapped, danger_button, left_button_row, secondary_button};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
 use crate::ui_icons;
@@ -277,16 +277,17 @@ impl PydlApp {
                             let label = egui::Label::new(widget).wrap().selectable(true);
                             let r = ui.add(label);
                             r.context_menu(|ui| {
-                                if secondary_button(
-                                    ui,
-                                    &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    ui.ctx().copy_text((*line).clone());
-                                    ui.close_menu();
-                                }
+                                button_group(ui, "log_copy_line", |g| {
+                                    if g.secondary(
+                                        &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                        true,
+                                    )
+                                    .clicked()
+                                    {
+                                        ui.ctx().copy_text((*line).clone());
+                                        ui.close_menu();
+                                    }
+                                });
                             });
                         }
                     });
@@ -364,20 +365,22 @@ pub(crate) fn attach_paste_context_menu(
     deferred_paste: &mut Option<String>,
 ) {
     response.context_menu(|ui| {
-        if secondary_button(ui, &format!("{} Paste", ui_icons::COPY_CLIPBOARD), true).clicked() {
-            response.request_focus();
-            let from_clipboard = arboard::Clipboard::new()
-                .ok()
-                .and_then(|mut cb| cb.get_text().ok())
-                .filter(|t| !t.is_empty());
-            if let Some(text) = from_clipboard {
-                *deferred_paste = Some(text);
-            } else {
-                ui.ctx()
-                    .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+        button_group(ui, "paste_ctx", |g| {
+            if g.secondary(&format!("{} Paste", ui_icons::COPY_CLIPBOARD), true).clicked() {
+                response.request_focus();
+                let from_clipboard = arboard::Clipboard::new()
+                    .ok()
+                    .and_then(|mut cb| cb.get_text().ok())
+                    .filter(|t| !t.is_empty());
+                if let Some(text) = from_clipboard {
+                    *deferred_paste = Some(text);
+                } else {
+                    ui.ctx()
+                        .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+                }
+                ui.close_menu();
             }
-            ui.close_menu();
-        }
+        });
     });
 }
 

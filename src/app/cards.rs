@@ -5,8 +5,8 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{
-    button_group, danger_button, draw_meta_badge, draw_status_chip, left_button_row,
-    secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
+    button_group, draw_meta_badge, draw_status_chip, left_button_row, status_color,
+    status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -401,35 +401,35 @@ impl PydlApp {
                             let r = ui.menu_button(
                                 format!("{} Remove…", ui_icons::CARD_DELETE),
                                 |ui| {
-                                    if let Some((p, _)) = done_file.as_ref() {
-                                        if danger_button(
-                                            ui,
-                                            &format!("{} Delete file from disk", ui_icons::CARD_DELETE),
-                                            true,
-                                        )
-                                        .on_hover_text("Delete only this file; the queue row stays until you remove it")
+                                    button_group(ui, ("card_danger", id), |g| {
+                                        if let Some((p, _)) = done_file.as_ref() {
+                                            if g.danger(
+                                                &format!("{} Delete file from disk", ui_icons::CARD_DELETE),
+                                                true,
+                                            )
+                                            .on_hover_text("Delete only this file; the queue row stays until you remove it")
                                             .clicked()
+                                            {
+                                                self.delete_file_path(p);
+                                                ui.close_menu();
+                                            }
+                                        }
+                                        if g.danger(
+                                            &format!("{} Remove from queue", ui_icons::REMOVE),
+                                            removable,
+                                        )
+                                        .on_hover_text(
+                                            "Remove this row from the list (does not delete the file unless you use Delete file above).",
+                                        )
+                                        .clicked()
                                         {
-                                            self.delete_file_path(p);
+                                            let _ = self.remove_item_by_id(id);
+                                            self.update_status();
+                                            self.refresh_input_line_info();
+                                            self.schedule_queue_save();
                                             ui.close_menu();
                                         }
-                                    }
-                                    if danger_button(
-                                        ui,
-                                        &format!("{} Remove from queue", ui_icons::REMOVE),
-                                        removable,
-                                    )
-                                    .on_hover_text(
-                                        "Remove this row from the list (does not delete the file unless you use Delete file above).",
-                                    )
-                                    .clicked()
-                                    {
-                                        let _ = self.remove_item_by_id(id);
-                                        self.update_status();
-                                        self.refresh_input_line_info();
-                                        self.schedule_queue_save();
-                                        ui.close_menu();
-                                    }
+                                    });
                                 },
                             );
                             r.response.on_hover_text(
