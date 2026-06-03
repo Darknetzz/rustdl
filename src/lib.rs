@@ -64,9 +64,6 @@ pub fn main_entry() {
         process::exit(0);
     }
 
-    #[cfg(windows)]
-    cli::detach_console_for_gui();
-
     let runtime = match Runtime::new() {
         Ok(rt) => Arc::new(rt),
         Err(e) => {
@@ -75,7 +72,12 @@ pub fn main_entry() {
         }
     };
 
+    #[cfg(windows)]
+    cli::detach_console_for_gui();
+
     if let Err(e) = run_gui(runtime) {
+        #[cfg(windows)]
+        cli::reattach_console_for_error();
         eprintln!("Failed to run app: {e}");
         process::exit(1);
     }

@@ -34,8 +34,23 @@ pub fn detach_console_for_gui() {
     }
 }
 
+/// Re-attach to the parent terminal so startup errors are visible after [`detach_console_for_gui`].
+#[cfg(windows)]
+pub fn reattach_console_for_error() {
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ACCESS_DENIED};
+    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 && GetLastError() != ERROR_ACCESS_DENIED {
+            let _ = AllocConsole();
+        }
+    }
+}
+
 #[cfg(not(windows))]
 pub fn detach_console_for_gui() {}
+
+#[cfg(not(windows))]
+pub fn reattach_console_for_error() {}
 
 pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     let mut settings = load_settings();
