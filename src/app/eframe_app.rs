@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button, success_button, warning_button};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -109,17 +109,29 @@ impl eframe::App for PydlApp {
                                 .color(ALERT_WARNING_TEXT),
                             );
                             ui.horizontal(|ui| {
-                                if warning_button(ui, &format!("{} Open Settings", ui_icons::SETTINGS), true)
-                                    .clicked()
-                                {
-                                    self.settings_open = true;
-                                }
-                                if warning_button(ui, &format!("{} Dismiss", ui_icons::DISMISS), true)
-                                    .clicked()
-                                {
-                                    self.settings.show_first_run_hint = false;
-                                    self.persist_settings();
-                                }
+                                left_button_row(ui, |ui| {
+                                    button_group(ui, "welcome_actions", |g| {
+                                        if g
+                                            .warning(
+                                                &format!("{} Open Settings", ui_icons::SETTINGS),
+                                                true,
+                                            )
+                                            .clicked()
+                                        {
+                                            self.settings_open = true;
+                                        }
+                                        if g
+                                            .warning(
+                                                &format!("{} Dismiss", ui_icons::DISMISS),
+                                                true,
+                                            )
+                                            .clicked()
+                                        {
+                                            self.settings.show_first_run_hint = false;
+                                            self.persist_settings();
+                                        }
+                                    });
+                                });
                             });
                         });
                     });
@@ -369,15 +381,18 @@ impl eframe::App for PydlApp {
                                 status_color(ItemStatus::Done),
                                 "All downloads finished for this session.",
                             );
-                            if secondary_button(
-                                ui,
-                                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.open_output_folder();
-                            }
+                            left_button_row(ui, |ui| {
+                                button_group(ui, "session_open_folder", |g| {
+                                    if g.secondary(
+                                        &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                                        true,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.open_output_folder();
+                                    }
+                                });
+                            });
                         });
                     }
                     let totals = self.transfer_totals();
@@ -730,17 +745,12 @@ impl PydlApp {
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
                     ui.add_space(HEADER_RIGHT_INSET);
-                    button_group(ui, "hdr_exit", |g| {
-                        if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                            self.open_exit_confirm();
-                        }
-                    });
                     let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
                         format!("{} Videos", ui_icons::VIDEOS)
                     } else {
                         format!("{} Videos (hidden)", ui_icons::VIDEOS)
                     };
-                    button_group(ui, "hdr_actions", |g| {
+                    button_group(ui, "hdr_nav", |g| {
                         if g.secondary(
                             &format!("{} Settings", ui_icons::SETTINGS),
                             true,
@@ -765,6 +775,9 @@ impl PydlApp {
                             .clicked()
                         {
                             self.toggle_videos_panel();
+                        }
+                        if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
+                            self.open_exit_confirm();
                         }
                     });
                     ui.separator();

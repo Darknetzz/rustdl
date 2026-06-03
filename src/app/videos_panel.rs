@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::app_ui::{draw_status_dot, secondary_button, status_color};
+use crate::app_ui::{button_group, draw_status_dot, left_button_row, secondary_button, status_color};
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -89,38 +89,40 @@ impl PydlApp {
             let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
             ui.label(RichText::new(heading).strong());
             let tail_w = ui.available_width();
+            let video_dock_label = if self.settings.videos_docked {
+                format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS)
+            } else {
+                format!("{} Dock videos", ui_icons::DOCK_VIDEOS)
+            };
             ui.allocate_ui_with_layout(
                 egui::vec2(tail_w.max(0.0), 0.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    let video_dock_label = if self.settings.videos_docked {
-                        format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS)
-                    } else {
-                        format!("{} Dock videos", ui_icons::DOCK_VIDEOS)
-                    };
-                    if secondary_button(ui, &video_dock_label, true)
-                        .on_hover_text(
-                            "Show the queue in a separate window so the main view stays compact.",
-                        )
-                        .clicked()
-                    {
-                        self.settings.videos_docked = !self.settings.videos_docked;
-                        if !self.settings.videos_docked {
-                            self.settings.videos_open = true;
-                        }
-                        self.persist_settings();
-                    }
-                    if self.settings.videos_docked {
-                        let log_dock_label = if self.settings.logs_docked {
-                            format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                        } else {
-                            format!("{} Dock log", ui_icons::DOCK_LOG)
-                        };
-                        if secondary_button(ui, &log_dock_label, true).clicked() {
-                            self.settings.logs_docked = !self.settings.logs_docked;
+                    button_group(ui, "videos_dock", |g| {
+                        if g.secondary(&video_dock_label, true)
+                            .on_hover_text(
+                                "Show the queue in a separate window so the main view stays compact.",
+                            )
+                            .clicked()
+                        {
+                            self.settings.videos_docked = !self.settings.videos_docked;
+                            if !self.settings.videos_docked {
+                                self.settings.videos_open = true;
+                            }
                             self.persist_settings();
                         }
-                    }
+                        if self.settings.videos_docked {
+                            let log_dock_label = if self.settings.logs_docked {
+                                format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                            } else {
+                                format!("{} Dock log", ui_icons::DOCK_LOG)
+                            };
+                            if g.secondary(&log_dock_label, true).clicked() {
+                                self.settings.logs_docked = !self.settings.logs_docked;
+                                self.persist_settings();
+                            }
+                        }
+                    });
                 },
             );
         });
@@ -135,13 +137,17 @@ impl PydlApp {
                 "Video queue is in a separate window."
             };
             ui.label(RichText::new(strip_label).color(TEXT_MUTED));
-            if !self.settings.videos_open
-                && secondary_button(ui, &format!("{} Show videos", ui_icons::VIDEOS), true)
-                    .clicked()
-            {
-                self.settings.videos_open = true;
-                self.persist_settings();
-            }
+            left_button_row(ui, |ui| {
+                button_group(ui, "videos_show", |g| {
+                    if !self.settings.videos_open
+                        && g.secondary(&format!("{} Show videos", ui_icons::VIDEOS), true)
+                            .clicked()
+                    {
+                        self.settings.videos_open = true;
+                        self.persist_settings();
+                    }
+                });
+            });
         });
         if self.av1_mode {
             if !self.av1_items.is_empty() {

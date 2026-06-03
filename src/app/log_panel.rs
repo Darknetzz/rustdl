@@ -5,7 +5,7 @@ use eframe::egui::{Color32, RichText};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::app_ui::{danger_button, secondary_button};
+use crate::app_ui::{button_group, button_toolbar_wrapped, danger_button, left_button_row, secondary_button};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
 use crate::ui_icons;
@@ -155,11 +155,9 @@ impl PydlApp {
             .min_width(400.0)
             .min_height(260.0)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true)
-                            .clicked()
-                        {
+                left_button_row(ui, |ui| {
+                    button_group(ui, "log_window_close", |g| {
+                        if g.secondary(&format!("{} Close", ui_icons::CLOSE), true).clicked() {
                             self.settings.logs_open = false;
                             self.persist_settings();
                         }
@@ -179,10 +177,12 @@ impl PydlApp {
     }
 
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if danger_button(ui, &format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
-                self.clear_activity_log();
-            }
+        button_toolbar_wrapped(ui, |ui| {
+            button_group(ui, "log_clear", |g| {
+                if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
+                    self.clear_activity_log();
+                }
+            });
             ui.label("Filter");
             egui::ComboBox::from_id_salt("log_filter")
                 .selected_text(self.log_filter.as_str())
@@ -197,36 +197,35 @@ impl PydlApp {
             {
                 self.persist_settings();
             }
-            if secondary_button(
-                ui,
-                &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
-                true,
-            )
-            .clicked()
-            {
-                if let Some(last) = self
-                    .log_lines
-                    .iter()
-                    .rev()
-                    .find(|line| is_error_line(log_message_body(line)))
-                {
-                    ui.ctx().copy_text(last.clone());
-                }
-            }
-            if secondary_button(ui, &format!("{} Open log file", ui_icons::OPEN_FILE), true)
+            button_group(ui, "log_actions", |g| {
+                if g.secondary(
+                    &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
+                    true,
+                )
                 .clicked()
-            {
-                self.open_activity_log_file();
-            }
-            if secondary_button(
-                ui,
-                &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                true,
-            )
-            .clicked()
-            {
-                self.open_config_folder();
-            }
+                {
+                    if let Some(last) = self
+                        .log_lines
+                        .iter()
+                        .rev()
+                        .find(|line| is_error_line(log_message_body(line)))
+                    {
+                        g.ui().ctx().copy_text(last.clone());
+                    }
+                }
+                if g.secondary(&format!("{} Open log file", ui_icons::OPEN_FILE), true).clicked()
+                {
+                    self.open_activity_log_file();
+                }
+                if g.secondary(
+                    &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                    true,
+                )
+                .clicked()
+                {
+                    self.open_config_folder();
+                }
+            });
         });
         let scroll_h = ui.available_height().max(80.0);
         egui::Frame::dark_canvas(ui.style())
