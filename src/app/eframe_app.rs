@@ -144,11 +144,10 @@ impl eframe::App for PydlApp {
                 nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
                 with_full_width(ui, |ui| {
                     nav_frame.show(ui, |ui| {
-                        let row_w = ui.available_width();
-                        let gap = ui.spacing().item_spacing.x;
-                        let btn_w = ((row_w - gap) * 0.5).max(120.0);
-                        ui.horizontal(|ui| {
-                            ui.set_width(row_w);
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            let row_w = ui.available_width();
+                            let btn_w = (row_w * 0.5).max(120.0);
+                            let btn_sz = egui::vec2(btn_w, 34.0);
                             ui.spacing_mut().item_spacing.x = 0.0;
                             let dl_active = !self.av1_mode;
                             let av1_active = self.av1_mode;
@@ -161,7 +160,6 @@ impl eframe::App for PydlApp {
                                         Color32::from_rgb(210, 220, 235)
                                     }),
                             )
-                            .min_size(egui::vec2(btn_w, 34.0))
                             .fill(if dl_active {
                                 Color32::from_rgb(152, 255, 152)
                             } else {
@@ -175,7 +173,7 @@ impl eframe::App for PydlApp {
                                     Color32::from_rgb(88, 100, 116)
                                 },
                             ));
-                            if ui.add(dl).clicked() {
+                            if ui.add_sized(btn_sz, dl).clicked() {
                                 self.set_app_mode(false);
                             }
                             let av1 = egui::Button::new(
@@ -187,7 +185,6 @@ impl eframe::App for PydlApp {
                                         Color32::from_rgb(210, 220, 235)
                                     }),
                             )
-                            .min_size(egui::vec2(btn_w, 34.0))
                             .fill(if av1_active {
                                 Color32::from_rgb(255, 190, 90)
                             } else {
@@ -201,7 +198,7 @@ impl eframe::App for PydlApp {
                                     Color32::from_rgb(88, 100, 116)
                                 },
                             ));
-                            if ui.add(av1).clicked() {
+                            if ui.add_sized(btn_sz, av1).clicked() {
                                 self.set_app_mode(true);
                             }
                         });
@@ -233,11 +230,13 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
-                egui::ScrollArea::vertical()
+                let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
-                    .auto_shrink([false, false])
-                    .max_height(main_split.controls_max_height)
-                    .show(ui, |ui| {
+                    .auto_shrink([false, false]);
+                if let Some(max_h) = main_split.controls_scroll_max_height {
+                    dl_controls_scroll = dl_controls_scroll.max_height(max_h);
+                }
+                dl_controls_scroll.show(ui, |ui| {
                         ui.set_width(ui.available_width());
 
                 ui.horizontal_wrapped(|ui| {

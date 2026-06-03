@@ -294,7 +294,8 @@ const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
 
 /// Split remaining main-panel height between scrollable controls and a docked video queue.
 pub struct MainColumnSplit {
-    pub controls_max_height: f32,
+    /// When the queue is undocked, controls shrink to content; when docked, caps scroll height.
+    pub controls_scroll_max_height: Option<f32>,
     pub videos_height: f32,
 }
 
@@ -306,7 +307,7 @@ pub fn compute_main_column_split(
     let h = available_height.max(0.0);
     if !videos_docked {
         return MainColumnSplit {
-            controls_max_height: h,
+            controls_scroll_max_height: None,
             videos_height: 0.0,
         };
     }
@@ -315,7 +316,7 @@ pub fn compute_main_column_split(
         let videos_h = (h * 0.45).clamp(120.0, (h - 60.0).max(120.0));
         let controls_h = (h - videos_h).max(60.0);
         return MainColumnSplit {
-            controls_max_height: controls_h,
+            controls_scroll_max_height: Some(controls_h),
             videos_height: videos_h,
         };
     }
@@ -323,7 +324,7 @@ pub fn compute_main_column_split(
         .max(min_videos)
         .min(h - MIN_CONTROLS_SCROLL_H);
     MainColumnSplit {
-        controls_max_height: h - videos_h,
+        controls_scroll_max_height: Some(h - videos_h),
         videos_height: videos_h,
     }
 }
@@ -561,14 +562,23 @@ mod tests {
     #[test]
     fn main_column_split_fits_viewport() {
         let split = compute_main_column_split(600.0, true, false);
-        assert!(split.controls_max_height >= 100.0);
+        let controls_h = split.controls_scroll_max_height.unwrap();
+        assert!(controls_h >= 100.0);
         assert!(split.videos_height >= 220.0);
-        assert!((split.controls_max_height + split.videos_height - 600.0).abs() < 0.01);
+        assert!((controls_h + split.videos_height - 600.0).abs() < 0.01);
     }
 
     #[test]
     fn main_column_split_never_exceeds_available() {
         let split = compute_main_column_split(280.0, true, false);
-        assert!(split.controls_max_height + split.videos_height <= 280.0 + 0.01);
+        let controls_h = split.controls_scroll_max_height.unwrap();
+        assert!(controls_h + split.videos_height <= 280.0 + 0.01);
+    }
+
+    #[test]
+    fn main_column_split_undocked_has_no_scroll_cap() {
+        let split = compute_main_column_split(600.0, false, false);
+        assert!(split.controls_scroll_max_height.is_none());
+        assert_eq!(split.videos_height, 0.0);
     }
 }

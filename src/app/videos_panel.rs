@@ -130,24 +130,29 @@ impl PydlApp {
 
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
+        ui.horizontal(|ui| {
             let strip_label = if self.av1_mode {
                 "AV1 queue is in a separate window."
             } else {
                 "Video queue is in a separate window."
             };
             ui.label(RichText::new(strip_label).color(TEXT_MUTED));
-            left_button_row(ui, |ui| {
-                button_group(ui, "videos_show", |g| {
-                    if !self.settings.videos_open
-                        && g.secondary(&format!("{} Show videos", ui_icons::VIDEOS), true)
-                            .clicked()
-                    {
-                        self.settings.videos_open = true;
-                        self.persist_settings();
-                    }
-                });
-            });
+            let tail_w = ui.available_width();
+            ui.allocate_ui_with_layout(
+                egui::vec2(tail_w.max(0.0), 0.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    button_group(ui, "videos_show", |g| {
+                        if !self.settings.videos_open
+                            && g.secondary(&format!("{} Show videos", ui_icons::VIDEOS), true)
+                                .clicked()
+                        {
+                            self.settings.videos_open = true;
+                            self.persist_settings();
+                        }
+                    });
+                },
+            );
         });
         if self.av1_mode {
             if !self.av1_items.is_empty() {

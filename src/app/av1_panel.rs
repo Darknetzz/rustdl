@@ -186,11 +186,13 @@ impl PydlApp {
             self.settings.compact_cards,
         );
 
-        egui::ScrollArea::vertical()
+        let mut av1_controls_scroll = egui::ScrollArea::vertical()
             .id_salt("rustdl_av1_controls")
-            .auto_shrink([false, false])
-            .max_height(main_split.controls_max_height)
-            .show(ui, |ui| {
+            .auto_shrink([false, false]);
+        if let Some(max_h) = main_split.controls_scroll_max_height {
+            av1_controls_scroll = av1_controls_scroll.max_height(max_h);
+        }
+        av1_controls_scroll.show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
                 ui.horizontal_wrapped(|ui| {
@@ -274,18 +276,18 @@ impl PydlApp {
                             true,
                         );
                     }
-                    left_button_row(ui, |ui| {
-                        button_group(ui, "av1_settings", |g| {
-                            if g.secondary(
-                                &format!("{} Edit in Settings", ui_icons::SETTINGS),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.settings_open = true;
-                                self.settings_tab = super::SettingsTab::Av1;
-                            }
-                        });
+                });
+                left_button_row(ui, |ui| {
+                    button_group(ui, "av1_settings", |g| {
+                        if g.secondary(
+                            &format!("{} Edit in Settings", ui_icons::SETTINGS),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.settings_open = true;
+                            self.settings_tab = super::SettingsTab::Av1;
+                        }
                     });
                 });
                 button_toolbar_wrapped(ui, |ui| {
