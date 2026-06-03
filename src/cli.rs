@@ -25,36 +25,17 @@ pub struct CliWebOnlyOptions {
     pub port: Option<u16>,
 }
 
-/// True when the process should attach to the parent console on Windows (CLI modes).
-pub fn args_want_console(args: &[String]) -> bool {
-    args.first().is_some_and(|a| {
-        matches!(
-            a.as_str(),
-            "--help" | "-h" | "--version" | "-V" | "--download" | "--list-profiles" | "--web-only"
-        )
-    })
-}
-
+/// Drop the console window when starting the egui UI (Explorer / shortcut launch).
 #[cfg(windows)]
-pub fn attach_parent_console() {
-    use std::io::{self, Write};
-    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ACCESS_DENIED};
-    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
+pub fn detach_console_for_gui() {
+    use windows_sys::Win32::System::Console::FreeConsole;
     unsafe {
-        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-            // Already has a console (e.g. subsystem:windows started from a terminal).
-            // AllocConsole here would open a second window and corrupt interleaved output.
-            if GetLastError() != ERROR_ACCESS_DENIED {
-                let _ = AllocConsole();
-            }
-        }
+        let _ = FreeConsole();
     }
-    let _ = io::stdout().flush();
-    let _ = io::stderr().flush();
 }
 
 #[cfg(not(windows))]
-pub fn attach_parent_console() {}
+pub fn detach_console_for_gui() {}
 
 pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
     let mut settings = load_settings();
@@ -433,12 +414,6 @@ mod tests {
         let opts = parse_web_only_args(&args).unwrap();
         assert_eq!(opts.host.as_deref(), Some("0.0.0.0"));
         assert_eq!(opts.port, Some(8765));
-    }
-
-    #[test]
-    fn args_want_console_includes_web_only() {
-        assert!(args_want_console(&["--web-only".to_owned()]));
-        assert!(!args_want_console(&[]));
     }
 
     #[test]

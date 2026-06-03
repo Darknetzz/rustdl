@@ -58,15 +58,14 @@ pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
 
 pub fn main_entry() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    #[cfg(windows)]
-    if cli::args_want_console(&args) {
-        cli::attach_parent_console();
-    }
     // CLI modes must exit explicitly: eframe/winit can leave threads running on Windows
     // after main returns, which makes --help and other headless commands appear hung.
     if !args.is_empty() && cli::run_cli_or_exit(args) {
         process::exit(0);
     }
+
+    #[cfg(windows)]
+    cli::detach_console_for_gui();
 
     let runtime = match Runtime::new() {
         Ok(rt) => Arc::new(rt),
