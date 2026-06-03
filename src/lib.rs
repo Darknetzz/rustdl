@@ -1,7 +1,6 @@
 //! Headless and GUI logic for rustdl. The binary entry point is [`main_entry`].
 
 pub mod app;
-pub(crate) mod service;
 pub mod app_actions;
 pub mod app_icon;
 pub mod app_parsing;
@@ -15,6 +14,7 @@ pub mod external_tools;
 pub mod models;
 pub mod pkg_version;
 pub mod profiles;
+pub(crate) mod service;
 pub mod theme;
 pub mod time_format;
 pub mod ui_icons;

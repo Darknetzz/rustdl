@@ -726,13 +726,9 @@ impl PydlApp {
                     {
                         self.toggle_logs_panel();
                     }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Settings", ui_icons::SETTINGS),
-                        true,
-                    )
-                    .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
-                    .clicked()
+                    if secondary_button(ui, &format!("{} Settings", ui_icons::SETTINGS), true)
+                        .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
+                        .clicked()
                     {
                         self.settings_open = true;
                     }

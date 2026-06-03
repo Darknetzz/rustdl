@@ -64,12 +64,13 @@ pub fn item_media_playable(core: &DownloadCore, item: &QueueItem) -> bool {
 
 pub fn item_media_filename(core: &DownloadCore, item: &QueueItem) -> Option<String> {
     let path = resolve_item_media_path(core, item).ok()?;
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .map(str::to_owned)
+    path.file_name().and_then(|n| n.to_str()).map(str::to_owned)
 }
 
-pub fn resolve_item_media_path(core: &DownloadCore, item: &QueueItem) -> Result<PathBuf, StatusCode> {
+pub fn resolve_item_media_path(
+    core: &DownloadCore,
+    item: &QueueItem,
+) -> Result<PathBuf, StatusCode> {
     let (path, _) = core
         .done_file_index
         .find_path_for_queue_item(&core.output_dir, item)
@@ -100,9 +101,7 @@ pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Respo
         return Err(StatusCode::NOT_FOUND);
     }
     let mime = mime_for_path(path);
-    let mut file = File::open(path)
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
+    let mut file = File::open(path).await.map_err(|_| StatusCode::NOT_FOUND)?;
 
     let (start, end) = if let Some(range) = headers
         .get(header::RANGE)

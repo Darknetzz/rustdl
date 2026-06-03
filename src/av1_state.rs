@@ -73,8 +73,9 @@ pub fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
             continue;
         };
         summary.completed += 1;
-        summary.completed_input_bytes =
-            summary.completed_input_bytes.saturating_add(item.input_bytes);
+        summary.completed_input_bytes = summary
+            .completed_input_bytes
+            .saturating_add(item.input_bytes);
         summary.completed_output_bytes =
             summary.completed_output_bytes.saturating_add(output_bytes);
     }
@@ -94,7 +95,10 @@ pub fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
     if scanned.is_empty() {
         return;
     }
-    let remove: HashSet<String> = scanned.iter().map(|s| normalize_av1_source_key(s)).collect();
+    let remove: HashSet<String> = scanned
+        .iter()
+        .map(|s| normalize_av1_source_key(s))
+        .collect();
     let remaining: Vec<String> = input
         .lines()
         .map(str::trim)
@@ -203,8 +207,14 @@ mod tests {
 
     #[test]
     fn progress_detail_includes_percent_and_time() {
-        let out =
-            format_av1_progress_detail("continue", Some(30.0), Some(60.0), "30", "1.5x", Some(50.0));
+        let out = format_av1_progress_detail(
+            "continue",
+            Some(30.0),
+            Some(60.0),
+            "30",
+            "1.5x",
+            Some(50.0),
+        );
         assert!(out.contains("50%"));
         assert!(out.contains("0:30 / 1:00"));
         assert!(out.contains("1.50x"));

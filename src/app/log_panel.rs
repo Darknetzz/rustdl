@@ -157,7 +157,9 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true).clicked() {
+                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true)
+                            .clicked()
+                        {
                             self.settings.logs_open = false;
                             self.persist_settings();
                         }
@@ -382,8 +384,7 @@ pub(crate) fn attach_paste_context_menu(
 
 static TOOL_VERSION_DATE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d{4}[-./]\d{2}[-./]\d{2}").expect("date regex"));
-static TOOL_VERSION_N_REV: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"N-\d+").expect("n-rev regex"));
+static TOOL_VERSION_N_REV: Lazy<Regex> = Lazy::new(|| Regex::new(r"N-\d+").expect("n-rev regex"));
 
 /// Short label for the header tool strip; prefers build/release date, full string on hover.
 pub(crate) fn compact_tool_version_display(version: &str) -> String {
@@ -427,11 +428,8 @@ pub(crate) fn draw_web_ui_header_link(ui: &mut egui::Ui, url: &str) {
     } else {
         format!("✔ Web UI · {host}")
     };
-    ui.hyperlink_to(
-        RichText::new(body).small().color(WEB_UI_OK).strong(),
-        url,
-    )
-    .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
+    ui.hyperlink_to(RichText::new(body).small().color(WEB_UI_OK).strong(), url)
+        .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
 }
 
 fn web_ui_link_host(url: &str) -> String {
@@ -505,9 +503,6 @@ mod web_ui_link_tests {
 
     #[test]
     fn host_from_url() {
-        assert_eq!(
-            web_ui_link_host("http://127.0.0.1:8765/"),
-            "127.0.0.1:8765"
-        );
+        assert_eq!(web_ui_link_host("http://127.0.0.1:8765/"), "127.0.0.1:8765");
     }
 }

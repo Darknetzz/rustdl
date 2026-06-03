@@ -7,28 +7,28 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use parking_lot::Mutex;
-use tokio::runtime::Runtime;
-use tokio::sync::broadcast;
 use crate::app::background_spawn;
 use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
+use crate::app::events::{UiEvent, UiEventBus};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
+use crate::av1_transcode::EncoderChoice;
 use crate::config::{
     load_activity_log, load_queue_items, load_settings, save_activity_log, save_queue_items,
     save_settings, trim_activity_log, AppSettings,
 };
-use crate::av1_transcode::EncoderChoice;
 use crate::config::{load_av1_queue_snapshot, Av1QueueSnapshot};
 use crate::models::{Av1QueueItem, ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
-use crate::app::events::{UiEvent, UiEventBus};
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
     build_download_extra_args, build_redownload_extra_args, metadata_extra_args,
     output_filename_template, remove_video_ids_from_download_archive,
 };
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use parking_lot::Mutex;
+use tokio::runtime::Runtime;
+use tokio::sync::broadcast;
 
 pub type SharedCore = Arc<Mutex<DownloadCore>>;
 
@@ -266,21 +266,13 @@ impl DownloadCore {
     /// Resolves `item_id` to a row index, rebuilding the map when it is stale.
     pub fn resolve_item_idx(&mut self, item_id: u64) -> Option<usize> {
         if let Some(idx) = self.item_idx(item_id) {
-            if self
-                .items
-                .get(idx)
-                .is_some_and(|it| it.item_id == item_id)
-            {
+            if self.items.get(idx).is_some_and(|it| it.item_id == item_id) {
                 return Some(idx);
             }
         }
         self.rebuild_item_index();
         if let Some(idx) = self.item_idx(item_id) {
-            if self
-                .items
-                .get(idx)
-                .is_some_and(|it| it.item_id == item_id)
-            {
+            if self.items.get(idx).is_some_and(|it| it.item_id == item_id) {
                 return Some(idx);
             }
         }
@@ -465,8 +457,7 @@ impl DownloadCore {
                 .done_file_index
                 .find_path_for_queue_item(&output_dir, &item)
             {
-                self.items[idx].local_path =
-                    Some(path.to_string_lossy().into_owned());
+                self.items[idx].local_path = Some(path.to_string_lossy().into_owned());
             }
         }
     }
@@ -826,12 +817,8 @@ impl DownloadCore {
         let removed = match filter {
             QueueClearFilter::Inactive => {
                 let before = self.items.len();
-                self.items.retain(|it| {
-                    matches!(
-                        it.status,
-                        ItemStatus::Queued | ItemStatus::Downloading
-                    )
-                });
+                self.items
+                    .retain(|it| matches!(it.status, ItemStatus::Queued | ItemStatus::Downloading));
                 self.pending_resolve_ids
                     .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
                 before.saturating_sub(self.items.len())
@@ -953,10 +940,7 @@ impl DownloadCore {
             ));
         }
         if filter_stats.invalid > 0 {
-            self.append_log(&format!(
-                "Skipped {} invalid URL(s).",
-                filter_stats.invalid
-            ));
+            self.append_log(&format!("Skipped {} invalid URL(s).", filter_stats.invalid));
         }
         if lines.is_empty() {
             self.append_log("No new URLs to add (all duplicates or invalid).");

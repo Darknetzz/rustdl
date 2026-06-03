@@ -16,9 +16,8 @@ use tokio::sync::Semaphore;
 mod about;
 mod av1_panel;
 pub(crate) mod background_spawn;
-pub(crate) mod core_sync;
 mod cards;
-mod videos_panel;
+pub(crate) mod core_sync;
 pub(crate) mod done_file_index;
 mod download_control;
 mod eframe_app;
@@ -30,6 +29,7 @@ mod queue_persist;
 mod settings_panel;
 mod thumbnails;
 mod update_check;
+mod videos_panel;
 
 pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
 pub(crate) use events::UiEvent;
@@ -37,26 +37,22 @@ pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
     attach_paste_context_menu, draw_input_line_summary, draw_precheck_status,
-    draw_web_ui_header_link, log_line_color,
-    LOG_COLOR_ERROR, LOG_COLOR_WARN,
+    draw_web_ui_header_link, log_line_color, LOG_COLOR_ERROR, LOG_COLOR_WARN,
 };
 
 use crate::app_actions;
 use crate::app_icon;
-use crate::app_parsing::{
-    human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob,
-};
+use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob};
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, centered_button_row, compute_main_column_split,
-    content_panel_frame, danger_button, with_full_width, HEADER_RIGHT_INSET,
-    modal_backdrop, secondary_button, status_color, success_button, warning_button,
-    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    content_panel_frame, danger_button, modal_backdrop, secondary_button, status_color,
+    success_button, warning_button, with_full_width, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    HEADER_RIGHT_INSET,
 };
 use crate::config::{
-    default_downloads, export_queue_urls, load_activity_log,
-    load_settings, rustdl_config_dir, save_settings, trim_activity_log,
-    AppSettings,
+    default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,
+    save_settings, trim_activity_log, AppSettings,
 };
 use crate::models::Av1QueueItem;
 use crate::models::{ItemStatus, QueueItem};
@@ -269,11 +265,8 @@ impl PydlApp {
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
         let applied_theme = settings.theme.clone();
 
-        let web_server = crate::service::web::spawn_web_server(
-            runtime.clone(),
-            shared_core.clone(),
-            &settings,
-        );
+        let web_server =
+            crate::service::web::spawn_web_server(runtime.clone(), shared_core.clone(), &settings);
 
         let mut app = Self {
             shared_core: shared_core.clone(),
@@ -962,8 +955,7 @@ impl PydlApp {
             .filter(|s| !s.is_empty())
             .map(str::to_owned)
             .collect();
-        self.input_line_info =
-            input_lines::analyze_input_lines(&lines, self.dedupe_keys());
+        self.input_line_info = input_lines::analyze_input_lines(&lines, self.dedupe_keys());
     }
 
     fn hold_current_input_line_summary(&mut self, now: f64) {

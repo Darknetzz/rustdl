@@ -7,7 +7,7 @@ use tokio::task::JoinHandle;
 
 use crate::config::AppSettings;
 use crate::service::core::SharedCore;
-use crate::service::web::api::{ApiState, api_router};
+use crate::service::web::api::{api_router, ApiState};
 
 /// Browser-openable URL for the LAN web UI (maps `0.0.0.0` to this machine).
 pub fn web_ui_browser_url(bind_address: &str) -> String {
@@ -84,9 +84,9 @@ pub fn resolve_web_bind_address(
         }
         return Ok(fallback.to_owned());
     }
-    let fallback_addr: SocketAddr = fallback.parse().map_err(|e| {
-        WebServerStartError::InvalidBind(format!("{fallback:?}: {e}"))
-    })?;
+    let fallback_addr: SocketAddr = fallback
+        .parse()
+        .map_err(|e| WebServerStartError::InvalidBind(format!("{fallback:?}: {e}")))?;
     let host = host
         .map(str::trim)
         .filter(|s| !s.is_empty())
@@ -144,15 +144,13 @@ pub fn spawn_web_server_at(
     let state = ApiState::new(core.clone());
     let app = api_router(state);
 
-    let std_listener = std::net::TcpListener::bind(addr).map_err(|e| {
-        WebServerStartError::BindFailed(format!("{addr}: {e}"))
-    })?;
+    let std_listener = std::net::TcpListener::bind(addr)
+        .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
     std_listener
         .set_nonblocking(true)
         .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
-    let listener = tokio::net::TcpListener::from_std(std_listener).map_err(|e| {
-        WebServerStartError::BindFailed(format!("{addr}: {e}"))
-    })?;
+    let listener = tokio::net::TcpListener::from_std(std_listener)
+        .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let join = runtime.spawn(async move {
@@ -178,10 +176,7 @@ mod tests {
 
     #[test]
     fn web_ui_browser_url_maps_wildcard_bind() {
-        assert_eq!(
-            web_ui_browser_url("0.0.0.0:8765"),
-            "http://127.0.0.1:8765/"
-        );
+        assert_eq!(web_ui_browser_url("0.0.0.0:8765"), "http://127.0.0.1:8765/");
     }
 
     #[test]

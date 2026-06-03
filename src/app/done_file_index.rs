@@ -272,11 +272,7 @@ pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
     }
     #[cfg(windows)]
     {
-        let norm = |p: &Path| {
-            p.to_string_lossy()
-                .replace('/', "\\")
-                .to_ascii_lowercase()
-        };
+        let norm = |p: &Path| p.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
         let r = norm(root);
         let f = norm(file);
         !r.is_empty() && (f == r || f.starts_with(&format!("{r}\\")))
@@ -287,10 +283,7 @@ pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
     }
 }
 
-fn find_unique_by_title_hint(
-    index: &DoneFileIndex,
-    title: &str,
-) -> Option<(PathBuf, SystemTime)> {
+fn find_unique_by_title_hint(index: &DoneFileIndex, title: &str) -> Option<(PathBuf, SystemTime)> {
     let hint = title_hint_fragment(title);
     if hint.len() < 6 {
         return None;
@@ -372,9 +365,7 @@ mod tests {
             title: "My Song [dQw4w9WgXcQ]".to_owned(),
             ..QueueItem::default()
         };
-        assert!(index
-            .find_path_for_queue_item("/tmp", &item)
-            .is_some());
+        assert!(index.find_path_for_queue_item("/tmp", &item).is_some());
     }
 
     #[test]

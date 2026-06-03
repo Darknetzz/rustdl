@@ -50,11 +50,7 @@ impl PydlApp {
         ids.into_iter().map(|(_, id)| id).collect()
     }
 
-    pub(super) fn spawn_download_workers(
-        &mut self,
-        pending_ids: Vec<u64>,
-        force_redownload: bool,
-    ) {
+    pub(super) fn spawn_download_workers(&mut self, pending_ids: Vec<u64>, force_redownload: bool) {
         if self.downloads_paused {
             self.append_log("Downloads are paused. Click Resume to continue.");
             return;

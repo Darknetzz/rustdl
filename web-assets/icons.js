@@ -11,6 +11,7 @@ const ICON = {
   deleteForever: "delete_forever",
   description: "description",
   download: "download",
+  exit: "exit_to_app",
   folderOpen: "folder_open",
   music: "music_note",
   pause: "pause",

@@ -156,7 +156,10 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/queue", post(queue_add))
         .route("/api/queue/{id}", axum::routing::delete(queue_remove))
         .route("/api/queue/clear", post(queue_clear))
-        .route("/api/queue/{id}/file", axum::routing::delete(queue_delete_file))
+        .route(
+            "/api/queue/{id}/file",
+            axum::routing::delete(queue_delete_file),
+        )
         .route("/api/logs/clear", post(logs_clear))
         .route("/api/downloads/start", post(downloads_start))
         .route("/api/downloads/pause", post(downloads_pause))
@@ -226,8 +229,7 @@ async fn profiles_apply(
     Json(body): Json<ApplyProfileBody>,
 ) -> Result<StatusCode, StatusCode> {
     let mut c = st.core.lock();
-    let profile = find_profile(&c.profile_store, body.name.trim())
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let profile = find_profile(&c.profile_store, body.name.trim()).ok_or(StatusCode::NOT_FOUND)?;
     profile.apply_to(&mut c.settings);
     c.settings.active_profile = profile.name.clone();
     c.output_dir = c.settings.output_dir.clone();
@@ -355,10 +357,7 @@ async fn queue_clear(
     Ok(Json(QueueClearResponse { removed }))
 }
 
-async fn queue_delete_file(
-    State(st): State<ApiState>,
-    Path(id): Path<u64>,
-) -> StatusCode {
+async fn queue_delete_file(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
     let mut c = st.core.lock();
     if c.delete_item_file_on_disk(id) {
         StatusCode::NO_CONTENT
@@ -391,10 +390,7 @@ async fn downloads_resume(State(st): State<ApiState>) -> StatusCode {
     StatusCode::OK
 }
 
-async fn downloads_cancel(
-    State(st): State<ApiState>,
-    Path(id): Path<u64>,
-) -> StatusCode {
+async fn downloads_cancel(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
     let mut c = st.core.lock();
     c.request_cancel_item(id, CancelPostAction::Ready);
     StatusCode::OK
@@ -503,7 +499,9 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
             processed,
             total,
             current,
-        } => serde_json::json!({"type":"add_progress","processed":processed,"total":total,"current":current}),
+        } => {
+            serde_json::json!({"type":"add_progress","processed":processed,"total":total,"current":current})
+        }
         UiEvent::AddDone => serde_json::json!({"type":"add_done"}),
         UiEvent::LogLine { line } => serde_json::json!({"type":"log","line":line}),
         UiEvent::Av1Line { item_id, line } => {
@@ -548,7 +546,13 @@ async fn thumbnail_proxy(
         let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
             .ok()
             .filter(|p| media::media_kind_for_path(p).is_some());
-        (urls, c.http_client.clone(), local_media, ffmpeg_path, has_ffmpeg)
+        (
+            urls,
+            c.http_client.clone(),
+            local_media,
+            ffmpeg_path,
+            has_ffmpeg,
+        )
     };
     if let Some(path) = local_thumb.as_ref() {
         if let Some(bytes) = extract_local_video_thumbnail(path, &ffmpeg_path, has_ffmpeg).await {

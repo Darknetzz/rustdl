@@ -323,9 +323,13 @@ mod tests {
         assert!(!is_queueable_http_url(
             "error: could not compile `rustdl` (lib) due to 1 previous error"
         ));
-        assert!(!is_queueable_http_url("help: consider changing this to be mutable"));
+        assert!(!is_queueable_http_url(
+            "help: consider changing this to be mutable"
+        ));
         assert!(!is_queueable_http_url("mailto:test@example.com"));
-        assert!(is_queueable_http_url("https://www.youtube.com/watch?v=abc123"));
+        assert!(is_queueable_http_url(
+            "https://www.youtube.com/watch?v=abc123"
+        ));
         assert!(is_queueable_http_url("http://127.0.0.1:8765/"));
     }
 

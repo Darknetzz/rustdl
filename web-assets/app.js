@@ -7,7 +7,12 @@ let autoAddTimer = null;
 const statusFlags = {
   auto_add_pasted_urls: false,
   add_in_progress: false,
+  shutdown_pending: false,
 };
+
+let shuttingDown = false;
+/** @type {object | null} */
+let lastStatusPayload = null;
 
 let cachedHasYtDlp = false;
 
@@ -75,12 +80,59 @@ async function refreshToolsOnly() {
 async function refreshStatus() {
   const res = await api("/api/status");
   const data = await res.json();
+  lastStatusPayload = data;
   const s = data.status;
   statusFlags.auto_add_pasted_urls = !!data.auto_add_pasted_urls;
   statusFlags.add_in_progress = !!data.add_in_progress;
+  statusFlags.shutdown_pending = !!data.shutdown_pending;
+  if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
+  updateQuitButtonState();
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
+}
+
+function updateQuitButtonState() {
+  const btn = document.getElementById("btn-quit");
+  if (!btn) return;
+  const busy = shuttingDown || statusFlags.shutdown_pending;
+  btn.disabled = busy;
+  btn.title = busy
+    ? "Shutting down rustdl…"
+    : "Quit rustdl (saves queue, cancels active jobs)";
+}
+
+function showShutdownNotice(message) {
+  shuttingDown = true;
+  updateQuitButtonState();
+  const auth = document.getElementById("auth-status");
+  if (auth) {
+    auth.textContent = message;
+    auth.classList.remove("hidden");
+  }
+  const panel = document.getElementById("auth-panel");
+  if (panel) panel.classList.remove("hidden");
+}
+
+async function requestAppShutdown() {
+  if (shuttingDown || statusFlags.shutdown_pending) return;
+  const st = lastStatusPayload?.status;
+  const workActive =
+    statusFlags.add_in_progress ||
+    (lastStatusPayload?.queue_running ?? 0) > 0 ||
+    (st &&
+      (st.resolving + st.queued + st.active > 0));
+  let msg =
+    "Quit rustdl? Your queue and settings will be saved.";
+  if (workActive) {
+    msg +=
+      " Active downloads will be cancelled first, then rustdl will exit.";
+  }
+  if (!confirm(msg)) return;
+  shuttingDown = true;
+  updateQuitButtonState();
+  showShutdownNotice("Shutting down rustdl…");
+  await api("/api/shutdown", { method: "POST" });
 }
 
 function renderStatusSummary(data) {
@@ -88,6 +140,14 @@ function renderStatusSummary(data) {
   if (!root) return;
   root.innerHTML = "";
   root.className = "status-summary";
+
+  if (data.shutdown_pending || shuttingDown) {
+    const el = document.createElement("span");
+    el.className = "status-badge status-paused";
+    el.innerHTML =
+      '<span class="status-dot" aria-hidden="true"></span>Shutting down…';
+    root.appendChild(el);
+  }
 
   const runningCount = data.queue_running ?? 0;
   const paused = document.createElement("span");
@@ -712,9 +772,24 @@ function connectSse() {
   const t = token();
   if (!t) return;
   const es = new EventSource(`/api/events?token=${encodeURIComponent(t)}`);
-  es.onmessage = () => refreshAll().catch(() => {});
+  es.onmessage = (ev) => {
+    try {
+      const data = JSON.parse(ev.data);
+      if (data?.type === "shutdown") {
+        showShutdownNotice(
+          "rustdl has shut down. You can close this tab."
+        );
+        es.close();
+        return;
+      }
+    } catch {
+      /* ignore malformed payloads */
+    }
+    refreshAll().catch(() => {});
+  };
   es.onerror = () => {
     es.close();
+    if (shuttingDown) return;
     setTimeout(connectSse, 3000);
   };
 }
@@ -940,6 +1015,13 @@ document.getElementById("auth-form").addEventListener("submit", (e) => {
 });
 
 document.getElementById("btn-refresh-tools").onclick = () => refreshToolsOnly().catch(() => {});
+
+document.getElementById("btn-quit").onclick = () =>
+  requestAppShutdown().catch((e) => {
+    shuttingDown = false;
+    updateQuitButtonState();
+    alert(e instanceof Error ? e.message : String(e));
+  });
 
 document.getElementById("btn-add").onclick = async () => {
   clearTimeout(autoAddTimer);

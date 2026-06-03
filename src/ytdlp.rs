@@ -219,7 +219,9 @@ pub fn parse_output_path_from_download_log_line(line: &str) -> Option<std::path:
 pub fn is_plausible_youtube_video_id(id: &str) -> bool {
     let id = id.trim();
     id.len() == 11
-        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 }
 
 /// Bracketed segments in a title/filename stem (`Title [id]`).
@@ -266,7 +268,9 @@ fn push_ytimg_candidates(out: &mut Vec<String>, vid: &str) {
     };
     push(format!("https://i.ytimg.com/vi/{vid}/hqdefault.jpg"));
     push(format!("https://i.ytimg.com/vi/{vid}/mqdefault.jpg"));
-    push(format!("https://i.ytimg.com/vi_webp/{vid}/maxresdefault.webp"));
+    push(format!(
+        "https://i.ytimg.com/vi_webp/{vid}/maxresdefault.webp"
+    ));
     push(format!("https://i.ytimg.com/vi/{vid}/default.jpg"));
 }
 
@@ -870,10 +874,7 @@ mod tests {
             source_line: "https://youtu.be/xyz987".to_owned(),
             ..Default::default()
         };
-        assert_eq!(
-            youtube_video_id_from_item(&item).as_deref(),
-            Some("xyz987")
-        );
+        assert_eq!(youtube_video_id_from_item(&item).as_deref(), Some("xyz987"));
     }
 
     #[test]

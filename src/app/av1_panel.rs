@@ -3,15 +3,15 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    compute_main_column_split, danger_button, draw_meta_badge, draw_status_dot,
-    secondary_button, status_color, status_dot_with_label, success_button, MetaBadgeKind,
+    compute_main_column_split, danger_button, draw_meta_badge, draw_status_dot, secondary_button,
+    status_color, status_dot_with_label, success_button, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
 use crate::models::{Av1QueueItem, ItemStatus};
 use crate::service::DownloadCore;
 use crate::theme;
-use crate::theme::{text_muted};
+use crate::theme::text_muted;
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -193,128 +193,130 @@ impl PydlApp {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
 
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("AV1 Converter").heading());
-            ui.label(
-                RichText::new("Near-parity mode for local video transcoding.")
-                    .small()
-                    .color(egui::Color32::GRAY),
-            );
-        });
-        ui.separator();
-        ui.label("Input paths (file/folder, one per line)");
-        ui.horizontal_wrapped(|ui| {
-            if secondary_button(ui, &format!("{} Browse", ui_icons::BROWSE), true).clicked() {
-                self.browse_av1_inputs();
-            }
-            if secondary_button(ui, &format!("{} Scan inputs", ui_icons::SCAN), true).clicked() {
-                self.scan_av1_input_textbox();
-            }
-            let ready = self
-                .av1_items
-                .iter()
-                .filter(|item| item.status == ItemStatus::Idle)
-                .count();
-            if ready > 0 {
-                status_dot_with_label(
-                    ui,
-                    format!("{ready} ready"),
-                    status_color(ItemStatus::Idle),
-                    true,
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("AV1 Converter").heading());
+                    ui.label(
+                        RichText::new("Near-parity mode for local video transcoding.")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
+                });
+                ui.separator();
+                ui.label("Input paths (file/folder, one per line)");
+                ui.horizontal_wrapped(|ui| {
+                    if secondary_button(ui, &format!("{} Browse", ui_icons::BROWSE), true).clicked()
+                    {
+                        self.browse_av1_inputs();
+                    }
+                    if secondary_button(ui, &format!("{} Scan inputs", ui_icons::SCAN), true)
+                        .clicked()
+                    {
+                        self.scan_av1_input_textbox();
+                    }
+                    let ready = self
+                        .av1_items
+                        .iter()
+                        .filter(|item| item.status == ItemStatus::Idle)
+                        .count();
+                    if ready > 0 {
+                        status_dot_with_label(
+                            ui,
+                            format!("{ready} ready"),
+                            status_color(ItemStatus::Idle),
+                            true,
+                        );
+                    }
+                });
+                // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
+                // there on scan / exit, so no per-keystroke save is needed here.
+                ui.add_sized(
+                    [ui.available_width(), 90.0],
+                    egui::TextEdit::multiline(&mut self.av1_input_paths)
+                        .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
                 );
-            }
-        });
-        // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
-        // there on scan / exit, so no per-keystroke save is needed here.
-        ui.add_sized(
-            [ui.available_width(), 90.0],
-            egui::TextEdit::multiline(&mut self.av1_input_paths)
-                .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
-        );
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Session").strong());
-            if ui
-                .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
-                .changed()
-            {
-                self.persist_settings();
-            }
-        });
-        self.refresh_av1_encoder_detection();
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("Encode settings").small());
-            let br = if self.settings.av1_target_bitrate.trim().is_empty() {
-                "auto".to_owned()
-            } else {
-                self.settings.av1_target_bitrate.clone()
-            };
-            ui.label(format!(
-                "Bitrate: {br} · Max width: {} · Preset: {} · Min shrink: {:.0}%",
-                self.settings.av1_max_width,
-                self.settings.av1_size_preset,
-                self.settings.av1_min_shrink_percent,
-            ));
-            if let Some(enc) = &self.av1_encoder_choice {
-                status_dot_with_label(
-                    ui,
-                    av1_transcode::encoder_indicator_label(enc),
-                    av1_transcode::encoder_indicator_color(enc),
-                    true,
-                );
-            } else if !self.has_ffmpeg {
-                status_dot_with_label(
-                    ui,
-                    "Encoder: ffmpeg not found",
-                    Color32::from_rgb(255, 193, 120),
-                    true,
-                );
-            }
-            if secondary_button(
-                ui,
-                &format!("{} Edit in Settings", ui_icons::SETTINGS),
-                true,
-            )
-            .clicked()
-            {
-                self.settings_open = true;
-                self.settings_tab = super::SettingsTab::Av1;
-            }
-        });
-        ui.horizontal_wrapped(|ui| {
-            let ready_count = self
-                .av1_items
-                .iter()
-                .filter(|item| item.status == ItemStatus::Idle)
-                .count();
-            if success_button(
-                ui,
-                &format!("{} Start AV1 batch", ui_icons::PLAY),
-                !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
-            )
-            .clicked()
-            {
-                self.start_av1_batch();
-            }
-            if danger_button(
-                ui,
-                &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
-                self.av1_running,
-            )
-            .clicked()
-            {
-                self.av1_core_action(|core| core.cancel_av1_batch());
-            }
-            if secondary_button(
-                ui,
-                &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
-                !self.av1_running,
-            )
-            .clicked()
-            {
-                self.clear_av1_queue();
-            }
-        });
-
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Session").strong());
+                    if ui
+                        .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
+                        .changed()
+                    {
+                        self.persist_settings();
+                    }
+                });
+                self.refresh_av1_encoder_detection();
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Encode settings").small());
+                    let br = if self.settings.av1_target_bitrate.trim().is_empty() {
+                        "auto".to_owned()
+                    } else {
+                        self.settings.av1_target_bitrate.clone()
+                    };
+                    ui.label(format!(
+                        "Bitrate: {br} · Max width: {} · Preset: {} · Min shrink: {:.0}%",
+                        self.settings.av1_max_width,
+                        self.settings.av1_size_preset,
+                        self.settings.av1_min_shrink_percent,
+                    ));
+                    if let Some(enc) = &self.av1_encoder_choice {
+                        status_dot_with_label(
+                            ui,
+                            av1_transcode::encoder_indicator_label(enc),
+                            av1_transcode::encoder_indicator_color(enc),
+                            true,
+                        );
+                    } else if !self.has_ffmpeg {
+                        status_dot_with_label(
+                            ui,
+                            "Encoder: ffmpeg not found",
+                            Color32::from_rgb(255, 193, 120),
+                            true,
+                        );
+                    }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Edit in Settings", ui_icons::SETTINGS),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        self.settings_open = true;
+                        self.settings_tab = super::SettingsTab::Av1;
+                    }
+                });
+                ui.horizontal_wrapped(|ui| {
+                    let ready_count = self
+                        .av1_items
+                        .iter()
+                        .filter(|item| item.status == ItemStatus::Idle)
+                        .count();
+                    if success_button(
+                        ui,
+                        &format!("{} Start AV1 batch", ui_icons::PLAY),
+                        !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
+                    )
+                    .clicked()
+                    {
+                        self.start_av1_batch();
+                    }
+                    if danger_button(
+                        ui,
+                        &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
+                        self.av1_running,
+                    )
+                    .clicked()
+                    {
+                        self.av1_core_action(|core| core.cancel_av1_batch());
+                    }
+                    if secondary_button(
+                        ui,
+                        &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
+                        !self.av1_running,
+                    )
+                    .clicked()
+                    {
+                        self.clear_av1_queue();
+                    }
+                });
             }); // av1 controls scroll
 
         if self.settings.videos_docked {

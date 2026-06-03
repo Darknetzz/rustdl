@@ -86,11 +86,7 @@ impl PydlApp {
 
     fn draw_videos_header_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            let heading = if self.av1_mode {
-                "AV1 queue"
-            } else {
-                "Videos"
-            };
+            let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
             ui.label(RichText::new(heading).strong());
             let tail_w = ui.available_width();
             ui.allocate_ui_with_layout(
@@ -140,12 +136,8 @@ impl PydlApp {
             };
             ui.label(RichText::new(strip_label).color(TEXT_MUTED));
             if !self.settings.videos_open
-                && secondary_button(
-                    ui,
-                    &format!("{} Show videos", ui_icons::VIDEOS),
-                    true,
-                )
-                .clicked()
+                && secondary_button(ui, &format!("{} Show videos", ui_icons::VIDEOS), true)
+                    .clicked()
             {
                 self.settings.videos_open = true;
                 self.persist_settings();
@@ -171,11 +163,7 @@ impl PydlApp {
             ));
         }
         if self.status_ready > 0 {
-            parts.push((
-                "ready",
-                self.status_ready,
-                status_color(ItemStatus::Idle),
-            ));
+            parts.push(("ready", self.status_ready, status_color(ItemStatus::Idle)));
         }
         if self.status_queued > 0 {
             parts.push((
@@ -294,11 +282,7 @@ impl PydlApp {
     }
 
     /// Docked video frame (cards + optional docked log below).
-    pub(super) fn draw_docked_videos_section(
-        &mut self,
-        ui: &mut egui::Ui,
-        video_scroll_h: f32,
-    ) {
+    pub(super) fn draw_docked_videos_section(&mut self, ui: &mut egui::Ui, video_scroll_h: f32) {
         let theme = self.settings.theme.clone();
         let fill = if self.av1_mode {
             canvas_bg(&theme)
@@ -367,7 +351,9 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true).clicked() {
+                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true)
+                            .clicked()
+                        {
                             self.settings.videos_open = false;
                             self.persist_settings();
                         }

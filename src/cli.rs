@@ -150,12 +150,9 @@ pub fn parse_web_only_args(args: &[String]) -> Result<CliWebOnlyOptions> {
 
 pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     let mut settings = load_settings();
-    let bind = resolve_web_bind_address(
-        opts.host.as_deref(),
-        opts.port,
-        &settings.web_bind_address,
-    )
-    .map_err(|e| anyhow!(e.message()))?;
+    let bind =
+        resolve_web_bind_address(opts.host.as_deref(), opts.port, &settings.web_bind_address)
+            .map_err(|e| anyhow!(e.message()))?;
     settings.web_bind_address = bind.clone();
     settings.web_ui_enabled = true;
     if settings.web_auth_token.trim().is_empty() {
@@ -177,8 +174,8 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     }
 
     let token = settings.web_auth_token.trim();
-    let (mut handle, api_state) = spawn_web_server_at(rt.clone(), core, &bind, token)
-        .map_err(|e| anyhow!(e.message()))?;
+    let (mut handle, api_state) =
+        spawn_web_server_at(rt.clone(), core, &bind, token).map_err(|e| anyhow!(e.message()))?;
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
     api_state.set_process_exit_notifier(exit_tx);
 

@@ -30,11 +30,7 @@ fn should_retry_without_embed_thumbnail(extra_args: &[String], err_text: &str) -
         || msg.contains("conversion failed")
 }
 
-pub(crate) fn spawn_update_check(
-    rt: &Arc<Runtime>,
-    bus: &UiEventBus,
-    client: reqwest::Client,
-) {
+pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, bus: &UiEventBus, client: reqwest::Client) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {

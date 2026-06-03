@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
-use crate::service::core::{DownloadCore, SharedCore};
 use super::PydlApp;
+use crate::service::core::{DownloadCore, SharedCore};
 
 fn sync_queue_fields(app: &mut PydlApp, core: &mut DownloadCore) {
     app.recompute_status();
@@ -111,11 +111,7 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
         app.items
             .iter()
             .filter(|it| !previous_item_ids.contains(&it.item_id))
-            .filter_map(|it| {
-                it.thumbnail_url
-                    .clone()
-                    .map(|url| (it.item_id, url))
-            })
+            .filter_map(|it| it.thumbnail_url.clone().map(|url| (it.item_id, url)))
             .collect()
     } else {
         Vec::new()

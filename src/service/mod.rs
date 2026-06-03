@@ -15,15 +15,12 @@ pub struct RustdlService {
 }
 
 impl RustdlService {
-    pub fn new(runtime: Arc<tokio::runtime::Runtime>) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+    pub fn new(
+        runtime: Arc<tokio::runtime::Runtime>,
+    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
         let (core, rx) = DownloadCore::new_shared(runtime.clone());
         core_events::spawn_core_event_loop(runtime, core.clone());
-        (
-            Self {
-                core: core.clone(),
-            },
-            rx,
-        )
+        (Self { core: core.clone() }, rx)
     }
 
     pub fn shared_core(&self) -> SharedCore {

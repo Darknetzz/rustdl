@@ -29,9 +29,8 @@ pub fn token_from_request(request: &Request<Body>, expected: &str) -> bool {
         .and_then(|v| v.strip_prefix("Bearer "))
         .is_some_and(|t| token_matches(expected, Some(t)));
     let query_ok = request.uri().query().is_some_and(|q| {
-        url::form_urlencoded::parse(q.as_bytes()).any(|(k, v)| {
-            k == "token" && token_matches(expected, Some(v.as_ref()))
-        })
+        url::form_urlencoded::parse(q.as_bytes())
+            .any(|(k, v)| k == "token" && token_matches(expected, Some(v.as_ref())))
     });
     header_ok || bearer_ok || query_ok
 }

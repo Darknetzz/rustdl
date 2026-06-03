@@ -277,9 +277,7 @@ impl super::core::DownloadCore {
                 };
                 self.items.insert(0, item);
             } else {
-                self.append_log(&format!(
-                    "Already in queue (duplicate): {source_line}"
-                ));
+                self.append_log(&format!("Already in queue (duplicate): {source_line}"));
             }
         } else {
             for pv in keys {
