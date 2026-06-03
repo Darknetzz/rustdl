@@ -411,7 +411,7 @@ impl PydlApp {
                                             .clicked()
                                             {
                                                 self.delete_file_path(p);
-                                                ui.close_menu();
+                                                g.ui().close_menu();
                                             }
                                         }
                                         if g.danger(
@@ -427,7 +427,7 @@ impl PydlApp {
                                             self.update_status();
                                             self.refresh_input_line_info();
                                             self.schedule_queue_save();
-                                            ui.close_menu();
+                                            g.ui().close_menu();
                                         }
                                     });
                                 },

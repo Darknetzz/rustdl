@@ -284,8 +284,8 @@ impl PydlApp {
                                     )
                                     .clicked()
                                     {
-                                        ui.ctx().copy_text((*line).clone());
-                                        ui.close_menu();
+                                        g.ui().ctx().copy_text((*line).clone());
+                                        g.ui().close_menu();
                                     }
                                 });
                             });
@@ -375,10 +375,10 @@ pub(crate) fn attach_paste_context_menu(
                 if let Some(text) = from_clipboard {
                     *deferred_paste = Some(text);
                 } else {
-                    ui.ctx()
+                    g.ui().ctx()
                         .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
                 }
-                ui.close_menu();
+                g.ui().close_menu();
             }
         });
     });
