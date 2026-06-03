@@ -51,6 +51,7 @@ pub enum WebServerStartError {
     EmptyBind,
     InvalidBind(String),
     EmptyToken,
+    BindFailed(String),
 }
 
 impl WebServerStartError {
@@ -60,6 +61,11 @@ impl WebServerStartError {
             Self::InvalidBind(detail) => format!("invalid web bind address: {detail}"),
             Self::EmptyToken => {
                 "web UI requires a non-empty auth token (see Settings → Shared)".to_owned()
+            }
+            Self::BindFailed(detail) => {
+                format!(
+                    "web UI failed to bind: {detail} (another rustdl instance may already be using this port)"
+                )
             }
         }
     }
@@ -134,12 +140,19 @@ pub fn spawn_web_server_at(
     };
     let app = api_router(state);
 
+    let std_listener = std::net::TcpListener::bind(addr).map_err(|e| {
+        WebServerStartError::BindFailed(format!("{addr}: {e}"))
+    })?;
+    std_listener
+        .set_nonblocking(true)
+        .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
+
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let join = runtime.spawn(async move {
-        let listener = match tokio::net::TcpListener::bind(addr).await {
+        let listener = match tokio::net::TcpListener::from_std(std_listener) {
             Ok(l) => l,
             Err(e) => {
-                eprintln!("rustdl: web UI failed to bind {addr}: {e}");
+                eprintln!("rustdl: web UI failed to start listener on {addr}: {e}");
                 return;
             }
         };

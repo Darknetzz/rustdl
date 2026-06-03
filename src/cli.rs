@@ -37,10 +37,15 @@ pub fn args_want_console(args: &[String]) -> bool {
 
 #[cfg(windows)]
 pub fn attach_parent_console() {
-    use windows_sys::Win32::System::Console::{AttachConsole, ATTACH_PARENT_PROCESS};
+    use std::io::{self, Write};
+    use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
     unsafe {
-        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+        if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+            let _ = AllocConsole();
+        }
     }
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
 }
 
 #[cfg(not(windows))]
@@ -195,6 +200,7 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     println!("  Local URL: {local_url}");
     println!("  API token: {token}");
     println!("Press Ctrl+C to stop.");
+    let _ = std::io::Write::flush(&mut std::io::stdout());
 
     tokio::signal::ctrl_c().await?;
     handle.stop();
