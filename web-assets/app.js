@@ -89,10 +89,11 @@ function renderStatusSummary(data) {
   root.innerHTML = "";
   root.className = "status-summary";
 
+  const runningCount = data.queue_running ?? 0;
   const paused = document.createElement("span");
   paused.className =
     "status-badge " + (data.downloads_paused ? "status-paused" : "status-live");
-  paused.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${
+  paused.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${runningCount} ${
     data.downloads_paused ? "Paused" : "Running"
   }`;
   root.appendChild(paused);
