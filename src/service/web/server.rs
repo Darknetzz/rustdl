@@ -110,7 +110,13 @@ pub fn spawn_web_server(
         settings.web_bind_address.trim(),
         settings.web_auth_token.trim(),
     ) {
-        Ok(handle) => Some(handle),
+        Ok(handle) => {
+            eprintln!(
+                "rustdl: web UI listening on http://{}",
+                settings.web_bind_address.trim()
+            );
+            Some(handle)
+        }
         Err(e) => {
             eprintln!("rustdl: {}", e.message());
             None
@@ -146,17 +152,12 @@ pub fn spawn_web_server_at(
     std_listener
         .set_nonblocking(true)
         .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
+    let listener = tokio::net::TcpListener::from_std(std_listener).map_err(|e| {
+        WebServerStartError::BindFailed(format!("{addr}: {e}"))
+    })?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
     let join = runtime.spawn(async move {
-        let listener = match tokio::net::TcpListener::from_std(std_listener) {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("rustdl: web UI failed to start listener on {addr}: {e}");
-                return;
-            }
-        };
-        eprintln!("rustdl: web UI listening on http://{addr}");
         let serve = axum::serve(listener, app);
         tokio::select! {
             _ = serve => {},

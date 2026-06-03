@@ -38,10 +38,15 @@ pub fn args_want_console(args: &[String]) -> bool {
 #[cfg(windows)]
 pub fn attach_parent_console() {
     use std::io::{self, Write};
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ACCESS_DENIED};
     use windows_sys::Win32::System::Console::{AllocConsole, AttachConsole, ATTACH_PARENT_PROCESS};
     unsafe {
         if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
-            let _ = AllocConsole();
+            // Already has a console (e.g. subsystem:windows started from a terminal).
+            // AllocConsole here would open a second window and corrupt interleaved output.
+            if GetLastError() != ERROR_ACCESS_DENIED {
+                let _ = AllocConsole();
+            }
         }
     }
     let _ = io::stdout().flush();
@@ -195,12 +200,16 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
         .map_err(|e| anyhow!(e.message()))?;
 
     let local_url = web_ui_browser_url(&bind);
-    println!("rustdl {} (web-only)", crate::pkg_version::VERSION);
-    println!("  LAN bind:  http://{bind}");
-    println!("  Local URL: {local_url}");
-    println!("  API token: {token}");
-    println!("Press Ctrl+C to stop.");
-    let _ = std::io::Write::flush(&mut std::io::stdout());
+    {
+        use std::io::{self, Write};
+        let mut out = io::stdout().lock();
+        writeln!(out, "rustdl {} (web-only)", crate::pkg_version::VERSION)?;
+        writeln!(out, "  LAN bind:  http://{bind}")?;
+        writeln!(out, "  Local URL: {local_url}")?;
+        writeln!(out, "  API token: {token}")?;
+        writeln!(out, "Press Ctrl+C to stop.")?;
+        out.flush()?;
+    }
 
     tokio::signal::ctrl_c().await?;
     handle.stop();
