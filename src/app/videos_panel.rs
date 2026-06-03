@@ -355,22 +355,19 @@ impl PydlApp {
             .min_height(320.0)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if secondary_button(ui, &format!("{} Close", ui_icons::CLOSE), true)
-                            .clicked()
-                        {
-                            self.settings.videos_open = false;
-                            self.persist_settings();
-                        }
-                        if secondary_button(
-                            ui,
+                left_button_row(ui, |ui| {
+                    button_group(ui, "videos_float", |g| {
+                        if g.secondary(
                             &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
                             true,
                         )
                         .clicked()
                         {
                             self.settings.videos_docked = true;
+                            self.persist_settings();
+                        }
+                        if g.secondary(&format!("{} Close", ui_icons::CLOSE), true).clicked() {
+                            self.settings.videos_open = false;
                             self.persist_settings();
                         }
                     });

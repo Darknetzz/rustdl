@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{secondary_button, success_button};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
 
 use crate::pkg_version;
 use crate::ui_icons;
@@ -39,38 +39,48 @@ impl PydlApp {
                         .color(Color32::GRAY),
                 );
                 ui.separator();
-                ui.horizontal_wrapped(|ui| {
-                    if secondary_button(
-                        ui,
-                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        self.open_config_folder();
-                    }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Open activity log file", ui_icons::OPEN_FILE),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        self.open_activity_log_file();
-                    }
+                left_button_row(ui, |ui| {
+                    button_group(ui, "about_paths", |g| {
+                        if g.secondary(
+                            &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.open_config_folder();
+                        }
+                        if g.secondary(
+                            &format!("{} Open activity log file", ui_icons::OPEN_FILE),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.open_activity_log_file();
+                        }
+                    });
                 });
                 ui.separator();
                 ui.label(RichText::new("Updates").strong());
-                ui.horizontal_wrapped(|ui| {
-                    if secondary_button(
-                        ui,
-                        &format!("{} Check for updates", ui_icons::UPDATE_CHECK),
-                        !self.update_check_in_progress,
-                    )
-                    .clicked()
-                    {
-                        self.start_update_check();
-                    }
+                button_toolbar_wrapped(ui, |ui| {
+                    button_group(ui, "about_updates", |g| {
+                        if g.secondary(
+                            &format!("{} Check for updates", ui_icons::UPDATE_CHECK),
+                            !self.update_check_in_progress,
+                        )
+                        .clicked()
+                        {
+                            self.start_update_check();
+                        }
+                        if self.update_has_update
+                            && g.success(
+                                &format!("{} Update now (open release page)", ui_icons::UPDATE_OPEN),
+                                true,
+                            )
+                            .clicked()
+                        {
+                            self.open_release_url();
+                        }
+                    });
                     if self.update_check_in_progress {
                         ui.spinner();
                     }
@@ -84,16 +94,6 @@ impl PydlApp {
                 }
                 if let Some(latest) = &self.update_latest_version {
                     ui.label(format!("Latest release: {latest}"));
-                }
-                if self.update_has_update
-                    && success_button(
-                        ui,
-                        &format!("{} Update now (open release page)", ui_icons::UPDATE_OPEN),
-                        true,
-                    )
-                    .clicked()
-                {
-                    self.open_release_url();
                 }
                 ui.label(
                     RichText::new(
