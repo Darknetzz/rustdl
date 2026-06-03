@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button, success_button, warning_button};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button, success_button};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -84,15 +84,16 @@ impl eframe::App for PydlApp {
                                 egui::vec2(tail_w.max(0.0), 0.0),
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if warning_button(
-                                        ui,
-                                        &format!("{} Dismiss", ui_icons::DISMISS),
-                                        true,
-                                    )
-                                    .clicked()
-                                    {
-                                        self.show_restore_banner = false;
-                                    }
+                                    button_group(ui, "restore_dismiss", |g| {
+                                        if g.warning(
+                                            &format!("{} Dismiss", ui_icons::DISMISS),
+                                            true,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.show_restore_banner = false;
+                                        }
+                                    });
                                 },
                             );
                         });
@@ -251,20 +252,24 @@ impl eframe::App for PydlApp {
                 ui.label("URLs (one per line)");
                 #[cfg(not(windows))]
                 {
-                    if secondary_button(ui, &format!("{} Paste URLs", ui_icons::ADD), true).clicked()
-                    {
-                        if let Ok(mut clip) = arboard::Clipboard::new() {
-                            if let Ok(text) = clip.get_text() {
-                                if !text.trim().is_empty() {
-                                    self.extend_input_urls_with_lines(
-                                        parse_urls_from_text_blob(&text),
-                                        Some(ctx.input(|i| i.time)),
-                                    );
-                                    self.refresh_input_line_info();
+                    left_button_row(ui, |ui| {
+                        button_group(ui, "paste_urls", |g| {
+                            if g.secondary(&format!("{} Paste URLs", ui_icons::ADD), true).clicked()
+                            {
+                                if let Ok(mut clip) = arboard::Clipboard::new() {
+                                    if let Ok(text) = clip.get_text() {
+                                        if !text.trim().is_empty() {
+                                            self.extend_input_urls_with_lines(
+                                                parse_urls_from_text_blob(&text),
+                                                Some(ctx.input(|i| i.time)),
+                                            );
+                                            self.refresh_input_line_info();
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    }
+                        });
+                    });
                 }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(

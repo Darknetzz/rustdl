@@ -267,34 +267,35 @@ impl PydlApp {
                     && !self.add_in_progress
                     && !self.items[idx].source_line.trim().is_empty();
                 if can_retry_download || can_retry_metadata {
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        if can_retry_download {
-                            let btn = secondary_button(
-                                ui,
-                                &format!("{} Retry download", ui_icons::RETRY),
-                                true,
-                            )
-                            .on_hover_text(
-                                "Queue this video for download again using the same URL as this row.",
-                            );
-                            if btn.clicked() {
-                                self.retry_download_item_id(id);
+                    left_button_row(ui, |ui| {
+                        button_group(ui, ("card_retry", id), |g| {
+                            if can_retry_download {
+                                let btn = g
+                                    .secondary(
+                                        &format!("{} Retry download", ui_icons::RETRY),
+                                        true,
+                                    )
+                                    .on_hover_text(
+                                        "Queue this video for download again using the same URL as this row.",
+                                    );
+                                if btn.clicked() {
+                                    self.retry_download_item_id(id);
+                                }
                             }
-                        }
-                        if can_retry_metadata {
-                            let btn = secondary_button(
-                                ui,
-                                &format!("{} Retry fetch", ui_icons::RETRY),
-                                true,
-                            )
-                            .on_hover_text(
-                                "Run yt-dlp metadata again for this URL (after errors or no preview).",
-                            );
-                            if btn.clicked() {
-                                self.retry_metadata_item_id(id);
+                            if can_retry_metadata {
+                                let btn = g
+                                    .secondary(
+                                        &format!("{} Retry fetch", ui_icons::RETRY),
+                                        true,
+                                    )
+                                    .on_hover_text(
+                                        "Run yt-dlp metadata again for this URL (after errors or no preview).",
+                                    );
+                                if btn.clicked() {
+                                    self.retry_metadata_item_id(id);
+                                }
                             }
-                        }
+                        });
                     });
                 }
 

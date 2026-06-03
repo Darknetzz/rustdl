@@ -4,7 +4,7 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, compute_main_column_split, draw_meta_badge, draw_status_dot,
-    left_button_row, secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
+    left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -274,16 +274,19 @@ impl PydlApp {
                             true,
                         );
                     }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Edit in Settings", ui_icons::SETTINGS),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        self.settings_open = true;
-                        self.settings_tab = super::SettingsTab::Av1;
-                    }
+                    left_button_row(ui, |ui| {
+                        button_group(ui, "av1_settings", |g| {
+                            if g.secondary(
+                                &format!("{} Edit in Settings", ui_icons::SETTINGS),
+                                true,
+                            )
+                            .clicked()
+                            {
+                                self.settings_open = true;
+                                self.settings_tab = super::SettingsTab::Av1;
+                            }
+                        });
+                    });
                 });
                 button_toolbar_wrapped(ui, |ui| {
                     let ready_count = self

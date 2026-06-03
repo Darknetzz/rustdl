@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::app_ui::{button_group, draw_status_dot, left_button_row, secondary_button, status_color};
+use crate::app_ui::{button_group, draw_status_dot, left_button_row, status_color};
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -256,16 +256,17 @@ impl PydlApp {
                         egui::vec2(tail_w.max(0.0), 0.0),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            if secondary_button(
-                                ui,
-                                &format!("{} Undock log", ui_icons::UNDOCK_LOG),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.settings.logs_docked = false;
-                                self.persist_settings();
-                            }
+                            button_group(ui, "log_undock", |g| {
+                                if g.secondary(
+                                    &format!("{} Undock log", ui_icons::UNDOCK_LOG),
+                                    true,
+                                )
+                                .clicked()
+                                {
+                                    self.settings.logs_docked = false;
+                                    self.persist_settings();
+                                }
+                            });
                         },
                     );
                 });
