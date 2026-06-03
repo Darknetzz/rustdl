@@ -46,7 +46,7 @@ use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_fro
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, compute_main_column_split,
-    content_panel_frame, modal_backdrop, secondary_button, status_color, warning_button,
+    content_panel_frame, modal_backdrop, status_color,
     with_full_width, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT, HEADER_RIGHT_INSET,
 };
 use crate::config::{

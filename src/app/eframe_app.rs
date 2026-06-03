@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button, success_button};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
