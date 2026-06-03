@@ -430,6 +430,90 @@ pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Respon
     )
 }
 
+const BTN_GROUP_BORDER: Color32 = Color32::from_rgb(58, 64, 76);
+
+/// Bootstrap-style fused buttons inside a shared border.
+pub struct ButtonGroup<'a> {
+    ui: &'a mut egui::Ui,
+    index: usize,
+}
+
+impl<'a> ButtonGroup<'a> {
+    fn divider_if_needed(&mut self) {
+        if self.index > 0 {
+            self.ui.add(
+                egui::Separator::default()
+                    .vertical()
+                    .spacing(0.0)
+                    .grow(0.0),
+            );
+        }
+    }
+
+    pub fn ui(&mut self) -> &mut egui::Ui {
+        self.ui
+    }
+
+    pub fn add<F>(&mut self, add: F) -> Response
+    where
+        F: FnOnce(&mut egui::Ui) -> Response,
+    {
+        self.divider_if_needed();
+        self.index += 1;
+        add(self.ui)
+    }
+
+    pub fn secondary(&mut self, label: &str, enabled: bool) -> Response {
+        self.add(|ui| secondary_button(ui, label, enabled))
+    }
+
+    pub fn success(&mut self, label: &str, enabled: bool) -> Response {
+        self.add(|ui| success_button(ui, label, enabled))
+    }
+
+    pub fn danger(&mut self, label: &str, enabled: bool) -> Response {
+        self.add(|ui| danger_button(ui, label, enabled))
+    }
+
+    pub fn warning(&mut self, label: &str, enabled: bool) -> Response {
+        self.add(|ui| warning_button(ui, label, enabled))
+    }
+}
+
+pub fn button_group<R>(
+    ui: &mut egui::Ui,
+    id_salt: impl Hash,
+    add: impl FnOnce(&mut ButtonGroup<'_>) -> R,
+) -> R {
+    let _ = ui.id().with(id_salt);
+    egui::Frame::none()
+        .stroke(egui::Stroke::new(1.0, BTN_GROUP_BORDER))
+        .rounding(egui::Rounding::same(6.0))
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            let mut group = ButtonGroup { ui, index: 0 };
+            add(&mut group)
+        })
+        .inner
+}
+
+/// Row of one or more [`button_group`]s with spacing between groups.
+pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        add(ui)
+    })
+    .inner
+}
+
+pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+        add(ui)
+    })
+    .inner
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

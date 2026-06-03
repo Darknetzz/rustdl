@@ -623,6 +623,34 @@ dialog::backdrop {
 
 .status { color: var(--danger); font-size: 0.9rem; }
 
+body.shutdown-mode .topbar,
+body.shutdown-mode #auth-panel,
+body.shutdown-mode #app-main,
+body.shutdown-mode dialog {
+  display: none !important;
+}
+
+.shutdown-screen {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+}
+
+body.shutdown-mode .shutdown-screen {
+  display: flex;
+}
+
+.shutdown-message {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 1.125rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
 @media (max-width: 400px) {
   .queue { grid-template-columns: 1fr; }
   .card { max-width: none; }

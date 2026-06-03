@@ -5,8 +5,8 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{
-    danger_button, draw_meta_badge, draw_status_chip, secondary_button, status_color,
-    status_dot_with_label, warning_button, MetaBadgeKind,
+    button_group, danger_button, draw_meta_badge, draw_status_chip, secondary_button,
+    status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -469,38 +469,39 @@ impl PydlApp {
                         .wrap(),
                 );
                 ui.set_width(inner_w);
-                ui.horizontal_wrapped(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 6.0);
-                    if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                        && warning_button(
-                            ui,
-                            &format!("{} Cancel -> Ready", ui_icons::CANCEL_TO_READY),
-                            true,
-                        )
-                        .clicked()
-                    {
-                        self.request_cancel_item(id, CancelPostAction::Ready);
-                    }
-                    if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                        && danger_button(
-                            ui,
-                            &format!("{} Cancel -> Remove", ui_icons::CANCEL_TO_REMOVE),
-                            true,
-                        )
-                        .clicked()
-                    {
-                        self.request_cancel_item(id, CancelPostAction::Remove);
-                    }
-                    if !show_saved_file_actions
-                        && danger_button(ui, &format!("{} Remove", ui_icons::REMOVE), removable)
+                if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
+                    || (!show_saved_file_actions && removable)
+                {
+                    button_group(ui, ("card_actions", id), |g| {
+                        if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
+                            && g.warning(
+                                &format!("{} Cancel -> Ready", ui_icons::CANCEL_TO_READY),
+                                true,
+                            )
                             .clicked()
-                    {
-                        let _ = self.remove_item_by_id(id);
-                        self.update_status();
-                        self.refresh_input_line_info();
-                        self.schedule_queue_save();
-                    }
-                });
+                        {
+                            self.request_cancel_item(id, CancelPostAction::Ready);
+                        }
+                        if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
+                            && g.danger(
+                                &format!("{} Cancel -> Remove", ui_icons::CANCEL_TO_REMOVE),
+                                true,
+                            )
+                            .clicked()
+                        {
+                            self.request_cancel_item(id, CancelPostAction::Remove);
+                        }
+                        if !show_saved_file_actions
+                            && g.danger(&format!("{} Remove", ui_icons::REMOVE), removable)
+                                .clicked()
+                        {
+                            let _ = self.remove_item_by_id(id);
+                            self.update_status();
+                            self.refresh_input_line_info();
+                            self.schedule_queue_save();
+                        }
+                    });
+                }
             });
         };
 

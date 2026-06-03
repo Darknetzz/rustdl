@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{secondary_button, warning_button};
+use crate::app_ui::{button_group, secondary_button};
 use crate::config::{export_settings_json, import_settings_json, trim_activity_log};
 use crate::profiles::{all_profiles, find_profile, save_user_profile, DownloadProfile};
 use crate::ui_icons;
@@ -48,22 +48,28 @@ impl PydlApp {
             .default_width(620.0)
             .default_height(560.0)
             .show(ctx, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Shared,
-                        format!("{} Shared", ui_icons::TAB_SHARED),
-                    );
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Downloader,
-                        format!("{} Downloader", ui_icons::TAB_DOWNLOADER),
-                    );
-                    ui.selectable_value(
-                        &mut self.settings_tab,
-                        SettingsTab::Av1,
-                        format!("{} AV1", ui_icons::TAB_AV1),
-                    );
+                button_group(ui, "settings_tabs", |g| {
+                    g.add(|ui| {
+                        ui.selectable_value(
+                            &mut self.settings_tab,
+                            SettingsTab::Shared,
+                            format!("{} Shared", ui_icons::TAB_SHARED),
+                        )
+                    });
+                    g.add(|ui| {
+                        ui.selectable_value(
+                            &mut self.settings_tab,
+                            SettingsTab::Downloader,
+                            format!("{} Downloader", ui_icons::TAB_DOWNLOADER),
+                        )
+                    });
+                    g.add(|ui| {
+                        ui.selectable_value(
+                            &mut self.settings_tab,
+                            SettingsTab::Av1,
+                            format!("{} AV1", ui_icons::TAB_AV1),
+                        )
+                    });
                 });
                 ui.separator();
                 let scroll_h = ui.available_height().max(240.0);
@@ -627,9 +633,8 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
-                        ui.horizontal_wrapped(|ui| {
-                            if secondary_button(
-                                ui,
+                        button_group(ui, "dl_presets", |g| {
+                            if g.secondary(
                                 &format!("{} Best quality", ui_icons::PRESET_BEST),
                                 true,
                             )
@@ -637,17 +642,7 @@ impl PydlApp {
                             {
                                 self.apply_preset(DownloadPreset::BestQuality);
                             }
-                            ui.label(
-                                RichText::new(
-                                    "Highest quality video flow, mp4 merge preference, faststart enabled.",
-                                )
-                                .small()
-                                .color(Color32::GRAY),
-                            );
-                        });
-                        ui.horizontal_wrapped(|ui| {
-                            if secondary_button(
-                                ui,
+                            if g.secondary(
                                 &format!("{} Audio only", ui_icons::PRESET_AUDIO),
                                 true,
                             )
@@ -655,15 +650,7 @@ impl PydlApp {
                             {
                                 self.apply_preset(DownloadPreset::AudioOnly);
                             }
-                            ui.label(
-                                RichText::new("Extract MP3 audio only; disables remux-to-mp4.")
-                                    .small()
-                                    .color(Color32::GRAY),
-                            );
-                        });
-                        ui.horizontal_wrapped(|ui| {
-                            if warning_button(
-                                ui,
+                            if g.warning(
                                 &format!("{} Fast download", ui_icons::PRESET_FAST),
                                 true,
                             )
@@ -671,17 +658,7 @@ impl PydlApp {
                             {
                                 self.apply_preset(DownloadPreset::FastDownload);
                             }
-                            ui.label(
-                                RichText::new(
-                                    "Prioritizes speed and resilience with fragment concurrency (retries are unlimited by default).",
-                                )
-                                .small()
-                                .color(Color32::GRAY),
-                            );
-                        });
-                        ui.horizontal_wrapped(|ui| {
-                            if secondary_button(
-                                ui,
+                            if g.secondary(
                                 &format!("{} Archive mode", ui_icons::PRESET_ARCHIVE),
                                 true,
                             )
@@ -689,14 +666,15 @@ impl PydlApp {
                             {
                                 self.apply_preset(DownloadPreset::ArchiveMode);
                             }
-                            ui.label(
-                                RichText::new(
-                                    "Keeps extra metadata artifacts like info JSON, subtitles, and description.",
-                                )
-                                .small()
-                                .color(Color32::GRAY),
-                            );
                         });
+                        ui.label(
+                            RichText::new(
+                                "Best quality: highest quality, mp4 merge, faststart. Audio only: MP3 extraction. \
+                                 Fast download: speed and fragment concurrency. Archive mode: extra metadata artifacts.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
                         ui.separator();
                         ui.label(RichText::new("Retries").strong());
                         changed |= ui

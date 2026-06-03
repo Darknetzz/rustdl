@@ -45,10 +45,9 @@ use crate::app_icon;
 use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob};
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
-    alert_danger, alert_warning, centered_button_row, compute_main_column_split,
-    content_panel_frame, danger_button, modal_backdrop, secondary_button, status_color,
-    success_button, warning_button, with_full_width, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
-    HEADER_RIGHT_INSET,
+    alert_danger, alert_warning, button_group, centered_button_row, compute_main_column_split,
+    content_panel_frame, modal_backdrop, secondary_button, status_color, warning_button,
+    with_full_width, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT, HEADER_RIGHT_INSET,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,
@@ -1501,20 +1500,15 @@ impl PydlApp {
                 });
                 ui.add_space(16.0);
                 centered_button_row(ui, "exit_confirm", |ui| {
-                    if secondary_button(
-                        ui,
-                        &format!("{} Cancel", ui_icons::DISMISS),
-                        true,
-                    )
-                    .clicked()
-                    {
-                        cancel_exit_confirm = true;
-                    }
-                    ui.add_space(12.0);
-                    if danger_button(ui, &format!("{} Quit", ui_icons::EXIT), true).clicked()
-                    {
-                        self.confirm_exit(ctx);
-                    }
+                    button_group(ui, "exit_confirm", |g| {
+                        if g.secondary(&format!("{} Cancel", ui_icons::DISMISS), true).clicked()
+                        {
+                            cancel_exit_confirm = true;
+                        }
+                        if g.danger(&format!("{} Quit", ui_icons::EXIT), true).clicked() {
+                            self.confirm_exit(ctx);
+                        }
+                    });
                 });
             });
         if cancel_exit_confirm {

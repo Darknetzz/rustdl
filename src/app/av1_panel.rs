@@ -3,8 +3,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    compute_main_column_split, danger_button, draw_meta_badge, draw_status_dot, secondary_button,
-    status_color, status_dot_with_label, success_button, MetaBadgeKind,
+    button_group, button_toolbar_wrapped, compute_main_column_split, draw_meta_badge, draw_status_dot,
+    secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -203,16 +203,15 @@ impl PydlApp {
                 });
                 ui.separator();
                 ui.label("Input paths (file/folder, one per line)");
-                ui.horizontal_wrapped(|ui| {
-                    if secondary_button(ui, &format!("{} Browse", ui_icons::BROWSE), true).clicked()
-                    {
+                button_group(ui, "av1_input", |g| {
+                    if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true).clicked() {
                         self.browse_av1_inputs();
                     }
-                    if secondary_button(ui, &format!("{} Scan inputs", ui_icons::SCAN), true)
-                        .clicked()
-                    {
+                    if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true).clicked() {
                         self.scan_av1_input_textbox();
                     }
+                });
+                ui.horizontal_wrapped(|ui| {
                     let ready = self
                         .av1_items
                         .iter()
@@ -283,39 +282,43 @@ impl PydlApp {
                         self.settings_tab = super::SettingsTab::Av1;
                     }
                 });
-                ui.horizontal_wrapped(|ui| {
+                button_toolbar_wrapped(ui, |ui| {
                     let ready_count = self
                         .av1_items
                         .iter()
                         .filter(|item| item.status == ItemStatus::Idle)
                         .count();
-                    if success_button(
-                        ui,
-                        &format!("{} Start AV1 batch", ui_icons::PLAY),
-                        !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
-                    )
-                    .clicked()
-                    {
-                        self.start_av1_batch();
-                    }
-                    if danger_button(
-                        ui,
-                        &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
-                        self.av1_running,
-                    )
-                    .clicked()
-                    {
-                        self.av1_core_action(|core| core.cancel_av1_batch());
-                    }
-                    if secondary_button(
-                        ui,
-                        &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
-                        !self.av1_running,
-                    )
-                    .clicked()
-                    {
-                        self.clear_av1_queue();
-                    }
+                    button_group(ui, "av1_batch", |g| {
+                        if g.success(
+                            &format!("{} Start AV1 batch", ui_icons::PLAY),
+                            !self.av1_running
+                                && self.has_ffmpeg
+                                && self.has_ffprobe
+                                && ready_count > 0,
+                        )
+                        .clicked()
+                        {
+                            self.start_av1_batch();
+                        }
+                        if g.danger(
+                            &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
+                            self.av1_running,
+                        )
+                        .clicked()
+                        {
+                            self.av1_core_action(|core| core.cancel_av1_batch());
+                        }
+                    });
+                    button_group(ui, "av1_queue", |g| {
+                        if g.secondary(
+                            &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
+                            !self.av1_running,
+                        )
+                        .clicked()
+                        {
+                            self.clear_av1_queue();
+                        }
+                    });
                 });
             }); // av1 controls scroll
 

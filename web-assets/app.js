@@ -11,6 +11,8 @@ const statusFlags = {
 };
 
 let shuttingDown = false;
+/** @type {number | null} */
+let refreshIntervalId = null;
 /** @type {object | null} */
 let lastStatusPayload = null;
 
@@ -105,13 +107,14 @@ function updateQuitButtonState() {
 function showShutdownNotice(message) {
   shuttingDown = true;
   updateQuitButtonState();
-  const auth = document.getElementById("auth-status");
-  if (auth) {
-    auth.textContent = message;
-    auth.classList.remove("hidden");
+  if (refreshIntervalId != null) {
+    clearInterval(refreshIntervalId);
+    refreshIntervalId = null;
   }
-  const panel = document.getElementById("auth-panel");
-  if (panel) panel.classList.remove("hidden");
+  document.getElementById("settings-dialog")?.close();
+  document.body.classList.add("shutdown-mode");
+  const msgEl = document.getElementById("shutdown-message");
+  if (msgEl) msgEl.textContent = message;
 }
 
 async function requestAppShutdown() {
@@ -799,7 +802,10 @@ function connectSse() {
   };
   es.onerror = () => {
     es.close();
-    if (shuttingDown) return;
+    if (shuttingDown) {
+      showShutdownNotice("rustdl has shut down. You can close this tab.");
+      return;
+    }
     setTimeout(connectSse, 3000);
   };
 }
@@ -1485,5 +1491,8 @@ if (token()) {
   showApp();
   refreshAll().catch(() => {});
   connectSse();
-  setInterval(() => refreshAll().catch(() => {}), 5000);
+  refreshIntervalId = setInterval(() => {
+    if (shuttingDown) return;
+    refreshAll().catch(() => {});
+  }, 5000);
 }
