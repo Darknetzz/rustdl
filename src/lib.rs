@@ -61,8 +61,10 @@ pub fn main_entry() {
     if cli::args_want_console(&args) {
         cli::attach_parent_console();
     }
+    // CLI modes must exit explicitly: eframe/winit can leave threads running on Windows
+    // after main returns, which makes --help and other headless commands appear hung.
     if !args.is_empty() && cli::run_cli_or_exit(args) {
-        return;
+        process::exit(0);
     }
 
     let runtime = match Runtime::new() {
