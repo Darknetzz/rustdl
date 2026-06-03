@@ -110,7 +110,7 @@ pub fn spawn_web_server(
         settings.web_bind_address.trim(),
         settings.web_auth_token.trim(),
     ) {
-        Ok(handle) => {
+        Ok((handle, _)) => {
             eprintln!(
                 "rustdl: web UI listening on http://{}",
                 settings.web_bind_address.trim()
@@ -129,7 +129,7 @@ pub fn spawn_web_server_at(
     core: SharedCore,
     bind: &str,
     auth_token: &str,
-) -> Result<WebServerHandle, WebServerStartError> {
+) -> Result<(WebServerHandle, super::api::ApiState), WebServerStartError> {
     let bind = bind.trim();
     if bind.is_empty() {
         return Err(WebServerStartError::EmptyBind);
@@ -141,9 +141,7 @@ pub fn spawn_web_server_at(
         return Err(WebServerStartError::EmptyToken);
     }
 
-    let state = ApiState {
-        core: core.clone(),
-    };
+    let state = ApiState::new(core.clone());
     let app = api_router(state);
 
     let std_listener = std::net::TcpListener::bind(addr).map_err(|e| {
@@ -165,10 +163,13 @@ pub fn spawn_web_server_at(
         }
     });
 
-    Ok(WebServerHandle {
-        shutdown_tx: Some(shutdown_tx),
-        join: Some(join),
-    })
+    Ok((
+        WebServerHandle {
+            shutdown_tx: Some(shutdown_tx),
+            join: Some(join),
+        },
+        state,
+    ))
 }
 
 #[cfg(test)]

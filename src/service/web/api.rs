@@ -1,5 +1,8 @@
 use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::Duration;
+
+use parking_lot::Mutex;
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -27,6 +30,21 @@ use super::auth;
 #[derive(Clone)]
 pub(super) struct ApiState {
     pub core: SharedCore,
+    /// Set in `--web-only` mode; signals the headless process to exit after graceful shutdown.
+    pub process_exit: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+}
+
+impl ApiState {
+    pub fn new(core: SharedCore) -> Self {
+        Self {
+            core,
+            process_exit: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn set_process_exit_notifier(&self, tx: tokio::sync::oneshot::Sender<()>) {
+        *self.process_exit.lock() = Some(tx);
+    }
 }
 
 fn expected_token(st: &ApiState) -> String {
@@ -41,6 +59,7 @@ struct StatusResponse {
     add_in_progress: bool,
     auto_add_pasted_urls: bool,
     auto_start_downloads: bool,
+    shutdown_pending: bool,
     status: StatusCountsJson,
     tools: serde_json::Value,
 }
@@ -150,6 +169,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/profiles/apply", post(profiles_apply))
         .route("/api/tools/refresh", post(tools_refresh))
         .route("/api/logs", get(logs_get))
+        .route("/api/shutdown", post(app_shutdown))
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/{id}", get(thumbnail_proxy))
         .route("/api/media/{id}", get(media_stream));
@@ -177,6 +197,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         add_in_progress: c.add_in_progress,
         auto_add_pasted_urls: c.settings.auto_add_pasted_urls,
         auto_start_downloads: c.settings.auto_start_downloads,
+        shutdown_pending: c.shutdown_pending,
         status: StatusCountsJson {
             resolving: c.status_resolving,
             ready: c.status_ready,
@@ -433,6 +454,13 @@ async fn logs_get(State(st): State<ApiState>) -> Json<LogsResponse> {
     })
 }
 
+async fn app_shutdown(State(st): State<ApiState>) -> StatusCode {
+    let process_exit = st.process_exit.lock().take();
+    let mut c = st.core.lock();
+    c.request_app_shutdown(process_exit);
+    StatusCode::ACCEPTED
+}
+
 async fn events_sse(
     State(st): State<ApiState>,
     Query(q): Query<TokenQuery>,
@@ -495,6 +523,7 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
             ..
         } => serde_json::json!({"type":"av1_done","item_id":item_id,"ok":ok,"detail":detail}),
         UiEvent::Av1BatchDone => serde_json::json!({"type":"av1_batch_done"}),
+        UiEvent::ShutdownRequested => serde_json::json!({"type":"shutdown"}),
         _ => serde_json::json!({"type":"other"}),
     }
 }

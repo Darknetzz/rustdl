@@ -94,6 +94,7 @@ impl super::core::DownloadCore {
             }
             _ => {}
         }
+        self.maybe_finish_shutdown();
     }
 
     fn handle_av1_line(&mut self, item_id: u64, line: &str) {

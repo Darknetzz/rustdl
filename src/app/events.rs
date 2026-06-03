@@ -100,6 +100,8 @@ pub(crate) enum UiEvent {
     LogLine {
         line: String,
     },
+    /// Graceful shutdown finished (web SSE + desktop window close).
+    ShutdownRequested,
 }
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
@@ -203,6 +205,12 @@ impl PydlApp {
                     ctx.request_repaint();
                 }
                 UiEvent::LogLine { .. } => {}
+                UiEvent::ShutdownRequested => {
+                    self.exit_allowed = true;
+                    self.flush_queue_to_disk();
+                    self.flush_av1_queue_to_disk();
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
             }
         }
         self.drain_pending_thumbnail_uploads(ctx);

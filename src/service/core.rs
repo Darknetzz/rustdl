@@ -135,6 +135,10 @@ pub struct DownloadCore {
     pub av1_media_inflight: HashSet<u64>,
     pub av1_encoder_choice: Option<EncoderChoice>,
     pub av1_encoder_detect_key: String,
+
+    /// Graceful quit requested from the LAN web UI (or completing after cancel).
+    pub shutdown_pending: bool,
+    shutdown_notify: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl DownloadCore {
@@ -231,6 +235,8 @@ impl DownloadCore {
             av1_media_inflight: HashSet::new(),
             av1_encoder_choice: None,
             av1_encoder_detect_key: String::new(),
+            shutdown_pending: false,
+            shutdown_notify: None,
         };
         core.rebuild_item_index();
         core.update_status();
@@ -351,6 +357,45 @@ impl DownloadCore {
         self.settings.worker_count = self.worker_count.clamp(1, 6);
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
+        }
+    }
+
+    pub fn work_in_progress(&self) -> bool {
+        self.add_in_progress
+            || self.status_resolving > 0
+            || self.status_queued > 0
+            || self.status_active > 0
+            || self.queue_running > 0
+            || self.av1_running
+    }
+
+    /// Graceful quit from the LAN web UI: cancel active jobs, persist state, then notify listeners.
+    pub fn request_app_shutdown(&mut self, process_exit: Option<tokio::sync::oneshot::Sender<()>>) {
+        if self.shutdown_pending {
+            return;
+        }
+        self.shutdown_pending = true;
+        if let Some(tx) = process_exit {
+            self.shutdown_notify = Some(tx);
+        }
+        self.append_log("Graceful shutdown requested from web UI: cancelling active jobs…");
+        self.cancel_av1_batch();
+        self.cancel_all_active(CancelPostAction::Ready);
+        self.maybe_finish_shutdown();
+    }
+
+    pub fn maybe_finish_shutdown(&mut self) {
+        if !self.shutdown_pending || self.work_in_progress() {
+            return;
+        }
+        self.flush_queue_to_disk();
+        self.flush_av1_queue_to_disk();
+        self.persist_settings();
+        self.shutdown_pending = false;
+        self.append_log("Shutdown complete.");
+        self.emit_event(crate::app::UiEvent::ShutdownRequested);
+        if let Some(tx) = self.shutdown_notify.take() {
+            let _ = tx.send(());
         }
     }
 
