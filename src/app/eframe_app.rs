@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar_wrapped};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -296,27 +296,29 @@ impl eframe::App for PydlApp {
                 draw_input_line_summary(ui, summary_lines);
                 log_panel::draw_input_line_preview(ui, summary_lines);
 
-                button_group(ui, "add_urls", |g| {
-                    if g.success(
-                        &format!("{} Add URLs", ui_icons::ADD),
-                        !self.add_in_progress,
-                    )
-                    .clicked()
-                    {
-                        self.add_urls(ctx.input(|i| i.time));
-                    }
-                    if g
-                        .secondary(
-                            &format!(
-                                "{} Import file (.txt/.csv)",
-                                ui_icons::IMPORT_FILE
-                            ),
-                            true,
+                left_button_row(ui, |ui| {
+                    button_group(ui, "add_urls", |g| {
+                        if g.success(
+                            &format!("{} Add URLs", ui_icons::ADD),
+                            !self.add_in_progress,
                         )
                         .clicked()
-                    {
-                        self.import_urls_from_file();
-                    }
+                        {
+                            self.add_urls(ctx.input(|i| i.time));
+                        }
+                        if g
+                            .secondary(
+                                &format!(
+                                    "{} Import file (.txt/.csv)",
+                                    ui_icons::IMPORT_FILE
+                                ),
+                                true,
+                            )
+                            .clicked()
+                        {
+                            self.import_urls_from_file();
+                        }
+                    });
                 });
                 ui.horizontal_wrapped(|ui| {
                     if self.add_in_progress {
@@ -399,7 +401,10 @@ impl eframe::App for PydlApp {
                 ui.separator();
                 ui.horizontal(|ui| {
                     ui.label("Output folder");
-                    let output_dir_edit = ui.text_edit_singleline(&mut self.output_dir);
+                    let output_dir_edit = ui.add(
+                        egui::TextEdit::singleline(&mut self.output_dir)
+                            .desired_width(ui.available_width().max(120.0)),
+                    );
                     attach_paste_context_menu(
                         &output_dir_edit,
                         &mut self.deferred_menu_paste_output_dir,
@@ -408,6 +413,8 @@ impl eframe::App for PydlApp {
                         self.persist_settings();
                         self.last_done_lookup_poll = None;
                     }
+                });
+                left_button_row(ui, |ui| {
                     button_group(ui, "output_dir", |g| {
                         if g.secondary(
                             &format!("{} Use Downloads", ui_icons::USE_DOWNLOADS),
@@ -720,7 +727,7 @@ impl PydlApp {
             }
             ui.allocate_ui_with_layout(
                 egui::vec2(right_w, 0.0),
-                egui::Layout::right_to_left(egui::Align::Min),
+                egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
                     ui.add_space(HEADER_RIGHT_INSET);
                     button_group(ui, "hdr_exit", |g| {

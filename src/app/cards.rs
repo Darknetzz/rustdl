@@ -5,8 +5,8 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{
-    button_group, danger_button, draw_meta_badge, draw_status_chip, secondary_button,
-    status_color, status_dot_with_label, MetaBadgeKind,
+    button_group, danger_button, draw_meta_badge, draw_status_chip, left_button_row,
+    secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -472,7 +472,8 @@ impl PydlApp {
                 if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
                     || (!show_saved_file_actions && removable)
                 {
-                    button_group(ui, ("card_actions", id), |g| {
+                    left_button_row(ui, |ui| {
+                        button_group(ui, ("card_actions", id), |g| {
                         if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
                             && g.warning(
                                 &format!("{} Cancel -> Ready", ui_icons::CANCEL_TO_READY),
@@ -500,6 +501,7 @@ impl PydlApp {
                             self.refresh_input_line_info();
                             self.schedule_queue_save();
                         }
+                        });
                     });
                 }
             });

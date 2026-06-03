@@ -4,7 +4,7 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, compute_main_column_split, draw_meta_badge, draw_status_dot,
-    secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
+    left_button_row, secondary_button, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -203,13 +203,16 @@ impl PydlApp {
                 });
                 ui.separator();
                 ui.label("Input paths (file/folder, one per line)");
-                button_group(ui, "av1_input", |g| {
-                    if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true).clicked() {
-                        self.browse_av1_inputs();
-                    }
-                    if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true).clicked() {
-                        self.scan_av1_input_textbox();
-                    }
+                left_button_row(ui, |ui| {
+                    button_group(ui, "av1_input", |g| {
+                        if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true).clicked() {
+                            self.browse_av1_inputs();
+                        }
+                        if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true).clicked()
+                        {
+                            self.scan_av1_input_textbox();
+                        }
+                    });
                 });
                 ui.horizontal_wrapped(|ui| {
                     let ready = self

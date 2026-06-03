@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{button_group, secondary_button};
+use crate::app_ui::{button_group, left_button_row, secondary_button};
 use crate::config::{export_settings_json, import_settings_json, trim_activity_log};
 use crate::profiles::{all_profiles, find_profile, save_user_profile, DownloadProfile};
 use crate::ui_icons;
@@ -48,7 +48,8 @@ impl PydlApp {
             .default_width(620.0)
             .default_height(560.0)
             .show(ctx, |ui| {
-                button_group(ui, "settings_tabs", |g| {
+                left_button_row(ui, |ui| {
+                    button_group(ui, "settings_tabs", |g| {
                     g.add(|ui| {
                         ui.selectable_value(
                             &mut self.settings_tab,
@@ -69,6 +70,7 @@ impl PydlApp {
                             SettingsTab::Av1,
                             format!("{} AV1", ui_icons::TAB_AV1),
                         )
+                    });
                     });
                 });
                 ui.separator();
@@ -633,7 +635,8 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
-                        button_group(ui, "dl_presets", |g| {
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "dl_presets", |g| {
                             if g.secondary(
                                 &format!("{} Best quality", ui_icons::PRESET_BEST),
                                 true,
@@ -666,6 +669,7 @@ impl PydlApp {
                             {
                                 self.apply_preset(DownloadPreset::ArchiveMode);
                             }
+                            });
                         });
                         ui.label(
                             RichText::new(

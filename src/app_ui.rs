@@ -500,6 +500,11 @@ pub fn button_group<R>(
         .inner
 }
 
+/// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).
+pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.horizontal(|ui| add(ui)).inner
+}
+
 /// Row of one or more [`button_group`]s with spacing between groups.
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.horizontal(|ui| {
@@ -510,9 +515,16 @@ pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.horizontal_wrapped(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-        add(ui)
+    ui.scope(|ui| {
+        ui.set_width(ui.available_width());
+        ui.with_layout(
+            egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+            |ui| {
+                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                add(ui)
+            },
+        )
+        .inner
     })
     .inner
 }
