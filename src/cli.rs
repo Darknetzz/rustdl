@@ -174,10 +174,10 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     }
 
     let token = settings.web_auth_token.trim();
-    let (mut handle, api_state) =
-        spawn_web_server_at(rt.clone(), core, &bind, token).map_err(|e| anyhow!(e.message()))?;
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
-    api_state.set_process_exit_notifier(exit_tx);
+    let mut handle =
+        spawn_web_server_at(rt.clone(), core, &bind, token, Some(exit_tx))
+            .map_err(|e| anyhow!(e.message()))?;
 
     let local_url = web_ui_browser_url(&bind);
     {

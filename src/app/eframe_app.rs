@@ -705,9 +705,7 @@ impl PydlApp {
                     if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
                         self.open_exit_confirm();
                     }
-                    let videos_btn = if self.settings.videos_docked {
-                        format!("{} Videos", ui_icons::VIDEOS)
-                    } else if self.settings.videos_open {
+                    let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
                         format!("{} Videos", ui_icons::VIDEOS)
                     } else {
                         format!("{} Videos (hidden)", ui_icons::VIDEOS)
