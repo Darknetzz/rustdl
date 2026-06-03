@@ -50,6 +50,9 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
     core.profile_store = app.profile_store.clone();
     core.downloads_paused = app.downloads_paused;
     core.session_complete_notified = app.session_complete_notified;
+    // The AV1 input textarea is GUI-editable; mirror it like output_dir. The rest of the AV1
+    // queue state is owned by the core and flows back via sync_core_to_app.
+    core.av1_input_paths = app.av1_input_paths.clone();
 
     if app.queue_dirty || core.items.is_empty() {
         sync_queue_fields(app, core);
@@ -97,6 +100,11 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
         .collect();
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
+    // Mirror the core-owned AV1 queue (the core applies AV1 events; the GUI only displays it).
+    app.av1_input_paths = core.av1_input_paths.clone();
+    app.av1_items = core.av1_items.clone();
+    app.av1_running = core.av1_running;
+    app.av1_media_inflight = core.av1_media_inflight.clone();
     app.core_generation = core.generation;
     app.queue_dirty = false;
     let new_thumbnails: Vec<(u64, String)> = if app.settings.show_thumbnails {
@@ -115,6 +123,7 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     for (item_id, url) in new_thumbnails {
         app.queue_thumbnail_load(item_id, url);
     }
+    app.ensure_av1_thumbnails();
 }
 
 pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {

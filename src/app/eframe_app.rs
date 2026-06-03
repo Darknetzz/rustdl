@@ -20,7 +20,6 @@ impl eframe::App for PydlApp {
         }
         self.maybe_flush_queue_save();
         self.maybe_flush_log_save();
-        self.maybe_flush_av1_queue_save();
         self.process_events(ctx);
         #[cfg(windows)]
         {

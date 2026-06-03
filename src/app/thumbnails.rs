@@ -108,23 +108,25 @@ impl PydlApp {
         );
     }
 
-    pub(super) fn queue_av1_media_probe(
-        &mut self,
-        item_id: u64,
-        file_path: PathBuf,
-        ffprobe_path: String,
-    ) {
-        if self.av1_media_inflight.contains(&item_id) {
+    /// Loads local-video thumbnails (egui textures) for any mirrored AV1 rows that lack one.
+    /// AV1 queue state itself is owned by `DownloadCore`; only the textures are GUI-local.
+    pub(super) fn ensure_av1_thumbnails(&mut self) {
+        if !self.settings.show_thumbnails || !self.has_ffmpeg || self.av1_items.is_empty() {
             return;
         }
-        self.av1_media_inflight.insert(item_id);
-        background_spawn::spawn_av1_media_probe(
-            &self.runtime,
-            &self.ui_bus,
-            item_id,
-            file_path,
-            ffprobe_path,
-        );
+        let ffmpeg_path = self.settings.ffmpeg_path.clone();
+        let pending: Vec<(u64, PathBuf)> = self
+            .av1_items
+            .iter()
+            .filter(|it| {
+                !self.textures.contains_key(&it.item_id)
+                    && !self.thumbnail_inflight.contains(&it.item_id)
+            })
+            .map(|it| (it.item_id, PathBuf::from(&it.source_path)))
+            .collect();
+        for (item_id, path) in pending {
+            self.queue_av1_local_thumbnail(item_id, path, ffmpeg_path.clone());
+        }
     }
 }
 

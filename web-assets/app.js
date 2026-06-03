@@ -703,6 +703,7 @@ async function refreshAll() {
     refreshSettingsCache(),
     refreshQueue(),
     refreshLogs(),
+    refreshAv1(),
   ]);
 }
 
@@ -794,6 +795,19 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-ffmpeg-mp3", s.ffmpeg_extract_audio_mp3);
   setCheck("set-verify-streams", s.verify_output_video_audio);
 
+  setVal("set-av1-bitrate", s.av1_target_bitrate);
+  setVal("set-av1-max-width", s.av1_max_width);
+  setVal("set-av1-preset", s.av1_size_preset);
+  setVal("set-av1-min-shrink", s.av1_min_shrink_percent);
+  setVal("set-av1-encoder-override", s.av1_encoder_override);
+  setCheck("set-av1-recursive", s.av1_recursive);
+  setCheck("set-av1-dry-run", s.av1_dry_run);
+  setCheck("set-av1-overwrite", s.av1_overwrite);
+  setCheck("set-av1-reencode", s.av1_reencode_av1);
+  setCheck("set-av1-delete-original", s.av1_delete_original);
+  setCheck("set-av1-rename-original", s.av1_rename_original);
+  setCheck("set-av1-remember-queue", s.av1_remember_queue);
+
   document.getElementById("command-preview").textContent = commandPreview || "";
   updateQualityCustomVisibility();
 }
@@ -848,7 +862,23 @@ function collectSettingsForm(base) {
   s.ffmpeg_extract_audio_mp3 = document.getElementById("set-ffmpeg-mp3").checked;
   s.verify_output_video_audio = document.getElementById("set-verify-streams").checked;
 
+  s.av1_target_bitrate = document.getElementById("set-av1-bitrate").value;
+  s.av1_max_width = parseInt(document.getElementById("set-av1-max-width").value, 10) || 1920;
+  s.av1_size_preset = document.getElementById("set-av1-preset").value;
+  s.av1_min_shrink_percent =
+    parseFloat(document.getElementById("set-av1-min-shrink").value) || 0;
+  s.av1_encoder_override = document.getElementById("set-av1-encoder-override").value;
+  s.av1_recursive = document.getElementById("set-av1-recursive").checked;
+  s.av1_dry_run = document.getElementById("set-av1-dry-run").checked;
+  s.av1_overwrite = document.getElementById("set-av1-overwrite").checked;
+  s.av1_reencode_av1 = document.getElementById("set-av1-reencode").checked;
+  s.av1_delete_original = document.getElementById("set-av1-delete-original").checked;
+  s.av1_rename_original = document.getElementById("set-av1-rename-original").checked;
+  s.av1_remember_queue = document.getElementById("set-av1-remember-queue").checked;
+
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
+  s.av1_max_width = Math.min(7680, Math.max(320, s.av1_max_width));
+  s.av1_min_shrink_percent = Math.min(95, Math.max(0, s.av1_min_shrink_percent));
   s.worker_count = Math.min(6, Math.max(1, s.worker_count));
   s.playlist_preview_cap = Math.min(500, Math.max(1, s.playlist_preview_cap));
   return s;
@@ -860,6 +890,7 @@ function switchSettingsTab(name) {
   });
   document.getElementById("settings-tab-shared").hidden = name !== "shared";
   document.getElementById("settings-tab-downloader").hidden = name !== "downloader";
+  document.getElementById("settings-tab-av1").hidden = name !== "av1";
 }
 
 async function openSettingsDialog() {
@@ -992,6 +1023,367 @@ document.getElementById("btn-apply-profile").onclick = () => {
 document.querySelectorAll(".preset-btn").forEach((btn) => {
   btn.onclick = () => applyProfile(btn.dataset.profile).catch(console.error);
 });
+
+/* ----------------------------- AV1 converter ----------------------------- */
+
+let currentView = "downloader";
+/** Skip re-fetching AV1 thumbnails that already failed until the source changes. */
+const av1ThumbFailedKeys = new Set();
+
+function formatBytes(n) {
+  if (n == null) return "";
+  let v = Number(n);
+  if (!isFinite(v)) return "";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const digits = i === 0 || v >= 100 ? 0 : v >= 10 ? 1 : 2;
+  return `${v.toFixed(digits)} ${units[i]}`;
+}
+
+function baseName(p) {
+  if (!p) return "";
+  const parts = String(p).split(/[\\/]/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : String(p);
+}
+
+function setView(view) {
+  currentView = view === "av1" ? "av1" : "downloader";
+  document.querySelectorAll(".nav-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.view === currentView);
+  });
+  document.getElementById("downloader-main").classList.toggle("hidden", currentView !== "downloader");
+  document.getElementById("av1-main").classList.toggle("hidden", currentView !== "av1");
+  const dlActions = document.getElementById("downloader-only-actions");
+  if (dlActions) dlActions.classList.toggle("hidden", currentView !== "downloader");
+  if (currentView === "av1") refreshAv1().catch(() => {});
+}
+
+function av1Slug(item) {
+  if (item.skipped) return "skipped";
+  switch (item.status) {
+    case "Idle":
+      return "idle";
+    case "Queued":
+      return "queued";
+    case "Downloading":
+      return "downloading";
+    case "Done":
+      return "done";
+    case "Failed":
+      return "failed";
+    case "Resolving":
+      return "resolving";
+    default:
+      return "idle";
+  }
+}
+
+function av1Group(item) {
+  if (item.skipped) return "Skipped";
+  switch (item.status) {
+    case "Queued":
+    case "Downloading":
+      return "Active";
+    case "Failed":
+      return "Failed";
+    case "Done":
+      return "Done";
+    case "Idle":
+    default:
+      return "Ready";
+  }
+}
+
+function av1ThumbKey(item) {
+  return `${item.item_id}|${item.source_path || ""}`;
+}
+
+function av1ThumbnailUrl(itemId) {
+  const t = token();
+  if (!t) return null;
+  return `/api/av1/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
+}
+
+function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
+  img.classList.add("hidden");
+  placeholder.classList.remove("hidden");
+  if (!showThumbnails) {
+    placeholder.textContent = "Thumbnails off";
+    return;
+  }
+  const url = av1ThumbnailUrl(item.item_id);
+  if (!url) {
+    placeholder.textContent = "Save API token to load thumbnails";
+    return;
+  }
+  const key = av1ThumbKey(item);
+  if (av1ThumbFailedKeys.has(key)) {
+    placeholder.textContent = "No preview available";
+    return;
+  }
+  placeholder.textContent = "Loading preview…";
+  img.onload = () => {
+    img.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+    av1ThumbFailedKeys.delete(key);
+  };
+  img.onerror = () => {
+    av1ThumbFailedKeys.add(key);
+    img.classList.add("hidden");
+    img.removeAttribute("src");
+    placeholder.textContent = "No preview available";
+    placeholder.classList.remove("hidden");
+  };
+  img.src = url;
+}
+
+function av1MediaBadges(item) {
+  const badges = document.createElement("div");
+  badges.className = "card-badges";
+  if (item.probing) {
+    const b = document.createElement("span");
+    b.className = "meta-badge";
+    b.textContent = "Probing…";
+    badges.appendChild(b);
+    return badges;
+  }
+  const add = (text) => {
+    if (!text) return;
+    const b = document.createElement("span");
+    b.className = "meta-badge";
+    b.textContent = text;
+    badges.appendChild(b);
+  };
+  if (item.video_codec) add(String(item.video_codec).toUpperCase());
+  if (item.width && item.height) add(`${item.width}×${item.height}`);
+  if (item.fps) add(`${Number(item.fps).toFixed(2)} fps`);
+  if (item.input_bytes) add(formatBytes(item.input_bytes));
+  if (item.bitrate_bps) {
+    const bps = Number(item.bitrate_bps);
+    add(bps >= 1_000_000 ? `${(bps / 1_000_000).toFixed(2)} Mbps` : `${Math.round(bps / 1000)} kbps`);
+  }
+  return badges;
+}
+
+function renderAv1Card(item, showThumbnails) {
+  const slug = av1Slug(item);
+  const active = slug === "downloading" || slug === "queued";
+  const card = document.createElement("article");
+  card.className = "card";
+
+  const thumb = document.createElement("div");
+  thumb.className = "card-thumb";
+  const img = document.createElement("img");
+  img.alt = "";
+  img.className = "hidden";
+  const placeholder = document.createElement("span");
+  placeholder.className = "card-thumb-placeholder";
+  thumb.appendChild(img);
+  attachAv1Thumbnail(img, placeholder, item, showThumbnails);
+  thumb.appendChild(placeholder);
+  card.appendChild(thumb);
+
+  const body = document.createElement("div");
+  body.className = "card-body";
+
+  const title = document.createElement("h3");
+  title.className = "card-title";
+  title.textContent = baseName(item.source_path) || "(unknown)";
+  title.title = item.source_path || "";
+  body.appendChild(title);
+
+  body.appendChild(av1MediaBadges(item));
+
+  if (active) {
+    const wrap = document.createElement("div");
+    wrap.className = "card-progress";
+    const fill = document.createElement("div");
+    fill.className = `card-progress-fill status-${slug}`;
+    fill.style.width = `${Math.min(100, Math.max(0, Number(item.percent) || 0))}%`;
+    wrap.appendChild(fill);
+    body.appendChild(wrap);
+  }
+
+  const detail = (item.detail || "").trim();
+  if (detail) {
+    const detailEl = document.createElement("p");
+    detailEl.className = `card-footer status-${slug}`;
+    detailEl.textContent = detail;
+    body.appendChild(detailEl);
+  }
+
+  const pathsEl = document.createElement("p");
+  pathsEl.className = "av1-paths";
+  pathsEl.textContent = `→ ${item.output_path || ""}`;
+  pathsEl.title = item.output_path || "";
+  body.appendChild(pathsEl);
+
+  card.appendChild(body);
+
+  const chipWrap = document.createElement("div");
+  chipWrap.className = "card-actions";
+  const chip = document.createElement("span");
+  chip.className = `status-chip status-${slug}`;
+  chip.textContent = item.status_label || item.status || "";
+  chipWrap.appendChild(chip);
+  card.appendChild(chipWrap);
+
+  return card;
+}
+
+function renderAv1Summary(data) {
+  const root = document.getElementById("av1-summary");
+  if (!root) return;
+  root.innerHTML = "";
+
+  const running = document.createElement("span");
+  running.className = "status-badge " + (data.running ? "status-live" : "status-paused");
+  running.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${data.running ? "Converting" : "Idle"}`;
+  root.appendChild(running);
+
+  const counts = {};
+  for (const it of data.items) {
+    const g = av1Group(it);
+    counts[g] = (counts[g] || 0) + 1;
+  }
+  for (const [label, slug] of [
+    ["Active", "downloading"],
+    ["Ready", "idle"],
+    ["Failed", "failed"],
+    ["Skipped", "skipped"],
+    ["Done", "done"],
+  ]) {
+    if (!counts[label]) continue;
+    const el = document.createElement("span");
+    el.className = `status-badge status-${slug}`;
+    el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${counts[label]} ${label}`;
+    root.appendChild(el);
+  }
+
+  const sum = data.summary || {};
+  if (sum.completed > 0) {
+    const inB = sum.completed_input_bytes || 0;
+    const outB = sum.completed_output_bytes || 0;
+    const saved = Math.max(0, inB - outB);
+    const pct = inB > 0 ? ((saved / inB) * 100).toFixed(1) : "0.0";
+    const el = document.createElement("span");
+    el.className = "status-badge status-done";
+    el.textContent = `Saved ${formatBytes(saved)} (${pct}%) across ${sum.completed} file(s)`;
+    root.appendChild(el);
+  }
+  if (sum.pending_count > 0) {
+    const el = document.createElement("span");
+    el.className = "status-badge status-queued";
+    el.textContent = `${sum.pending_count} pending · ${formatBytes(sum.pending_input_bytes || 0)}`;
+    root.appendChild(el);
+  }
+}
+
+function renderAv1Encoder(data) {
+  const el = document.getElementById("av1-encoder");
+  if (!el) return;
+  const parts = [];
+  if (data.encoder) parts.push(`Encoder: ${data.encoder.label}`);
+  else if (!data.has_ffmpeg) parts.push("Encoder: ffmpeg not found (set the path in Settings → Shared)");
+  if (!data.has_ffprobe) parts.push("ffprobe not found — metadata and start are disabled");
+  el.textContent = parts.join(" · ");
+}
+
+function pruneAv1ThumbKeys(items) {
+  const active = new Set(items.map((it) => av1ThumbKey(it)));
+  for (const key of av1ThumbFailedKeys) {
+    if (!active.has(key)) av1ThumbFailedKeys.delete(key);
+  }
+}
+
+async function refreshAv1() {
+  let data;
+  try {
+    const res = await api("/api/av1/queue");
+    if (!res.ok) return;
+    data = await res.json();
+  } catch {
+    return;
+  }
+  // Keep the textarea in sync with the server unless the user is editing it.
+  const input = document.getElementById("av1-input");
+  if (input && document.activeElement !== input) {
+    input.value = data.input_paths || "";
+  }
+  renderAv1Encoder(data);
+  renderAv1Summary(data);
+
+  const startBtn = document.getElementById("btn-av1-start");
+  const cancelBtn = document.getElementById("btn-av1-cancel");
+  const readyCount = data.items.filter((it) => it.status === "Idle").length;
+  if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
+  if (cancelBtn) cancelBtn.disabled = !data.running;
+
+  const root = document.getElementById("av1-queue");
+  if (!root) return;
+  const showThumbnails = (cachedSettings || {}).show_thumbnails !== false;
+  pruneAv1ThumbKeys(data.items);
+  root.innerHTML = "";
+  if (!data.items.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint av1-empty";
+    empty.textContent = "Nothing here yet. Add file or folder paths above, then Scan inputs.";
+    root.appendChild(empty);
+    return;
+  }
+  for (const label of ["Active", "Ready", "Failed", "Skipped", "Done"]) {
+    const group = data.items.filter((it) => av1Group(it) === label);
+    if (!group.length) continue;
+    const header = document.createElement("h3");
+    header.className = "av1-group-header";
+    header.textContent = `${label} (${group.length})`;
+    root.appendChild(header);
+    for (const item of group) {
+      root.appendChild(renderAv1Card(item, showThumbnails));
+    }
+  }
+}
+
+async function av1Scan() {
+  const input = document.getElementById("av1-input");
+  const paths = (input ? input.value : "")
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (!paths.length) return;
+  await api("/api/av1/scan", { method: "POST", body: JSON.stringify({ paths }) });
+  await refreshAv1();
+}
+
+async function av1Start() {
+  await api("/api/av1/start", { method: "POST" });
+  await refreshAv1();
+}
+
+async function av1Cancel() {
+  await api("/api/av1/cancel", { method: "POST" });
+  await refreshAv1();
+}
+
+async function av1Clear() {
+  if (!confirm("Clear the entire AV1 queue?")) return;
+  await api("/api/av1/clear", { method: "POST" });
+  await refreshAv1();
+}
+
+document.querySelectorAll(".nav-btn").forEach((btn) => {
+  btn.onclick = () => setView(btn.dataset.view);
+});
+document.getElementById("btn-av1-scan").onclick = () => av1Scan().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-av1-start").onclick = () => av1Start().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-av1-cancel").onclick = () => av1Cancel().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-av1-clear").onclick = () => av1Clear().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-av1-settings").onclick = () =>
+  openSettingsDialog().then(() => switchSettingsTab("av1")).catch(console.error);
 
 applyStaticButtonIcons();
 

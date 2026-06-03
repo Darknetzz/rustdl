@@ -6,7 +6,10 @@ use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
 
 use crate::app::UiEvent;
-use crate::app_parsing::parse_speed_eta;
+use crate::app_parsing::{
+    av1_detail_is_user_cancellation, parse_speed_eta, reset_av1_item_to_ready,
+};
+use crate::av1_state::{format_av1_progress_detail, format_av1_saved_detail};
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 
@@ -64,8 +67,186 @@ impl super::core::DownloadCore {
             } => {
                 self.handle_download_done(item_id, ok, &detail);
             }
+            UiEvent::Av1Line { item_id, line } => {
+                self.handle_av1_line(item_id, &line);
+            }
+            UiEvent::Av1Duration {
+                item_id,
+                duration_ms,
+            } => {
+                if duration_ms > 0 {
+                    self.av1_duration_ms.insert(item_id, duration_ms);
+                }
+            }
+            UiEvent::Av1MediaProbed { item_id, media } => {
+                self.handle_av1_media_probed(item_id, media);
+            }
+            UiEvent::Av1Done {
+                item_id,
+                ok,
+                detail,
+                final_output_path,
+            } => {
+                self.handle_av1_done(item_id, ok, detail, final_output_path);
+            }
+            UiEvent::Av1BatchDone => {
+                self.handle_av1_batch_done();
+            }
             _ => {}
         }
+    }
+
+    fn handle_av1_line(&mut self, item_id: u64, line: &str) {
+        if line.starts_with("starting with ") || line.starts_with("skip_reason=") {
+            if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                it.status = ItemStatus::Downloading;
+                it.detail = line.to_owned();
+            }
+            self.append_log(&format!("[av1 {item_id}] {line}"));
+            self.bump_generation();
+            return;
+        }
+
+        let Some((key, value)) = line.split_once('=') else {
+            if line.starts_with("dry-run:") {
+                if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+                    it.detail = line.chars().take(160).collect();
+                }
+                self.append_log(&format!("[av1 {item_id}] {line}"));
+                self.bump_generation();
+            }
+            return;
+        };
+
+        let key = key.trim();
+        let value = value.trim();
+        if key != "progress" {
+            self.av1_progress_state
+                .entry(item_id)
+                .or_default()
+                .insert(key.to_owned(), value.to_owned());
+            return;
+        }
+
+        let state = self.av1_progress_state.remove(&item_id).unwrap_or_default();
+        let current_secs = state
+            .get("out_time")
+            .and_then(|v| crate::av1_transcode::parse_ffmpeg_out_time_secs(v));
+        let total_secs = self
+            .av1_duration_ms
+            .get(&item_id)
+            .copied()
+            .map(|ms| ms as f64 / 1000.0);
+
+        let percent = if value == "end" {
+            Some(100.0)
+        } else if let (Some(current), Some(total)) = (current_secs, total_secs) {
+            if total > 0.0 {
+                Some(((current / total) * 100.0).clamp(0.0, 100.0) as f32)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let fps_raw = state.get("fps").map(String::as_str).unwrap_or("");
+        let speed_raw = state.get("speed").map(String::as_str).unwrap_or("");
+        let detail = format_av1_progress_detail(
+            value,
+            current_secs,
+            total_secs,
+            fps_raw,
+            speed_raw,
+            percent,
+        );
+
+        if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+            it.status = ItemStatus::Downloading;
+            if let Some(p) = percent {
+                it.percent = p;
+            }
+            it.detail = detail;
+        }
+        self.bump_generation();
+    }
+
+    fn handle_av1_media_probed(
+        &mut self,
+        item_id: u64,
+        media: crate::av1_transcode::Av1InputMedia,
+    ) {
+        self.av1_media_inflight.remove(&item_id);
+        if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+            it.video_codec = media.codec;
+            it.width = media.width;
+            it.height = media.height;
+            it.fps = media.fps;
+            it.bitrate_bps = media.bitrate_bps;
+        }
+        if let Some(ms) = media.duration_ms.filter(|ms| *ms > 0) {
+            self.av1_duration_ms.insert(item_id, ms);
+        }
+        self.schedule_av1_queue_save();
+        self.bump_generation();
+    }
+
+    fn handle_av1_done(
+        &mut self,
+        item_id: u64,
+        ok: bool,
+        detail: String,
+        final_output_path: Option<String>,
+    ) {
+        if let Some(it) = self.av1_items.iter_mut().find(|x| x.item_id == item_id) {
+            if !ok && av1_detail_is_user_cancellation(&detail) {
+                reset_av1_item_to_ready(it);
+            } else {
+                it.status = if ok {
+                    ItemStatus::Done
+                } else {
+                    ItemStatus::Failed
+                };
+                it.percent = if ok { 100.0 } else { it.percent };
+                if let Some(path) = final_output_path {
+                    it.output_path = path;
+                }
+                let skipped = detail.to_ascii_lowercase().starts_with("skipped");
+                if ok && !skipped {
+                    if let Ok(meta) = std::fs::metadata(&it.output_path) {
+                        let output_bytes = meta.len();
+                        it.output_bytes = Some(output_bytes);
+                        it.detail = if it.input_bytes > 0 {
+                            format_av1_saved_detail(it.input_bytes, output_bytes)
+                        } else {
+                            detail.clone()
+                        };
+                    } else {
+                        it.detail = detail.clone();
+                    }
+                } else {
+                    it.detail = detail.clone();
+                }
+            }
+        }
+        self.av1_duration_ms.remove(&item_id);
+        self.av1_progress_state.remove(&item_id);
+        if !ok && !av1_detail_is_user_cancellation(&detail) {
+            self.append_log(&format!("[av1 {item_id}] {detail}"));
+        }
+        self.schedule_av1_queue_save();
+        self.bump_generation();
+    }
+
+    fn handle_av1_batch_done(&mut self) {
+        self.av1_running = false;
+        for item in &mut self.av1_items {
+            if matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading) {
+                reset_av1_item_to_ready(item);
+            }
+        }
+        self.schedule_av1_queue_save();
+        self.bump_generation();
     }
 
     fn handle_add_resolved(&mut self, rows: Vec<crate::models::VideoPreview>, source_line: String) {
@@ -191,6 +372,9 @@ impl super::core::DownloadCore {
                 self.bind_local_path_for_item(item_id);
             }
             self.items[idx].detail = final_detail.clone();
+        }
+        if completed {
+            self.enqueue_completed_download_to_av1(item_id);
         }
         if !completed {
             let summary = final_detail.trim();

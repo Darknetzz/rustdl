@@ -12,13 +12,19 @@
   <header class="topbar">
     <div class="topbar-left">
       <h1>rustdl</h1>
+      <nav class="view-nav" id="view-nav" aria-label="Section">
+        <button type="button" id="nav-downloader" class="nav-btn active" data-view="downloader" data-icon="cloud_download">Downloader</button>
+        <button type="button" id="nav-av1" class="nav-btn" data-view="av1" data-icon="bolt">AV1</button>
+      </nav>
       <div id="tools-status" class="tools-status" aria-label="PATH checks"></div>
     </div>
     <div class="topbar-actions">
       <button type="button" id="btn-refresh-tools" class="secondary" data-icon="sync" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
-      <button type="button" id="btn-pause" class="secondary" data-icon="pause">Pause</button>
-      <button type="button" id="btn-resume" class="secondary" data-icon="play_arrow">Resume</button>
-      <button type="button" id="btn-start" class="primary" data-icon="download">Start downloads</button>
+      <span id="downloader-only-actions" class="inline-actions">
+        <button type="button" id="btn-pause" class="secondary" data-icon="pause">Pause</button>
+        <button type="button" id="btn-resume" class="secondary" data-icon="play_arrow">Resume</button>
+        <button type="button" id="btn-start" class="primary" data-icon="download">Start downloads</button>
+      </span>
       <button type="button" id="btn-settings" class="secondary" data-icon="settings">Settings</button>
     </div>
   </header>
@@ -34,6 +40,7 @@
   </section>
 
   <main id="app-main" class="hidden">
+    <div id="downloader-main">
     <section class="panel add-panel">
       <h2>Add URLs</h2>
       <textarea id="url-input" rows="3" placeholder="One URL per line"></textarea>
@@ -64,6 +71,29 @@
       </div>
       <pre id="log-view" class="log-view"></pre>
     </section>
+    </div>
+
+    <div id="av1-main" class="hidden">
+      <section class="panel">
+        <h2>AV1 Converter</h2>
+        <p class="hint">Transcode local videos to AV1/HEVC to save space. Paths are read on the rustdl host, not your browser.</p>
+        <label class="av1-input-label">Input paths (file or folder, one per line)
+          <textarea id="av1-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
+        </label>
+        <div class="row av1-actions">
+          <button type="button" id="btn-av1-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
+          <button type="button" id="btn-av1-start" class="primary" data-icon="play_arrow">Start AV1 batch</button>
+          <button type="button" id="btn-av1-cancel" class="danger" data-icon="stop">Cancel</button>
+          <button type="button" id="btn-av1-clear" class="secondary" data-icon="clear_all">Clear queue</button>
+          <button type="button" id="btn-av1-settings" class="secondary" data-icon="settings">AV1 settings</button>
+        </div>
+        <p id="av1-encoder" class="av1-encoder hint"></p>
+        <div id="av1-summary" class="status-summary"></div>
+      </section>
+      <section class="panel">
+        <div id="av1-queue" class="queue"></div>
+      </section>
+    </div>
   </main>
 
   <dialog id="settings-dialog" class="settings-dialog">
@@ -73,6 +103,7 @@
         <div class="settings-tabs" role="tablist">
           <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
           <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
+          <button type="button" class="settings-tab" data-tab="av1" data-icon="bolt" role="tab">AV1</button>
         </div>
       </div>
       <div class="settings-scroll">
@@ -175,6 +206,31 @@
 
           <h3>Command preview</h3>
           <pre id="command-preview" class="command-preview"></pre>
+        </div>
+
+        <div id="settings-tab-av1" class="settings-panel" role="tabpanel" hidden>
+          <h3>Encoding</h3>
+          <p class="hint">ffmpeg/ffprobe paths are shared (see the Shared tab). The fastest available AV1/HEVC encoder is picked automatically unless overridden.</p>
+          <label>Target bitrate <input type="text" id="set-av1-bitrate" placeholder="auto (e.g. 2M, 1500k)" /></label>
+          <label>Max width (px) <input type="number" id="set-av1-max-width" min="320" max="7680" step="2" /></label>
+          <label>Size preset
+            <select id="set-av1-preset">
+              <option value="light">Light (largest, best quality)</option>
+              <option value="balanced">Balanced</option>
+              <option value="aggressive">Aggressive (smallest)</option>
+            </select>
+          </label>
+          <label>Minimum shrink to keep output (%) <input type="number" id="set-av1-min-shrink" min="0" max="95" step="1" /></label>
+          <label>Encoder override <input type="text" id="set-av1-encoder-override" placeholder="av1_nvenc, av1_amf, libsvtav1…" /></label>
+
+          <h3>Files</h3>
+          <label class="check"><input type="checkbox" id="set-av1-recursive" /> Scan folders recursively</label>
+          <label class="check"><input type="checkbox" id="set-av1-dry-run" /> Dry run (analyze only, do not write)</label>
+          <label class="check"><input type="checkbox" id="set-av1-overwrite" /> Overwrite existing output files</label>
+          <label class="check"><input type="checkbox" id="set-av1-reencode" /> Re-encode files that are already AV1</label>
+          <label class="check"><input type="checkbox" id="set-av1-delete-original" /> Delete original after a successful transcode</label>
+          <label class="check"><input type="checkbox" id="set-av1-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
+          <label class="check"><input type="checkbox" id="set-av1-remember-queue" /> Remember the AV1 queue between sessions</label>
         </div>
       </div>
       <div class="dialog-actions">

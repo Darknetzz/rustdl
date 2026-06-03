@@ -1,9 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::config::{
-    activity_log_file_path, save_activity_log, save_av1_queue_snapshot, save_queue_items,
-    Av1QueueSnapshot,
-};
+use crate::config::{activity_log_file_path, save_activity_log, save_queue_items};
 
 use super::PydlApp;
 
@@ -50,43 +47,12 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn schedule_av1_queue_save(&mut self) {
-        if !self.settings.av1_remember_queue {
-            return;
-        }
-        self.av1_queue_save_deadline = Some(Instant::now() + QUEUE_SAVE_DEBOUNCE);
-    }
-
-    pub(super) fn maybe_flush_av1_queue_save(&mut self) {
-        if let Some(deadline) = self.av1_queue_save_deadline {
-            if Instant::now() >= deadline {
-                self.av1_queue_save_deadline = None;
-                self.flush_av1_queue_to_disk();
-            }
-        }
-    }
-
+    /// AV1 queue persistence lives on `DownloadCore`; this mirrors the GUI textarea buffer
+    /// into the core and flushes (used on exit and when toggling the remember setting).
     pub(super) fn flush_av1_queue_to_disk(&mut self) {
-        self.av1_queue_save_deadline = None;
-        if !self.settings.av1_remember_queue {
-            return;
-        }
-        let snapshot = Av1QueueSnapshot {
-            input_paths: self.av1_input_paths.clone(),
-            next_item_id: self.av1_next_item_id,
-            items: self.av1_items.clone(),
-        };
-        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
-            self.append_log(&format!("Failed to save AV1 queue state: {err}"));
-        }
-    }
-
-    pub(super) fn clear_av1_queue_persistence(&mut self) {
-        self.av1_queue_save_deadline = None;
-        let snapshot = Av1QueueSnapshot::default();
-        if let Err(err) = save_av1_queue_snapshot(&snapshot) {
-            self.append_log(&format!("Failed to clear AV1 queue state: {err}"));
-        }
+        let mut core = self.shared_core.lock();
+        core.av1_input_paths = self.av1_input_paths.clone();
+        core.flush_av1_queue_to_disk();
     }
 
     pub(super) fn clear_activity_log(&mut self) {

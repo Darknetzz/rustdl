@@ -7,6 +7,7 @@ pub mod app_icon;
 pub mod app_parsing;
 pub mod app_state;
 pub mod app_ui;
+pub mod av1_state;
 pub mod av1_transcode;
 pub mod cli;
 pub mod config;

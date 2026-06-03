@@ -44,7 +44,7 @@ pub(crate) use log_panel::{
 use crate::app_actions;
 use crate::app_icon;
 use crate::app_parsing::{
-    human_bytes_ui, normalize_restored_av1_item, normalize_restored_item, parse_urls_from_text_blob,
+    human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob,
 };
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
@@ -54,9 +54,9 @@ use crate::app_ui::{
     ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    default_downloads, export_queue_urls, load_activity_log, load_av1_queue_snapshot,
+    default_downloads, export_queue_urls, load_activity_log,
     load_settings, rustdl_config_dir, save_settings, trim_activity_log,
-    AppSettings, Av1QueueSnapshot,
+    AppSettings,
 };
 use crate::models::Av1QueueItem;
 use crate::models::{ItemStatus, QueueItem};
@@ -188,14 +188,15 @@ pub struct PydlApp {
     update_has_update: bool,
     update_status_text: String,
     av1_mode: bool,
+    /// Editable textarea buffer; mirrored to/from `DownloadCore::av1_input_paths`.
     av1_input_paths: String,
+    /// Mirror of `DownloadCore::av1_items` (the core owns the AV1 queue).
     av1_items: Vec<Av1QueueItem>,
-    av1_duration_ms: HashMap<u64, u64>,
-    av1_progress_state: HashMap<u64, HashMap<String, String>>,
+    /// Mirror of `DownloadCore::av1_media_inflight` (drives the "probing" badge).
     av1_media_inflight: HashSet<u64>,
-    av1_next_item_id: u64,
+    /// Mirror of `DownloadCore::av1_running`.
     av1_running: bool,
-    av1_cancel_flag: Arc<AtomicBool>,
+    /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
     av1_encoder_choice: Option<crate::av1_transcode::EncoderChoice>,
     av1_encoder_detect_key: String,
 
@@ -209,8 +210,6 @@ pub struct PydlApp {
     queue_save_deadline: Option<Instant>,
     /// When set, activity log JSON is written after this instant (debounced).
     log_save_deadline: Option<Instant>,
-    /// When set, AV1 queue JSON is written after this instant (debounced).
-    av1_queue_save_deadline: Option<Instant>,
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
@@ -247,26 +246,11 @@ impl PydlApp {
         for it in &mut restored_items {
             normalize_restored_item(it);
         }
-        let av1_snapshot = if settings.av1_remember_queue {
-            load_av1_queue_snapshot()
-        } else {
-            Av1QueueSnapshot::default()
-        };
-        let mut restored_av1_items = av1_snapshot.items;
-        for it in &mut restored_av1_items {
-            normalize_restored_av1_item(it);
-        }
-        let av1_next_item_id = if restored_av1_items.is_empty() {
-            1_000_000
-        } else {
-            av1_snapshot.next_item_id.max(
-                restored_av1_items
-                    .iter()
-                    .map(|x| x.item_id)
-                    .max()
-                    .unwrap_or(999_999)
-                    + 1,
-            )
+        // AV1 queue state is owned by DownloadCore (so it also works in --web-only mode); the GUI
+        // mirrors it via sync_core_to_app. The core already restored the snapshot in new_shared.
+        let (restored_av1_count, restored_av1_input) = {
+            let core = shared_core.lock();
+            (core.av1_items.len(), core.av1_input_paths.clone())
         };
         let next_item_id = restored_items
             .iter()
@@ -365,14 +349,10 @@ impl PydlApp {
             update_has_update: false,
             update_status_text: String::new(),
             av1_mode,
-            av1_input_paths: av1_snapshot.input_paths,
-            av1_items: restored_av1_items,
-            av1_duration_ms: HashMap::new(),
-            av1_progress_state: HashMap::new(),
+            av1_input_paths: restored_av1_input,
+            av1_items: Vec::new(),
             av1_media_inflight: HashSet::new(),
-            av1_next_item_id,
             av1_running: false,
-            av1_cancel_flag: Arc::new(AtomicBool::new(false)),
             av1_encoder_choice: None,
             av1_encoder_detect_key: String::new(),
             done_file_index: done_file_index::DoneFileIndex::new(),
@@ -381,7 +361,6 @@ impl PydlApp {
             thumb_semaphore,
             queue_save_deadline: None,
             log_save_deadline: None,
-            av1_queue_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
@@ -400,10 +379,9 @@ impl PydlApp {
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         ));
-        if app.settings.av1_remember_queue && !app.av1_items.is_empty() {
+        if app.settings.av1_remember_queue && restored_av1_count > 0 {
             app.append_log(&format!(
-                "AV1: restored {} item(s) from previous session.",
-                app.av1_items.len()
+                "AV1: restored {restored_av1_count} item(s) from previous session."
             ));
         }
         app.refresh_deps();
@@ -414,7 +392,13 @@ impl PydlApp {
         if app.settings.web_ui_enabled {
             app.restart_web_server();
         }
-        app.queue_av1_restored_assets();
+        // Pull the core-owned AV1 queue into the GUI mirror and kick off thumbnail loads.
+        {
+            let shared = app.shared_core.clone();
+            let core = shared.lock();
+            core_sync::sync_core_to_app(&core, &mut app);
+        }
+        app.ensure_av1_thumbnails();
         app.refresh_input_line_info();
         app
     }
@@ -714,10 +698,15 @@ impl PydlApp {
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
-        if self.settings.av1_remember_queue {
-            self.flush_av1_queue_to_disk();
-        } else {
-            self.clear_av1_queue_persistence();
+        // AV1 queue persistence is owned by DownloadCore; mirror this preference change there.
+        {
+            let mut core = self.shared_core.lock();
+            core.settings.av1_remember_queue = self.settings.av1_remember_queue;
+            if self.settings.av1_remember_queue {
+                core.flush_av1_queue_to_disk();
+            } else {
+                core.clear_av1_queue_persistence();
+            }
         }
     }
 
@@ -1375,7 +1364,8 @@ impl PydlApp {
         if lines.is_empty() {
             return;
         }
-        self.scan_av1_paths_into_queue(&lines);
+        self.av1_core_action(|core| core.scan_av1_paths_into_queue(&lines));
+        self.ensure_av1_thumbnails();
     }
 
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
@@ -1423,8 +1413,7 @@ impl PydlApp {
         self.exit_confirm_open = false;
         if self.exit_work_in_progress() {
             self.exit_pending_after_cancel = true;
-            self.av1_cancel_flag
-                .store(true, std::sync::atomic::Ordering::Relaxed);
+            self.av1_core_action(|core| core.cancel_av1_batch());
             self.cancel_all_active(CancelPostAction::Ready);
             self.append_log("Graceful shutdown requested: cancelling active jobs before exit...");
             return;

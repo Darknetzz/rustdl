@@ -1,6 +1,3 @@
-use std::collections::HashSet;
-use std::path::Path;
-
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_actions;
@@ -9,8 +6,10 @@ use crate::app_ui::{
     compute_main_column_split, danger_button, draw_meta_badge, draw_status_dot,
     secondary_button, status_color, status_dot_with_label, success_button, MetaBadgeKind,
 };
-use crate::av1_transcode::{self, Av1Config, Av1Input};
+use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
+use crate::av1_transcode;
 use crate::models::{Av1QueueItem, ItemStatus};
+use crate::service::DownloadCore;
 use crate::theme;
 use crate::theme::{text_muted};
 use crate::ui_icons;
@@ -62,85 +61,11 @@ fn draw_av1_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) 
     }
 }
 
-pub(crate) fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
-    item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
-}
-
-fn av1_item_status_label(item: &Av1QueueItem) -> &'static str {
-    match item.status {
-        ItemStatus::Idle => "Ready",
-        ItemStatus::Queued => "Queued",
-        ItemStatus::Downloading => "Running",
-        ItemStatus::Done if av1_item_is_skipped(item) => "Skipped",
-        ItemStatus::Done => "Done",
-        ItemStatus::Failed => "Failed",
-        ItemStatus::Resolving => "Resolving",
-    }
-}
-
 fn av1_item_status_color(item: &Av1QueueItem) -> Color32 {
     if av1_item_is_skipped(item) {
         return AV1_SKIPPED_COLOR;
     }
     status_color(item.status)
-}
-
-struct Av1BatchSummary {
-    completed: usize,
-    completed_input_bytes: u64,
-    completed_output_bytes: u64,
-    pending_count: usize,
-    pending_input_bytes: u64,
-}
-
-fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
-    let mut summary = Av1BatchSummary {
-        completed: 0,
-        completed_input_bytes: 0,
-        completed_output_bytes: 0,
-        pending_count: 0,
-        pending_input_bytes: 0,
-    };
-    for item in items {
-        let pending = matches!(
-            item.status,
-            ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
-        );
-        if pending {
-            summary.pending_count += 1;
-            summary.pending_input_bytes =
-                summary.pending_input_bytes.saturating_add(item.input_bytes);
-            continue;
-        }
-        if item.status != ItemStatus::Done || av1_item_is_skipped(item) {
-            continue;
-        }
-        let Some(output_bytes) = item.output_bytes else {
-            continue;
-        };
-        summary.completed += 1;
-        summary.completed_input_bytes = summary
-            .completed_input_bytes
-            .saturating_add(item.input_bytes);
-        summary.completed_output_bytes =
-            summary.completed_output_bytes.saturating_add(output_bytes);
-    }
-    summary
-}
-
-pub(crate) fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> String {
-    if input_bytes == 0 {
-        return format!("Output {}", human_bytes_ui(output_bytes));
-    }
-    if output_bytes <= input_bytes {
-        let saved = input_bytes - output_bytes;
-        let pct = (saved as f64 / input_bytes as f64) * 100.0;
-        format!("Saved {} ({pct:.1}%)", human_bytes_ui(saved))
-    } else {
-        let growth = output_bytes - input_bytes;
-        let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
-        format!("Output +{} (+{grow_pct:.1}%)", human_bytes_ui(growth),)
-    }
 }
 
 fn format_av1_bitrate(bps: u64) -> String {
@@ -202,35 +127,6 @@ fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, 
     });
 }
 
-fn normalize_av1_source_key(path: &str) -> String {
-    Path::new(path)
-        .to_string_lossy()
-        .replace('/', "\\")
-        .to_ascii_lowercase()
-}
-
-fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
-    if scanned.is_empty() {
-        return;
-    }
-    let remove: HashSet<String> = scanned
-        .iter()
-        .map(|s| normalize_av1_source_key(s))
-        .collect();
-    let remaining: Vec<String> = input
-        .lines()
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .filter(|s| !remove.contains(&normalize_av1_source_key(s)))
-        .map(str::to_owned)
-        .collect();
-    *input = if remaining.is_empty() {
-        String::new()
-    } else {
-        format!("{}\n", remaining.join("\n"))
-    };
-}
-
 fn av1_encoder_detect_key(ffmpeg_path: &str, encoder_override: &str) -> String {
     format!("{ffmpeg_path}\0{encoder_override}")
 }
@@ -256,189 +152,31 @@ impl PydlApp {
         self.av1_encoder_detect_key = key;
     }
 
-    pub(super) fn av1_config(&self) -> Av1Config {
-        Av1Config {
-            ffmpeg_path: self.settings.ffmpeg_path.clone(),
-            ffprobe_path: self.settings.ffprobe_path.clone(),
-            output_dir: self.output_dir.clone(),
-            recursive: self.settings.av1_recursive,
-            dry_run: self.settings.av1_dry_run,
-            delete_original: self.settings.av1_delete_original,
-            rename_original: self.settings.av1_rename_original,
-            overwrite: self.settings.av1_overwrite,
-            reencode_av1: self.settings.av1_reencode_av1,
-            target_bitrate: self.settings.av1_target_bitrate.clone(),
-            max_width: self.settings.av1_max_width,
-            size_preset: self.settings.av1_size_preset.clone(),
-            min_shrink_percent: self.settings.av1_min_shrink_percent,
-            encoder_override: self.settings.av1_encoder_override.clone(),
+    /// Runs an AV1 mutation against the shared `DownloadCore` (the single source of truth) and
+    /// refreshes the GUI mirror fields from it. The editable textarea is pushed in first so the
+    /// core sees the latest paths, then read back (a scan trims the lines it consumed).
+    pub(super) fn av1_core_action(&mut self, f: impl FnOnce(&mut DownloadCore)) {
+        {
+            let mut core = self.shared_core.lock();
+            core.av1_input_paths = self.av1_input_paths.clone();
+            f(&mut core);
+            self.av1_input_paths = core.av1_input_paths.clone();
+            self.av1_items = core.av1_items.clone();
+            self.av1_running = core.av1_running;
+            self.av1_media_inflight = core.av1_media_inflight.clone();
+            self.core_generation = core.generation;
         }
+        self.ensure_av1_thumbnails();
     }
 
-    pub(super) fn scan_av1_paths_into_queue(&mut self, path_lines: &[String]) {
-        let lines: Vec<String> = path_lines
-            .iter()
-            .map(|s| s.trim().to_owned())
-            .filter(|s| !s.is_empty())
-            .collect();
-        if lines.is_empty() {
-            return;
+    fn clear_av1_queue(&mut self) {
+        let ids: Vec<u64> = self.av1_items.iter().map(|it| it.item_id).collect();
+        self.av1_core_action(|core| core.clear_av1_queue());
+        for id in ids {
+            self.textures.remove(&id);
+            self.thumbnail_inflight.remove(&id);
+            self.thumbnail_attempted.remove(&id);
         }
-
-        let cfg = self.av1_config();
-        let inputs: Vec<Av1Input> = lines
-            .iter()
-            .map(|source_path| Av1Input {
-                source_path: source_path.clone(),
-            })
-            .collect();
-        let plan = av1_transcode::collect_plan(&inputs, &cfg);
-        if plan.is_empty() {
-            self.append_log("AV1: no supported video files found in added path(s).");
-            remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
-            self.schedule_av1_queue_save();
-            return;
-        }
-
-        let added = self.push_av1_plan_items(plan);
-
-        if added > 0 {
-            self.append_log(&format!("AV1: added {added} video(s) to queue as ready."));
-            self.schedule_av1_queue_save();
-        } else {
-            self.append_log("AV1: all video(s) from path(s) are already in the queue.");
-        }
-        remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
-        self.schedule_av1_queue_save();
-    }
-
-    /// Adds plan items not already in the AV1 queue. Returns how many were added.
-    pub(super) fn push_av1_plan_items(&mut self, plan: Vec<av1_transcode::Av1PlanItem>) -> usize {
-        if plan.is_empty() {
-            return 0;
-        }
-        let existing: HashSet<String> = self
-            .av1_items
-            .iter()
-            .map(|item| normalize_av1_source_key(&item.source_path))
-            .collect();
-        let cfg = self.av1_config();
-        let ffmpeg_path = cfg.ffmpeg_path.clone();
-        let ffprobe_path = cfg.ffprobe_path.clone();
-        let mut added = 0usize;
-        for plan_item in plan {
-            let source = plan_item.input.to_string_lossy().to_string();
-            if existing.contains(&normalize_av1_source_key(&source)) {
-                continue;
-            }
-
-            let item_id = self.av1_next_item_id;
-            self.av1_next_item_id = self.av1_next_item_id.saturating_add(1);
-            if self.has_ffprobe {
-                self.queue_av1_media_probe(item_id, plan_item.input.clone(), ffprobe_path.clone());
-            }
-
-            let input_bytes = std::fs::metadata(&plan_item.input)
-                .map(|m| m.len())
-                .unwrap_or(0);
-            let ready_detail = if input_bytes > 0 {
-                format!("Ready · {}", human_bytes_ui(input_bytes))
-            } else {
-                "Ready".to_owned()
-            };
-
-            self.av1_items.push(Av1QueueItem {
-                item_id,
-                source_path: source,
-                output_path: plan_item.output.to_string_lossy().to_string(),
-                status: ItemStatus::Idle,
-                percent: 0.0,
-                detail: ready_detail,
-                input_bytes,
-                output_bytes: None,
-                video_codec: String::new(),
-                width: None,
-                height: None,
-                fps: None,
-                bitrate_bps: None,
-            });
-            if self.has_ffmpeg {
-                self.queue_av1_local_thumbnail(item_id, plan_item.input, ffmpeg_path.clone());
-            }
-            added += 1;
-        }
-        if added > 0 {
-            self.schedule_av1_queue_save();
-        }
-        added
-    }
-
-    pub(super) fn enqueue_completed_download_to_av1(&mut self, item_id: u64) {
-        if !self.settings.enqueue_downloads_to_av1 || self.settings.ffmpeg_extract_audio_mp3 {
-            return;
-        }
-        let Some(idx) = self.item_idx(item_id) else {
-            return;
-        };
-        let item = self.items[idx].clone();
-        let Some((path, _)) = self.find_downloaded_file_for_item(&item) else {
-            return;
-        };
-        if !av1_transcode::is_video_path(&path) {
-            return;
-        }
-        let source = path.to_string_lossy().into_owned();
-        let plan = av1_transcode::collect_plan(
-            &[Av1Input {
-                source_path: source,
-            }],
-            &self.av1_config(),
-        );
-        let added = self.push_av1_plan_items(plan);
-        if added > 0 {
-            let label = item.title.trim();
-            let label = if label.is_empty() {
-                path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("download")
-            } else {
-                label
-            };
-            self.append_log(&format!(
-                "AV1: enqueued \"{label}\" from completed download."
-            ));
-        }
-    }
-
-    pub(super) fn queue_av1_restored_assets(&mut self) {
-        if self.av1_items.is_empty() {
-            return;
-        }
-        let cfg = self.av1_config();
-        let ffmpeg_path = cfg.ffmpeg_path.clone();
-        let ffprobe_path = cfg.ffprobe_path.clone();
-        for item in self.av1_items.clone() {
-            let source = std::path::PathBuf::from(&item.source_path);
-            if self.has_ffprobe && item.video_codec.is_empty() {
-                self.queue_av1_media_probe(item.item_id, source.clone(), ffprobe_path.clone());
-            }
-            if self.has_ffmpeg && !self.textures.contains_key(&item.item_id) {
-                self.queue_av1_local_thumbnail(item.item_id, source, ffmpeg_path.clone());
-            }
-        }
-    }
-
-    pub(super) fn clear_av1_queue(&mut self) {
-        for item in &self.av1_items {
-            self.textures.remove(&item.item_id);
-            self.thumbnail_inflight.remove(&item.item_id);
-            self.thumbnail_attempted.remove(&item.item_id);
-            self.av1_media_inflight.remove(&item.item_id);
-        }
-        self.av1_items.clear();
-        self.av1_duration_ms.clear();
-        self.av1_progress_state.clear();
-        self.clear_av1_queue_persistence();
     }
 
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
@@ -486,14 +224,13 @@ impl PydlApp {
                 );
             }
         });
-        let input_edit = ui.add_sized(
+        // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
+        // there on scan / exit, so no per-keystroke save is needed here.
+        ui.add_sized(
             [ui.available_width(), 90.0],
             egui::TextEdit::multiline(&mut self.av1_input_paths)
                 .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
         );
-        if input_edit.changed() {
-            self.schedule_av1_queue_save();
-        }
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Session").strong());
             if ui
@@ -565,8 +302,7 @@ impl PydlApp {
             )
             .clicked()
             {
-                self.av1_cancel_flag
-                    .store(true, std::sync::atomic::Ordering::Relaxed);
+                self.av1_core_action(|core| core.cancel_av1_batch());
             }
             if secondary_button(
                 ui,
@@ -976,60 +712,16 @@ impl PydlApp {
             .filter(|s| !s.is_empty())
             .map(str::to_owned)
             .collect();
-        self.scan_av1_paths_into_queue(&lines);
+        if lines.is_empty() {
+            return;
+        }
+        self.av1_core_action(|core| core.scan_av1_paths_into_queue(&lines));
     }
 
     fn start_av1_batch(&mut self) {
-        let idle_count = self
-            .av1_items
-            .iter()
-            .filter(|item| item.status == ItemStatus::Idle)
-            .count();
-        if idle_count == 0 {
-            self.scan_av1_input_textbox();
-        }
-
-        let jobs: Vec<(u64, Av1Input, String)> = self
-            .av1_items
-            .iter()
-            .filter(|item| item.status == ItemStatus::Idle)
-            .map(|item| {
-                (
-                    item.item_id,
-                    Av1Input {
-                        source_path: item.source_path.clone(),
-                    },
-                    item.output_path.clone(),
-                )
-            })
-            .collect();
-        if jobs.is_empty() {
-            self.append_log("AV1: no ready items to convert.");
-            return;
-        }
-
+        // Persist current AV1 settings first so the worker (in the core) uses the latest config.
         self.persist_settings();
-        self.av1_cancel_flag
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-        let cfg = self.av1_config();
-
-        for (item_id, _, _) in &jobs {
-            if let Some(item) = self.av1_items.iter_mut().find(|x| x.item_id == *item_id) {
-                item.status = ItemStatus::Queued;
-                item.detail = "Queued".to_owned();
-            }
-        }
-
-        self.av1_running = true;
-        super::background_spawn::spawn_av1_worker(
-            &self.runtime,
-            &self.ui_bus,
-            cfg,
-            jobs,
-            self.av1_cancel_flag.clone(),
-        );
-        self.append_log("AV1: batch started.");
-        self.schedule_av1_queue_save();
+        self.av1_core_action(|core| core.start_av1_batch());
     }
 
     fn browse_av1_inputs(&mut self) {

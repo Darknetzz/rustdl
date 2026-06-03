@@ -25,7 +25,7 @@ use super::assets;
 use super::auth;
 
 #[derive(Clone)]
-pub struct ApiState {
+pub(super) struct ApiState {
     pub core: SharedCore,
 }
 
@@ -152,7 +152,8 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/logs", get(logs_get))
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/{id}", get(thumbnail_proxy))
-        .route("/api/media/{id}", get(media_stream))
+        .route("/api/media/{id}", get(media_stream));
+    let protected = super::av1_api::register(protected)
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
@@ -477,6 +478,23 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
         } => serde_json::json!({"type":"add_progress","processed":processed,"total":total,"current":current}),
         UiEvent::AddDone => serde_json::json!({"type":"add_done"}),
         UiEvent::LogLine { line } => serde_json::json!({"type":"log","line":line}),
+        UiEvent::Av1Line { item_id, line } => {
+            serde_json::json!({"type":"av1_line","item_id":item_id,"line":line})
+        }
+        UiEvent::Av1Duration {
+            item_id,
+            duration_ms,
+        } => serde_json::json!({"type":"av1_duration","item_id":item_id,"duration_ms":duration_ms}),
+        UiEvent::Av1MediaProbed { item_id, .. } => {
+            serde_json::json!({"type":"av1_media_probed","item_id":item_id})
+        }
+        UiEvent::Av1Done {
+            item_id,
+            ok,
+            detail,
+            ..
+        } => serde_json::json!({"type":"av1_done","item_id":item_id,"ok":ok,"detail":detail}),
+        UiEvent::Av1BatchDone => serde_json::json!({"type":"av1_batch_done"}),
         _ => serde_json::json!({"type":"other"}),
     }
 }
@@ -521,7 +539,7 @@ async fn thumbnail_proxy(
     Err(StatusCode::NOT_FOUND)
 }
 
-async fn extract_local_video_thumbnail(
+pub(super) async fn extract_local_video_thumbnail(
     path: &std::path::Path,
     ffmpeg_path: &str,
     has_ffmpeg: bool,
@@ -539,7 +557,7 @@ async fn extract_local_video_thumbnail(
     .flatten()
 }
 
-fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
+pub(super) fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
     (
         StatusCode::OK,
         [(axum::http::header::CONTENT_TYPE, content_type)],

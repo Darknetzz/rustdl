@@ -19,7 +19,9 @@ use crate::config::{
     load_activity_log, load_queue_items, load_settings, save_activity_log, save_queue_items,
     save_settings, trim_activity_log, AppSettings,
 };
-use crate::models::{ItemStatus, QueueItem};
+use crate::av1_transcode::EncoderChoice;
+use crate::config::{load_av1_queue_snapshot, Av1QueueSnapshot};
+use crate::models::{Av1QueueItem, ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
 use crate::app::events::{UiEvent, UiEventBus};
 use crate::ytdlp;
@@ -121,6 +123,18 @@ pub struct DownloadCore {
     pub download_log_throttle: HashMap<u64, f64>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
+
+    // --- AV1 converter (shared by GUI and web UI) ---
+    pub av1_input_paths: String,
+    pub av1_items: Vec<Av1QueueItem>,
+    pub av1_next_item_id: u64,
+    pub av1_running: bool,
+    pub av1_cancel_flag: Arc<AtomicBool>,
+    pub av1_duration_ms: HashMap<u64, u64>,
+    pub av1_progress_state: HashMap<u64, HashMap<String, String>>,
+    pub av1_media_inflight: HashSet<u64>,
+    pub av1_encoder_choice: Option<EncoderChoice>,
+    pub av1_encoder_detect_key: String,
 }
 
 impl DownloadCore {
@@ -141,6 +155,27 @@ impl DownloadCore {
             .unwrap_or(0)
             .saturating_add(1);
         let http_client = build_http_client(&settings);
+        let av1_snapshot = if settings.av1_remember_queue {
+            load_av1_queue_snapshot()
+        } else {
+            Av1QueueSnapshot::default()
+        };
+        let mut restored_av1_items = av1_snapshot.items;
+        for it in &mut restored_av1_items {
+            crate::app_parsing::normalize_restored_av1_item(it);
+        }
+        let av1_next_item_id = if restored_av1_items.is_empty() {
+            1_000_000
+        } else {
+            av1_snapshot.next_item_id.max(
+                restored_av1_items
+                    .iter()
+                    .map(|x| x.item_id)
+                    .max()
+                    .unwrap_or(999_999)
+                    + 1,
+            )
+        };
         let mut core = Self {
             runtime,
             tx,
@@ -186,12 +221,23 @@ impl DownloadCore {
             done_lookup_truncation_logged: false,
             download_log_throttle: HashMap::new(),
             generation: 1,
+            av1_input_paths: av1_snapshot.input_paths,
+            av1_items: restored_av1_items,
+            av1_next_item_id,
+            av1_running: false,
+            av1_cancel_flag: Arc::new(AtomicBool::new(false)),
+            av1_duration_ms: HashMap::new(),
+            av1_progress_state: HashMap::new(),
+            av1_media_inflight: HashSet::new(),
+            av1_encoder_choice: None,
+            av1_encoder_detect_key: String::new(),
         };
         core.rebuild_item_index();
         core.update_status();
         core.invalidate_queue_caches();
         core.refresh_deps();
         core.refresh_done_file_lookup();
+        core.queue_av1_restored_assets();
         (Arc::new(Mutex::new(core)), rx)
     }
 
