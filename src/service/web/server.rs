@@ -109,8 +109,9 @@ pub fn spawn_web_server(
         core,
         settings.web_bind_address.trim(),
         settings.web_auth_token.trim(),
+        None,
     ) {
-        Ok((handle, _)) => {
+        Ok(handle) => {
             eprintln!(
                 "rustdl: web UI listening on http://{}",
                 settings.web_bind_address.trim()
@@ -129,7 +130,8 @@ pub fn spawn_web_server_at(
     core: SharedCore,
     bind: &str,
     auth_token: &str,
-) -> Result<(WebServerHandle, super::api::ApiState), WebServerStartError> {
+    process_exit: Option<tokio::sync::oneshot::Sender<()>>,
+) -> Result<WebServerHandle, WebServerStartError> {
     let bind = bind.trim();
     if bind.is_empty() {
         return Err(WebServerStartError::EmptyBind);
@@ -142,6 +144,9 @@ pub fn spawn_web_server_at(
     }
 
     let state = ApiState::new(core.clone());
+    if let Some(tx) = process_exit {
+        state.set_process_exit_notifier(tx);
+    }
     let app = api_router(state);
 
     let std_listener = std::net::TcpListener::bind(addr)
@@ -161,13 +166,10 @@ pub fn spawn_web_server_at(
         }
     });
 
-    Ok((
-        WebServerHandle {
-            shutdown_tx: Some(shutdown_tx),
-            join: Some(join),
-        },
-        state,
-    ))
+    Ok(WebServerHandle {
+        shutdown_tx: Some(shutdown_tx),
+        join: Some(join),
+    })
 }
 
 #[cfg(test)]
