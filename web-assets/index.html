@@ -12,21 +12,23 @@
   <header class="topbar">
     <div class="topbar-left">
       <h1>rustdl</h1>
-      <nav class="view-nav" id="view-nav" aria-label="Section">
+      <nav class="view-nav btn-group" id="view-nav" aria-label="Section">
         <button type="button" id="nav-downloader" class="nav-btn active" data-view="downloader" data-icon="cloud_download">Downloader</button>
         <button type="button" id="nav-av1" class="nav-btn" data-view="av1" data-icon="bolt">AV1</button>
       </nav>
       <div id="tools-status" class="tools-status" aria-label="PATH checks"></div>
     </div>
-    <div class="topbar-actions">
+    <div class="topbar-actions btn-toolbar">
       <button type="button" id="btn-refresh-tools" class="secondary" data-icon="sync" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
-      <span id="downloader-only-actions" class="inline-actions">
+      <div id="downloader-only-actions" class="btn-group" role="group" aria-label="Download controls">
         <button type="button" id="btn-pause" class="secondary" data-icon="pause">Pause</button>
         <button type="button" id="btn-resume" class="secondary" data-icon="play_arrow">Resume</button>
         <button type="button" id="btn-start" class="primary" data-icon="download">Start downloads</button>
-      </span>
-      <button type="button" id="btn-settings" class="secondary" data-icon="settings">Settings</button>
-      <button type="button" id="btn-quit" class="danger" data-icon="exit_to_app" title="Quit rustdl (saves queue, cancels active jobs)">Quit</button>
+      </div>
+      <div class="btn-group" role="group" aria-label="Application">
+        <button type="button" id="btn-settings" class="secondary" data-icon="settings">Settings</button>
+        <button type="button" id="btn-quit" class="danger" data-icon="exit_to_app" title="Quit rustdl (saves queue, cancels active jobs)">Quit</button>
+      </div>
     </div>
   </header>
 
@@ -45,22 +47,28 @@
     <section class="panel add-panel">
       <h2>Add URLs</h2>
       <textarea id="url-input" rows="3" placeholder="One URL per line"></textarea>
-      <div class="row add-panel-actions">
-        <button type="button" id="btn-add" class="primary" data-icon="add">Add URLs</button>
-        <button type="button" id="btn-clear-url-input" class="secondary" data-icon="clear_all" title="Clear the URL text box">Clear input</button>
+      <div class="row add-panel-actions btn-toolbar">
+        <div class="btn-group" role="group" aria-label="Add URLs">
+          <button type="button" id="btn-add" class="primary" data-icon="add">Add URLs</button>
+          <button type="button" id="btn-clear-url-input" class="secondary" data-icon="clear_all" title="Clear the URL text box">Clear input</button>
+        </div>
       </div>
       <p id="add-feedback" class="add-feedback hidden" role="status"></p>
     </section>
 
     <section class="panel">
       <div class="summary" id="status-summary"></div>
-      <div class="queue-toolbar row">
+      <div class="queue-toolbar btn-toolbar">
         <span class="hint">Queue:</span>
-        <button type="button" id="btn-clear-finished" class="secondary" data-icon="clear_all" title="Remove done and failed rows">Clear finished</button>
-        <button type="button" id="btn-clear-done" class="secondary" data-icon="delete" title="Remove done rows only">Clear done</button>
-        <button type="button" id="btn-clear-failed" class="secondary" data-icon="delete" title="Remove failed rows only">Clear failed</button>
-        <button type="button" id="btn-clear-inactive" class="secondary" data-icon="remove_circle_outline" title="Remove all rows except queued/downloading">Clear inactive</button>
-        <button type="button" id="btn-clear-all" class="danger" data-icon="delete_forever" title="Remove every row (cancels active downloads)">Clear all</button>
+        <div class="btn-group" role="group" aria-label="Clear queue subsets">
+          <button type="button" id="btn-clear-finished" class="secondary" data-icon="clear_all" title="Remove done and failed rows">Clear finished</button>
+          <button type="button" id="btn-clear-done" class="secondary" data-icon="delete" title="Remove done rows only">Clear done</button>
+          <button type="button" id="btn-clear-failed" class="secondary" data-icon="delete" title="Remove failed rows only">Clear failed</button>
+          <button type="button" id="btn-clear-inactive" class="secondary" data-icon="remove_circle_outline" title="Remove all rows except queued/downloading">Clear inactive</button>
+        </div>
+        <div class="btn-group" role="group" aria-label="Clear entire queue">
+          <button type="button" id="btn-clear-all" class="danger" data-icon="delete_forever" title="Remove every row (cancels active downloads)">Clear all</button>
+        </div>
       </div>
       <div id="queue" class="queue"></div>
     </section>
@@ -81,12 +89,16 @@
         <label class="av1-input-label">Input paths (file or folder, one per line)
           <textarea id="av1-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
         </label>
-        <div class="row av1-actions">
-          <button type="button" id="btn-av1-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
-          <button type="button" id="btn-av1-start" class="primary" data-icon="play_arrow">Start AV1 batch</button>
-          <button type="button" id="btn-av1-cancel" class="danger" data-icon="stop">Cancel</button>
-          <button type="button" id="btn-av1-clear" class="secondary" data-icon="clear_all">Clear queue</button>
-          <button type="button" id="btn-av1-settings" class="secondary" data-icon="settings">AV1 settings</button>
+        <div class="row av1-actions btn-toolbar">
+          <div class="btn-group" role="group" aria-label="AV1 batch controls">
+            <button type="button" id="btn-av1-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
+            <button type="button" id="btn-av1-start" class="primary" data-icon="play_arrow">Start AV1 batch</button>
+            <button type="button" id="btn-av1-cancel" class="danger" data-icon="stop">Cancel</button>
+          </div>
+          <div class="btn-group" role="group" aria-label="AV1 queue">
+            <button type="button" id="btn-av1-clear" class="secondary" data-icon="clear_all">Clear queue</button>
+            <button type="button" id="btn-av1-settings" class="secondary" data-icon="settings">AV1 settings</button>
+          </div>
         </div>
         <p id="av1-encoder" class="av1-encoder hint"></p>
         <div id="av1-summary" class="status-summary"></div>
@@ -101,7 +113,7 @@
     <form method="dialog" id="settings-form">
       <div class="settings-header">
         <h2>Settings</h2>
-        <div class="settings-tabs" role="tablist">
+        <div class="settings-tabs btn-group" role="tablist">
           <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
           <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
           <button type="button" class="settings-tab" data-tab="av1" data-icon="bolt" role="tab">AV1</button>
@@ -144,10 +156,12 @@
           </div>
           <div class="preset-row">
             <span class="hint">Presets:</span>
-            <button type="button" class="secondary preset-btn" data-icon="star" data-profile="Best quality">Best quality</button>
-            <button type="button" class="secondary preset-btn" data-icon="music_note" data-profile="Audio only">Audio only</button>
-            <button type="button" class="secondary preset-btn" data-icon="bolt" data-profile="Fast download">Fast download</button>
-            <button type="button" class="secondary preset-btn" data-icon="archive" data-profile="Archive mode">Archive mode</button>
+            <div class="btn-group" role="group" aria-label="Download presets">
+              <button type="button" class="secondary preset-btn" data-icon="star" data-profile="Best quality">Best quality</button>
+              <button type="button" class="secondary preset-btn" data-icon="music_note" data-profile="Audio only">Audio only</button>
+              <button type="button" class="secondary preset-btn" data-icon="bolt" data-profile="Fast download">Fast download</button>
+              <button type="button" class="secondary preset-btn" data-icon="archive" data-profile="Archive mode">Archive mode</button>
+            </div>
           </div>
 
           <h3>Output and quality</h3>
@@ -235,8 +249,10 @@
         </div>
       </div>
       <div class="dialog-actions">
-        <button type="button" id="btn-settings-cancel" class="secondary" data-icon="close">Cancel</button>
-        <button type="submit" class="primary" data-icon="save">Save settings</button>
+        <div class="btn-group" role="group" aria-label="Settings dialog">
+          <button type="button" id="btn-settings-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" class="primary" data-icon="save">Save settings</button>
+        </div>
       </div>
     </form>
   </dialog>

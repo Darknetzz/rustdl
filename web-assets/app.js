@@ -331,6 +331,16 @@ function toggleCardMedia(item, thumb) {
   el.play().catch(() => {});
 }
 
+function createCardActionBar() {
+  const bar = document.createElement("div");
+  bar.className = "card-actions";
+  const group = document.createElement("div");
+  group.className = "btn-group";
+  group.setAttribute("role", "group");
+  bar.appendChild(group);
+  return { bar, group };
+}
+
 function appendPlayButton(actions, item, thumb) {
   if (!item.playable) return;
   const play = document.createElement("button");
@@ -565,21 +575,22 @@ function renderQueueCard(item, settings) {
 
   card.appendChild(body);
 
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  appendPlayButton(actions, item, thumb);
+  const { bar: actions, group } = createCardActionBar();
+  appendPlayButton(group, item, thumb);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
     setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
-    actions.appendChild(cancel);
+    group.appendChild(cancel);
   }
-  appendRedownloadButton(actions, item);
-  appendDeleteFileButton(actions, item);
-  appendRemoveButton(actions, item);
-  card.appendChild(actions);
+  appendRedownloadButton(group, item);
+  appendDeleteFileButton(group, item);
+  appendRemoveButton(group, item);
+  if (group.childElementCount > 0) {
+    card.appendChild(actions);
+  }
 
   return card;
 }
@@ -621,21 +632,20 @@ function renderQueueCardListRow(item) {
   }
   card.appendChild(body);
 
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  appendPlayButton(actions, item, thumb);
+  const { bar: actions, group } = createCardActionBar();
+  appendPlayButton(group, item, thumb);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
     cancel.className = "secondary";
     setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
-    actions.appendChild(cancel);
+    group.appendChild(cancel);
   }
-  appendRedownloadButton(actions, item);
-  appendDeleteFileButton(actions, item);
-  appendRemoveButton(actions, item);
-  if (actions.childElementCount > 0) {
+  appendRedownloadButton(group, item);
+  appendDeleteFileButton(group, item);
+  appendRemoveButton(group, item);
+  if (group.childElementCount > 0) {
     card.appendChild(actions);
   }
 

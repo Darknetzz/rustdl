@@ -74,7 +74,7 @@ body {
 .tool-badge.ok { color: var(--ok); border-color: rgba(129, 199, 132, 0.35); }
 .tool-badge.missing { color: var(--danger); border-color: rgba(239, 83, 80, 0.35); }
 
-.topbar-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+.topbar-actions.btn-toolbar { justify-content: flex-end; }
 
 .panel {
   margin: 1rem;
@@ -113,6 +113,61 @@ button {
 button.primary { background: var(--accent); color: #fff; }
 button.secondary { background: var(--border); color: var(--text); }
 button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border: 1px solid rgba(239, 83, 80, 0.45); }
+
+/* Bootstrap-style segmented controls */
+.btn-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-group {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  vertical-align: middle;
+  border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.btn-group > button {
+  position: relative;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.btn-group > button + button {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.08);
+}
+
+.btn-group > button.secondary {
+  background: var(--border);
+}
+
+.btn-group > button.danger {
+  border: none;
+}
+
+.btn-group > button:first-child {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.btn-group > button:last-child {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.btn-group > button:only-child {
+  border-radius: 6px;
+}
+
+.btn-group > button:hover,
+.btn-group > button:focus-visible {
+  z-index: 1;
+}
 
 .summary { color: var(--muted); margin-bottom: 0.85rem; font-size: 0.9rem; }
 
@@ -176,8 +231,6 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 
 .queue-toolbar {
   margin-bottom: 0.75rem;
-  align-items: center;
-  gap: 0.4rem;
 }
 
 .queue-toolbar .hint {
@@ -239,7 +292,7 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 }
 
 .queue.list-layout .card-body { flex: 1; min-width: 0; }
-.queue.list-layout .card-actions { border-top: none; padding-top: 0; flex-wrap: nowrap; }
+.queue.list-layout .card-actions { border-top: none; padding-top: 0; }
 
 .card {
   display: flex;
@@ -443,10 +496,14 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 
 .card-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
   padding: 0.45rem 0.65rem 0.6rem;
   border-top: 1px solid var(--border);
+}
+
+.card-actions .btn-group {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .log-view {
@@ -492,7 +549,9 @@ dialog::backdrop {
 
 .settings-header h2 { margin: 0 0 0.75rem; }
 
-.settings-tabs { display: flex; gap: 0.35rem; }
+.settings-tabs.btn-group {
+  box-shadow: 0 0 0 1px var(--border);
+}
 
 .settings-tab {
   background: var(--bg);
@@ -534,9 +593,13 @@ dialog::backdrop {
 .preset-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.35rem;
+  gap: 0.5rem;
   align-items: center;
   margin: 0.5rem 0 1rem;
+}
+
+.preset-row .btn-group {
+  flex-wrap: wrap;
 }
 
 .command-preview {
@@ -554,7 +617,6 @@ dialog::backdrop {
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--border);
 }
@@ -568,15 +630,6 @@ dialog::backdrop {
 
 /* ----------------------------- view nav + AV1 ----------------------------- */
 
-.view-nav {
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.2rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
-}
-
 .nav-btn {
   border: none;
   background: transparent;
@@ -584,7 +637,6 @@ dialog::backdrop {
   font: inherit;
   font-weight: 600;
   padding: 0.3rem 0.7rem;
-  border-radius: 6px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -594,7 +646,13 @@ dialog::backdrop {
 .nav-btn:hover { color: var(--text); }
 .nav-btn.active { background: var(--accent); color: #fff; }
 
-.inline-actions { display: inline-flex; gap: 0.5rem; align-items: center; }
+.view-nav.btn-group {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.view-nav.btn-group > .nav-btn.active {
+  z-index: 1;
+}
 
 .av1-input-label { display: block; }
 .av1-input-label textarea { width: 100%; margin-top: 0.35rem; }
