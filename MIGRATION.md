@@ -28,4 +28,6 @@ git push gitlab --tags
 
 ## Monorepo
 
-Development no longer happens under `Rust/rustdl/` in `code`. That tree was removed; see `Rust/README.md` in the monorepo for the pointer.
+Active development is in this repository: **https://github.com/Darknetzz/rustdl** (GitLab mirror: https://gitlab.roste.org/kriss/rustdl).
+
+The former path `Rust/rustdl/` in [Darknetzz/code](https://github.com/Darknetzz/code) is no longer maintained.

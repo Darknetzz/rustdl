@@ -52,12 +52,12 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 ### Changed
 
 - `app/mod.rs` split: `queue_persist`, `download_control`, `background_spawn`, `events`, `app_parsing`.
-- `cargo deny` / `cargo audit` run on pushes to `main` only (PR CI stays faster).
+- `cargo deny` / `cargo audit` run on pushes to `dev` only (PR CI stays faster).
 
 ### Documentation
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...main
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...dev
 [0.1.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.0...rustdl-v0.1.1
 [0.1.0]: https://github.com/Darknetzz/rustdl/tree/rustdl-v0.1.0

@@ -4,6 +4,12 @@ include!(concat!(env!("OUT_DIR"), "/build_info.rs"));
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Canonical GitHub repository (matches `repository` / `homepage` in `Cargo.toml`).
+pub const GITHUB_REPOSITORY: &str = "https://github.com/Darknetzz/rustdl";
+pub const GITHUB_RELEASES: &str = "https://github.com/Darknetzz/rustdl/releases";
+pub const GITHUB_OWNER: &str = "Darknetzz";
+pub const GITHUB_REPO: &str = "rustdl";
+
 /// Build time in the local timezone of the machine running rustdl.
 pub fn build_date_local() -> String {
     use chrono::{Local, TimeZone, Utc};

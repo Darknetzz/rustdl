@@ -76,5 +76,5 @@ jobs:
           gh release create "$tag" \
             --repo "${{ github.repository }}" \
             --title "rustdl ${ver}" \
-            --notes "See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md)." \
+            --notes "See [CHANGELOG](https://github.com/${{ github.repository }}/blob/dev/CHANGELOG.md)." \
             artifacts/**/*

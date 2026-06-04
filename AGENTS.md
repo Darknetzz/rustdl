@@ -13,7 +13,7 @@ Guidance for AI agents and automation working in this repository.
 
 The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` from `src/main.rs`.
 
-This repo was split from the monorepo path `Rust/rustdl/` in [Darknetzz/code](https://github.com/Darknetzz/code) (see `MIGRATION.md`). Default branch on GitHub/GitLab is **`dev`**.
+**Canonical repository:** https://github.com/Darknetzz/rustdl (GitLab mirror: https://gitlab.roste.org/kriss/rustdl). User-facing links, `Cargo.toml` `repository` / `homepage`, and `pkg_version::GITHUB_*` constants should all use that GitHub URL—not the old monorepo [Darknetzz/code](https://github.com/Darknetzz/code) path `Rust/rustdl/` (historical context only; see `MIGRATION.md`). Default branch on GitHub/GitLab is **`dev`**.
 
 ## Building the binary
 

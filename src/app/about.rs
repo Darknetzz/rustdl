@@ -27,6 +27,11 @@ impl PydlApp {
                         .small()
                         .color(Color32::LIGHT_GRAY),
                 );
+                ui.horizontal(|ui| {
+                    ui.hyperlink_to("Source on GitHub", pkg_version::GITHUB_REPOSITORY);
+                    ui.label("·");
+                    ui.hyperlink_to("Releases", pkg_version::GITHUB_RELEASES);
+                });
                 ui.separator();
                 ui.label(RichText::new("Keyboard shortcuts").strong());
                 ui.label(

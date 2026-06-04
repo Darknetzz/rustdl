@@ -30,10 +30,7 @@ pub(crate) fn parse_latest_release_json(raw: &str) -> Result<(String, String), S
 pub(crate) async fn check_latest_release_async(
     client: &Client,
 ) -> Result<(String, String, bool), String> {
-    let (owner, repo) = detect_github_repo().ok_or_else(|| {
-        "Could not detect GitHub repository (set package.repository or run from git checkout)"
-            .to_owned()
-    })?;
+    let (owner, repo) = detect_github_repo();
     let api = format!("https://api.github.com/repos/{owner}/{repo}/releases/latest");
     let resp = client
         .get(&api)
@@ -50,25 +47,37 @@ pub(crate) async fn check_latest_release_async(
     Ok((tag, html_url, newer))
 }
 
-pub(crate) fn detect_github_repo() -> Option<(String, String)> {
+pub(crate) fn detect_github_repo() -> (String, String) {
     if let Some(repo_url) = option_env!("CARGO_PKG_REPOSITORY") {
         if let Some(parsed) = parse_github_owner_repo(repo_url) {
-            return Some(parsed);
+            return parsed;
         }
     }
     let mut cmd = Command::new("git");
     no_console_window(&mut cmd);
-    let out = cmd
+    if let Ok(out) = cmd
         .args(["config", "--get", "remote.origin.url"])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+    {
+        if out.status.success() {
+            let remote = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+            if is_github_remote(&remote) {
+                if let Some(parsed) = parse_github_owner_repo(&remote) {
+                    return parsed;
+                }
+            }
+        }
     }
-    let remote = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-    parse_github_owner_repo(&remote)
+    (
+        pkg_version::GITHUB_OWNER.to_owned(),
+        pkg_version::GITHUB_REPO.to_owned(),
+    )
+}
+
+fn is_github_remote(url: &str) -> bool {
+    url.trim().to_ascii_lowercase().contains("github.com")
 }
 
 fn parse_github_owner_repo(url: &str) -> Option<(String, String)> {
@@ -94,7 +103,8 @@ fn parse_github_owner_repo(url: &str) -> Option<(String, String)> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_github_owner_repo, parse_latest_release_json};
+    use super::{detect_github_repo, parse_github_owner_repo, parse_latest_release_json};
+    use crate::pkg_version;
 
     #[test]
     fn parse_release_json_tag_and_url() {
@@ -125,5 +135,12 @@ mod tests {
             parse_github_owner_repo("git@github.com:org/repo.git"),
             Some(("org".to_owned(), "repo".to_owned()))
         );
+    }
+
+    #[test]
+    fn detect_github_repo_defaults_to_rustdl() {
+        let (owner, repo) = detect_github_repo();
+        assert_eq!(owner, pkg_version::GITHUB_OWNER);
+        assert_eq!(repo, pkg_version::GITHUB_REPO);
     }
 }
