@@ -679,6 +679,48 @@ impl<'a> ButtonGroup<'a> {
         let compact = self.compact;
         self.add(|ui| grouped_warning_button(ui, label, enabled, compact))
     }
+
+    /// Fused "Remove..." menu: queue row removal and optional on-disk file delete.
+    pub fn remove_menu(
+        &mut self,
+        enabled: bool,
+        removable: bool,
+        show_delete_file: bool,
+        remove_clicked: &mut bool,
+        delete_clicked: &mut bool,
+    ) -> Response {
+        let compact = self.compact;
+        let label = format!("{} Remove...", crate::ui_icons::REMOVE);
+        self.add(|ui| {
+            if !enabled {
+                return grouped_secondary_button(ui, &label, false, compact)
+                    .on_disabled_hover_text("Nothing to remove for this row");
+            }
+            ui.menu_button(grouped_button_label(&label, compact), |ui| {
+                if ui
+                    .add_enabled(removable, egui::Button::new("Remove from queue"))
+                    .on_hover_text(
+                        "Remove this row from the list (does not delete the file on disk).",
+                    )
+                    .clicked()
+                {
+                    *remove_clicked = true;
+                }
+                if show_delete_file
+                    && ui
+                        .button("Delete file")
+                        .on_hover_text(
+                            "Delete only this file; the queue row stays until you remove it.",
+                        )
+                        .clicked()
+                {
+                    *delete_clicked = true;
+                }
+            })
+            .response
+            .on_hover_text("Remove from queue or delete the saved file")
+        })
+    }
 }
 
 pub fn button_group<R>(

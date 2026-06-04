@@ -362,32 +362,25 @@ impl PydlApp {
                             {
                                 self.redownload_item_id(id);
                             }
-                            if let Some((p, _)) = done_file.as_ref() {
-                                if g.danger(
-                                    &format!("{} Delete", ui_icons::CARD_DELETE),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Delete only this file; the queue row stays until you remove it",
-                                )
-                                .clicked()
-                                {
-                                    self.delete_file_path(p);
-                                }
-                            }
-                            if g.secondary(
-                                &format!("{} Remove", ui_icons::REMOVE),
+                            let mut remove_from_queue = false;
+                            let mut delete_file = false;
+                            g.remove_menu(
+                                removable || done_file.is_some(),
                                 removable,
-                            )
-                            .on_hover_text(
-                                "Remove this row from the list (does not delete the file unless you use Delete above).",
-                            )
-                            .clicked()
-                            {
+                                done_file.is_some(),
+                                &mut remove_from_queue,
+                                &mut delete_file,
+                            );
+                            if remove_from_queue {
                                 let _ = self.remove_item_by_id(id);
                                 self.update_status();
                                 self.refresh_input_line_info();
                                 self.schedule_queue_save();
+                            }
+                            if delete_file {
+                                if let Some((p, _)) = done_file.as_ref() {
+                                    self.delete_file_path(p);
+                                }
                             }
                         });
                     });

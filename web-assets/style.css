@@ -140,7 +140,10 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   box-shadow: none;
 }
 
-.btn-group > button + button {
+.btn-group > button + button,
+.btn-group > button + .btn-menu .btn-menu-trigger,
+.btn-group > .btn-menu + button,
+.btn-group > .btn-menu + .btn-menu .btn-menu-trigger {
   box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.08);
 }
 
@@ -528,6 +531,93 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   font-size: 0.95rem;
   vertical-align: -2px;
   margin-right: 0.1rem;
+}
+
+.btn-group > .btn-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.btn-menu-trigger {
+  list-style: none;
+  cursor: pointer;
+  border: none;
+  border-radius: 0;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  background: var(--border);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.btn-menu-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.btn-menu-trigger::marker {
+  content: "";
+}
+
+.btn-menu-trigger .material-icons {
+  font-size: 0.95rem;
+  vertical-align: -2px;
+  margin-right: 0.1rem;
+}
+
+.btn-menu[open] > .btn-menu-trigger {
+  z-index: 3;
+}
+
+.btn-menu-panel {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.btn-menu-item {
+  width: 100%;
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: transparent;
+  color: var(--text);
+}
+
+.btn-menu-item:hover,
+.btn-menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn-menu-item.danger {
+  color: var(--failed);
+}
+
+.card-actions .btn-group > .btn-menu:first-child .btn-menu-trigger {
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.card-actions .btn-group > .btn-menu:last-child .btn-menu-trigger {
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.card-actions .btn-group > .btn-menu:only-child .btn-menu-trigger {
+  border-radius: 6px;
 }
 
 .log-view {

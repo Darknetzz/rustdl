@@ -524,30 +524,56 @@ function canRedownload(item) {
   return slug === "done" || slug === "failed";
 }
 
-function appendRemoveButton(actions, item) {
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "secondary";
-  setButtonLabel(btn, ICON.remove, "Remove");
-  btn.title = "Remove this row from the queue (does not delete the file on disk).";
-  btn.onclick = () =>
-    removeQueueItem(item.item_id).catch((e) => alert(e.message || String(e)));
-  actions.appendChild(btn);
-}
+function appendRemoveMenuButton(group, item) {
+  const menu = document.createElement("details");
+  menu.className = "btn-menu";
 
-function appendDeleteFileButton(actions, item) {
-  if (!item.can_delete_file) return;
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "danger";
-  setButtonLabel(btn, ICON.deleteForever, "Delete");
-  btn.title = "Delete the downloaded file on disk. The queue row stays until you remove it.";
-  btn.onclick = () => {
-    const name = item.media_filename || "this file";
-    if (!confirm(`Delete ${name} from the output folder?`)) return;
-    deleteQueueItemFile(item.item_id).catch((e) => alert(e.message || String(e)));
+  const trigger = document.createElement("summary");
+  trigger.className = "btn-menu-trigger secondary";
+  trigger.title = "Remove from queue or delete the saved file";
+  setButtonLabel(trigger, ICON.remove, "Remove...");
+  menu.appendChild(trigger);
+
+  const panel = document.createElement("div");
+  panel.className = "btn-menu-panel";
+  panel.setAttribute("role", "menu");
+
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-menu-item";
+  removeBtn.textContent = "Remove from queue";
+  removeBtn.title =
+    "Remove this row from the queue (does not delete the file on disk).";
+  removeBtn.onclick = (e) => {
+    e.preventDefault();
+    menu.open = false;
+    removeQueueItem(item.item_id).catch((err) =>
+      alert(err.message || String(err))
+    );
   };
-  actions.appendChild(btn);
+  panel.appendChild(removeBtn);
+
+  if (item.can_delete_file) {
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "btn-menu-item danger";
+    deleteBtn.textContent = "Delete file";
+    deleteBtn.title =
+      "Delete the downloaded file on disk. The queue row stays until you remove it.";
+    deleteBtn.onclick = (e) => {
+      e.preventDefault();
+      menu.open = false;
+      const name = item.media_filename || "this file";
+      if (!confirm(`Delete ${name} from the output folder?`)) return;
+      deleteQueueItemFile(item.item_id).catch((err) =>
+        alert(err.message || String(err))
+      );
+    };
+    panel.appendChild(deleteBtn);
+  }
+
+  menu.appendChild(panel);
+  group.appendChild(menu);
 }
 
 function appendRedownloadButton(actions, item) {
@@ -675,8 +701,7 @@ function renderQueueCard(item, settings) {
     group.appendChild(cancel);
   }
   appendRedownloadButton(group, item);
-  appendDeleteFileButton(group, item);
-  appendRemoveButton(group, item);
+  appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
     card.appendChild(actions);
   }
@@ -732,8 +757,7 @@ function renderQueueCardListRow(item) {
     group.appendChild(cancel);
   }
   appendRedownloadButton(group, item);
-  appendDeleteFileButton(group, item);
-  appendRemoveButton(group, item);
+  appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
     card.appendChild(actions);
   }
