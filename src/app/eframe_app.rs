@@ -297,7 +297,7 @@ impl eframe::App for PydlApp {
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls_v6")
                     .hscroll(false)
-                    .auto_shrink([false, false])
+                    .auto_shrink([false, true])
                     .max_height(main_split.controls_max_height)
                     .show(ui, |ui| {
                         constrain_content_width(ui);
@@ -411,8 +411,9 @@ impl eframe::App for PydlApp {
 
                 ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
                 let profiles = crate::profiles::all_profiles(&self.profile_store);
-                if !profiles.is_empty() {
-                    ui.horizontal(|ui| {
+                ui.horizontal(|ui| {
+                    constrain_content_width(ui);
+                    if !profiles.is_empty() {
                         ui.label("Profile");
                         egui::ComboBox::from_id_salt("toolbar_profile")
                             .selected_text(self.settings.active_profile.clone())
@@ -434,14 +435,13 @@ impl eframe::App for PydlApp {
                                     }
                                 }
                             });
-                    });
-                }
-                ui.horizontal(|ui| {
+                        ui.add_space(20.0);
+                    }
                     ui.label("Search");
                     let search = ui.add(
                         egui::TextEdit::singleline(&mut self.queue_search)
                             .hint_text("Title, URL, uploader…")
-                            .desired_width(200.0),
+                            .desired_width(220.0),
                     );
                     if search.changed() {
                         self.queue_group_focus = None;
@@ -455,48 +455,88 @@ impl eframe::App for PydlApp {
                     }
                 });
                 button_toolbar_wrapped(ui, |ui| {
-                    if self.downloads_paused {
-                        button_group(ui, "dl_pause", |g| {
-                            if g.success(
-                                &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
-                                true,
-                            )
-                            .clicked()
+                    button_group(ui, "dl_actions", |g| {
+                        if self.downloads_paused {
+                            if g
+                                .success(
+                                    &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                                    true,
+                                )
+                                .clicked()
                             {
                                 self.resume_all_downloads();
                             }
-                        });
-                    } else {
-                        button_group(ui, "dl_pause", |g| {
-                            if g.warning(
+                        } else if g
+                            .warning(
                                 &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
                                 self.status_queued > 0 || self.status_active > 0,
                             )
                             .clicked()
-                            {
-                                self.pause_all_downloads();
-                            }
-                        });
-                    }
-                    button_group(ui, "dl_io", |g| {
-                        if g.secondary(
-                            &format!("{} Export URLs", ui_icons::EXPORT),
-                            !self.items.is_empty(),
-                        )
-                        .clicked()
+                        {
+                            self.pause_all_downloads();
+                        }
+                        if g
+                            .secondary(
+                                &format!("{} Export URLs", ui_icons::EXPORT),
+                                !self.items.is_empty(),
+                            )
+                            .clicked()
                         {
                             self.export_queue_to_file();
                         }
-                        if g.secondary(
-                            &format!("{} Import queue", ui_icons::IMPORT_FILE),
-                            !self.add_in_progress,
-                        )
-                        .on_hover_text(
-                            "Load URLs from a .txt file directly into the download queue",
-                        )
-                        .clicked()
+                        if g
+                            .secondary(
+                                &format!("{} Import queue", ui_icons::IMPORT_FILE),
+                                !self.add_in_progress,
+                            )
+                            .on_hover_text(
+                                "Load URLs from a .txt file directly into the download queue",
+                            )
+                            .clicked()
                         {
                             self.import_queue_from_file();
+                        }
+                        if g
+                            .warning(
+                                &format!("{} Re-check saved files", ui_icons::RECHECK),
+                                self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
+                            )
+                            .on_hover_text(
+                                "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
+                            )
+                            .on_disabled_hover_text(
+                                "Requires ffprobe. Disabled while MP3 extraction is enabled.",
+                            )
+                            .clicked()
+                        {
+                            self.recheck_all_saved_downloads();
+                        }
+                        if g
+                            .danger(
+                                &format!("{} Clear list", ui_icons::CLEAR_QUEUE),
+                                true,
+                            )
+                            .clicked()
+                        {
+                            self.items.retain(|x| {
+                                matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
+                            });
+                            self.pending_resolve_ids
+                                .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                            self.update_status();
+                            self.refresh_input_line_info();
+                            self.schedule_queue_save();
+                            self.mark_queue_dirty();
+                        }
+                        if has_idle_items
+                            && g
+                                .success(
+                                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                                    true,
+                                )
+                                .clicked()
+                        {
+                            self.start_downloads();
                         }
                     });
                     if !self.selected_item_ids.is_empty() {
@@ -556,64 +596,6 @@ impl eframe::App for PydlApp {
                             .clicked()
                             {
                                 self.cancel_all_active(CancelPostAction::Remove);
-                            }
-                        });
-                    }
-                    button_group(ui, "dl_recheck", |g| {
-                        let recheck = g.add(|ui| {
-                            ui.add_enabled(
-                                self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
-                                egui::Button::new(
-                                    RichText::new(format!(
-                                        "{} Re-check saved files",
-                                        ui_icons::RECHECK
-                                    ))
-                                    .color(Color32::from_rgb(40, 24, 0)),
-                                )
-                                .fill(Color32::from_rgb(255, 167, 38))
-                                .stroke(egui::Stroke::new(
-                                    1.0,
-                                    Color32::from_rgb(214, 120, 20),
-                                )),
-                            )
-                            .on_hover_text(
-                                "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
-                            )
-                            .on_disabled_hover_text(
-                                "Requires ffprobe. Disabled while MP3 extraction is enabled.",
-                            )
-                        });
-                        if recheck.clicked() {
-                            self.recheck_all_saved_downloads();
-                        }
-                    });
-                    button_group(ui, "dl_clear", |g| {
-                        if g.danger(
-                            &format!("{} Clear list", ui_icons::CLEAR_QUEUE),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.items.retain(|x| {
-                                matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
-                            });
-                            self.pending_resolve_ids
-                                .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
-                            self.update_status();
-                            self.refresh_input_line_info();
-                            self.schedule_queue_save();
-                            self.mark_queue_dirty();
-                        }
-                    });
-                    if has_idle_items {
-                        button_group(ui, "dl_start", |g| {
-                            if g.success(
-                                &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.start_downloads();
                             }
                         });
                     }
@@ -701,9 +683,10 @@ impl PydlApp {
                 );
             }
         });
+        ui.add_space(6.0);
         ui.horizontal_wrapped(|ui| {
             constrain_content_width(ui);
-            ui.spacing_mut().item_spacing.x = 10.0;
+            ui.spacing_mut().item_spacing = egui::vec2(12.0, 8.0);
             draw_precheck_status(
                 ui,
                 "ffprobe",

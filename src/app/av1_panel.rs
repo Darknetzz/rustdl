@@ -190,7 +190,7 @@ impl PydlApp {
         egui::ScrollArea::vertical()
             .id_salt("rustdl_av1_controls_v5")
             .hscroll(false)
-            .auto_shrink([false, false])
+            .auto_shrink([false, true])
             .max_height(main_split.controls_max_height)
             .show(ui, |ui| {
                 constrain_content_width(ui);

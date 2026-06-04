@@ -258,8 +258,8 @@ pub fn warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response
         ui,
         label,
         enabled,
-        Color32::from_rgb(40, 24, 0),
-        Color32::from_rgb(255, 167, 38),
+        Color32::from_rgb(255, 255, 255),
+        Color32::from_rgb(245, 124, 0),
     )
 }
 
@@ -604,7 +604,7 @@ pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::
             |ui| {
                 ui.set_width(w);
                 ui.set_max_width(w);
-                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                ui.spacing_mut().item_spacing = egui::vec2(6.0, 8.0);
                 add(ui)
             },
         )
