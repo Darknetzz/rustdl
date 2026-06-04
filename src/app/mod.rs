@@ -47,7 +47,7 @@ use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, compute_main_column_split,
     content_panel_frame, modal_backdrop, status_color,
-    with_full_width, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT, HEADER_RIGHT_INSET,
+    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT, HEADER_RIGHT_INSET,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,

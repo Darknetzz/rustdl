@@ -186,7 +186,6 @@ impl PydlApp {
             self.settings.compact_cards,
         );
 
-        let controls_w = ui.available_width();
         let mut av1_controls_scroll = egui::ScrollArea::vertical()
             .id_salt("rustdl_av1_controls")
             .auto_shrink([false, false]);
@@ -194,7 +193,7 @@ impl PydlApp {
             av1_controls_scroll = av1_controls_scroll.max_height(max_h);
         }
         av1_controls_scroll.show(ui, |ui| {
-                prepare_scroll_content(ui, controls_w);
+                prepare_scroll_content(ui);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("AV1 Converter").heading());

@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar, left_button_row, prepare_scroll_content, set_row_width};
+use crate::app_ui::{button_group, button_toolbar, left_button_row, prepare_scroll_content, set_row_width, with_full_width};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -64,7 +64,7 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                ui.set_width(ui.available_width());
+                with_full_width(ui, |ui| {
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -144,14 +144,14 @@ impl eframe::App for PydlApp {
                 nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
                 with_full_width(ui, |ui| {
                     nav_frame.show(ui, |ui| {
-                        let row_w = ui.available_width();
-                        set_row_width(ui, row_w);
+                        let inner_w = ui.available_width();
+                        set_row_width(ui, inner_w);
                         ui.allocate_ui_with_layout(
-                            egui::vec2(row_w, 34.0),
+                            egui::vec2(inner_w, 34.0),
                             egui::Layout::left_to_right(egui::Align::Center),
                             |ui| {
                                 ui.spacing_mut().item_spacing.x = 0.0;
-                                let half = row_w * 0.5;
+                                let half = inner_w * 0.5;
                                 let btn_sz = egui::vec2(half, 34.0);
                                 let dl_active = !self.av1_mode;
                                 let av1_active = self.av1_mode;
@@ -235,7 +235,6 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
-                let controls_w = ui.available_width();
                 let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
                     .auto_shrink([false, false]);
@@ -243,7 +242,7 @@ impl eframe::App for PydlApp {
                     dl_controls_scroll = dl_controls_scroll.max_height(max_h);
                 }
                 dl_controls_scroll.show(ui, |ui| {
-                        prepare_scroll_content(ui, controls_w);
+                        prepare_scroll_content(ui);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -697,6 +696,7 @@ impl eframe::App for PydlApp {
                         self.draw_docked_log_only_section(ui);
                     }
                 }
+                });
         });
 
         self.draw_settings_window(ctx);

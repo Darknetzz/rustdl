@@ -337,8 +337,8 @@ pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
 }
 
 /// Call at the start of [`egui::ScrollArea`] content so inner controls use the viewport width.
-pub fn prepare_scroll_content(ui: &mut egui::Ui, viewport_width: f32) {
-    set_row_width(ui, viewport_width);
+pub fn prepare_scroll_content(ui: &mut egui::Ui) {
+    set_row_width(ui, ui.max_rect().width());
 }
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
@@ -503,7 +503,6 @@ pub fn button_group<R>(
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                ui.set_max_width(ui.available_width());
                 let mut group = ButtonGroup { ui, index: 0 };
                 add(&mut group)
             })
