@@ -34,6 +34,8 @@ pub struct Av1Config {
     pub rename_original: bool,
     pub overwrite: bool,
     pub reencode_av1: bool,
+    /// When true, outputs use `.mkv` (recommended for AV1 + Opus). When false, keep the source extension.
+    pub use_recommended_container: bool,
     pub target_bitrate: String,
     pub max_width: u32,
     pub size_preset: String,
@@ -310,6 +312,18 @@ fn walk_dir(out: &mut Vec<Av1PlanItem>, root: &Path, cfg: &Av1Config) {
     }
 }
 
+fn planned_output_extension(input: &Path, cfg: &Av1Config) -> String {
+    if cfg.use_recommended_container {
+        return "mkv".to_owned();
+    }
+    input
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
+        .unwrap_or_else(|| "mkv".to_owned())
+}
+
 fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
     if !is_video_path(input) {
         return;
@@ -318,11 +332,28 @@ fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("video");
-    let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-AV1.mkv"));
+    let ext = planned_output_extension(input, cfg);
+    let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-AV1.{ext}"));
     out.push(Av1PlanItem {
         input: input.to_path_buf(),
         output,
     });
+}
+
+fn append_container_mux_args(cmd: &mut Command, output: &Path, enc: &EncoderChoice) {
+    let ext = output
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    let Some(ext) = ext else {
+        return;
+    };
+    match ext.as_str() {
+        "mp4" | "m4v" if enc.codec == "av1" => {
+            cmd.args(["-tag:v", "av01"]);
+        }
+        _ => {}
+    }
 }
 
 pub fn is_video_path(path: &Path) -> bool {
@@ -698,8 +729,9 @@ where
     cmd.arg("-c:a")
         .arg("libopus")
         .arg("-b:a")
-        .arg("64k")
-        .arg(&plan.output)
+        .arg("64k");
+    append_container_mux_args(&mut cmd, &plan.output, enc);
+    cmd.arg(&plan.output)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
@@ -782,6 +814,7 @@ mod tests {
             output_dir: root.to_string_lossy().to_string(),
             recursive: false,
             dry_run: true,
+            use_recommended_container: true,
             delete_original: false,
             rename_original: false,
             overwrite: false,
@@ -801,6 +834,39 @@ mod tests {
         assert_eq!(plan.len(), 1);
         assert!(plan[0].input.to_string_lossy().ends_with("movie.mp4"));
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mkv"));
+    }
+
+    #[test]
+    fn collect_plan_keeps_source_extension_when_not_recommended() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let movie = root.join("movie.mp4");
+        std::fs::write(&movie, b"x").expect("write movie");
+        let cfg = Av1Config {
+            ffmpeg_path: String::new(),
+            ffprobe_path: String::new(),
+            output_dir: root.to_string_lossy().to_string(),
+            recursive: false,
+            dry_run: true,
+            use_recommended_container: false,
+            delete_original: false,
+            rename_original: false,
+            overwrite: false,
+            reencode_av1: false,
+            target_bitrate: String::new(),
+            max_width: 1920,
+            size_preset: "balanced".to_owned(),
+            min_shrink_percent: 0.0,
+            encoder_override: String::new(),
+        };
+        let plan = collect_plan(
+            &[Av1Input {
+                source_path: movie.to_string_lossy().to_string(),
+            }],
+            &cfg,
+        );
+        assert_eq!(plan.len(), 1);
+        assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mp4"));
     }
 
     #[test]

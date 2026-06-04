@@ -99,6 +99,9 @@ pub struct AppSettings {
     /// Re-encode inputs already using AV1 codec.
     #[serde(default)]
     pub av1_reencode_av1: bool,
+    /// Write AV1 outputs as MKV (recommended for AV1 + Opus). When false, keep the source file extension.
+    #[serde(default = "default_av1_use_recommended_container")]
+    pub av1_use_recommended_container: bool,
     /// Default target bitrate (e.g. 1800k). Empty means auto.
     #[serde(default)]
     pub av1_target_bitrate: String,
@@ -273,6 +276,10 @@ fn default_downloader_options_expanded() -> bool {
     true
 }
 
+fn default_av1_use_recommended_container() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -323,6 +330,7 @@ impl Default for AppSettings {
             av1_rename_original: false,
             av1_overwrite: false,
             av1_reencode_av1: false,
+            av1_use_recommended_container: true,
             av1_target_bitrate: String::new(),
             av1_max_width: 1920,
             av1_size_preset: "balanced".to_owned(),

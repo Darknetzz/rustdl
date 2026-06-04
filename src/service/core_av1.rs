@@ -33,6 +33,7 @@ impl DownloadCore {
             rename_original: self.settings.av1_rename_original,
             overwrite: self.settings.av1_overwrite,
             reencode_av1: self.settings.av1_reencode_av1,
+            use_recommended_container: self.settings.av1_use_recommended_container,
             target_bitrate: self.settings.av1_target_bitrate.clone(),
             max_width: self.settings.av1_max_width,
             size_preset: self.settings.av1_size_preset.clone(),

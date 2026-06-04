@@ -906,6 +906,16 @@ impl PydlApp {
                                 "Re-encode files already in AV1",
                             )
                             .changed();
+                        changed |= ui
+                            .checkbox(
+                                &mut self.settings.av1_use_recommended_container,
+                                "Use recommended container (MKV)",
+                            )
+                            .on_hover_text(
+                                "MKV is the recommended container for AV1 with Opus audio. \
+                                 When off, outputs keep the source extension (e.g. MP4 in → MP4 out).",
+                            )
+                            .changed();
                         ui.horizontal(|ui| {
                             ui.label("Target bitrate");
                             changed |= ui

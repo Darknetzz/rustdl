@@ -897,6 +897,7 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-av1-auto-start", s.av1_auto_start_on_add);
   setCheck("set-av1-overwrite", s.av1_overwrite);
   setCheck("set-av1-reencode", s.av1_reencode_av1);
+  setCheck("set-av1-recommended-container", s.av1_use_recommended_container);
   setCheck("set-av1-delete-original", s.av1_delete_original);
   setCheck("set-av1-rename-original", s.av1_rename_original);
   setCheck("set-av1-remember-queue", s.av1_remember_queue);
@@ -966,6 +967,9 @@ function collectSettingsForm(base) {
   s.av1_auto_start_on_add = document.getElementById("set-av1-auto-start").checked;
   s.av1_overwrite = document.getElementById("set-av1-overwrite").checked;
   s.av1_reencode_av1 = document.getElementById("set-av1-reencode").checked;
+  s.av1_use_recommended_container = document.getElementById(
+    "set-av1-recommended-container",
+  ).checked;
   s.av1_delete_original = document.getElementById("set-av1-delete-original").checked;
   s.av1_rename_original = document.getElementById("set-av1-rename-original").checked;
   s.av1_remember_queue = document.getElementById("set-av1-remember-queue").checked;

@@ -123,6 +123,19 @@ fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, th
         MetaBadgeKind::ShrinkPercent,
         muted,
     );
+    ui.label(RichText::new("·").small().color(muted));
+    let container = if settings.av1_use_recommended_container {
+        "MKV"
+    } else {
+        "same ext"
+    };
+    draw_labeled_meta_badge(
+        ui,
+        "Container:",
+        container,
+        MetaBadgeKind::SizePreset,
+        muted,
+    );
 }
 
 fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, theme: &str) {
