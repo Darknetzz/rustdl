@@ -342,7 +342,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
         nav_frame.show(ui, |ui| {
             let row_w = ui.available_width();
             let gap = ui.spacing().item_spacing.x;
-            let btn_w = ((row_w - gap) * 0.5).max(120.0);
+            let btn_w = ((row_w - gap) * 0.5).max(0.0);
             ui.horizontal(|ui| {
                 ui.set_width(row_w);
                 let dl = egui::Button::new(
@@ -403,6 +403,14 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
     (dl_clicked, av1_clicked)
 }
 
+/// Keep layout width within the visible panel or scroll viewport (prevents horizontal overflow).
+pub fn constrain_content_width(ui: &mut egui::Ui) -> f32 {
+    let w = ui.clip_rect().width().max(0.0);
+    ui.set_width(w);
+    ui.set_max_width(w);
+    w
+}
+
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let width = ui.available_width();
@@ -411,6 +419,7 @@ pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             ui.set_width(width);
+            ui.set_max_width(width);
             add_contents(ui)
         },
     )
@@ -589,10 +598,12 @@ pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.scope(|ui| {
-        ui.set_width(ui.available_width());
+        let w = constrain_content_width(ui);
         ui.with_layout(
             egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
             |ui| {
+                ui.set_width(w);
+                ui.set_max_width(w);
                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                 add(ui)
             },
