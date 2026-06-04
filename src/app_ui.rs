@@ -329,6 +329,18 @@ pub fn compute_main_column_split(
     }
 }
 
+/// Ensure a child uses the full width of its parent row (egui vertical layouts shrink-wrap by default).
+pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
+    let w = width.max(0.0);
+    ui.set_min_width(w);
+    ui.set_width(w);
+}
+
+/// Call at the start of [`egui::ScrollArea`] content so inner controls use the viewport width.
+pub fn prepare_scroll_content(ui: &mut egui::Ui, viewport_width: f32) {
+    set_row_width(ui, viewport_width);
+}
+
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let width = ui.available_width();
@@ -336,8 +348,7 @@ pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
-            ui.set_min_width(width);
-            ui.set_width(width);
+            set_row_width(ui, width);
             add_contents(ui)
         },
     )
@@ -358,8 +369,7 @@ fn alert_box<R>(
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, |ui| {
-                ui.set_min_width(width);
-                ui.set_width(width);
+                set_row_width(ui, width);
                 add_contents(ui)
             })
             .inner
@@ -493,6 +503,7 @@ pub fn button_group<R>(
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
+                ui.set_max_width(ui.available_width());
                 let mut group = ButtonGroup { ui, index: 0 };
                 add(&mut group)
             })
@@ -503,24 +514,32 @@ pub fn button_group<R>(
 
 /// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).
 pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.horizontal(|ui| add(ui)).inner
+    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| add(ui))
+        .inner
 }
 
 /// Row of one or more [`button_group`]s with spacing between groups.
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        add(ui)
+    let row_w = ui.available_width();
+    ui.scope(|ui| {
+        set_row_width(ui, row_w);
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            add(ui)
+        })
+        .inner
     })
     .inner
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let row_w = ui.available_width();
     ui.scope(|ui| {
-        ui.set_width(ui.available_width());
+        set_row_width(ui, row_w);
         ui.with_layout(
             egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
             |ui| {
+                set_row_width(ui, row_w);
                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                 add(ui)
             },

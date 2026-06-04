@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
+use crate::app_ui::{button_group, button_toolbar, left_button_row, prepare_scroll_content, set_row_width};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -144,64 +144,69 @@ impl eframe::App for PydlApp {
                 nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
                 with_full_width(ui, |ui| {
                     nav_frame.show(ui, |ui| {
-                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                            let row_w = ui.available_width();
-                            let btn_w = (row_w * 0.5).max(120.0);
-                            let btn_sz = egui::vec2(btn_w, 34.0);
-                            ui.spacing_mut().item_spacing.x = 0.0;
-                            let dl_active = !self.av1_mode;
-                            let av1_active = self.av1_mode;
-                            let dl = egui::Button::new(
-                                RichText::new(format!("{} Downloader", ui_icons::NAV_DOWNLOADER))
-                                    .strong()
-                                    .color(if dl_active {
-                                        Color32::from_rgb(10, 32, 10)
-                                    } else {
-                                        Color32::from_rgb(210, 220, 235)
-                                    }),
-                            )
-                            .fill(if dl_active {
-                                Color32::from_rgb(152, 255, 152)
-                            } else {
-                                Color32::from_rgb(44, 52, 64)
-                            })
-                            .stroke(egui::Stroke::new(
-                                1.0,
-                                if dl_active {
-                                    Color32::from_rgb(80, 190, 80)
+                        let row_w = ui.available_width();
+                        set_row_width(ui, row_w);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(row_w, 34.0),
+                            egui::Layout::left_to_right(egui::Align::Center),
+                            |ui| {
+                                ui.spacing_mut().item_spacing.x = 0.0;
+                                let half = row_w * 0.5;
+                                let btn_sz = egui::vec2(half, 34.0);
+                                let dl_active = !self.av1_mode;
+                                let av1_active = self.av1_mode;
+                                let dl = egui::Button::new(
+                                    RichText::new(format!("{} Downloader", ui_icons::NAV_DOWNLOADER))
+                                        .strong()
+                                        .color(if dl_active {
+                                            Color32::from_rgb(10, 32, 10)
+                                        } else {
+                                            Color32::from_rgb(210, 220, 235)
+                                        }),
+                                )
+                                .fill(if dl_active {
+                                    Color32::from_rgb(152, 255, 152)
                                 } else {
-                                    Color32::from_rgb(88, 100, 116)
-                                },
-                            ));
-                            if ui.add_sized(btn_sz, dl).clicked() {
-                                self.set_app_mode(false);
-                            }
-                            let av1 = egui::Button::new(
-                                RichText::new(format!("{} AV1 Converter", ui_icons::NAV_AV1))
-                                    .strong()
-                                    .color(if av1_active {
-                                        Color32::from_rgb(45, 27, 0)
+                                    Color32::from_rgb(44, 52, 64)
+                                })
+                                .stroke(egui::Stroke::new(
+                                    1.0,
+                                    if dl_active {
+                                        Color32::from_rgb(80, 190, 80)
                                     } else {
-                                        Color32::from_rgb(210, 220, 235)
-                                    }),
-                            )
-                            .fill(if av1_active {
-                                Color32::from_rgb(255, 190, 90)
-                            } else {
-                                Color32::from_rgb(44, 52, 64)
-                            })
-                            .stroke(egui::Stroke::new(
-                                1.0,
-                                if av1_active {
-                                    Color32::from_rgb(245, 154, 35)
+                                        Color32::from_rgb(88, 100, 116)
+                                    },
+                                ));
+                                if ui.add_sized(btn_sz, dl).clicked() {
+                                    self.set_app_mode(false);
+                                }
+                                let av1 = egui::Button::new(
+                                    RichText::new(format!("{} AV1 Converter", ui_icons::NAV_AV1))
+                                        .strong()
+                                        .color(if av1_active {
+                                            Color32::from_rgb(45, 27, 0)
+                                        } else {
+                                            Color32::from_rgb(210, 220, 235)
+                                        }),
+                                )
+                                .fill(if av1_active {
+                                    Color32::from_rgb(255, 190, 90)
                                 } else {
-                                    Color32::from_rgb(88, 100, 116)
-                                },
-                            ));
-                            if ui.add_sized(btn_sz, av1).clicked() {
-                                self.set_app_mode(true);
-                            }
-                        });
+                                    Color32::from_rgb(44, 52, 64)
+                                })
+                                .stroke(egui::Stroke::new(
+                                    1.0,
+                                    if av1_active {
+                                        Color32::from_rgb(245, 154, 35)
+                                    } else {
+                                        Color32::from_rgb(88, 100, 116)
+                                    },
+                                ));
+                                if ui.add_sized(btn_sz, av1).clicked() {
+                                    self.set_app_mode(true);
+                                }
+                            },
+                        );
                     });
                 });
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
@@ -230,6 +235,7 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
+                let controls_w = ui.available_width();
                 let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
                     .auto_shrink([false, false]);
@@ -237,7 +243,7 @@ impl eframe::App for PydlApp {
                     dl_controls_scroll = dl_controls_scroll.max_height(max_h);
                 }
                 dl_controls_scroll.show(ui, |ui| {
-                        ui.set_width(ui.available_width());
+                        prepare_scroll_content(ui, controls_w);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -510,7 +516,7 @@ impl eframe::App for PydlApp {
                         self.queue_search.clear();
                     }
                 });
-                button_toolbar_wrapped(ui, |ui| {
+                button_toolbar(ui, |ui| {
                     if self.downloads_paused {
                         button_group(ui, "dl_pause", |g| {
                             if g.success(
