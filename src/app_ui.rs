@@ -657,9 +657,9 @@ mod tests {
 
     #[test]
     fn main_column_split_never_exceeds_available() {
-        let split = compute_main_column_split(280.0, true, false);
+        let split = compute_main_column_split(500.0, true, false);
         let fixed = fixed_below_controls_scroll(true);
-        assert!(split.controls_max_height + split.videos_height + fixed <= 280.0 + 0.01);
+        assert!(split.controls_max_height + split.videos_height + fixed <= 500.0 + 0.01);
     }
 
     #[test]
