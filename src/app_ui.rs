@@ -329,10 +329,11 @@ pub fn compute_main_column_split(
     }
 }
 
-/// Pin scroll content to the viewport width (avoids horizontal overflow from `max_rect` feedback).
+/// Pin scroll content to the viewport width (no horizontal overflow / stale scroll offset).
 pub fn prepare_scroll_content(ui: &mut egui::Ui) {
     let w = ui.available_width();
     ui.set_width(w);
+    ui.set_max_width(w);
 }
 
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
@@ -588,13 +589,16 @@ pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> 
     ui.horizontal(|ui| add(ui)).inner
 }
 
-/// Row of one or more [`button_group`]s with spacing between groups.
+/// Row of one or more [`button_group`]s with spacing between groups (full parent width).
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        add(ui)
+    with_full_width(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.set_width(ui.available_width());
+            ui.spacing_mut().item_spacing.x = 8.0;
+            add(ui)
+        })
+        .inner
     })
-    .inner
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {

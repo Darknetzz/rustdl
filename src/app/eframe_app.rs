@@ -64,7 +64,9 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                ui.set_width(ui.available_width());
+                let panel_w = ui.available_width();
+                ui.set_width(panel_w);
+                ui.set_max_width(panel_w);
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -397,14 +399,16 @@ impl eframe::App for PydlApp {
                     });
                 });
 
+                    }); // downloader controls scroll
+
                 ui.separator();
                 let has_idle_items = self
                     .items
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
 
-                // Queue actions + primary download control live above the scroll so they stay
-                // reachable when the window is short (CentralPanel does not scroll as a whole).
+                // Queue actions stay outside the controls scroll so they remain visible when the
+                // window is short (CentralPanel does not scroll as a whole).
                 ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
                 let profiles = crate::profiles::all_profiles(&self.profile_store);
                 if !profiles.is_empty() {
@@ -620,8 +624,6 @@ impl eframe::App for PydlApp {
                 if trigger_download && has_idle_items {
                     self.start_downloads();
                 }
-
-                    }); // downloader controls scroll
 
                 if self.settings.videos_docked {
                     self.draw_docked_videos_section(ui, main_split.videos_height);
