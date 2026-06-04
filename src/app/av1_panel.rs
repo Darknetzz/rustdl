@@ -3,8 +3,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compute_main_column_split, draw_meta_badge, draw_status_dot,
-    left_button_row, constrain_to_viewport, status_color, status_dot_with_label, MetaBadgeKind,
+    button_group, compute_main_column_split, draw_meta_badge, draw_status_dot,
+    left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -187,11 +187,11 @@ impl PydlApp {
         );
 
         egui::ScrollArea::vertical()
-            .id_salt("rustdl_av1_controls_v3")
+            .id_salt("rustdl_av1_controls_v4")
             .auto_shrink([false, false])
             .max_height(main_split.controls_max_height)
             .show(ui, |ui| {
-                constrain_to_viewport(ui);
+                ui.set_width(ui.available_width());
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("AV1 Converter").heading());
@@ -288,7 +288,8 @@ impl PydlApp {
                         }
                     });
                 });
-                button_toolbar_wrapped(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                     let ready_count = self
                         .av1_items
                         .iter()
