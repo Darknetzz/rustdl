@@ -2,7 +2,10 @@
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::app_ui::{button_group, constrain_content_width, draw_status_dot, left_button_row, status_color};
+use crate::app_ui::{
+    button_group, constrain_content_width, draw_status_dot, left_button_row, status_color,
+    with_full_width,
+};
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -130,37 +133,80 @@ impl PydlApp {
 
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            let strip_label = if self.av1_mode {
-                "AV1 queue is in a separate window."
+        let theme = self.settings.theme.clone();
+        let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
+        let window_title = self.videos_window_title();
+        with_full_width(ui, |ui| {
+            let fill = if self.av1_mode {
+                canvas_bg(&theme)
             } else {
-                "Video queue is in a separate window."
+                BG_CANVAS
             };
-            ui.label(RichText::new(strip_label).color(TEXT_MUTED));
-            let tail_w = ui.available_width();
-            ui.allocate_ui_with_layout(
-                egui::vec2(tail_w.max(0.0), 0.0),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    button_group(ui, "videos_show", |g| {
-                        if !self.settings.videos_open
-                            && g.secondary(&format!("{} Show videos", ui_icons::VIDEOS), true)
-                                .clicked()
-                        {
-                            self.settings.videos_open = true;
-                            self.persist_settings();
-                        }
+            let border = if self.av1_mode {
+                panel_border(&theme)
+            } else {
+                BORDER_PANEL
+            };
+            egui::Frame::none()
+                .fill(fill)
+                .stroke(egui::Stroke::new(1.0, border))
+                .inner_margin(egui::Margin::symmetric(12.0, 10.0))
+                .rounding(egui::Rounding::same(8.0))
+                .show(ui, |ui| {
+                    constrain_content_width(ui);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(heading).strong());
+                        ui.label(
+                            RichText::new(format!(
+                                "Showing in separate \"{window_title}\" window"
+                            ))
+                            .small()
+                            .color(TEXT_MUTED),
+                        );
                     });
-                },
-            );
+                    left_button_row(ui, |ui| {
+                        button_group(ui, "videos_undock_strip", |g| {
+                            if g
+                                .secondary(
+                                    &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Move the queue back into this window (same as Videos in the header).",
+                                )
+                                .clicked()
+                            {
+                                self.settings.videos_docked = true;
+                                self.persist_settings();
+                            }
+                            if !self.settings.videos_open
+                                && g.secondary(
+                                    &format!("{} Show {window_title}", ui_icons::VIDEOS),
+                                    true,
+                                )
+                                .on_hover_text("Open or focus the floating queue window")
+                                .clicked()
+                            {
+                                self.settings.videos_open = true;
+                                self.persist_settings();
+                            }
+                        });
+                    });
+                    let show_status = if self.av1_mode {
+                        !self.av1_items.is_empty()
+                    } else {
+                        !self.items.is_empty()
+                    };
+                    if show_status {
+                        ui.add_space(4.0);
+                        if self.av1_mode {
+                            self.draw_av1_queue_status_row(ui);
+                        } else {
+                            self.draw_downloader_queue_status_row(ui);
+                        }
+                    }
+                });
         });
-        if self.av1_mode {
-            if !self.av1_items.is_empty() {
-                self.draw_av1_queue_status_row(ui);
-            }
-        } else if !self.items.is_empty() {
-            self.draw_downloader_queue_status_row(ui);
-        }
     }
 
     /// Colored per-status counts for the downloader queue (main panel, undocked strip, videos panel).
