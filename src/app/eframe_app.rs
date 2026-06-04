@@ -704,12 +704,6 @@ impl PydlApp {
                         {
                             self.open_exit_confirm();
                         }
-                        let videos_btn =
-                            if self.settings.videos_docked || self.settings.videos_open {
-                                format!("{} Videos", ui_icons::VIDEOS)
-                            } else {
-                                format!("{} Videos (hidden)", ui_icons::VIDEOS)
-                            };
                         button_group(ui, "hdr_nav", |g| {
                             if g
                                 .secondary(
@@ -717,27 +711,12 @@ impl PydlApp {
                                     true,
                                 )
                                 .on_hover_text(
-                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
+                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads · \
+                                     Queue and log controls are below the URL area",
                                 )
                                 .clicked()
                             {
                                 self.settings_open = true;
-                            }
-                            if g.secondary(&format!("{} Logs", ui_icons::LOGS), true)
-                                .on_hover_text(
-                                    "View activity log (dock under queue or separate window)",
-                                )
-                                .clicked()
-                            {
-                                self.toggle_logs_panel();
-                            }
-                            if g.secondary(&videos_btn, true)
-                                .on_hover_text(
-                                    "Show video queue in main window or a separate floating window",
-                                )
-                                .clicked()
-                            {
-                                self.toggle_videos_panel();
                             }
                         });
                     },

@@ -524,14 +524,6 @@ impl PydlApp {
         }
     }
 
-    fn toggle_logs_panel(&mut self) {
-        self.settings.logs_open = !self.settings.logs_open;
-        if !self.settings.logs_open {
-            self.settings.logs_docked = false;
-        }
-        self.persist_settings();
-    }
-
     fn focus_queue_group(&mut self, group: &'static str) {
         self.ensure_videos_window_open();
         self.queue_group_focus = Some(group);

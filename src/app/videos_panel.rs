@@ -3,8 +3,8 @@
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
-    button_group, constrain_content_width, draw_status_dot, left_button_row, status_color,
-    with_full_width,
+    button_group, button_toolbar_wrapped, constrain_content_width, draw_status_dot,
+    left_button_row, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -13,16 +13,6 @@ use crate::ui_icons;
 use super::PydlApp;
 
 impl PydlApp {
-    pub(super) fn toggle_videos_panel(&mut self) {
-        if self.settings.videos_docked {
-            self.settings.videos_docked = false;
-            self.settings.videos_open = true;
-        } else {
-            self.settings.videos_open = !self.settings.videos_open;
-        }
-        self.persist_settings();
-    }
-
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
             self.settings.videos_open = true;
@@ -87,45 +77,108 @@ impl PydlApp {
             });
     }
 
+    /// Dock/undock and show/hide for the queue window and activity log (same controls everywhere).
+    pub(super) fn draw_queue_and_log_controls(&mut self, ui: &mut egui::Ui) {
+        let window_title = self.videos_window_title();
+        button_toolbar_wrapped(ui, |ui| {
+            button_group(ui, "queue_videos_controls", |g| {
+                if self.settings.videos_docked {
+                    if g.secondary(
+                        &format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS),
+                        true,
+                    )
+                    .on_hover_text(
+                        "Show the queue in a separate window so the main view stays compact.",
+                    )
+                    .clicked()
+                    {
+                        self.settings.videos_docked = false;
+                        self.settings.videos_open = true;
+                        self.persist_settings();
+                    }
+                } else {
+                    if g.secondary(
+                        &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
+                        true,
+                    )
+                    .on_hover_text("Move the queue back into this window.")
+                    .clicked()
+                    {
+                        self.settings.videos_docked = true;
+                        self.persist_settings();
+                    }
+                    if !self.settings.videos_open {
+                        if g.secondary(
+                            &format!("{} Show {window_title}", ui_icons::VIDEOS),
+                            true,
+                        )
+                        .on_hover_text("Open or focus the floating queue window")
+                        .clicked()
+                        {
+                            self.settings.videos_open = true;
+                            self.persist_settings();
+                        }
+                    } else if g.secondary(
+                        &format!("{} Hide {window_title}", ui_icons::DISMISS),
+                        true,
+                    )
+                    .on_hover_text("Close the floating queue window")
+                    .clicked()
+                    {
+                        self.settings.videos_open = false;
+                        self.persist_settings();
+                    }
+                }
+            });
+            button_group(ui, "queue_logs_controls", |g| {
+                if !self.settings.logs_open {
+                    if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                        .on_hover_text(
+                            "Open the activity log (dock under the queue or in its own window)",
+                        )
+                        .clicked()
+                    {
+                        self.settings.logs_open = true;
+                        self.persist_settings();
+                    }
+                } else {
+                    let log_dock_label = if self.settings.logs_docked {
+                        format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                    } else {
+                        format!("{} Dock log", ui_icons::DOCK_LOG)
+                    };
+                    if g.secondary(&log_dock_label, true)
+                        .on_hover_text(
+                            "Dock the log under the queue in this window, or show it in a separate window",
+                        )
+                        .clicked()
+                    {
+                        self.settings.logs_docked = !self.settings.logs_docked;
+                        self.persist_settings();
+                    }
+                    if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
+                        .on_hover_text("Close the activity log")
+                        .clicked()
+                    {
+                        self.settings.logs_open = false;
+                        self.settings.logs_docked = false;
+                        self.persist_settings();
+                    }
+                }
+            });
+        });
+    }
+
     fn draw_videos_header_toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
             ui.label(RichText::new(heading).strong());
             let tail_w = ui.available_width();
-            let video_dock_label = if self.settings.videos_docked {
-                format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS)
-            } else {
-                format!("{} Dock videos", ui_icons::DOCK_VIDEOS)
-            };
             ui.allocate_ui_with_layout(
                 egui::vec2(tail_w.max(0.0), 0.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    button_group(ui, "videos_dock", |g| {
-                        if g.secondary(&video_dock_label, true)
-                            .on_hover_text(
-                                "Show the queue in a separate window so the main view stays compact.",
-                            )
-                            .clicked()
-                        {
-                            self.settings.videos_docked = !self.settings.videos_docked;
-                            if !self.settings.videos_docked {
-                                self.settings.videos_open = true;
-                            }
-                            self.persist_settings();
-                        }
-                        if self.settings.videos_docked {
-                            let log_dock_label = if self.settings.logs_docked {
-                                format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                            } else {
-                                format!("{} Dock log", ui_icons::DOCK_LOG)
-                            };
-                            if g.secondary(&log_dock_label, true).clicked() {
-                                self.settings.logs_docked = !self.settings.logs_docked;
-                                self.persist_settings();
-                            }
-                        }
-                    });
+                    self.draw_queue_and_log_controls(ui);
                 },
             );
         });
@@ -165,32 +218,7 @@ impl PydlApp {
                         );
                     });
                     left_button_row(ui, |ui| {
-                        button_group(ui, "videos_undock_strip", |g| {
-                            if g
-                                .secondary(
-                                    &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Move the queue back into this window (same as Videos in the header).",
-                                )
-                                .clicked()
-                            {
-                                self.settings.videos_docked = true;
-                                self.persist_settings();
-                            }
-                            if !self.settings.videos_open
-                                && g.secondary(
-                                    &format!("{} Show {window_title}", ui_icons::VIDEOS),
-                                    true,
-                                )
-                                .on_hover_text("Open or focus the floating queue window")
-                                .clicked()
-                            {
-                                self.settings.videos_open = true;
-                                self.persist_settings();
-                            }
-                        });
+                        self.draw_queue_and_log_controls(ui);
                     });
                     let show_status = if self.av1_mode {
                         !self.av1_items.is_empty()
@@ -300,27 +328,7 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 constrain_content_width(ui);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Activity log").small().strong());
-                    let tail_w = ui.available_width();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(tail_w.max(0.0), 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            button_group(ui, "log_undock", |g| {
-                                if g.secondary(
-                                    &format!("{} Undock log", ui_icons::UNDOCK_LOG),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    self.settings.logs_docked = false;
-                                    self.persist_settings();
-                                }
-                            });
-                        },
-                    );
-                });
+                ui.label(RichText::new("Activity log").small().strong());
                 if ui
                     .add(egui::Slider::new(
                         &mut self.settings.log_dock_height,
@@ -408,21 +416,7 @@ impl PydlApp {
             .resizable(true)
             .show(ctx, |ui| {
                 left_button_row(ui, |ui| {
-                    button_group(ui, "videos_float", |g| {
-                        if g.secondary(
-                            &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.settings.videos_docked = true;
-                            self.persist_settings();
-                        }
-                        if g.secondary(&format!("{} Close", ui_icons::CLOSE), true).clicked() {
-                            self.settings.videos_open = false;
-                            self.persist_settings();
-                        }
-                    });
+                    self.draw_queue_and_log_controls(ui);
                 });
                 let h = ui.available_height().max(200.0);
                 self.draw_queue_cards(ui, h);

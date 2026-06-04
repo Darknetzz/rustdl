@@ -156,12 +156,7 @@ impl PydlApp {
             .min_height(260.0)
             .show(ctx, |ui| {
                 left_button_row(ui, |ui| {
-                    button_group(ui, "log_window_close", |g| {
-                        if g.secondary(&format!("{} Close", ui_icons::CLOSE), true).clicked() {
-                            self.settings.logs_open = false;
-                            self.persist_settings();
-                        }
-                    });
+                    self.draw_queue_and_log_controls(ui);
                 });
                 self.draw_activity_log_panel(ui);
             });
