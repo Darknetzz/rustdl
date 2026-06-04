@@ -297,8 +297,6 @@ pub const ALERT_DANGER_TEXT: Color32 = Color32::from_rgb(132, 32, 41);
 pub const CONTENT_MARGIN_LEFT: f32 = 20.0;
 pub const CONTENT_MARGIN_RIGHT: f32 = 32.0;
 pub const CONTENT_MARGIN_V: f32 = 12.0;
-/// Extra inset before right-aligned header controls (inside the content margin).
-pub const HEADER_RIGHT_INSET: f32 = 10.0;
 
 pub fn content_panel_frame() -> egui::Frame {
     egui::Frame::default().inner_margin(egui::Margin {
@@ -354,91 +352,81 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     with_full_width(ui, |ui| {
-        let mut nav_frame = egui::Frame::group(ui.style());
-        nav_frame.fill = Color32::from_rgb(28, 32, 38);
-        nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
-        nav_frame.rounding = egui::Rounding::same(8.0);
-        nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
-        nav_frame.show(ui, |ui| {
-            let row_w = ui.available_width();
-            let gap = ui.spacing().item_spacing.x;
-            let btn_w = ((row_w - gap) * 0.5).max(0.0);
-            ui.horizontal(|ui| {
-                ui.set_width(row_w);
-                let dl = egui::Button::new(
-                    RichText::new(format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER))
-                        .strong()
-                        .color(if dl_active {
-                            Color32::from_rgb(10, 32, 10)
-                        } else {
-                            Color32::from_rgb(210, 220, 235)
-                        }),
-                )
-                .min_size(egui::vec2(btn_w, 34.0))
-                .fill(if dl_active {
-                    Color32::from_rgb(152, 255, 152)
-                } else {
-                    Color32::from_rgb(44, 52, 64)
-                })
-                .stroke(egui::Stroke::new(
-                    1.0,
-                    if dl_active {
-                        Color32::from_rgb(80, 190, 80)
+        let row_w = ui.available_width();
+        let btn_w = (row_w * 0.5).max(0.0);
+        button_group(ui, "mode_nav", |g| {
+            let dl = g.add(|ui| {
+                ui.add(
+                    egui::Button::new(
+                        RichText::new(format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER))
+                            .strong()
+                            .color(if dl_active {
+                                Color32::from_rgb(10, 32, 10)
+                            } else {
+                                Color32::from_rgb(210, 220, 235)
+                            }),
+                    )
+                    .min_size(egui::vec2(btn_w, 34.0))
+                    .fill(if dl_active {
+                        Color32::from_rgb(152, 255, 152)
                     } else {
-                        Color32::from_rgb(88, 100, 116)
-                    },
-                ));
-                if ui.add(dl).clicked() {
-                    dl_clicked = true;
-                }
-                let av1 = egui::Button::new(
-                    RichText::new(format!("{} AV1 Converter", crate::ui_icons::NAV_AV1))
-                        .strong()
-                        .color(if av1_active {
-                            Color32::from_rgb(45, 27, 0)
-                        } else {
-                            Color32::from_rgb(210, 220, 235)
-                        }),
+                        Color32::from_rgb(44, 52, 64)
+                    })
+                    .stroke(egui::Stroke::NONE)
+                    .rounding(egui::Rounding::ZERO),
                 )
-                .min_size(egui::vec2(btn_w, 34.0))
-                .fill(if av1_active {
-                    Color32::from_rgb(255, 190, 90)
-                } else {
-                    Color32::from_rgb(44, 52, 64)
-                })
-                .stroke(egui::Stroke::new(
-                    1.0,
-                    if av1_active {
-                        Color32::from_rgb(245, 154, 35)
-                    } else {
-                        Color32::from_rgb(88, 100, 116)
-                    },
-                ));
-                if ui.add(av1).clicked() {
-                    av1_clicked = true;
-                }
             });
+            if dl.clicked() {
+                dl_clicked = true;
+            }
+            let av1 = g.add(|ui| {
+                ui.add(
+                    egui::Button::new(
+                        RichText::new(format!("{} AV1 Converter", crate::ui_icons::NAV_AV1))
+                            .strong()
+                            .color(if av1_active {
+                                Color32::from_rgb(45, 27, 0)
+                            } else {
+                                Color32::from_rgb(210, 220, 235)
+                            }),
+                    )
+                    .min_size(egui::vec2(btn_w, 34.0))
+                    .fill(if av1_active {
+                        Color32::from_rgb(255, 190, 90)
+                    } else {
+                        Color32::from_rgb(44, 52, 64)
+                    })
+                    .stroke(egui::Stroke::NONE)
+                    .rounding(egui::Rounding::ZERO),
+                )
+            });
+            if av1.clicked() {
+                av1_clicked = true;
+            }
         });
     });
     (dl_clicked, av1_clicked)
 }
 
-/// Keep layout width within the visible panel or scroll viewport (prevents horizontal overflow).
+/// Width of the current layout region (respects [`content_panel_frame`] margins).
+pub fn content_width(ui: &egui::Ui) -> f32 {
+    ui.max_rect().width().max(0.0)
+}
+
+/// Cap layout width without forcing horizontal expansion (preserves panel margins).
 pub fn constrain_content_width(ui: &mut egui::Ui) -> f32 {
-    let w = ui.clip_rect().width().max(0.0);
-    ui.set_width(w);
+    let w = content_width(ui);
     ui.set_max_width(w);
     w
 }
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = ui.available_width();
+    let width = content_width(ui);
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
-            ui.set_width(width);
             ui.set_max_width(width);
             add_contents(ui)
         },
@@ -453,14 +441,14 @@ fn alert_box<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     with_full_width(ui, |ui| {
-        let width = ui.available_width();
+        let width = content_width(ui);
         egui::Frame::none()
             .fill(bg)
             .stroke(egui::Stroke::new(1.0, border))
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, |ui| {
-                ui.set_width(width);
+                ui.set_max_width(width);
                 add_contents(ui)
             })
             .inner
@@ -587,26 +575,13 @@ fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Resp
     )
 }
 
-const BTN_GROUP_BORDER: Color32 = Color32::from_rgb(58, 64, 76);
 
-/// Bootstrap-style fused buttons inside a shared border.
+/// Bootstrap-style fused buttons (shared edges, no dividers).
 pub struct ButtonGroup<'a> {
     ui: &'a mut egui::Ui,
-    index: usize,
 }
 
 impl<'a> ButtonGroup<'a> {
-    fn divider_if_needed(&mut self) {
-        if self.index > 0 {
-            self.ui.add(
-                egui::Separator::default()
-                    .vertical()
-                    .spacing(0.0)
-                    .grow(0.0),
-            );
-        }
-    }
-
     pub fn ui(&mut self) -> &mut egui::Ui {
         self.ui
     }
@@ -615,8 +590,6 @@ impl<'a> ButtonGroup<'a> {
     where
         F: FnOnce(&mut egui::Ui) -> Response,
     {
-        self.divider_if_needed();
-        self.index += 1;
         add(self.ui)
     }
 
@@ -644,12 +617,11 @@ pub fn button_group<R>(
 ) -> R {
     let _ = ui.id().with(id_salt);
     egui::Frame::none()
-        .stroke(egui::Stroke::new(1.0, BTN_GROUP_BORDER))
         .rounding(egui::Rounding::same(6.0))
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let mut group = ButtonGroup { ui, index: 0 };
+                let mut group = ButtonGroup { ui };
                 add(&mut group)
             })
             .inner
@@ -677,7 +649,6 @@ pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::
         ui.with_layout(
             egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
             |ui| {
-                ui.set_width(w);
                 ui.set_max_width(w);
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 8.0);
                 add(ui)

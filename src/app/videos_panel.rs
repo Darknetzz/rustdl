@@ -2,7 +2,7 @@
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::app_ui::{button_group, draw_status_dot, left_button_row, status_color};
+use crate::app_ui::{button_group, constrain_content_width, draw_status_dot, left_button_row, status_color};
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -253,7 +253,7 @@ impl PydlApp {
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width());
+                constrain_content_width(ui);
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Activity log").small().strong());
                     let tail_w = ui.available_width();
@@ -313,7 +313,7 @@ impl PydlApp {
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
-                ui.set_width(ui.available_width());
+                constrain_content_width(ui);
                 self.draw_videos_header_toolbar(ui);
                 let dock_log = self.settings.logs_open && self.settings.logs_docked;
                 let log_h = if dock_log {

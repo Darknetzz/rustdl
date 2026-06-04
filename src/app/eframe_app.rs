@@ -1,7 +1,7 @@
 use super::*;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, danger_button, draw_mode_nav_bar,
-    left_button_row, with_full_width,
+    button_group, button_toolbar_wrapped, constrain_content_width, content_width, danger_button,
+    draw_mode_nav_bar, left_button_row, with_full_width,
 };
 
 impl eframe::App for PydlApp {
@@ -67,7 +67,6 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                constrain_content_width(ui);
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -201,7 +200,7 @@ impl eframe::App for PydlApp {
                 }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(
-                    [ui.available_width(), 120.0],
+                    [content_width(ui), 120.0],
                     egui::TextEdit::multiline(&mut self.input_urls)
                         .hint_text(
                             "https://... — paste, drag from browser, or drop .url / .webloc / list (.txt, .m3u)",
@@ -366,7 +365,7 @@ impl eframe::App for PydlApp {
                 ui.horizontal(|ui| {
                     constrain_content_width(ui);
                     ui.label("Output folder");
-                    let path_w = ui.available_width().max(120.0);
+                    let path_w = content_width(ui).max(120.0);
                     let output_dir_edit = ui.add(
                         egui::TextEdit::singleline(&mut self.output_dir).desired_width(path_w),
                     );
@@ -649,9 +648,8 @@ impl eframe::App for PydlApp {
 impl PydlApp {
     /// Logo and tool status on the left; Settings/Logs/Videos and Exit aligned on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
-        let panel_w = constrain_content_width(ui);
+        constrain_content_width(ui);
         ui.horizontal(|ui| {
-            ui.set_width(panel_w);
             ui.spacing_mut().item_spacing.x = 12.0;
             ui.horizontal(|ui| {
                 let sz = egui::vec2(40.0, 40.0);
@@ -698,11 +696,10 @@ impl PydlApp {
             });
             let tail_w = ui.available_width();
             if tail_w > 0.0 {
-                ui.allocate_ui_with_layout(
-                    egui::vec2(tail_w, 0.0),
+                ui.with_layout(
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        ui.add_space(HEADER_RIGHT_INSET);
+                        ui.set_max_width(tail_w);
                         if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked()
                         {
                             self.open_exit_confirm();
