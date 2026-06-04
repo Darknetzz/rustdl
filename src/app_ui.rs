@@ -3,7 +3,17 @@ use std::hash::Hash;
 use eframe::egui;
 use eframe::egui::{Color32, Response, RichText};
 
+use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
+
+/// Text color for the free-space figure (green → amber → red by [`DiskSpaceLevel`]).
+pub fn disk_space_free_color(level: DiskSpaceLevel) -> Color32 {
+    match level {
+        DiskSpaceLevel::Ok => Color32::from_rgb(129, 199, 132),
+        DiskSpaceLevel::Low => ALERT_WARNING_TEXT,
+        DiskSpaceLevel::Critical => ALERT_DANGER_TEXT,
+    }
+}
 
 pub fn status_color(s: ItemStatus) -> Color32 {
     match s {

@@ -40,6 +40,14 @@ impl DiskSpace {
         }
     }
 
+    pub fn level_slug(&self) -> &'static str {
+        match self.level() {
+            DiskSpaceLevel::Ok => "ok",
+            DiskSpaceLevel::Low => "low",
+            DiskSpaceLevel::Critical => "critical",
+        }
+    }
+
     pub fn format_available_total(&self) -> String {
         let suffix = self
             .volume_label

@@ -792,17 +792,18 @@ impl PydlApp {
     }
 
     pub(super) fn draw_output_disk_space(&self, ui: &mut egui::Ui) {
-        use crate::app_ui::{ALERT_DANGER_TEXT, ALERT_WARNING_TEXT};
-        use crate::disk_space::DiskSpaceLevel;
+        use crate::app_parsing::human_bytes_ui;
+        use crate::app_ui::disk_space_free_color;
         use eframe::egui::RichText;
 
         let theme = &self.settings.theme;
+        let muted = crate::theme::text_muted(theme);
         let trimmed = self.output_dir.trim();
         if trimmed.is_empty() {
             ui.label(
                 RichText::new("Destination disk: set an output folder to see free space.")
                     .small()
-                    .color(crate::theme::text_muted(theme)),
+                    .color(muted),
             );
             return;
         }
@@ -810,25 +811,35 @@ impl PydlApp {
             ui.label(
                 RichText::new("Destination disk: …")
                     .small()
-                    .color(crate::theme::text_muted(theme)),
+                    .color(muted),
             );
             return;
         };
-        let detail = format!(
-            "{} · {:.0}% free",
-            space.format_available_total(),
+        let level = space.level();
+        let free_color = disk_space_free_color(level);
+        let vol = space
+            .volume_label
+            .as_deref()
+            .filter(|s| !s.is_empty())
+            .map(|label| format!(" ({label})"))
+            .unwrap_or_default();
+        let tail = format!(
+            " / {}{} · {:.0}% free",
+            human_bytes_ui(space.total_bytes),
+            vol,
             space.percent_free()
         );
-        let color = match space.level() {
-            DiskSpaceLevel::Ok => crate::theme::text_muted(theme),
-            DiskSpaceLevel::Low => ALERT_WARNING_TEXT,
-            DiskSpaceLevel::Critical => ALERT_DANGER_TEXT,
-        };
-        ui.label(
-            RichText::new(format!("Destination disk: {detail}"))
-                .small()
-                .color(color),
-        );
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.label(RichText::new("Destination disk: ").small().color(muted));
+            ui.label(
+                RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
+                    .small()
+                    .strong()
+                    .color(free_color),
+            );
+            ui.label(RichText::new(tail).small().color(muted));
+        });
     }
 
     pub(super) fn refresh_done_file_lookup(&mut self) {

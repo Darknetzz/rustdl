@@ -242,14 +242,23 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 .status-badge.status-failed { color: var(--failed); border-color: rgba(239, 83, 80, 0.35); }
 .status-badge.status-failed .status-dot { background: var(--failed); }
 
-.status-badge.disk-space-ok { color: var(--muted); border-color: rgba(158, 158, 158, 0.35); }
-.status-badge.disk-space-ok .status-dot { background: var(--muted); }
+.status-badge.disk-space { color: var(--muted); border-color: rgba(158, 158, 158, 0.35); }
 
-.status-badge.disk-space-low { color: var(--warn); border-color: rgba(255, 193, 7, 0.35); }
+.status-badge.disk-space-ok .status-dot { background: var(--ok); }
 .status-badge.disk-space-low .status-dot { background: var(--warn); }
-
-.status-badge.disk-space-critical { color: var(--failed); border-color: rgba(239, 83, 80, 0.35); }
 .status-badge.disk-space-critical .status-dot { background: var(--failed); }
+
+.disk-space-free-ok,
+.disk-space-pct-ok { color: var(--ok); font-weight: 700; }
+
+.disk-space-free-low,
+.disk-space-pct-low { color: var(--warn); font-weight: 700; }
+
+.disk-space-free-critical,
+.disk-space-pct-critical { color: var(--failed); font-weight: 700; }
+
+#settings-output-disk .disk-space-free,
+#settings-output-disk .disk-space-pct { font-weight: 700; }
 
 .queue-toolbar {
   margin-bottom: 0.75rem;

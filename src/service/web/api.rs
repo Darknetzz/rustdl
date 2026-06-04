@@ -203,11 +203,7 @@ pub fn api_router(state: ApiState) -> Router {
 
 fn disk_space_json(output_dir: &str) -> Option<DiskSpaceJson> {
     let space = crate::disk_space::query_disk_space(output_dir)?;
-    let level = match space.level() {
-        crate::disk_space::DiskSpaceLevel::Ok => "ok",
-        crate::disk_space::DiskSpaceLevel::Low => "low",
-        crate::disk_space::DiskSpaceLevel::Critical => "critical",
-    };
+    let level = space.level_slug();
     let percent_free = space.percent_free();
     Some(DiskSpaceJson {
         available_bytes: space.available_bytes,

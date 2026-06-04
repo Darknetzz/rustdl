@@ -185,38 +185,52 @@ function renderStatusSummary(data) {
   appendOutputDiskSpaceBadge(root, data.output_disk_space);
 }
 
+function diskSpaceLevel(disk) {
+  return disk?.level || "ok";
+}
+
+function diskSpaceFreeHtml(disk) {
+  const level = diskSpaceLevel(disk);
+  const free = formatBytes(disk.available_bytes);
+  return `<span class="disk-space-free disk-space-free-${level}">${free} free</span>`;
+}
+
 function updateSettingsOutputDiskHint(disk) {
   const el = document.getElementById("settings-output-disk");
   if (!el) return;
   if (!disk || disk.total_bytes == null) {
     el.classList.add("hidden");
-    el.textContent = "";
+    el.innerHTML = "";
     return;
   }
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
   const pct =
     disk.percent_free != null && isFinite(disk.percent_free)
-      ? ` · ${Math.round(disk.percent_free)}% free`
+      ? ` · <span class="disk-space-pct disk-space-pct-${diskSpaceLevel(disk)}">${Math.round(
+          disk.percent_free
+        )}% free</span>`
       : "";
-  el.textContent = `Destination disk${vol}: ${formatBytes(
-    disk.available_bytes
-  )} free / ${formatBytes(disk.total_bytes)} total${pct}`;
+  el.innerHTML = `Destination disk${vol}: ${diskSpaceFreeHtml(disk)} / ${formatBytes(
+    disk.total_bytes
+  )} total${pct}`;
   el.classList.remove("hidden");
 }
 
 function appendOutputDiskSpaceBadge(root, disk) {
   if (!disk || disk.total_bytes == null) return;
+  const level = diskSpaceLevel(disk);
   const el = document.createElement("span");
-  const level = disk.level || "ok";
   el.className = `status-badge disk-space disk-space-${level}`;
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
   const pct =
     disk.percent_free != null && isFinite(disk.percent_free)
-      ? ` · ${Math.round(disk.percent_free)}% free`
+      ? ` · <span class="disk-space-pct disk-space-pct-${level}">${Math.round(
+          disk.percent_free
+        )}% free</span>`
       : "";
   el.title = "Free and total space on the output folder volume";
-  el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${formatBytes(
-    disk.available_bytes
+  el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${diskSpaceFreeHtml(
+    disk
   )} / ${formatBytes(disk.total_bytes)}${pct}`;
   root.appendChild(el);
 }
