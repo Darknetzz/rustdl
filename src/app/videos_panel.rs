@@ -36,7 +36,85 @@ impl PydlApp {
         }
     }
 
+    /// Pause/export/import/recheck/clear — lives in the video queue card or floating window.
+    pub(super) fn draw_downloader_queue_action_toolbar(&mut self, ui: &mut egui::Ui) {
+        button_toolbar_wrapped(ui, |ui| {
+            button_group(ui, "dl_queue_actions", |g| {
+                if self.downloads_paused {
+                    if g
+                        .success(
+                            &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                            true,
+                        )
+                        .clicked()
+                    {
+                        self.resume_all_downloads();
+                    }
+                } else if g
+                    .warning(
+                        &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                        self.status_queued > 0 || self.status_active > 0,
+                    )
+                    .clicked()
+                {
+                    self.pause_all_downloads();
+                }
+                if g
+                    .secondary(
+                        &format!("{} Export URLs", ui_icons::EXPORT),
+                        !self.items.is_empty(),
+                    )
+                    .clicked()
+                {
+                    self.export_queue_to_file();
+                }
+                if g
+                    .secondary(
+                        &format!("{} Import queue", ui_icons::IMPORT_FILE),
+                        !self.add_in_progress,
+                    )
+                    .on_hover_text(
+                        "Load URLs from a .txt file directly into the download queue",
+                    )
+                    .clicked()
+                {
+                    self.import_queue_from_file();
+                }
+                if g
+                    .warning(
+                        &format!("{} Re-check saved files", ui_icons::RECHECK),
+                        self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
+                    )
+                    .on_hover_text(
+                        "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
+                    )
+                    .on_disabled_hover_text(
+                        "Requires ffprobe. Disabled while MP3 extraction is enabled.",
+                    )
+                    .clicked()
+                {
+                    self.recheck_all_saved_downloads();
+                }
+                if g
+                    .danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
+                    .clicked()
+                {
+                    self.items.retain(|x| {
+                        matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
+                    });
+                    self.pending_resolve_ids
+                        .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                    self.update_status();
+                    self.refresh_input_line_info();
+                    self.schedule_queue_save();
+                    self.mark_queue_dirty();
+                }
+            });
+        });
+    }
+
     fn draw_downloader_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+        self.draw_downloader_queue_action_toolbar(ui);
         if !self.items.is_empty() {
             ui.add_space(4.0);
             self.draw_downloader_queue_status_row(ui);
