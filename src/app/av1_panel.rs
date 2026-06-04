@@ -4,7 +4,7 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, button_toolbar, compute_main_column_split, draw_meta_badge, draw_status_dot,
-    left_button_row, prepare_scroll_content, status_color, status_dot_with_label, MetaBadgeKind,
+    left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -186,14 +186,12 @@ impl PydlApp {
             self.settings.compact_cards,
         );
 
-        let mut av1_controls_scroll = egui::ScrollArea::vertical()
+        egui::ScrollArea::vertical()
             .id_salt("rustdl_av1_controls")
-            .auto_shrink([false, false]);
-        if let Some(max_h) = main_split.controls_scroll_max_height {
-            av1_controls_scroll = av1_controls_scroll.max_height(max_h);
-        }
-        av1_controls_scroll.show(ui, |ui| {
-                prepare_scroll_content(ui);
+            .auto_shrink([false, false])
+            .max_height(main_split.controls_max_height)
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("AV1 Converter").heading());

@@ -22,7 +22,7 @@ impl PydlApp {
                 ui.label(RichText::new("rustdl").strong());
                 ui.label(format!("Version: {}", pkg_version::VERSION));
                 ui.label(
-                    RichText::new(format!("Build: {}", pkg_version::BUILD_DATE))
+                    RichText::new(format!("Build: {}", pkg_version::build_date_local()))
                         .small()
                         .color(Color32::LIGHT_GRAY),
                 );

@@ -329,10 +329,6 @@ pub fn compute_main_column_split(
     }
 }
 
-/// Pin scroll content to the viewport width (no horizontal overflow).
-pub fn prepare_scroll_content(ui: &mut egui::Ui) {
-    ui.set_width(ui.available_width());
-}
 
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {

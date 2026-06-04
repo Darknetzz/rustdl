@@ -313,7 +313,7 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
     match args[0].as_str() {
         "--version" | "-V" => {
             println!("rustdl {}", crate::pkg_version::VERSION);
-            println!("Build: {}", crate::pkg_version::BUILD_DATE);
+            println!("Build: {}", crate::pkg_version::build_date_local());
             true
         }
         "--help" | "-h" => {
