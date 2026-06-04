@@ -5,7 +5,7 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{
-    button_group, draw_meta_badge, draw_status_chip, left_button_row, status_color,
+    compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, status_color,
     status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
@@ -268,11 +268,11 @@ impl PydlApp {
                     && !self.items[idx].source_line.trim().is_empty();
                 if can_retry_download || can_retry_metadata {
                     left_button_row(ui, |ui| {
-                        button_group(ui, ("card_retry", id), |g| {
+                        compact_button_group(ui, ("card_retry", id), |g| {
                             if can_retry_download {
                                 let btn = g
-                                    .secondary(
-                                        &format!("{} Retry download", ui_icons::RETRY),
+                                    .warning(
+                                        &format!("{} Retry", ui_icons::RETRY),
                                         true,
                                     )
                                     .on_hover_text(
@@ -285,7 +285,7 @@ impl PydlApp {
                             if can_retry_metadata {
                                 let btn = g
                                     .secondary(
-                                        &format!("{} Retry fetch", ui_icons::RETRY),
+                                        &format!("{} Refetch", ui_icons::RETRY),
                                         true,
                                     )
                                     .on_hover_text(
@@ -300,141 +300,95 @@ impl PydlApp {
                 }
 
                 if show_saved_file_actions {
-                    ui.spacing_mut().item_spacing.y = 4.0;
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
-                        if done_file.is_some() {
-                            ui.push_id((id, "card_open_menu"), |ui| {
-                                let r = ui.menu_button(
-                                    format!("{} Open…", ui_icons::OPEN_FILE),
-                                    |ui| {
-                                        if ui
-                                            .button(format!("{} Open file", ui_icons::OPEN_FILE))
-                                            .on_hover_text("Open with the default app for this file type")
-                                            .clicked()
-                                        {
-                                            if let Some((p, _)) = done_file.as_ref() {
-                                                self.open_file_path(p);
-                                            }
-                                            ui.close_menu();
-                                        }
-                                        if ui
-                                            .button(format!(
-                                                "{} Reveal in folder",
-                                                ui_icons::REVEAL_FOLDER
-                                            ))
-                                            .on_hover_text("Show the file in Explorer / file manager")
-                                            .clicked()
-                                        {
-                                            if let Some((p, _)) = done_file.as_ref() {
-                                                self.reveal_file_path(p);
-                                            }
-                                            ui.close_menu();
-                                        }
-                                        if ui
-                                            .button(format!(
-                                                "{} Open output folder",
-                                                ui_icons::REVEAL_FOLDER
-                                            ))
-                                            .on_hover_text(
-                                                "Open the folder containing this download (or the output folder)",
-                                            )
-                                            .clicked()
-                                        {
-                                            self.open_item_output_folder(id);
-                                            ui.close_menu();
-                                        }
-                                    },
-                                );
-                                r.response.on_hover_text(
-                                    "Play the download or show it in your file manager",
-                                );
-                            });
-                        }
-                        ui.push_id((id, "card_source_menu"), |ui| {
-                            let r = ui.menu_button(
-                                format!("{} Source", ui_icons::REDOWNLOAD),
-                                |ui| {
-                                    let streams = ui
-                                        .add_enabled(
-                                            self.has_ffprobe,
-                                            egui::Button::new(format!(
-                                                "{} Inspect streams (ffprobe)",
-                                                ui_icons::CHECK_STREAMS
-                                            )),
-                                        )
-                                        .on_hover_text(
-                                            "Run ffprobe on the saved file: list video/audio streams and refresh resolution on the card.",
-                                        )
-                                        .on_disabled_hover_text(
-                                            "Configure ffprobe in Settings → Executables.",
-                                        );
-                                    if streams.clicked() {
-                                        self.check_streams_for_item_id(id);
-                                        ui.close_menu();
-                                    }
-                                    let redo = ui
-                                        .add_enabled(
-                                            self.has_yt_dlp && output_ready && can_redownload,
-                                            egui::Button::new(format!(
-                                                "{} Re-download from web",
-                                                ui_icons::REDOWNLOAD
-                                            )),
-                                        )
-                                        .on_hover_text(
-                                            "Deletes the matched file in the output folder (if found), then downloads this URL again.",
-                                        )
-                                        .on_disabled_hover_text(
-                                            "Needs a video URL on this row, a valid output folder, and yt-dlp.",
-                                        );
-                                    if redo.clicked() {
-                                        self.redownload_item_id(id);
-                                        ui.close_menu();
-                                    }
-                                },
-                            );
-                            r.response.on_hover_text(
-                                "Inspect the file on disk or fetch the same URL again",
-                            );
-                        });
-                        ui.push_id((id, "card_danger_menu"), |ui| {
-                            let r = ui.menu_button(
-                                format!("{} Remove…", ui_icons::CARD_DELETE),
-                                |ui| {
-                                    button_group(ui, ("card_danger", id), |g| {
-                                        if let Some((p, _)) = done_file.as_ref() {
-                                            if g.danger(
-                                                &format!("{} Delete file from disk", ui_icons::CARD_DELETE),
-                                                true,
-                                            )
-                                            .on_hover_text("Delete only this file; the queue row stays until you remove it")
-                                            .clicked()
-                                            {
-                                                self.delete_file_path(p);
-                                                g.ui().close_menu();
-                                            }
-                                        }
-                                        if g.danger(
-                                            &format!("{} Remove from queue", ui_icons::REMOVE),
-                                            removable,
-                                        )
-                                        .on_hover_text(
-                                            "Remove this row from the list (does not delete the file unless you use Delete file above).",
-                                        )
-                                        .clicked()
-                                        {
-                                            let _ = self.remove_item_by_id(id);
-                                            self.update_status();
-                                            self.refresh_input_line_info();
-                                            self.schedule_queue_save();
-                                            g.ui().close_menu();
-                                        }
-                                    });
-                                },
-                            );
-                            r.response.on_hover_text(
-                                "Delete the saved file and/or remove this entry from the list",
-                            );
+                    left_button_row(ui, |ui| {
+                        compact_button_group(ui, ("card_done_actions", id), |g| {
+                            if let Some((p, _)) = done_file.as_ref() {
+                                if g.success(
+                                    &format!("{} Open", ui_icons::OPEN_FILE),
+                                    true,
+                                )
+                                .on_hover_text("Open with the default app for this file type")
+                                .clicked()
+                                {
+                                    self.open_file_path(p);
+                                }
+                                if g.secondary(
+                                    &format!("{} Folder", ui_icons::REVEAL_FOLDER),
+                                    true,
+                                )
+                                .on_hover_text("Show the file in Explorer / file manager")
+                                .clicked()
+                                {
+                                    self.reveal_file_path(p);
+                                }
+                            } else if done_but_file_missing {
+                                if g.secondary(
+                                    &format!("{} Folder", ui_icons::REVEAL_FOLDER),
+                                    true,
+                                )
+                                .on_hover_text("Open the output folder for this download")
+                                .clicked()
+                                {
+                                    self.open_item_output_folder(id);
+                                }
+                            }
+                            if done_file.is_some() {
+                                if g.secondary(
+                                    &format!("{} Streams", ui_icons::CHECK_STREAMS),
+                                    self.has_ffprobe,
+                                )
+                                .on_hover_text(
+                                    "Run ffprobe on the saved file and refresh resolution on the card.",
+                                )
+                                .on_disabled_hover_text(
+                                    "Configure ffprobe in Settings → Executables.",
+                                )
+                                .clicked()
+                                {
+                                    self.check_streams_for_item_id(id);
+                                }
+                            }
+                            if g.secondary(
+                                &format!("{} Redo", ui_icons::REDOWNLOAD),
+                                self.has_yt_dlp && output_ready && can_redownload,
+                            )
+                            .on_hover_text(
+                                "Deletes the matched file in the output folder (if found), then downloads this URL again.",
+                            )
+                            .on_disabled_hover_text(
+                                "Needs a video URL on this row, a valid output folder, and yt-dlp.",
+                            )
+                            .clicked()
+                            {
+                                self.redownload_item_id(id);
+                            }
+                            if let Some((p, _)) = done_file.as_ref() {
+                                if g.danger(
+                                    &format!("{} Delete", ui_icons::CARD_DELETE),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Delete only this file; the queue row stays until you remove it",
+                                )
+                                .clicked()
+                                {
+                                    self.delete_file_path(p);
+                                }
+                            }
+                            if g.secondary(
+                                &format!("{} Remove", ui_icons::REMOVE),
+                                removable,
+                            )
+                            .on_hover_text(
+                                "Remove this row from the list (does not delete the file unless you use Delete above).",
+                            )
+                            .clicked()
+                            {
+                                let _ = self.remove_item_by_id(id);
+                                self.update_status();
+                                self.refresh_input_line_info();
+                                self.schedule_queue_save();
+                            }
                         });
                     });
                 }
@@ -474,34 +428,39 @@ impl PydlApp {
                     || (!show_saved_file_actions && removable)
                 {
                     left_button_row(ui, |ui| {
-                        button_group(ui, ("card_actions", id), |g| {
-                        if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                            && g.warning(
-                                &format!("{} Cancel -> Ready", ui_icons::CANCEL_TO_READY),
-                                true,
-                            )
-                            .clicked()
-                        {
-                            self.request_cancel_item(id, CancelPostAction::Ready);
-                        }
-                        if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                            && g.danger(
-                                &format!("{} Cancel -> Remove", ui_icons::CANCEL_TO_REMOVE),
-                                true,
-                            )
-                            .clicked()
-                        {
-                            self.request_cancel_item(id, CancelPostAction::Remove);
-                        }
-                        if !show_saved_file_actions
-                            && g.danger(&format!("{} Remove", ui_icons::REMOVE), removable)
+                        compact_button_group(ui, ("card_actions", id), |g| {
+                            if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
+                                && g.warning(
+                                    &format!("{} Ready", ui_icons::CANCEL_TO_READY),
+                                    true,
+                                )
+                                .on_hover_text("Cancel download and mark as ready")
                                 .clicked()
-                        {
-                            let _ = self.remove_item_by_id(id);
-                            self.update_status();
-                            self.refresh_input_line_info();
-                            self.schedule_queue_save();
-                        }
+                            {
+                                self.request_cancel_item(id, CancelPostAction::Ready);
+                            }
+                            if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
+                                && g.danger(
+                                    &format!("{} Drop", ui_icons::CANCEL_TO_REMOVE),
+                                    true,
+                                )
+                                .on_hover_text("Cancel download and remove from queue")
+                                .clicked()
+                            {
+                                self.request_cancel_item(id, CancelPostAction::Remove);
+                            }
+                            if !show_saved_file_actions
+                                && g.secondary(
+                                    &format!("{} Remove", ui_icons::REMOVE),
+                                    removable,
+                                )
+                                .clicked()
+                            {
+                                let _ = self.remove_item_by_id(id);
+                                self.update_status();
+                                self.refresh_input_line_info();
+                                self.schedule_queue_save();
+                            }
                         });
                     });
                 }

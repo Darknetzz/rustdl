@@ -263,13 +263,14 @@ fn shade(color: Color32, factor: f32) -> Color32 {
 
 fn colored_button(
     ui: &mut egui::Ui,
-    label: &str,
+    label: impl Into<RichText>,
     enabled: bool,
     text_color: Color32,
     bg_fill: Color32,
     rounding: egui::Rounding,
     stroke: egui::Stroke,
 ) -> Response {
+    let label = label.into();
     let (fill, stroke, text) = if enabled {
         (
             bg_fill,
@@ -284,7 +285,7 @@ fn colored_button(
         )
     };
 
-    let button = egui::Button::new(RichText::new(label).color(text))
+    let button = egui::Button::new(label.color(text))
         .frame(true)
         .fill(fill)
         .stroke(stroke)
@@ -579,11 +580,20 @@ pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Respon
     )
 }
 
-fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+fn grouped_button_label(label: &str, compact: bool) -> RichText {
+    let text = RichText::new(label);
+    if compact {
+        text.small()
+    } else {
+        text
+    }
+}
+
+fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
     let bg = Color32::from_rgb(30, 136, 229);
     colored_button(
         ui,
-        label,
+        grouped_button_label(label, compact),
         enabled,
         Color32::from_rgb(227, 242, 253),
         bg,
@@ -592,11 +602,11 @@ fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Re
     )
 }
 
-fn grouped_success_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+fn grouped_success_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
     let bg = Color32::from_rgb(46, 125, 50);
     colored_button(
         ui,
-        label,
+        grouped_button_label(label, compact),
         enabled,
         Color32::from_rgb(232, 245, 233),
         bg,
@@ -605,11 +615,11 @@ fn grouped_success_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Resp
     )
 }
 
-fn grouped_danger_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+fn grouped_danger_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
     let bg = Color32::from_rgb(183, 28, 28);
     colored_button(
         ui,
-        label,
+        grouped_button_label(label, compact),
         enabled,
         Color32::from_rgb(255, 235, 238),
         bg,
@@ -618,11 +628,11 @@ fn grouped_danger_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Respo
     )
 }
 
-fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
     let bg = Color32::from_rgb(245, 124, 0);
     colored_button(
         ui,
-        label,
+        grouped_button_label(label, compact),
         enabled,
         Color32::from_rgb(255, 255, 255),
         bg,
@@ -635,6 +645,7 @@ fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Resp
 /// Bootstrap-style fused buttons (shared edges, no dividers).
 pub struct ButtonGroup<'a> {
     ui: &'a mut egui::Ui,
+    compact: bool,
 }
 
 impl<'a> ButtonGroup<'a> {
@@ -650,19 +661,23 @@ impl<'a> ButtonGroup<'a> {
     }
 
     pub fn secondary(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| grouped_secondary_button(ui, label, enabled))
+        let compact = self.compact;
+        self.add(|ui| grouped_secondary_button(ui, label, enabled, compact))
     }
 
     pub fn success(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| grouped_success_button(ui, label, enabled))
+        let compact = self.compact;
+        self.add(|ui| grouped_success_button(ui, label, enabled, compact))
     }
 
     pub fn danger(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| grouped_danger_button(ui, label, enabled))
+        let compact = self.compact;
+        self.add(|ui| grouped_danger_button(ui, label, enabled, compact))
     }
 
     pub fn warning(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| grouped_warning_button(ui, label, enabled))
+        let compact = self.compact;
+        self.add(|ui| grouped_warning_button(ui, label, enabled, compact))
     }
 }
 
@@ -671,18 +686,44 @@ pub fn button_group<R>(
     id_salt: impl Hash,
     add: impl FnOnce(&mut ButtonGroup<'_>) -> R,
 ) -> R {
+    button_group_sized(ui, id_salt, false, add)
+}
+
+/// Fused button row with tighter padding and smaller labels (queue cards).
+pub fn compact_button_group<R>(
+    ui: &mut egui::Ui,
+    id_salt: impl Hash,
+    add: impl FnOnce(&mut ButtonGroup<'_>) -> R,
+) -> R {
+    button_group_sized(ui, id_salt, true, add)
+}
+
+fn button_group_sized<R>(
+    ui: &mut egui::Ui,
+    id_salt: impl Hash,
+    compact: bool,
+    add: impl FnOnce(&mut ButtonGroup<'_>) -> R,
+) -> R {
     let _ = ui.id().with(id_salt);
-    egui::Frame::none()
+    let pad = ui.style().spacing.button_padding;
+    if compact {
+        ui.style_mut().spacing.button_padding = egui::vec2(8.0, 4.0);
+    }
+    let inner = egui::Frame::none()
         .rounding(egui::Rounding::same(6.0))
         .show(ui, |ui| {
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                let mut group = ButtonGroup { ui };
+                let mut group = ButtonGroup { ui, compact };
                 add(&mut group)
             })
             .inner
         })
-        .inner
+        .inner;
+    if compact {
+        ui.style_mut().spacing.button_padding = pad;
+    }
+    inner
 }
 
 /// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).

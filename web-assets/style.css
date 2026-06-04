@@ -112,6 +112,8 @@ button {
 
 button.primary { background: var(--accent); color: #fff; }
 button.secondary { background: var(--border); color: var(--text); }
+button.success { background: rgba(129, 199, 132, 0.25); color: var(--done); border: 1px solid rgba(129, 199, 132, 0.5); }
+button.warning { background: rgba(255, 167, 38, 0.22); color: #ffb74d; border: 1px solid rgba(255, 167, 38, 0.45); }
 button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border: 1px solid rgba(239, 83, 80, 0.45); }
 
 /* Bootstrap-style segmented controls */
@@ -144,6 +146,14 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 
 .btn-group > button.secondary {
   background: var(--border);
+}
+
+.btn-group > button.success {
+  border: none;
+}
+
+.btn-group > button.warning {
+  border: none;
 }
 
 .btn-group > button.danger {
@@ -496,14 +506,28 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
 
 .card-actions {
   display: flex;
-  padding: 0.45rem 0.65rem 0.6rem;
+  padding: 0.3rem 0.5rem 0.4rem;
   border-top: 1px solid var(--border);
 }
 
 .card-actions .btn-group {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   flex-wrap: wrap;
+  gap: 0;
+}
+
+.card-actions .btn-group > button {
+  padding: 0.28rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.card-actions .btn-group > button .material-icons {
+  font-size: 0.95rem;
+  vertical-align: -2px;
+  margin-right: 0.1rem;
 }
 
 .log-view {

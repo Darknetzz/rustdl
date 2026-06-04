@@ -540,7 +540,7 @@ function appendDeleteFileButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "danger";
-  setButtonLabel(btn, ICON.deleteForever, "Delete file");
+  setButtonLabel(btn, ICON.deleteForever, "Delete");
   btn.title = "Delete the downloaded file on disk. The queue row stays until you remove it.";
   btn.onclick = () => {
     const name = item.media_filename || "this file";
@@ -556,7 +556,7 @@ function appendRedownloadButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "secondary";
-  const label = slug === "failed" ? "Retry download" : "Re-download";
+  const label = slug === "failed" ? "Retry" : "Redo";
   setButtonLabel(btn, ICON.refresh, label);
   btn.title =
     "Deletes the matched file in the output folder (if found), then downloads this URL again with current quality settings.";
@@ -669,7 +669,7 @@ function renderQueueCard(item, settings) {
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
-    cancel.className = "secondary";
+    cancel.className = "warning";
     setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
     group.appendChild(cancel);
@@ -726,7 +726,7 @@ function renderQueueCardListRow(item) {
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
-    cancel.className = "secondary";
+    cancel.className = "warning";
     setButtonLabel(cancel, ICON.stop, "Cancel");
     cancel.onclick = () => cancelItem(item.item_id);
     group.appendChild(cancel);
