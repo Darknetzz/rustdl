@@ -55,6 +55,9 @@ pub struct AppSettings {
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
     pub card_list_layout: bool,
+    /// Downloader output folder / profile / search section expanded in the main panel.
+    #[serde(default = "default_downloader_options_expanded")]
+    pub downloader_options_expanded: bool,
     /// Show video queue docked in the main window (vs separate window).
     #[serde(default = "default_videos_docked")]
     pub videos_docked: bool,
@@ -266,6 +269,10 @@ fn default_yt_dlp_retry_count() -> u32 {
     10
 }
 
+fn default_downloader_options_expanded() -> bool {
+    true
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -300,6 +307,7 @@ impl Default for AppSettings {
             enqueue_downloads_to_av1: false,
             ui_scale: 1.08,
             card_list_layout: false,
+            downloader_options_expanded: true,
             videos_docked: true,
             videos_open: true,
             video_float_width: default_video_float_width(),

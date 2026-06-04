@@ -362,97 +362,119 @@ impl eframe::App for PydlApp {
                 }
 
                 ui.separator();
-                ui.horizontal(|ui| {
-                    constrain_content_width(ui);
-                    ui.label("Output folder");
-                    let path_w = content_width(ui).max(120.0);
-                    let output_dir_edit = ui.add(
-                        egui::TextEdit::singleline(&mut self.output_dir).desired_width(path_w),
-                    );
-                    attach_paste_context_menu(
-                        &output_dir_edit,
-                        &mut self.deferred_menu_paste_output_dir,
-                    );
-                    if output_dir_edit.changed() {
-                        self.persist_settings();
-                        self.last_done_lookup_poll = None;
-                    }
-                });
-                left_button_row(ui, |ui| {
-                    button_group(ui, "output_dir", |g| {
-                        if g.secondary(
-                            &format!("{} Use Downloads", ui_icons::USE_DOWNLOADS),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.output_dir =
-                                default_downloads().to_string_lossy().to_string();
-                            self.persist_settings();
-                            self.last_done_lookup_poll = None;
-                        }
-                        if g.secondary(
-                            &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.open_output_folder();
-                        }
-                    });
-                });
-
-                ui.separator();
                 let has_idle_items = self
                     .items
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
 
-                ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
-                let profiles = crate::profiles::all_profiles(&self.profile_store);
-                ui.horizontal(|ui| {
-                    constrain_content_width(ui);
-                    if !profiles.is_empty() {
-                        ui.label("Profile");
-                        egui::ComboBox::from_id_salt("toolbar_profile")
-                            .selected_text(self.settings.active_profile.clone())
-                            .show_ui(ui, |ui| {
-                                for p in &profiles {
-                                    if ui
-                                        .selectable_value(
-                                            &mut self.settings.active_profile,
-                                            p.name.clone(),
-                                            &p.name,
-                                        )
-                                        .clicked()
-                                    {
-                                        if let Some(prof) =
-                                            crate::profiles::find_profile(&self.profile_store, &p.name)
-                                        {
-                                            self.apply_download_profile(&prof);
-                                        }
-                                    }
+                let options_header = downloader_options_collapsing_label(
+                    &self.output_dir,
+                    &self.settings.active_profile,
+                    &self.queue_search,
+                    self.settings.downloader_options_expanded,
+                );
+                let options_expanded_before = self.settings.downloader_options_expanded;
+                egui::CollapsingHeader::new(options_header)
+                    .id_salt("downloader_options")
+                    .open(Some(&mut self.settings.downloader_options_expanded))
+                    .show(ui, |ui| {
+                        constrain_content_width(ui);
+                        ui.horizontal(|ui| {
+                            ui.label("Output folder");
+                            let path_w = content_width(ui).max(120.0);
+                            let output_dir_edit = ui.add(
+                                egui::TextEdit::singleline(&mut self.output_dir)
+                                    .desired_width(path_w),
+                            );
+                            attach_paste_context_menu(
+                                &output_dir_edit,
+                                &mut self.deferred_menu_paste_output_dir,
+                            );
+                            if output_dir_edit.changed() {
+                                self.persist_settings();
+                                self.last_done_lookup_poll = None;
+                            }
+                        });
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "output_dir", |g| {
+                                if g.secondary(
+                                    &format!("{} Use Downloads", ui_icons::USE_DOWNLOADS),
+                                    true,
+                                )
+                                .clicked()
+                                {
+                                    self.output_dir =
+                                        default_downloads().to_string_lossy().to_string();
+                                    self.persist_settings();
+                                    self.last_done_lookup_poll = None;
+                                }
+                                if g.secondary(
+                                    &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                                    true,
+                                )
+                                .clicked()
+                                {
+                                    self.open_output_folder();
                                 }
                             });
-                        ui.add_space(20.0);
-                    }
-                    ui.label("Search");
-                    let search = ui.add(
-                        egui::TextEdit::singleline(&mut self.queue_search)
-                            .hint_text("Title, URL, uploader…")
-                            .desired_width(220.0),
-                    );
-                    if search.changed() {
-                        self.queue_group_focus = None;
-                    }
-                    if !self.queue_search.is_empty()
-                        && ui
-                            .small_button(format!("{} Clear", ui_icons::CLEAR_SEARCH))
-                            .clicked()
-                    {
-                        self.queue_search.clear();
-                    }
-                });
+                        });
+
+                        ui.add_space(4.0);
+                        let profiles = crate::profiles::all_profiles(&self.profile_store);
+                        ui.horizontal(|ui| {
+                            if !profiles.is_empty() {
+                                ui.label("Profile");
+                                egui::ComboBox::from_id_salt("toolbar_profile")
+                                    .selected_text(self.settings.active_profile.clone())
+                                    .show_ui(ui, |ui| {
+                                        for p in &profiles {
+                                            if ui
+                                                .selectable_value(
+                                                    &mut self.settings.active_profile,
+                                                    p.name.clone(),
+                                                    &p.name,
+                                                )
+                                                .clicked()
+                                            {
+                                                if let Some(prof) =
+                                                    crate::profiles::find_profile(
+                                                        &self.profile_store,
+                                                        &p.name,
+                                                    )
+                                                {
+                                                    self.apply_download_profile(&prof);
+                                                }
+                                            }
+                                        }
+                                    });
+                                ui.add_space(20.0);
+                            }
+                            ui.label("Search");
+                            let search = ui.add(
+                                egui::TextEdit::singleline(&mut self.queue_search)
+                                    .hint_text("Title, URL, uploader…")
+                                    .desired_width(220.0),
+                            );
+                            if search.changed() {
+                                self.queue_group_focus = None;
+                            }
+                            if !self.queue_search.is_empty()
+                                && ui
+                                    .small_button(format!(
+                                        "{} Clear",
+                                        ui_icons::CLEAR_SEARCH
+                                    ))
+                                    .clicked()
+                            {
+                                self.queue_search.clear();
+                            }
+                        });
+                    });
+                if self.settings.downloader_options_expanded != options_expanded_before {
+                    self.persist_settings();
+                }
+
+                ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
                 button_toolbar_wrapped(ui, |ui| {
                     button_group(ui, "dl_actions", |g| {
                         if self.downloads_paused {
