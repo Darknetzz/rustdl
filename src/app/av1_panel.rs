@@ -3,9 +3,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, button_toolbar, compute_main_column_split, content_width, draw_meta_badge,
-    draw_status_dot, left_button_row, prepare_scroll_content, status_color, status_dot_with_label,
-    MetaBadgeKind,
+    button_group, button_toolbar, compute_main_column_split, draw_meta_badge, draw_status_dot,
+    left_button_row, prepare_scroll_content, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
@@ -187,7 +186,6 @@ impl PydlApp {
             self.settings.compact_cards,
         );
 
-        let scroll_w = content_width(ui);
         let mut av1_controls_scroll = egui::ScrollArea::vertical()
             .id_salt("rustdl_av1_controls")
             .auto_shrink([false, false]);
@@ -195,7 +193,7 @@ impl PydlApp {
             av1_controls_scroll = av1_controls_scroll.max_height(max_h);
         }
         av1_controls_scroll.show(ui, |ui| {
-                prepare_scroll_content(ui, scroll_w);
+                prepare_scroll_content(ui);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("AV1 Converter").heading());
@@ -236,7 +234,7 @@ impl PydlApp {
                 // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
                 // there on scan / exit, so no per-keystroke save is needed here.
                 ui.add_sized(
-                    [content_width(ui), 90.0],
+                    [ui.available_width(), 90.0],
                     egui::TextEdit::multiline(&mut self.av1_input_paths)
                         .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
                 );

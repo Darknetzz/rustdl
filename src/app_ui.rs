@@ -329,115 +329,83 @@ pub fn compute_main_column_split(
     }
 }
 
-/// Usable content width for the current panel/row (stable during layout; prefer over [`egui::Ui::available_width`] alone).
-pub fn content_width(ui: &egui::Ui) -> f32 {
-    ui.max_rect().width().max(ui.available_width())
-}
-
-/// Call once at the top of [`egui::CentralPanel`] content.
-pub fn prepare_central_panel(ui: &mut egui::Ui) {
-    set_row_width(ui, content_width(ui));
-}
-
-/// Ensure a child uses the full width of its parent row (egui vertical layouts shrink-wrap by default).
-pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
-    let w = width.max(0.0);
-    ui.set_min_width(w);
+/// Pin scroll content to the viewport width (avoids horizontal overflow from `max_rect` feedback).
+pub fn prepare_scroll_content(ui: &mut egui::Ui) {
+    let w = ui.available_width();
     ui.set_width(w);
-}
-
-/// Call at the start of [`egui::ScrollArea`] content so inner controls use the viewport width.
-pub fn prepare_scroll_content(ui: &mut egui::Ui, viewport_width: f32) {
-    let w = viewport_width.max(content_width(ui)).max(0.0);
-    if w > 0.0 {
-        set_row_width(ui, w);
-    }
 }
 
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
-    let add_mode_tab = |ui: &mut egui::Ui,
-                            rect: egui::Rect,
-                            label: String,
-                            active: bool,
-                            fill_active: Color32,
-                            fill_inactive: Color32,
-                            text_active: Color32,
-                            text_inactive: Color32,
-                            stroke_active: Color32,
-                            stroke_inactive: Color32| {
-        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
-            ui.add(
-                egui::Button::new(
-                    RichText::new(label)
-                        .strong()
-                        .color(if active {
-                            text_active
-                        } else {
-                            text_inactive
-                        }),
-                )
-                .fill(if active { fill_active } else { fill_inactive })
-                .stroke(egui::Stroke::new(
-                    1.0,
-                    if active {
-                        stroke_active
-                    } else {
-                        stroke_inactive
-                    },
-                ))
-                .min_size(rect.size()),
-            )
-        })
-        .inner
-        .clicked()
-    };
     with_full_width(ui, |ui| {
-        let width = content_width(ui);
+        let width = ui.available_width();
         let mut nav_frame = egui::Frame::group(ui.style());
         nav_frame.fill = Color32::from_rgb(28, 32, 38);
         nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
         nav_frame.rounding = egui::Rounding::same(8.0);
         nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
         nav_frame.show(ui, |ui| {
-            set_row_width(ui, width);
-            let row_w = content_width(ui);
-            let tab_h = 34.0;
-            let (row_rect, _) =
-                ui.allocate_exact_size(egui::vec2(row_w, tab_h), egui::Sense::hover());
-            let half = row_w * 0.5;
-            let dl_rect = egui::Rect::from_min_size(row_rect.min, egui::vec2(half, tab_h));
-            let av1_rect = egui::Rect::from_min_size(
-                row_rect.min + egui::vec2(half, 0.0),
-                egui::vec2(half, tab_h),
-            );
-
-            dl_clicked = add_mode_tab(
-                ui,
-                dl_rect,
-                format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER),
-                dl_active,
-                Color32::from_rgb(152, 255, 152),
-                Color32::from_rgb(44, 52, 64),
-                Color32::from_rgb(10, 32, 10),
-                Color32::from_rgb(210, 220, 235),
-                Color32::from_rgb(80, 190, 80),
-                Color32::from_rgb(88, 100, 116),
-            );
-            av1_clicked = add_mode_tab(
-                ui,
-                av1_rect,
-                format!("{} AV1 Converter", crate::ui_icons::NAV_AV1),
-                av1_active,
-                Color32::from_rgb(255, 190, 90),
-                Color32::from_rgb(44, 52, 64),
-                Color32::from_rgb(45, 27, 0),
-                Color32::from_rgb(210, 220, 235),
-                Color32::from_rgb(245, 154, 35),
-                Color32::from_rgb(88, 100, 116),
-            );
+            ui.set_width(width);
+            let row_w = ui.available_width();
+            let gap = ui.spacing().item_spacing.x;
+            let btn_w = ((row_w - gap) * 0.5).max(120.0);
+            ui.horizontal(|ui| {
+                ui.set_width(row_w);
+                let dl = egui::Button::new(
+                    RichText::new(format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER))
+                        .strong()
+                        .color(if dl_active {
+                            Color32::from_rgb(10, 32, 10)
+                        } else {
+                            Color32::from_rgb(210, 220, 235)
+                        }),
+                )
+                .min_size(egui::vec2(btn_w, 34.0))
+                .fill(if dl_active {
+                    Color32::from_rgb(152, 255, 152)
+                } else {
+                    Color32::from_rgb(44, 52, 64)
+                })
+                .stroke(egui::Stroke::new(
+                    1.0,
+                    if dl_active {
+                        Color32::from_rgb(80, 190, 80)
+                    } else {
+                        Color32::from_rgb(88, 100, 116)
+                    },
+                ));
+                if ui.add(dl).clicked() {
+                    dl_clicked = true;
+                }
+                let av1 = egui::Button::new(
+                    RichText::new(format!("{} AV1 Converter", crate::ui_icons::NAV_AV1))
+                        .strong()
+                        .color(if av1_active {
+                            Color32::from_rgb(45, 27, 0)
+                        } else {
+                            Color32::from_rgb(210, 220, 235)
+                        }),
+                )
+                .min_size(egui::vec2(btn_w, 34.0))
+                .fill(if av1_active {
+                    Color32::from_rgb(255, 190, 90)
+                } else {
+                    Color32::from_rgb(44, 52, 64)
+                })
+                .stroke(egui::Stroke::new(
+                    1.0,
+                    if av1_active {
+                        Color32::from_rgb(245, 154, 35)
+                    } else {
+                        Color32::from_rgb(88, 100, 116)
+                    },
+                ));
+                if ui.add(av1).clicked() {
+                    av1_clicked = true;
+                }
+            });
         });
     });
     (dl_clicked, av1_clicked)
@@ -445,12 +413,13 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = content_width(ui);
+    let width = ui.available_width();
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
-            set_row_width(ui, width);
+            ui.set_min_width(width);
+            ui.set_width(width);
             add_contents(ui)
         },
     )
@@ -464,14 +433,15 @@ fn alert_box<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     with_full_width(ui, |ui| {
-        let width = content_width(ui);
+        let width = ui.available_width();
         egui::Frame::none()
             .fill(bg)
             .stroke(egui::Stroke::new(1.0, border))
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, |ui| {
-                set_row_width(ui, width);
+                ui.set_min_width(width);
+                ui.set_width(width);
                 add_contents(ui)
             })
             .inner
@@ -494,7 +464,7 @@ pub fn centered_button_row<R>(
     id_salt: impl Hash,
     mut add_contents: impl FnMut(&mut egui::Ui) -> R,
 ) -> R {
-    let avail_w = content_width(ui);
+    let avail_w = ui.available_width();
     let row_width = {
         let mut sizing_ui = ui.new_child(
             egui::UiBuilder::new()
@@ -615,32 +585,24 @@ pub fn button_group<R>(
 
 /// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).
 pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| add(ui))
-        .inner
+    ui.horizontal(|ui| add(ui)).inner
 }
 
 /// Row of one or more [`button_group`]s with spacing between groups.
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let row_w = content_width(ui);
-    ui.scope(|ui| {
-        set_row_width(ui, row_w);
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            add(ui)
-        })
-        .inner
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        add(ui)
     })
     .inner
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let row_w = content_width(ui);
     ui.scope(|ui| {
-        set_row_width(ui, row_w);
+        ui.set_width(ui.available_width());
         ui.with_layout(
             egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
             |ui| {
-                set_row_width(ui, row_w);
                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                 add(ui)
             },

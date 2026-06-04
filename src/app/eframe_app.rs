@@ -1,8 +1,5 @@
 use super::*;
-use crate::app_ui::{
-    button_group, button_toolbar, content_width, draw_mode_nav_bar, left_button_row,
-    prepare_central_panel, prepare_scroll_content,
-};
+use crate::app_ui::{button_group, button_toolbar, draw_mode_nav_bar, left_button_row, prepare_scroll_content};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -67,7 +64,7 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                prepare_central_panel(ui);
+                ui.set_width(ui.available_width());
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -173,7 +170,6 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
-                let scroll_w = content_width(ui);
                 let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
                     .auto_shrink([false, false]);
@@ -181,7 +177,7 @@ impl eframe::App for PydlApp {
                     dl_controls_scroll = dl_controls_scroll.max_height(max_h);
                 }
                 dl_controls_scroll.show(ui, |ui| {
-                        prepare_scroll_content(ui, scroll_w);
+                        prepare_scroll_content(ui);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -216,7 +212,7 @@ impl eframe::App for PydlApp {
                 }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(
-                    [content_width(ui), 120.0],
+                    [ui.available_width(), 120.0],
                     egui::TextEdit::multiline(&mut self.input_urls)
                         .hint_text(
                             "https://... — paste, drag from browser, or drop .url / .webloc / list (.txt, .m3u)",
@@ -667,107 +663,100 @@ impl eframe::App for PydlApp {
 impl PydlApp {
     /// Title on the left; tool status and window actions on one row, top-aligned, inset from the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
-        let header_w = content_width(ui);
-        ui.allocate_ui_with_layout(
-            egui::vec2(header_w, 0.0),
-            egui::Layout::left_to_right(egui::Align::Center),
-            |ui| {
-                ui.set_width(header_w);
-                ui.horizontal(|ui| {
-                    let sz = egui::vec2(40.0, 40.0);
-                    let img = ui.add(
-                        egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                            .sense(egui::Sense::click()),
-                    );
-                    let title = ui.add(
-                        egui::Label::new(RichText::new("rustdl").heading())
-                            .sense(egui::Sense::click()),
-                    );
-                    let header = img
-                        .union(title)
-                        .on_hover_text("About rustdl — click to open");
-                    if header.clicked() {
-                        self.about_open = true;
-                    }
-                });
-                let tail_w = ui.available_width();
-                if tail_w <= 0.0 {
-                    return;
-                }
-                ui.allocate_ui_with_layout(
-                    egui::vec2(tail_w, 0.0),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        ui.set_width(tail_w);
-                        ui.add_space(HEADER_RIGHT_INSET);
-                        let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
-                            format!("{} Videos", ui_icons::VIDEOS)
-                        } else {
-                            format!("{} Videos (hidden)", ui_icons::VIDEOS)
-                        };
-                        button_group(ui, "hdr_nav", |g| {
-                            if g.secondary(
-                                &format!("{} Settings", ui_icons::SETTINGS),
-                                true,
-                            )
-                            .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
-                            .clicked()
-                            {
-                                self.settings_open = true;
-                            }
-                            if g.secondary(&format!("{} Logs", ui_icons::LOGS), true)
-                                .on_hover_text(
-                                    "View activity log (dock under queue or separate window)",
-                                )
-                                .clicked()
-                            {
-                                self.toggle_logs_panel();
-                            }
-                            if g.secondary(&videos_btn, true)
-                                .on_hover_text(
-                                    "Show video queue in main window or a separate floating window",
-                                )
-                                .clicked()
-                            {
-                                self.toggle_videos_panel();
-                            }
-                            if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                                self.open_exit_confirm();
-                            }
-                        });
-                        ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.spacing_mut().item_spacing.x = 10.0;
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                                draw_precheck_status(
-                                    ui,
-                                    "ffprobe",
-                                    self.has_ffprobe,
-                                    &self.ffprobe_version,
-                                );
-                                draw_precheck_status(
-                                    ui,
-                                    "ffmpeg",
-                                    self.has_ffmpeg,
-                                    &self.ffmpeg_version,
-                                );
-                                draw_precheck_status(
-                                    ui,
-                                    "yt-dlp",
-                                    self.has_yt_dlp,
-                                    &self.yt_dlp_version,
-                                );
-                                if self.settings.web_ui_enabled && self.web_server.is_some() {
-                                    let url = crate::service::web::web_ui_browser_url(
-                                        &self.settings.web_bind_address,
-                                    );
-                                    draw_web_ui_header_link(ui, &url);
-                                }
-                            });
-                        });
-                    },
+        ui.horizontal(|ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let sz = egui::vec2(40.0, 40.0);
+                let img = ui.add(
+                    egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                        .sense(egui::Sense::click()),
                 );
-            },
-        );
+                let title = ui.add(
+                    egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()),
+                );
+                let header = img
+                    .union(title)
+                    .on_hover_text("About rustdl — click to open");
+                if header.clicked() {
+                    self.about_open = true;
+                }
+            });
+            let right_w = ui.available_width();
+            if right_w <= 0.0 {
+                return;
+            }
+            ui.allocate_ui_with_layout(
+                egui::vec2(right_w, 0.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.add_space(HEADER_RIGHT_INSET);
+                    let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
+                        format!("{} Videos", ui_icons::VIDEOS)
+                    } else {
+                        format!("{} Videos (hidden)", ui_icons::VIDEOS)
+                    };
+                    button_group(ui, "hdr_nav", |g| {
+                        if g.secondary(
+                            &format!("{} Settings", ui_icons::SETTINGS),
+                            true,
+                        )
+                        .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
+                        .clicked()
+                        {
+                            self.settings_open = true;
+                        }
+                        if g.secondary(&format!("{} Logs", ui_icons::LOGS), true)
+                            .on_hover_text(
+                                "View activity log (dock under queue or separate window)",
+                            )
+                            .clicked()
+                        {
+                            self.toggle_logs_panel();
+                        }
+                        if g.secondary(&videos_btn, true)
+                            .on_hover_text(
+                                "Show video queue in main window or a separate floating window",
+                            )
+                            .clicked()
+                        {
+                            self.toggle_videos_panel();
+                        }
+                        if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
+                            self.open_exit_confirm();
+                        }
+                    });
+                    ui.separator();
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 10.0;
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                            draw_precheck_status(
+                                ui,
+                                "ffprobe",
+                                self.has_ffprobe,
+                                &self.ffprobe_version,
+                            );
+                            draw_precheck_status(
+                                ui,
+                                "ffmpeg",
+                                self.has_ffmpeg,
+                                &self.ffmpeg_version,
+                            );
+                            draw_precheck_status(
+                                ui,
+                                "yt-dlp",
+                                self.has_yt_dlp,
+                                &self.yt_dlp_version,
+                            );
+                            if self.settings.web_ui_enabled && self.web_server.is_some() {
+                                let url = crate::service::web::web_ui_browser_url(
+                                    &self.settings.web_bind_address,
+                                );
+                                draw_web_ui_header_link(ui, &url);
+                            }
+                        });
+                    });
+                },
+            );
+        });
     }
 }
