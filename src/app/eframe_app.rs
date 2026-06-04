@@ -367,16 +367,22 @@ impl eframe::App for PydlApp {
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
 
+                let options_id = ui.make_persistent_id("downloader_options");
+                let options_expanded = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    options_id,
+                    self.settings.downloader_options_expanded,
+                )
+                .is_open();
                 let options_header = downloader_options_collapsing_label(
                     &self.output_dir,
                     &self.settings.active_profile,
                     &self.queue_search,
-                    self.settings.downloader_options_expanded,
+                    options_expanded,
                 );
-                let options_expanded_before = self.settings.downloader_options_expanded;
-                egui::CollapsingHeader::new(options_header)
+                let options_resp = egui::CollapsingHeader::new(options_header)
                     .id_salt("downloader_options")
-                    .open(Some(&mut self.settings.downloader_options_expanded))
+                    .default_open(self.settings.downloader_options_expanded)
                     .show(ui, |ui| {
                         constrain_content_width(ui);
                         ui.horizontal(|ui| {
@@ -470,8 +476,16 @@ impl eframe::App for PydlApp {
                             }
                         });
                     });
-                if self.settings.downloader_options_expanded != options_expanded_before {
-                    self.persist_settings();
+                if options_resp.header_response.changed() {
+                    if let Some(state) =
+                        egui::collapsing_header::CollapsingState::load(ui.ctx(), options_id)
+                    {
+                        let open = state.is_open();
+                        if open != self.settings.downloader_options_expanded {
+                            self.settings.downloader_options_expanded = open;
+                            self.persist_settings();
+                        }
+                    }
                 }
 
                 ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
@@ -746,4 +760,38 @@ impl PydlApp {
             }
         });
     }
+}
+
+fn downloader_options_collapsing_label(
+    output_dir: &str,
+    profile: &str,
+    search: &str,
+    expanded: bool,
+) -> String {
+    if expanded {
+        return "Download options".to_owned();
+    }
+    let folder = std::path::Path::new(output_dir)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or(output_dir);
+    let folder = if folder.chars().count() > 36 {
+        let short: String = folder.chars().take(33).collect();
+        format!("{short}…")
+    } else {
+        folder.to_owned()
+    };
+    let mut label = format!("Download options — {folder} · {profile}");
+    let q = search.trim();
+    if !q.is_empty() {
+        let short = if q.chars().count() > 20 {
+            let s: String = q.chars().take(17).collect();
+            format!("{s}…")
+        } else {
+            q.to_owned()
+        };
+        label.push_str(&format!(" · \"{short}\""));
+    }
+    label
 }
