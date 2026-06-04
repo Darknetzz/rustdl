@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar, danger_button, draw_mode_nav_bar, left_button_row, prepare_scroll_content};
+use crate::app_ui::{button_group, button_toolbar, danger_button, draw_mode_nav_bar, left_button_row};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -172,12 +172,10 @@ impl eframe::App for PydlApp {
 
                 let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
-                    .auto_shrink([false, false]);
-                if let Some(max_h) = main_split.controls_scroll_max_height {
-                    dl_controls_scroll = dl_controls_scroll.max_height(max_h);
-                }
+                    .auto_shrink([false, false])
+                    .max_height(main_split.controls_max_height);
                 dl_controls_scroll.show(ui, |ui| {
-                        prepare_scroll_content(ui);
+                    ui.set_width(ui.available_width());
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -397,16 +395,12 @@ impl eframe::App for PydlApp {
                     });
                 });
 
-                    }); // downloader controls scroll
-
                 ui.separator();
                 let has_idle_items = self
                     .items
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
 
-                // Queue actions stay outside the controls scroll so they remain visible when the
-                // window is short (CentralPanel does not scroll as a whole).
                 ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
                 let profiles = crate::profiles::all_profiles(&self.profile_store);
                 if !profiles.is_empty() {
@@ -623,6 +617,8 @@ impl eframe::App for PydlApp {
                     self.start_downloads();
                 }
 
+                    }); // downloader controls scroll
+
                 if self.settings.videos_docked {
                     self.draw_docked_videos_section(ui, main_split.videos_height);
                 } else {
@@ -664,7 +660,6 @@ impl PydlApp {
     /// Title on the left; tool status and window actions on one row, top-aligned, inset from the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 let sz = egui::vec2(40.0, 40.0);
                 let img = ui.add(

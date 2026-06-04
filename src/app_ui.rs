@@ -294,8 +294,8 @@ const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
 
 /// Split remaining main-panel height between scrollable controls and a docked video queue.
 pub struct MainColumnSplit {
-    /// When the queue is undocked, controls shrink to content; when docked, caps scroll height.
-    pub controls_scroll_max_height: Option<f32>,
+    /// Max height for the controls [`egui::ScrollArea`] (always set — required for egui layout).
+    pub controls_max_height: f32,
     pub videos_height: f32,
 }
 
@@ -307,7 +307,7 @@ pub fn compute_main_column_split(
     let h = available_height.max(0.0);
     if !videos_docked {
         return MainColumnSplit {
-            controls_scroll_max_height: None,
+            controls_max_height: h,
             videos_height: 0.0,
         };
     }
@@ -316,7 +316,7 @@ pub fn compute_main_column_split(
         let videos_h = (h * 0.45).clamp(120.0, (h - 60.0).max(120.0));
         let controls_h = (h - videos_h).max(60.0);
         return MainColumnSplit {
-            controls_scroll_max_height: Some(controls_h),
+            controls_max_height: controls_h,
             videos_height: videos_h,
         };
     }
@@ -324,7 +324,7 @@ pub fn compute_main_column_split(
         .max(min_videos)
         .min(h - MIN_CONTROLS_SCROLL_H);
     MainColumnSplit {
-        controls_scroll_max_height: Some(h - videos_h),
+        controls_max_height: h - videos_h,
         videos_height: videos_h,
     }
 }
@@ -338,9 +338,7 @@ pub fn prepare_scroll_content(ui: &mut egui::Ui) {
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
-    let outer_w = ui.available_width();
-    ui.scope(|ui| {
-        ui.set_width(outer_w);
+    with_full_width(ui, |ui| {
         let mut nav_frame = egui::Frame::group(ui.style());
         nav_frame.fill = Color32::from_rgb(28, 32, 38);
         nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
@@ -348,12 +346,10 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
         nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
         nav_frame.show(ui, |ui| {
             let row_w = ui.available_width();
-            ui.set_width(row_w);
+            let gap = ui.spacing().item_spacing.x;
+            let btn_w = ((row_w - gap) * 0.5).max(120.0);
             ui.horizontal(|ui| {
                 ui.set_width(row_w);
-                ui.spacing_mut().item_spacing.x = 0.0;
-                let half = row_w * 0.5;
-                let btn_h = 34.0;
                 let dl = egui::Button::new(
                     RichText::new(format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER))
                         .strong()
@@ -363,6 +359,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                             Color32::from_rgb(210, 220, 235)
                         }),
                 )
+                .min_size(egui::vec2(btn_w, 34.0))
                 .fill(if dl_active {
                     Color32::from_rgb(152, 255, 152)
                 } else {
@@ -376,7 +373,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                         Color32::from_rgb(88, 100, 116)
                     },
                 ));
-                if ui.add_sized([half, btn_h], dl).clicked() {
+                if ui.add(dl).clicked() {
                     dl_clicked = true;
                 }
                 let av1 = egui::Button::new(
@@ -388,6 +385,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                             Color32::from_rgb(210, 220, 235)
                         }),
                 )
+                .min_size(egui::vec2(btn_w, 34.0))
                 .fill(if av1_active {
                     Color32::from_rgb(255, 190, 90)
                 } else {
@@ -401,7 +399,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                         Color32::from_rgb(88, 100, 116)
                     },
                 ));
-                if ui.add_sized([half, btn_h], av1).clicked() {
+                if ui.add(av1).clicked() {
                     av1_clicked = true;
                 }
             });
@@ -587,16 +585,13 @@ pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> 
     ui.horizontal(|ui| add(ui)).inner
 }
 
-/// Row of one or more [`button_group`]s with spacing between groups (full parent width).
+/// Row of one or more [`button_group`]s with spacing between groups.
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    with_full_width(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.set_width(ui.available_width());
-            ui.spacing_mut().item_spacing.x = 8.0;
-            add(ui)
-        })
-        .inner
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        add(ui)
     })
+    .inner
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
@@ -646,23 +641,21 @@ mod tests {
     #[test]
     fn main_column_split_fits_viewport() {
         let split = compute_main_column_split(600.0, true, false);
-        let controls_h = split.controls_scroll_max_height.unwrap();
-        assert!(controls_h >= 100.0);
+        assert!(split.controls_max_height >= 100.0);
         assert!(split.videos_height >= 220.0);
-        assert!((controls_h + split.videos_height - 600.0).abs() < 0.01);
+        assert!((split.controls_max_height + split.videos_height - 600.0).abs() < 0.01);
     }
 
     #[test]
     fn main_column_split_never_exceeds_available() {
         let split = compute_main_column_split(280.0, true, false);
-        let controls_h = split.controls_scroll_max_height.unwrap();
-        assert!(controls_h + split.videos_height <= 280.0 + 0.01);
+        assert!(split.controls_max_height + split.videos_height <= 280.0 + 0.01);
     }
 
     #[test]
-    fn main_column_split_undocked_has_no_scroll_cap() {
+    fn main_column_split_undocked_uses_full_height() {
         let split = compute_main_column_split(600.0, false, false);
-        assert!(split.controls_scroll_max_height.is_none());
+        assert_eq!(split.controls_max_height, 600.0);
         assert_eq!(split.videos_height, 0.0);
     }
 }
