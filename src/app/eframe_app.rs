@@ -170,7 +170,7 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
-                let mut dl_controls_scroll = egui::ScrollArea::vertical()
+                let dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
                     .auto_shrink([false, false])
                     .max_height(main_split.controls_max_height);
