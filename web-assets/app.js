@@ -20,6 +20,10 @@ let cachedHasYtDlp = false;
 
 /** Skip re-fetching thumbnails that already returned 404 until item metadata changes. */
 const thumbFailedKeys = new Set();
+/** Blob URLs survive queue DOM rebuilds (SSE / polling used to abort direct img src loads). */
+const thumbBlobCache = new Map();
+/** @type {Map<string, Promise<string|null>>} */
+const thumbInflight = new Map();
 
 /** @type {HTMLMediaElement | null} */
 let activeMediaEl = null;
@@ -280,10 +284,70 @@ function thumbCacheKey(item) {
   ].join("|");
 }
 
+function revokeThumbBlob(cacheKey) {
+  const url = thumbBlobCache.get(cacheKey);
+  if (url) {
+    URL.revokeObjectURL(url);
+    thumbBlobCache.delete(cacheKey);
+  }
+}
+
 function pruneThumbFailedKeys(activeItems) {
   const active = new Set(activeItems.map((item) => thumbCacheKey(item)));
   for (const key of thumbFailedKeys) {
     if (!active.has(key)) thumbFailedKeys.delete(key);
+  }
+  for (const key of thumbBlobCache.keys()) {
+    if (!active.has(key)) revokeThumbBlob(key);
+  }
+  for (const key of thumbInflight.keys()) {
+    if (!active.has(key)) thumbInflight.delete(key);
+  }
+}
+
+async function fetchQueueThumbnailBlob(item) {
+  const cacheKey = thumbCacheKey(item);
+  if (thumbBlobCache.has(cacheKey)) {
+    return thumbBlobCache.get(cacheKey);
+  }
+  if (thumbFailedKeys.has(cacheKey)) {
+    return null;
+  }
+  if (thumbInflight.has(cacheKey)) {
+    return thumbInflight.get(cacheKey);
+  }
+  const apiUrl = thumbnailApiUrl(item.item_id);
+  if (!apiUrl) {
+    return null;
+  }
+  const work = (async () => {
+    try {
+      const res = await fetch(apiUrl, { headers: headers() });
+      if (!res.ok) {
+        if (res.status !== 401) {
+          thumbFailedKeys.add(cacheKey);
+        }
+        return null;
+      }
+      const blob = await res.blob();
+      if (blob.size < 32) {
+        thumbFailedKeys.add(cacheKey);
+        return null;
+      }
+      const objUrl = URL.createObjectURL(blob);
+      thumbBlobCache.set(cacheKey, objUrl);
+      thumbFailedKeys.delete(cacheKey);
+      return objUrl;
+    } catch {
+      thumbFailedKeys.add(cacheKey);
+      return null;
+    }
+  })();
+  thumbInflight.set(cacheKey, work);
+  try {
+    return await work;
+  } finally {
+    thumbInflight.delete(cacheKey);
   }
 }
 
@@ -360,6 +424,23 @@ function thumbnailApiUrl(itemId) {
   return `/api/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
+function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl) {
+  img.onload = () => {
+    img.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+    thumbFailedKeys.delete(cacheKey);
+  };
+  img.onerror = () => {
+    thumbFailedKeys.add(cacheKey);
+    revokeThumbBlob(cacheKey);
+    img.classList.add("hidden");
+    img.removeAttribute("src");
+    placeholder.textContent = "Thumbnail unavailable";
+    placeholder.classList.remove("hidden");
+  };
+  img.src = objUrl;
+}
+
 function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   img.classList.add("hidden");
   placeholder.classList.remove("hidden");
@@ -368,8 +449,7 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   if (!showThumbnails || !itemHasThumbnailSource(item)) {
     return;
   }
-  const url = thumbnailApiUrl(item.item_id);
-  if (!url) {
+  if (!thumbnailApiUrl(item.item_id)) {
     placeholder.textContent = "Save API token to load thumbnails";
     return;
   }
@@ -379,19 +459,25 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
     return;
   }
 
-  img.onload = () => {
-    img.classList.remove("hidden");
-    placeholder.classList.add("hidden");
-    thumbFailedKeys.delete(cacheKey);
-  };
-  img.onerror = () => {
-    thumbFailedKeys.add(cacheKey);
-    img.classList.add("hidden");
-    img.removeAttribute("src");
-    placeholder.textContent = "Thumbnail unavailable";
-    placeholder.classList.remove("hidden");
-  };
-  img.src = url;
+  const cached = thumbBlobCache.get(cacheKey);
+  if (cached) {
+    applyThumbBlobToImg(img, placeholder, cacheKey, cached);
+    return;
+  }
+
+  placeholder.textContent = "Fetching thumbnail…";
+  fetchQueueThumbnailBlob(item).then((objUrl) => {
+    if (!img.isConnected) return;
+    if (objUrl) {
+      applyThumbBlobToImg(img, placeholder, cacheKey, objUrl);
+    } else {
+      placeholder.textContent = thumbFailedKeys.has(cacheKey)
+        ? "Thumbnail unavailable"
+        : "Save API token to load thumbnails";
+      placeholder.classList.remove("hidden");
+      img.classList.add("hidden");
+    }
+  });
 }
 
 function footerStatusText(item) {
@@ -1134,6 +1220,9 @@ document.querySelectorAll(".preset-btn").forEach((btn) => {
 let currentView = "downloader";
 /** Skip re-fetching AV1 thumbnails that already failed until the source changes. */
 const av1ThumbFailedKeys = new Set();
+const av1ThumbBlobCache = new Map();
+/** @type {Map<string, Promise<string|null>>} */
+const av1ThumbInflight = new Map();
 
 function formatBytes(n) {
   if (n == null) return "";
@@ -1213,6 +1302,23 @@ function av1ThumbnailUrl(itemId) {
   return `/api/av1/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
+function applyAv1ThumbBlobToImg(img, placeholder, key, objUrl) {
+  img.onload = () => {
+    img.classList.remove("hidden");
+    placeholder.classList.add("hidden");
+    av1ThumbFailedKeys.delete(key);
+  };
+  img.onerror = () => {
+    av1ThumbFailedKeys.add(key);
+    revokeAv1ThumbBlob(key);
+    img.classList.add("hidden");
+    img.removeAttribute("src");
+    placeholder.textContent = "No preview available";
+    placeholder.classList.remove("hidden");
+  };
+  img.src = objUrl;
+}
+
 function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
   img.classList.add("hidden");
   placeholder.classList.remove("hidden");
@@ -1220,8 +1326,7 @@ function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
     placeholder.textContent = "Thumbnails off";
     return;
   }
-  const url = av1ThumbnailUrl(item.item_id);
-  if (!url) {
+  if (!av1ThumbnailUrl(item.item_id)) {
     placeholder.textContent = "Save API token to load thumbnails";
     return;
   }
@@ -1230,20 +1335,24 @@ function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
     placeholder.textContent = "No preview available";
     return;
   }
+  const cached = av1ThumbBlobCache.get(key);
+  if (cached) {
+    applyAv1ThumbBlobToImg(img, placeholder, key, cached);
+    return;
+  }
   placeholder.textContent = "Loading preview…";
-  img.onload = () => {
-    img.classList.remove("hidden");
-    placeholder.classList.add("hidden");
-    av1ThumbFailedKeys.delete(key);
-  };
-  img.onerror = () => {
-    av1ThumbFailedKeys.add(key);
-    img.classList.add("hidden");
-    img.removeAttribute("src");
-    placeholder.textContent = "No preview available";
-    placeholder.classList.remove("hidden");
-  };
-  img.src = url;
+  fetchAv1ThumbnailBlob(item).then((objUrl) => {
+    if (!img.isConnected) return;
+    if (objUrl) {
+      applyAv1ThumbBlobToImg(img, placeholder, key, objUrl);
+    } else {
+      placeholder.textContent = av1ThumbFailedKeys.has(key)
+        ? "No preview available"
+        : "Save API token to load thumbnails";
+      placeholder.classList.remove("hidden");
+      img.classList.add("hidden");
+    }
+  });
 }
 
 function av1MediaBadges(item) {
@@ -1398,10 +1507,70 @@ function renderAv1Encoder(data) {
   el.textContent = parts.join(" · ");
 }
 
+function revokeAv1ThumbBlob(key) {
+  const url = av1ThumbBlobCache.get(key);
+  if (url) {
+    URL.revokeObjectURL(url);
+    av1ThumbBlobCache.delete(key);
+  }
+}
+
 function pruneAv1ThumbKeys(items) {
   const active = new Set(items.map((it) => av1ThumbKey(it)));
   for (const key of av1ThumbFailedKeys) {
     if (!active.has(key)) av1ThumbFailedKeys.delete(key);
+  }
+  for (const key of av1ThumbBlobCache.keys()) {
+    if (!active.has(key)) revokeAv1ThumbBlob(key);
+  }
+  for (const key of av1ThumbInflight.keys()) {
+    if (!active.has(key)) av1ThumbInflight.delete(key);
+  }
+}
+
+async function fetchAv1ThumbnailBlob(item) {
+  const cacheKey = av1ThumbKey(item);
+  if (av1ThumbBlobCache.has(cacheKey)) {
+    return av1ThumbBlobCache.get(cacheKey);
+  }
+  if (av1ThumbFailedKeys.has(cacheKey)) {
+    return null;
+  }
+  if (av1ThumbInflight.has(cacheKey)) {
+    return av1ThumbInflight.get(cacheKey);
+  }
+  const apiUrl = av1ThumbnailUrl(item.item_id);
+  if (!apiUrl) {
+    return null;
+  }
+  const work = (async () => {
+    try {
+      const res = await fetch(apiUrl, { headers: headers() });
+      if (!res.ok) {
+        if (res.status !== 401) {
+          av1ThumbFailedKeys.add(cacheKey);
+        }
+        return null;
+      }
+      const blob = await res.blob();
+      if (blob.size < 32) {
+        av1ThumbFailedKeys.add(cacheKey);
+        return null;
+      }
+      const objUrl = URL.createObjectURL(blob);
+      av1ThumbBlobCache.set(cacheKey, objUrl);
+      av1ThumbFailedKeys.delete(cacheKey);
+      return objUrl;
+    } catch {
+      av1ThumbFailedKeys.add(cacheKey);
+      return null;
+    }
+  })();
+  av1ThumbInflight.set(cacheKey, work);
+  try {
+    return await work;
+  } finally {
+    av1ThumbInflight.delete(cacheKey);
   }
 }
 

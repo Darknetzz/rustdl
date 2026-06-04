@@ -554,11 +554,6 @@ async fn thumbnail_proxy(
             has_ffmpeg,
         )
     };
-    if let Some(path) = local_thumb.as_ref() {
-        if let Some(bytes) = extract_local_video_thumbnail(path, &ffmpeg_path, has_ffmpeg).await {
-            return Ok(thumbnail_response(bytes, "image/png"));
-        }
-    }
     for url in candidates {
         if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
             return Ok(thumbnail_response(bytes, content_type));
@@ -593,7 +588,10 @@ pub(super) async fn extract_local_video_thumbnail(
 pub(super) fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
     (
         StatusCode::OK,
-        [(axum::http::header::CONTENT_TYPE, content_type)],
+        [
+            (axum::http::header::CONTENT_TYPE, content_type),
+            (axum::http::header::CACHE_CONTROL, "private, max-age=300"),
+        ],
         bytes,
     )
 }
