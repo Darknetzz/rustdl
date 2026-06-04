@@ -44,6 +44,7 @@ impl eframe::App for PydlApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.poll_done_file_lookup();
+        self.poll_output_disk_space();
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
             if !self.add_in_progress && now >= deadline {
@@ -399,6 +400,7 @@ impl eframe::App for PydlApp {
                             if output_dir_edit.changed() {
                                 self.persist_settings();
                                 self.last_done_lookup_poll = None;
+                                self.invalidate_output_disk_space();
                             }
                         });
                         left_button_row(ui, |ui| {
@@ -413,6 +415,7 @@ impl eframe::App for PydlApp {
                                         default_downloads().to_string_lossy().to_string();
                                     self.persist_settings();
                                     self.last_done_lookup_poll = None;
+                                    self.invalidate_output_disk_space();
                                 }
                                 if g.secondary(
                                     &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
@@ -424,6 +427,7 @@ impl eframe::App for PydlApp {
                                 }
                             });
                         });
+                        self.draw_output_disk_space(ui);
 
                         ui.add_space(4.0);
                         let profiles = crate::profiles::all_profiles(&self.profile_store);

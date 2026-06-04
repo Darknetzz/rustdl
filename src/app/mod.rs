@@ -215,6 +215,9 @@ pub struct PydlApp {
     pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
     last_done_lookup_poll: Option<Instant>,
+    /// Cached free/total space for the output folder volume.
+    output_disk_space: Option<crate::disk_space::DiskSpace>,
+    output_disk_space_polled_at: Option<Instant>,
     #[cfg(windows)]
     win_browser_drop_queue: Arc<Mutex<Vec<crate::win_drop_target::WinDropPayload>>>,
     #[cfg(windows)]
@@ -356,6 +359,8 @@ impl PydlApp {
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
+            output_disk_space: None,
+            output_disk_space_polled_at: None,
             deferred_menu_paste_urls: None,
             deferred_menu_paste_output_dir: None,
             #[cfg(windows)]
@@ -675,6 +680,25 @@ impl PydlApp {
         }
     }
 
+    pub(super) fn invalidate_output_disk_space(&mut self) {
+        self.output_disk_space = None;
+        self.output_disk_space_polled_at = None;
+    }
+
+    fn poll_output_disk_space(&mut self) {
+        const INTERVAL: Duration = Duration::from_secs(5);
+        let now = Instant::now();
+        let due = match self.output_disk_space_polled_at {
+            None => true,
+            Some(t) => now.saturating_duration_since(t) >= INTERVAL,
+        };
+        if !due {
+            return;
+        }
+        self.output_disk_space = crate::disk_space::query_disk_space(&self.output_dir);
+        self.output_disk_space_polled_at = Some(now);
+    }
+
     pub(super) fn persist_settings(&mut self) {
         self.settings.output_dir = self.output_dir.clone();
         self.settings.worker_count = self.worker_count.clamp(1, 6);
@@ -765,6 +789,46 @@ impl PydlApp {
         if let Err(e) = app_actions::open_str_path(&self.output_dir) {
             self.append_log(&format!("Failed to open output folder: {e}"));
         }
+    }
+
+    pub(super) fn draw_output_disk_space(&self, ui: &mut egui::Ui) {
+        use crate::app_ui::{ALERT_DANGER_TEXT, ALERT_WARNING_TEXT};
+        use crate::disk_space::DiskSpaceLevel;
+        use eframe::egui::RichText;
+
+        let theme = &self.settings.theme;
+        let trimmed = self.output_dir.trim();
+        if trimmed.is_empty() {
+            ui.label(
+                RichText::new("Destination disk: set an output folder to see free space.")
+                    .small()
+                    .color(crate::theme::text_muted(theme)),
+            );
+            return;
+        }
+        let Some(space) = self.output_disk_space.as_ref() else {
+            ui.label(
+                RichText::new("Destination disk: …")
+                    .small()
+                    .color(crate::theme::text_muted(theme)),
+            );
+            return;
+        };
+        let detail = format!(
+            "{} · {:.0}% free",
+            space.format_available_total(),
+            space.percent_free()
+        );
+        let color = match space.level() {
+            DiskSpaceLevel::Ok => crate::theme::text_muted(theme),
+            DiskSpaceLevel::Low => ALERT_WARNING_TEXT,
+            DiskSpaceLevel::Critical => ALERT_DANGER_TEXT,
+        };
+        ui.label(
+            RichText::new(format!("Destination disk: {detail}"))
+                .small()
+                .color(color),
+        );
     }
 
     pub(super) fn refresh_done_file_lookup(&mut self) {

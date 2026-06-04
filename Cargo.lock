@@ -3857,6 +3857,7 @@ dependencies = [
  "egui_material_icons",
  "futures-util",
  "image",
+ "libc",
  "notify-rust",
  "once_cell",
  "opener",

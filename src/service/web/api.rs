@@ -52,6 +52,15 @@ fn expected_token(st: &ApiState) -> String {
 }
 
 #[derive(Serialize)]
+struct DiskSpaceJson {
+    available_bytes: u64,
+    total_bytes: u64,
+    volume_label: Option<String>,
+    percent_free: f64,
+    level: &'static str,
+}
+
+#[derive(Serialize)]
 struct StatusResponse {
     version: &'static str,
     downloads_paused: bool,
@@ -62,6 +71,7 @@ struct StatusResponse {
     shutdown_pending: bool,
     status: StatusCountsJson,
     tools: serde_json::Value,
+    output_disk_space: Option<DiskSpaceJson>,
 }
 
 #[derive(Serialize)]
@@ -191,8 +201,26 @@ pub fn api_router(state: ApiState) -> Router {
         .fallback_service(assets::static_router())
 }
 
+fn disk_space_json(output_dir: &str) -> Option<DiskSpaceJson> {
+    let space = crate::disk_space::query_disk_space(output_dir)?;
+    let level = match space.level() {
+        crate::disk_space::DiskSpaceLevel::Ok => "ok",
+        crate::disk_space::DiskSpaceLevel::Low => "low",
+        crate::disk_space::DiskSpaceLevel::Critical => "critical",
+    };
+    let percent_free = space.percent_free();
+    Some(DiskSpaceJson {
+        available_bytes: space.available_bytes,
+        total_bytes: space.total_bytes,
+        volume_label: space.volume_label,
+        percent_free,
+        level,
+    })
+}
+
 async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
     let c = st.core.lock();
+    let output_dir = c.effective_output_dir();
     Json(StatusResponse {
         version: crate::pkg_version::VERSION,
         downloads_paused: c.downloads_paused,
@@ -210,6 +238,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             failed: c.status_failed,
         },
         tools: c.tools_status_json(),
+        output_disk_space: disk_space_json(&output_dir),
     })
 }
 

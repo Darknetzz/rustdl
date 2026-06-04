@@ -541,7 +541,7 @@ impl DownloadCore {
         app_state::item_has_redownload_target(item)
     }
 
-    fn effective_output_dir(&self) -> String {
+    pub(crate) fn effective_output_dir(&self) -> String {
         let trimmed = self.output_dir.trim();
         if trimmed.is_empty() {
             self.settings.output_dir.trim().to_owned()

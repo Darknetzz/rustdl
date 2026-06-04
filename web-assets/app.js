@@ -93,6 +93,7 @@ async function refreshStatus() {
   statusFlags.shutdown_pending = !!data.shutdown_pending;
   if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
+  updateSettingsOutputDiskHint(data.output_disk_space);
   updateQuitButtonState();
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
@@ -180,6 +181,44 @@ function renderStatusSummary(data) {
     el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${count} ${label}`;
     root.appendChild(el);
   }
+
+  appendOutputDiskSpaceBadge(root, data.output_disk_space);
+}
+
+function updateSettingsOutputDiskHint(disk) {
+  const el = document.getElementById("settings-output-disk");
+  if (!el) return;
+  if (!disk || disk.total_bytes == null) {
+    el.classList.add("hidden");
+    el.textContent = "";
+    return;
+  }
+  const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
+  const pct =
+    disk.percent_free != null && isFinite(disk.percent_free)
+      ? ` · ${Math.round(disk.percent_free)}% free`
+      : "";
+  el.textContent = `Destination disk${vol}: ${formatBytes(
+    disk.available_bytes
+  )} free / ${formatBytes(disk.total_bytes)} total${pct}`;
+  el.classList.remove("hidden");
+}
+
+function appendOutputDiskSpaceBadge(root, disk) {
+  if (!disk || disk.total_bytes == null) return;
+  const el = document.createElement("span");
+  const level = disk.level || "ok";
+  el.className = `status-badge disk-space disk-space-${level}`;
+  const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
+  const pct =
+    disk.percent_free != null && isFinite(disk.percent_free)
+      ? ` · ${Math.round(disk.percent_free)}% free`
+      : "";
+  el.title = "Free and total space on the output folder volume";
+  el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${formatBytes(
+    disk.available_bytes
+  )} / ${formatBytes(disk.total_bytes)}${pct}`;
+  root.appendChild(el);
 }
 
 function collectUrlsFromInput() {

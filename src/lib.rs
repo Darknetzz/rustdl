@@ -10,6 +10,7 @@ pub mod av1_state;
 pub mod av1_transcode;
 pub mod cli;
 pub mod config;
+pub mod disk_space;
 pub mod external_tools;
 pub mod models;
 pub mod pkg_version;
