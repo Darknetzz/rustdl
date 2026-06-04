@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar, left_button_row, prepare_scroll_content, set_row_width, with_full_width};
+use crate::app_ui::{button_group, button_toolbar, draw_mode_nav_bar, left_button_row, prepare_scroll_content, with_full_width};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -137,78 +137,13 @@ impl eframe::App for PydlApp {
                         });
                     });
                 }
-                let mut nav_frame = egui::Frame::group(ui.style());
-                nav_frame.fill = Color32::from_rgb(28, 32, 38);
-                nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
-                nav_frame.rounding = egui::Rounding::same(8.0);
-                nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
-                with_full_width(ui, |ui| {
-                    nav_frame.show(ui, |ui| {
-                        let inner_w = ui.available_width();
-                        set_row_width(ui, inner_w);
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(inner_w, 34.0),
-                            egui::Layout::left_to_right(egui::Align::Center),
-                            |ui| {
-                                ui.spacing_mut().item_spacing.x = 0.0;
-                                let half = inner_w * 0.5;
-                                let btn_sz = egui::vec2(half, 34.0);
-                                let dl_active = !self.av1_mode;
-                                let av1_active = self.av1_mode;
-                                let dl = egui::Button::new(
-                                    RichText::new(format!("{} Downloader", ui_icons::NAV_DOWNLOADER))
-                                        .strong()
-                                        .color(if dl_active {
-                                            Color32::from_rgb(10, 32, 10)
-                                        } else {
-                                            Color32::from_rgb(210, 220, 235)
-                                        }),
-                                )
-                                .fill(if dl_active {
-                                    Color32::from_rgb(152, 255, 152)
-                                } else {
-                                    Color32::from_rgb(44, 52, 64)
-                                })
-                                .stroke(egui::Stroke::new(
-                                    1.0,
-                                    if dl_active {
-                                        Color32::from_rgb(80, 190, 80)
-                                    } else {
-                                        Color32::from_rgb(88, 100, 116)
-                                    },
-                                ));
-                                if ui.add_sized(btn_sz, dl).clicked() {
-                                    self.set_app_mode(false);
-                                }
-                                let av1 = egui::Button::new(
-                                    RichText::new(format!("{} AV1 Converter", ui_icons::NAV_AV1))
-                                        .strong()
-                                        .color(if av1_active {
-                                            Color32::from_rgb(45, 27, 0)
-                                        } else {
-                                            Color32::from_rgb(210, 220, 235)
-                                        }),
-                                )
-                                .fill(if av1_active {
-                                    Color32::from_rgb(255, 190, 90)
-                                } else {
-                                    Color32::from_rgb(44, 52, 64)
-                                })
-                                .stroke(egui::Stroke::new(
-                                    1.0,
-                                    if av1_active {
-                                        Color32::from_rgb(245, 154, 35)
-                                    } else {
-                                        Color32::from_rgb(88, 100, 116)
-                                    },
-                                ));
-                                if ui.add_sized(btn_sz, av1).clicked() {
-                                    self.set_app_mode(true);
-                                }
-                            },
-                        );
-                    });
-                });
+                let (dl_nav, av1_nav) = draw_mode_nav_bar(ui, !self.av1_mode, self.av1_mode);
+                if dl_nav {
+                    self.set_app_mode(false);
+                }
+                if av1_nav {
+                    self.set_app_mode(true);
+                }
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
                     ui.colored_label(
                         LOG_COLOR_WARN,
@@ -235,6 +170,7 @@ impl eframe::App for PydlApp {
                     self.settings.compact_cards,
                 );
 
+                let scroll_w = ui.available_width();
                 let mut dl_controls_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_downloader_controls")
                     .auto_shrink([false, false]);
@@ -242,7 +178,7 @@ impl eframe::App for PydlApp {
                     dl_controls_scroll = dl_controls_scroll.max_height(max_h);
                 }
                 dl_controls_scroll.show(ui, |ui| {
-                        prepare_scroll_content(ui);
+                        prepare_scroll_content(ui, scroll_w);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -729,7 +665,9 @@ impl eframe::App for PydlApp {
 impl PydlApp {
     /// Title on the left; tool status and window actions on one row, top-aligned, inset from the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
+        let header_w = ui.available_width();
         ui.horizontal(|ui| {
+            ui.set_width(header_w);
             ui.horizontal(|ui| {
                 let sz = egui::vec2(40.0, 40.0);
                 let img = ui.add(

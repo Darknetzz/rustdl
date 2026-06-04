@@ -337,8 +337,100 @@ pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
 }
 
 /// Call at the start of [`egui::ScrollArea`] content so inner controls use the viewport width.
-pub fn prepare_scroll_content(ui: &mut egui::Ui) {
-    set_row_width(ui, ui.max_rect().width());
+pub fn prepare_scroll_content(ui: &mut egui::Ui, viewport_width: f32) {
+    let w = viewport_width.max(ui.max_rect().width()).max(0.0);
+    if w > 0.0 {
+        set_row_width(ui, w);
+    }
+}
+
+/// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
+pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
+    let mut dl_clicked = false;
+    let mut av1_clicked = false;
+    let add_mode_tab = |ui: &mut egui::Ui,
+                            rect: egui::Rect,
+                            label: String,
+                            active: bool,
+                            fill_active: Color32,
+                            fill_inactive: Color32,
+                            text_active: Color32,
+                            text_inactive: Color32,
+                            stroke_active: Color32,
+                            stroke_inactive: Color32| {
+        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+            ui.add(
+                egui::Button::new(
+                    RichText::new(label)
+                        .strong()
+                        .color(if active {
+                            text_active
+                        } else {
+                            text_inactive
+                        }),
+                )
+                .fill(if active { fill_active } else { fill_inactive })
+                .stroke(egui::Stroke::new(
+                    1.0,
+                    if active {
+                        stroke_active
+                    } else {
+                        stroke_inactive
+                    },
+                ))
+                .min_size(rect.size()),
+            )
+        })
+        .inner
+        .clicked()
+    };
+    with_full_width(ui, |ui| {
+        let width = ui.available_width();
+        let mut nav_frame = egui::Frame::group(ui.style());
+        nav_frame.fill = Color32::from_rgb(28, 32, 38);
+        nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
+        nav_frame.rounding = egui::Rounding::same(8.0);
+        nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
+        nav_frame.show(ui, |ui| {
+            set_row_width(ui, width);
+            let row_w = ui.available_width();
+            let tab_h = 34.0;
+            let (row_rect, _) =
+                ui.allocate_exact_size(egui::vec2(row_w, tab_h), egui::Sense::hover());
+            let half = row_w * 0.5;
+            let dl_rect = egui::Rect::from_min_size(row_rect.min, egui::vec2(half, tab_h));
+            let av1_rect = egui::Rect::from_min_size(
+                row_rect.min + egui::vec2(half, 0.0),
+                egui::vec2(half, tab_h),
+            );
+
+            dl_clicked = add_mode_tab(
+                ui,
+                dl_rect,
+                format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER),
+                dl_active,
+                Color32::from_rgb(152, 255, 152),
+                Color32::from_rgb(44, 52, 64),
+                Color32::from_rgb(10, 32, 10),
+                Color32::from_rgb(210, 220, 235),
+                Color32::from_rgb(80, 190, 80),
+                Color32::from_rgb(88, 100, 116),
+            );
+            av1_clicked = add_mode_tab(
+                ui,
+                av1_rect,
+                format!("{} AV1 Converter", crate::ui_icons::NAV_AV1),
+                av1_active,
+                Color32::from_rgb(255, 190, 90),
+                Color32::from_rgb(44, 52, 64),
+                Color32::from_rgb(45, 27, 0),
+                Color32::from_rgb(210, 220, 235),
+                Color32::from_rgb(245, 154, 35),
+                Color32::from_rgb(88, 100, 116),
+            );
+        });
+    });
+    (dl_clicked, av1_clicked)
 }
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
