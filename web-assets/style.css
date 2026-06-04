@@ -639,6 +639,12 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   color: var(--failed);
 }
 
+.btn-menu-item .material-icons {
+  font-size: 0.95rem;
+  vertical-align: -2px;
+  margin-right: 0.15rem;
+}
+
 .card-actions .btn-group > .btn-menu:first-child .btn-menu-trigger {
   border-top-left-radius: 6px;
   border-bottom-left-radius: 6px;

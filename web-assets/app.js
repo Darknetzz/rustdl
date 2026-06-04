@@ -965,24 +965,28 @@ async function clearQueue(filter, confirmMessage) {
 const QUEUE_CLEAR_ACTIONS = [
   {
     filter: "finished",
+    icon: ICON.clear,
     label: "Clear finished",
     title: "Remove done and failed rows",
     confirm: "Remove all done and failed items from the queue?",
   },
   {
     filter: "done",
+    icon: ICON.delete,
     label: "Clear done",
     title: "Remove done rows only",
     confirm: "Remove all done items from the queue?",
   },
   {
     filter: "failed",
+    icon: ICON.delete,
     label: "Clear failed",
     title: "Remove failed rows only",
     confirm: "Remove all failed items from the queue?",
   },
   {
     filter: "inactive",
+    icon: ICON.removeCircleOutline,
     label: "Clear inactive",
     title: "Remove all rows except queued or downloading",
     confirm:
@@ -990,6 +994,7 @@ const QUEUE_CLEAR_ACTIONS = [
   },
   {
     filter: "all",
+    icon: ICON.deleteForever,
     label: "Clear all",
     title: "Remove every row (cancels active downloads)",
     confirm:
@@ -1016,7 +1021,7 @@ function mountClearQueueMenu(container) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn-menu-item" + (action.danger ? " danger" : "");
-    btn.textContent = action.label;
+    setButtonLabel(btn, action.icon, action.label);
     btn.title = action.title;
     btn.onclick = (e) => {
       e.preventDefault();

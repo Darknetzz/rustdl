@@ -19,6 +19,7 @@ const ICON = {
   playCircle: "play_circle",
   refresh: "sync",
   remove: "delete",
+  removeCircleOutline: "remove_circle_outline",
   save: "save",
   search: "search",
   settings: "settings",
