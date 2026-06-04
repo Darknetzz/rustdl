@@ -7,7 +7,7 @@ description = "Desktop GUI for yt-dlp (egui)"
 license = "MIT"
 readme = "README.md"
 # Crate metadata; in-app update check reads this URL when present.
-repository = "https://github.com/Darknetzz/code"
+repository = "https://github.com/Darknetzz/rustdl"
 
 [build-dependencies]
 chrono = { version = "0.4", default-features = false, features = ["now"] }

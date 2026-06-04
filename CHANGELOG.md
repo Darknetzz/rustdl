@@ -58,6 +58,6 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[Unreleased]: https://github.com/Darknetzz/code/compare/rustdl-v0.1.1...main/Rust/rustdl
-[0.1.1]: https://github.com/Darknetzz/code/compare/rustdl-v0.1.0...rustdl-v0.1.1
-[0.1.0]: https://github.com/Darknetzz/code/tree/rustdl-v0.1.0/Rust/rustdl
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...main
+[0.1.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.0...rustdl-v0.1.1
+[0.1.0]: https://github.com/Darknetzz/rustdl/tree/rustdl-v0.1.0

@@ -6,7 +6,7 @@
 
 <p align="center">Desktop GUI for <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> built in Rust with <code>eframe/egui</code>.</p>
 
-<p align="center">Source: <a href="https://github.com/Darknetzz/code">github.com/Darknetzz/code</a> (this crate lives at <code>Rust/rustdl/</code> in that repo).</p>
+<p align="center">Source: <a href="https://github.com/Darknetzz/rustdl">github.com/Darknetzz/rustdl</a> · mirror: <a href="https://gitlab.roste.org/kriss/rustdl">gitlab.roste.org/kriss/rustdl</a></p>
 
 ## Requirements
 
@@ -40,21 +40,15 @@ cargo run -- --web-only                    # bind address from Settings → Shar
 
 On first run without a saved API token, rustdl generates one and prints it. Open the local URL from another device on your LAN with that token (same security notes as the desktop LAN web UI).
 
-From the monorepo root (`code`):
-
-```bash
-cargo run --manifest-path Rust/rustdl/Cargo.toml
-```
-
 ## Versioning and changelog
 
 - App version comes from `Cargo.toml` (shown in **About** and `rustdl --version`).
 - User-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/) style).
-- For a release: bump `version` in `Cargo.toml`, finalize `CHANGELOG.md`, commit, and push tag `rustdl-vX.Y.Z` (see `.github/workflows/rustdl-release.yml`).
+- For a release: bump `version` in `Cargo.toml`, finalize `CHANGELOG.md`, commit, and push tag `rustdl-vX.Y.Z` (see `.github/workflows/release.yml`).
 
 ## Development checks
 
-Run these before opening a PR (from `Rust/rustdl/`, or prefix each with `cargo ... --manifest-path Rust/rustdl/Cargo.toml` from the monorepo root):
+Run these before opening a PR:
 
 ```bash
 cargo fmt --all -- --check
