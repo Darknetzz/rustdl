@@ -329,31 +329,31 @@ pub fn compute_main_column_split(
     }
 }
 
-/// Pin scroll content to the viewport width (no horizontal overflow / stale scroll offset).
+/// Pin scroll content to the viewport width (no horizontal overflow).
 pub fn prepare_scroll_content(ui: &mut egui::Ui) {
-    let w = ui.available_width();
-    ui.set_width(w);
-    ui.set_max_width(w);
+    ui.set_width(ui.available_width());
 }
 
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
-    with_full_width(ui, |ui| {
-        let width = ui.available_width();
+    let outer_w = ui.available_width();
+    ui.scope(|ui| {
+        ui.set_width(outer_w);
         let mut nav_frame = egui::Frame::group(ui.style());
         nav_frame.fill = Color32::from_rgb(28, 32, 38);
         nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
         nav_frame.rounding = egui::Rounding::same(8.0);
         nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
         nav_frame.show(ui, |ui| {
-            ui.set_width(width);
             let row_w = ui.available_width();
-            let gap = ui.spacing().item_spacing.x;
-            let btn_w = ((row_w - gap) * 0.5).max(120.0);
+            ui.set_width(row_w);
             ui.horizontal(|ui| {
                 ui.set_width(row_w);
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let half = row_w * 0.5;
+                let btn_h = 34.0;
                 let dl = egui::Button::new(
                     RichText::new(format!("{} Downloader", crate::ui_icons::NAV_DOWNLOADER))
                         .strong()
@@ -363,7 +363,6 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                             Color32::from_rgb(210, 220, 235)
                         }),
                 )
-                .min_size(egui::vec2(btn_w, 34.0))
                 .fill(if dl_active {
                     Color32::from_rgb(152, 255, 152)
                 } else {
@@ -377,7 +376,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                         Color32::from_rgb(88, 100, 116)
                     },
                 ));
-                if ui.add(dl).clicked() {
+                if ui.add_sized([half, btn_h], dl).clicked() {
                     dl_clicked = true;
                 }
                 let av1 = egui::Button::new(
@@ -389,7 +388,6 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                             Color32::from_rgb(210, 220, 235)
                         }),
                 )
-                .min_size(egui::vec2(btn_w, 34.0))
                 .fill(if av1_active {
                     Color32::from_rgb(255, 190, 90)
                 } else {
@@ -403,7 +401,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
                         Color32::from_rgb(88, 100, 116)
                     },
                 ));
-                if ui.add(av1).clicked() {
+                if ui.add_sized([half, btn_h], av1).clicked() {
                     av1_clicked = true;
                 }
             });

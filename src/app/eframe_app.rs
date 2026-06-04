@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar, draw_mode_nav_bar, left_button_row, prepare_scroll_content};
+use crate::app_ui::{button_group, button_toolbar, danger_button, draw_mode_nav_bar, left_button_row, prepare_scroll_content};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -64,9 +64,7 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                let panel_w = ui.available_width();
-                ui.set_width(panel_w);
-                ui.set_max_width(panel_w);
+                ui.set_width(ui.available_width());
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -692,6 +690,9 @@ impl PydlApp {
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
                     ui.add_space(HEADER_RIGHT_INSET);
+                    if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked() {
+                        self.open_exit_confirm();
+                    }
                     let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
                         format!("{} Videos", ui_icons::VIDEOS)
                     } else {
@@ -722,9 +723,6 @@ impl PydlApp {
                             .clicked()
                         {
                             self.toggle_videos_panel();
-                        }
-                        if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                            self.open_exit_confirm();
                         }
                     });
                     ui.separator();

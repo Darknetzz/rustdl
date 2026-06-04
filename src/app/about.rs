@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
+use crate::app_ui::{button_group, left_button_row};
 
 use crate::pkg_version;
 use crate::ui_icons;
@@ -61,25 +61,30 @@ impl PydlApp {
                 });
                 ui.separator();
                 ui.label(RichText::new("Updates").strong());
-                button_toolbar_wrapped(ui, |ui| {
-                    button_group(ui, "about_updates", |g| {
-                        if g.secondary(
-                            &format!("{} Check for updates", ui_icons::UPDATE_CHECK),
-                            !self.update_check_in_progress,
-                        )
-                        .clicked()
-                        {
-                            self.start_update_check();
-                        }
-                        if self.update_has_update
-                            && g.success(
-                                &format!("{} Update now (open release page)", ui_icons::UPDATE_OPEN),
-                                true,
+                ui.horizontal(|ui| {
+                    left_button_row(ui, |ui| {
+                        button_group(ui, "about_updates", |g| {
+                            if g.secondary(
+                                &format!("{} Check for updates", ui_icons::UPDATE_CHECK),
+                                !self.update_check_in_progress,
                             )
                             .clicked()
-                        {
-                            self.open_release_url();
-                        }
+                            {
+                                self.start_update_check();
+                            }
+                            if self.update_has_update
+                                && g.success(
+                                    &format!(
+                                        "{} Update now (open release page)",
+                                        ui_icons::UPDATE_OPEN
+                                    ),
+                                    true,
+                                )
+                                .clicked()
+                            {
+                                self.open_release_url();
+                            }
+                        });
                     });
                     if self.update_check_in_progress {
                         ui.spinner();
