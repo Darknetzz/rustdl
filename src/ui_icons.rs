@@ -59,3 +59,12 @@ pub const PLAY: &str = m::ICON_PLAY_ARROW;
 pub const ARROW_FORWARD: &str = m::ICON_ARROW_FORWARD;
 pub const REVEAL_FOLDER: &str = m::ICON_LAUNCH;
 pub const CARD_DELETE: &str = m::ICON_DELETE;
+
+/// Per-video status chip glyphs (aligned with web `statusChipIcon`).
+pub const STATUS_RESOLVING: &str = m::ICON_SEARCH;
+pub const STATUS_IDLE: &str = m::ICON_HOURGLASS_EMPTY;
+pub const STATUS_QUEUED: &str = m::ICON_SCHEDULE;
+pub const STATUS_DOWNLOADING: &str = m::ICON_DOWNLOAD;
+pub const STATUS_DONE: &str = m::ICON_CHECK;
+pub const STATUS_FAILED: &str = m::ICON_CLOSE;
+pub const STATUS_SKIPPED: &str = m::ICON_BLOCK;

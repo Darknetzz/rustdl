@@ -14,6 +14,30 @@ pub fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
 }
 
+/// True when the input file is already AV1 (matches ffprobe / yt-dlp style names).
+pub fn is_av1_video_codec(codec: &str) -> bool {
+    let c = codec.trim().to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
+    c == "av1" || c.contains("av01")
+}
+
+/// Pending row that will be skipped at encode time (already AV1, re-encode disabled, AV1 output).
+pub fn av1_item_will_skip_already_av1(
+    item: &Av1QueueItem,
+    reencode_av1: bool,
+    output_encoder_codec: &str,
+) -> bool {
+    if reencode_av1 || output_encoder_codec != "av1" {
+        return false;
+    }
+    if !matches!(
+        item.status,
+        ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Resolving
+    ) {
+        return false;
+    }
+    is_av1_video_codec(&item.video_codec)
+}
+
 /// Short status label for an AV1 queue row.
 pub fn av1_item_status_label(item: &Av1QueueItem) -> &'static str {
     match item.status {
@@ -180,6 +204,18 @@ pub fn format_av1_progress_detail(
 mod tests {
     use super::*;
     use crate::models::Av1QueueItem;
+
+    #[test]
+    fn will_skip_already_av1_when_reencode_disabled() {
+        let item = Av1QueueItem {
+            status: ItemStatus::Idle,
+            video_codec: "av1".to_owned(),
+            ..Default::default()
+        };
+        assert!(av1_item_will_skip_already_av1(&item, false, "av1"));
+        assert!(!av1_item_will_skip_already_av1(&item, true, "av1"));
+        assert!(!av1_item_will_skip_already_av1(&item, false, "hevc"));
+    }
 
     #[test]
     fn skipped_detection_matches_skipped_prefix() {

@@ -69,6 +69,7 @@ struct StatusResponse {
     auto_add_pasted_urls: bool,
     auto_start_downloads: bool,
     shutdown_pending: bool,
+    av1_running: bool,
     status: StatusCountsJson,
     tools: serde_json::Value,
     output_disk_space: Option<DiskSpaceJson>,
@@ -225,6 +226,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         auto_add_pasted_urls: c.settings.auto_add_pasted_urls,
         auto_start_downloads: c.settings.auto_start_downloads,
         shutdown_pending: c.shutdown_pending,
+        av1_running: c.av1_running,
         status: StatusCountsJson {
             resolving: c.status_resolving,
             ready: c.status_ready,

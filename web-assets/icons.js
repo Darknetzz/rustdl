@@ -27,7 +27,39 @@ const ICON = {
   stop: "stop",
   tune: "tune",
   upload: "upload",
+  check: "check",
+  schedule: "schedule",
+  hourglassEmpty: "hourglass_empty",
+  block: "block",
 };
+
+function statusChipIcon(slug) {
+  switch (slug) {
+    case "resolving":
+      return ICON.search;
+    case "idle":
+      return ICON.hourglassEmpty;
+    case "queued":
+      return ICON.schedule;
+    case "downloading":
+      return ICON.download;
+    case "done":
+      return ICON.check;
+    case "failed":
+      return ICON.close;
+    case "skipped":
+      return ICON.block;
+    default:
+      return ICON.hourglassEmpty;
+  }
+}
+
+/** Status pill on video cards: [icon] label */
+function setStatusChip(chip, slug, label) {
+  chip.className = `status-chip status-${slug}`;
+  const text = label || "Idle";
+  chip.replaceChildren(iconSpan(statusChipIcon(slug)), document.createTextNode(` ${text}`));
+}
 
 function iconSpan(name) {
   const el = document.createElement("span");

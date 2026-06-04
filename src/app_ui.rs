@@ -5,6 +5,7 @@ use eframe::egui::{Color32, Response, RichText};
 
 use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
+use crate::ui_icons;
 
 /// Text color for the free-space figure (green → amber → red by [`DiskSpaceLevel`]).
 pub fn disk_space_free_color(level: DiskSpaceLevel) -> Color32 {
@@ -57,8 +58,32 @@ pub fn status_dot_with_label(
     .response
 }
 
+pub fn status_chip_icon(status: ItemStatus) -> &'static str {
+    match status {
+        ItemStatus::Resolving => ui_icons::STATUS_RESOLVING,
+        ItemStatus::Idle => ui_icons::STATUS_IDLE,
+        ItemStatus::Queued => ui_icons::STATUS_QUEUED,
+        ItemStatus::Downloading => ui_icons::STATUS_DOWNLOADING,
+        ItemStatus::Done => ui_icons::STATUS_DONE,
+        ItemStatus::Failed => ui_icons::STATUS_FAILED,
+    }
+}
+
+/// Label color on status chips (matches web `.status-chip` light backgrounds).
+pub fn status_chip_text_color(status: ItemStatus) -> Color32 {
+    match status {
+        ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Done => {
+            Color32::from_rgb(26, 26, 26)
+        }
+        _ => Color32::WHITE,
+    }
+}
+
 pub fn draw_status_chip(ui: &mut egui::Ui, status: ItemStatus) {
-    let text = RichText::new(status.as_str()).small().color(Color32::WHITE);
+    let label = format!("{} {}", status_chip_icon(status), status.as_str());
+    let text = RichText::new(label)
+        .small()
+        .color(status_chip_text_color(status));
     let fill = status_color(status);
     egui::Frame::none()
         .fill(fill)
@@ -79,6 +104,7 @@ pub enum MetaBadgeKind {
     Bitrate,
     SizePreset,
     ShrinkPercent,
+    Av1WillSkip,
 }
 
 fn parse_resolution_height(label: &str) -> u32 {
@@ -235,6 +261,10 @@ fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
         ),
         MetaBadgeKind::SizePreset => size_preset_badge_colors(label),
         MetaBadgeKind::ShrinkPercent => shrink_percent_badge_colors(label),
+        MetaBadgeKind::Av1WillSkip => (
+            Color32::from_rgb(120, 70, 20),
+            Color32::from_rgb(255, 220, 180),
+        ),
     }
 }
 

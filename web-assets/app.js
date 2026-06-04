@@ -15,6 +15,8 @@ let shuttingDown = false;
 let refreshIntervalId = null;
 /** @type {object | null} */
 let lastStatusPayload = null;
+/** @type {object | null} */
+let lastAv1Payload = null;
 
 let cachedHasYtDlp = false;
 
@@ -93,11 +95,106 @@ async function refreshStatus() {
   statusFlags.shutdown_pending = !!data.shutdown_pending;
   if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
+  renderNavbarStatus();
   updateSettingsOutputDiskHint(data.output_disk_space);
   updateQuitButtonState();
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
   updateDownloadControlButtons(data);
+}
+
+/**
+ * @returns {{ slug: string, label: string, pulse: boolean, title: string }}
+ */
+function deriveNavbarStatus(statusData, av1Data) {
+  const s = statusData?.status || {};
+  const resolving = s.resolving || 0;
+  const queued = s.queued || 0;
+  const active = s.active || 0;
+  const ready = s.ready || 0;
+  const paused = !!statusData?.downloads_paused;
+  const queueRunning = statusData?.queue_running ?? 0;
+  const av1Running = !!statusData?.av1_running || !!av1Data?.running;
+  const av1Resolving =
+    av1Data?.items?.some(
+      (it) => it.status === "Resolving" || it.probing
+    ) ?? false;
+
+  if (statusFlags.shutdown_pending || shuttingDown || statusData?.shutdown_pending) {
+    return {
+      slug: "shutdown",
+      label: "Shutting down",
+      pulse: true,
+      title: "rustdl is saving state and exiting",
+    };
+  }
+  if (statusFlags.add_in_progress) {
+    return {
+      slug: "adding",
+      label: "Adding URLs",
+      pulse: true,
+      title: "Fetching metadata for new URLs",
+    };
+  }
+  if (av1Running) {
+    return {
+      slug: "converting",
+      label: "Converting",
+      pulse: true,
+      title: "AV1 batch encode in progress",
+    };
+  }
+  if (active > 0 || (queueRunning > 0 && !paused)) {
+    return {
+      slug: "downloading",
+      label: "Downloading",
+      pulse: true,
+      title: `${active} active · ${queueRunning} worker slot(s)`,
+    };
+  }
+  if (resolving > 0 || av1Resolving) {
+    return {
+      slug: "resolving",
+      label: "Resolving",
+      pulse: true,
+      title: "Probing media metadata",
+    };
+  }
+  if (paused && (queued > 0 || active > 0 || ready > 0)) {
+    return {
+      slug: "paused",
+      label: "Paused",
+      pulse: false,
+      title: "Downloads paused — resume to continue",
+    };
+  }
+  if (queued > 0) {
+    return {
+      slug: "queued",
+      label: "Queued",
+      pulse: false,
+      title: `${queued} item(s) waiting to download`,
+    };
+  }
+  return {
+    slug: "idle",
+    label: "Idle",
+    pulse: false,
+    title: "No active downloads or conversions",
+  };
+}
+
+function renderNavbarStatus() {
+  const root = document.getElementById("navbar-status");
+  if (!root) return;
+  const info = deriveNavbarStatus(lastStatusPayload, lastAv1Payload);
+  root.className =
+    "navbar-status navbar-status-" +
+    info.slug +
+    (info.pulse ? " navbar-status-pulse" : "");
+  root.title = info.title;
+  const label = root.querySelector(".navbar-status-label");
+  if (label) label.textContent = info.label;
 }
 
 function updateDownloadControlButtons(data) {
@@ -778,8 +875,7 @@ function renderQueueCard(item, settings) {
     badges.appendChild(sizeBadge);
   }
   const chip = document.createElement("span");
-  chip.className = `status-chip status-${slug}`;
-  chip.textContent = item.status || "Idle";
+  setStatusChip(chip, slug, item.status || "Idle");
   badges.appendChild(chip);
   body.appendChild(badges);
 
@@ -830,8 +926,7 @@ function renderQueueCardListRow(item) {
   const body = document.createElement("div");
   body.className = "card-body";
   const chip = document.createElement("span");
-  chip.className = `status-chip status-${slug}`;
-  chip.textContent = item.status;
+  setStatusChip(chip, slug, item.status);
   const title = document.createElement("span");
   title.className = "card-title";
   title.style.display = "inline";
@@ -1530,30 +1625,96 @@ function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
   });
 }
 
+function parseResolutionHeight(label) {
+  const s = String(label);
+  const x = s.split("x");
+  if (x.length === 2) {
+    const h = parseInt(x[1].trim(), 10);
+    if (!Number.isNaN(h)) return h;
+  }
+  const p = s.trim().match(/^(\d+)p$/i);
+  if (p) return parseInt(p[1], 10);
+  const w = s.trim().match(/^(\d+)w$/i);
+  if (w) return parseInt(w[1], 10);
+  return 0;
+}
+
+function parseFpsValue(label) {
+  const n = parseFloat(String(label).split(/\s+/)[0]);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function metaBadgeClasses(kind, label) {
+  const classes = ["meta-badge", `meta-badge-${kind}`];
+  const text = String(label || "");
+  if (kind === "codec") {
+    const c = text.toLowerCase().replace(/[.\- _]/g, "");
+    if (c.includes("av1")) classes.push("meta-badge-codec-av1");
+    else if (c.includes("hevc") || c.includes("h265") || c.includes("265"))
+      classes.push("meta-badge-codec-hevc");
+    else if (c.includes("h264") || c.includes("avc") || c.includes("264"))
+      classes.push("meta-badge-codec-h264");
+    else if (c.includes("vp9")) classes.push("meta-badge-codec-vp9");
+    else classes.push("meta-badge-codec-other");
+  } else if (kind === "resolution") {
+    const h = parseResolutionHeight(text);
+    if (h >= 2160) classes.push("meta-badge-res-4k");
+    else if (h >= 1080) classes.push("meta-badge-res-1080");
+    else if (h >= 720) classes.push("meta-badge-res-720");
+    else if (h >= 480) classes.push("meta-badge-res-480");
+    else classes.push("meta-badge-res-other");
+  } else if (kind === "fps") {
+    const fps = parseFpsValue(text);
+    if (fps >= 50) classes.push("meta-badge-fps-high");
+    else if (fps >= 28) classes.push("meta-badge-fps-mid");
+    else if (fps >= 23) classes.push("meta-badge-fps-cine");
+    else classes.push("meta-badge-fps-other");
+  } else if (kind === "size") {
+    classes.push("meta-badge-size");
+  } else if (kind === "bitrate") {
+    classes.push("meta-badge-bitrate");
+  } else if (kind === "skip") {
+    classes.push("meta-badge-skip");
+  }
+  return classes.join(" ");
+}
+
+function appendMetaBadge(container, kind, text) {
+  if (!text) return;
+  const b = document.createElement("span");
+  b.className = metaBadgeClasses(kind, text);
+  b.textContent = text;
+  container.appendChild(b);
+}
+
+function av1WillSkipNotice() {
+  const el = document.createElement("p");
+  el.className = "av1-will-skip-notice";
+  el.textContent = "Will skip · already AV1 (re-encode disabled)";
+  return el;
+}
+
 function av1MediaBadges(item) {
   const badges = document.createElement("div");
   badges.className = "card-badges";
   if (item.probing) {
-    const b = document.createElement("span");
-    b.className = "meta-badge";
-    b.textContent = "Probing…";
-    badges.appendChild(b);
+    appendMetaBadge(badges, "other", "Probing…");
     return badges;
   }
-  const add = (text) => {
-    if (!text) return;
-    const b = document.createElement("span");
-    b.className = "meta-badge";
-    b.textContent = text;
-    badges.appendChild(b);
-  };
-  if (item.video_codec) add(String(item.video_codec).toUpperCase());
-  if (item.width && item.height) add(`${item.width}×${item.height}`);
-  if (item.fps) add(`${Number(item.fps).toFixed(2)} fps`);
-  if (item.input_bytes) add(formatBytes(item.input_bytes));
+  if (item.video_codec) appendMetaBadge(badges, "codec", String(item.video_codec).toUpperCase());
+  if (item.width && item.height)
+    appendMetaBadge(badges, "resolution", `${item.width}×${item.height}`);
+  if (item.fps) appendMetaBadge(badges, "fps", `${Number(item.fps).toFixed(2)} fps`);
+  if (item.input_bytes) appendMetaBadge(badges, "size", formatBytes(item.input_bytes));
   if (item.bitrate_bps) {
     const bps = Number(item.bitrate_bps);
-    add(bps >= 1_000_000 ? `${(bps / 1_000_000).toFixed(2)} Mbps` : `${Math.round(bps / 1000)} kbps`);
+    appendMetaBadge(
+      badges,
+      "bitrate",
+      bps >= 1_000_000
+        ? `${(bps / 1_000_000).toFixed(2)} Mbps`
+        : `${Math.round(bps / 1000)} kbps`
+    );
   }
   return badges;
 }
@@ -1562,7 +1723,7 @@ function renderAv1Card(item, showThumbnails) {
   const slug = av1Slug(item);
   const active = slug === "downloading" || slug === "queued";
   const card = document.createElement("article");
-  card.className = "card";
+  card.className = "card" + (item.will_skip_av1 ? " av1-will-skip" : "");
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -1585,6 +1746,9 @@ function renderAv1Card(item, showThumbnails) {
   title.title = item.source_path || "";
   body.appendChild(title);
 
+  if (item.will_skip_av1) {
+    body.appendChild(av1WillSkipNotice());
+  }
   body.appendChild(av1MediaBadges(item));
 
   if (active) {
@@ -1616,8 +1780,7 @@ function renderAv1Card(item, showThumbnails) {
   const chipWrap = document.createElement("div");
   chipWrap.className = "card-actions";
   const chip = document.createElement("span");
-  chip.className = `status-chip status-${slug}`;
-  chip.textContent = item.status_label || item.status || "";
+  setStatusChip(chip, slug, item.status_label || item.status || "");
   chipWrap.appendChild(chip);
   card.appendChild(chipWrap);
 
@@ -1758,6 +1921,7 @@ async function refreshAv1() {
   } catch {
     return;
   }
+  lastAv1Payload = data;
   // Keep the textarea in sync with the server unless the user is editing it.
   const input = document.getElementById("av1-input");
   if (input && document.activeElement !== input) {
@@ -1765,6 +1929,7 @@ async function refreshAv1() {
   }
   renderAv1Encoder(data);
   renderAv1Summary(data);
+  renderNavbarStatus();
 
   const startBtn = document.getElementById("btn-av1-start");
   const cancelBtn = document.getElementById("btn-av1-cancel");

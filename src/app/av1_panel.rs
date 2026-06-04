@@ -8,7 +8,10 @@ use crate::app_ui::{
     status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
-use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
+use crate::av1_state::{
+    av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
+    compute_av1_batch_summary,
+};
 use crate::av1_transcode;
 use crate::models::{Av1QueueItem, ItemStatus};
 use crate::service::DownloadCore;
@@ -136,6 +139,10 @@ fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, th
         MetaBadgeKind::SizePreset,
         muted,
     );
+}
+
+fn draw_av1_will_skip_notice(ui: &mut egui::Ui) {
+    draw_meta_badge(ui, "Will skip · already AV1", MetaBadgeKind::Av1WillSkip);
 }
 
 fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, theme: &str) {
@@ -670,14 +677,30 @@ impl PydlApp {
         let theme = &self.settings.theme;
         let done = it.status == ItemStatus::Done && !av1_item_is_skipped(it);
         let item_color = av1_item_status_color(it);
+        let output_codec = self
+            .av1_encoder_choice
+            .as_ref()
+            .map(|enc| enc.codec)
+            .unwrap_or("av1");
+        let will_skip_av1 = av1_item_will_skip_already_av1(
+            it,
+            self.settings.av1_reencode_av1,
+            output_codec,
+        );
         let fill = if done {
             theme::done_card_fill(theme)
         } else {
             Color32::TRANSPARENT
         };
+        let stroke = if will_skip_av1 {
+            egui::Stroke::new(1.5, AV1_SKIPPED_COLOR)
+        } else {
+            egui::Stroke::NONE
+        };
 
         egui::Frame::none()
             .fill(fill)
+            .stroke(stroke)
             .inner_margin(egui::Margin::symmetric(8.0, 6.0))
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
@@ -737,6 +760,9 @@ impl PydlApp {
                         }
 
                         let probing = self.av1_media_inflight.contains(&it.item_id);
+                        if will_skip_av1 {
+                            draw_av1_will_skip_notice(ui);
+                        }
                         draw_av1_media_badges(ui, it, probing, theme);
 
                         draw_av1_path_line(ui, "in:", &it.source_path, theme);

@@ -8,7 +8,10 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
+use crate::av1_state::{
+    av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
+    compute_av1_batch_summary,
+};
 use crate::av1_transcode::{encoder_indicator_label, encoder_uses_hardware};
 use crate::models::Av1QueueItem;
 
@@ -20,6 +23,7 @@ struct Av1ItemView {
     item: Av1QueueItem,
     status_label: &'static str,
     skipped: bool,
+    will_skip_av1: bool,
     probing: bool,
 }
 
@@ -47,6 +51,7 @@ struct Av1QueueResponse {
     encoder: Option<Av1EncoderJson>,
     has_ffmpeg: bool,
     has_ffprobe: bool,
+    reencode_av1: bool,
     summary: Av1SummaryJson,
 }
 
@@ -73,12 +78,19 @@ async fn av1_queue(State(st): State<ApiState>) -> Json<Av1QueueResponse> {
     }
     c.refresh_av1_encoder_detection();
     let summary = compute_av1_batch_summary(&c.av1_items);
+    let output_codec = c
+        .av1_encoder_choice
+        .as_ref()
+        .map(|enc| enc.codec)
+        .unwrap_or("av1");
+    let reencode_av1 = c.settings.av1_reencode_av1;
     let items = c
         .av1_items
         .iter()
         .map(|item| Av1ItemView {
             status_label: av1_item_status_label(item),
             skipped: av1_item_is_skipped(item),
+            will_skip_av1: av1_item_will_skip_already_av1(item, reencode_av1, output_codec),
             probing: c.av1_media_inflight.contains(&item.item_id),
             item: item.clone(),
         })
@@ -99,6 +111,7 @@ async fn av1_queue(State(st): State<ApiState>) -> Json<Av1QueueResponse> {
         encoder,
         has_ffmpeg: c.has_ffmpeg,
         has_ffprobe: c.has_ffprobe,
+        reencode_av1,
         summary: Av1SummaryJson {
             completed: summary.completed,
             completed_input_bytes: summary.completed_input_bytes,
