@@ -77,8 +77,8 @@ impl PydlApp {
             });
     }
 
-    /// Dock/undock and show/hide for the queue window and activity log (same controls everywhere).
-    pub(super) fn draw_queue_and_log_controls(&mut self, ui: &mut egui::Ui) {
+    /// Dock/undock and show/hide for the video queue (videos window and docked panel only).
+    pub(super) fn draw_video_queue_controls(&mut self, ui: &mut egui::Ui) {
         let window_title = self.videos_window_title();
         button_toolbar_wrapped(ui, |ui| {
             button_group(ui, "queue_videos_controls", |g| {
@@ -130,6 +130,12 @@ impl PydlApp {
                     }
                 }
             });
+        });
+    }
+
+    /// Dock/undock and show/hide for the activity log (log window and docked log sections only).
+    pub(super) fn draw_log_controls(&mut self, ui: &mut egui::Ui) {
+        button_toolbar_wrapped(ui, |ui| {
             button_group(ui, "queue_logs_controls", |g| {
                 if !self.settings.logs_open {
                     if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
@@ -149,7 +155,7 @@ impl PydlApp {
                     };
                     if g.secondary(&log_dock_label, true)
                         .on_hover_text(
-                            "Dock the log under the queue in this window, or show it in a separate window",
+                            "Dock the log under the queue in the main window, or show it in a separate window",
                         )
                         .clicked()
                     {
@@ -178,7 +184,7 @@ impl PydlApp {
                 egui::vec2(tail_w.max(0.0), 0.0),
                 egui::Layout::right_to_left(egui::Align::Center),
                 |ui| {
-                    self.draw_queue_and_log_controls(ui);
+                    self.draw_video_queue_controls(ui);
                 },
             );
         });
@@ -218,7 +224,7 @@ impl PydlApp {
                         );
                     });
                     left_button_row(ui, |ui| {
-                        self.draw_queue_and_log_controls(ui);
+                        self.draw_video_queue_controls(ui);
                     });
                     let show_status = if self.av1_mode {
                         !self.av1_items.is_empty()
@@ -328,7 +334,17 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 constrain_content_width(ui);
-                ui.label(RichText::new("Activity log").small().strong());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Activity log").small().strong());
+                    let tail_w = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(tail_w.max(0.0), 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            self.draw_log_controls(ui);
+                        },
+                    );
+                });
                 if ui
                     .add(egui::Slider::new(
                         &mut self.settings.log_dock_height,
@@ -383,7 +399,17 @@ impl PydlApp {
                 self.draw_queue_cards(ui, cards_h);
                 if dock_log {
                     ui.add_space(6.0);
-                    ui.label(RichText::new("Activity log").small().strong());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new("Activity log").small().strong());
+                        let tail_w = ui.available_width();
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(tail_w.max(0.0), 0.0),
+                            egui::Layout::right_to_left(egui::Align::Center),
+                            |ui| {
+                                self.draw_log_controls(ui);
+                            },
+                        );
+                    });
                     if ui
                         .add(egui::Slider::new(
                             &mut self.settings.log_dock_height,
@@ -416,7 +442,7 @@ impl PydlApp {
             .resizable(true)
             .show(ctx, |ui| {
                 left_button_row(ui, |ui| {
-                    self.draw_queue_and_log_controls(ui);
+                    self.draw_video_queue_controls(ui);
                 });
                 let h = ui.available_height().max(200.0);
                 self.draw_queue_cards(ui, h);

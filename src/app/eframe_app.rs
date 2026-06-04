@@ -648,6 +648,12 @@ impl eframe::App for PydlApp {
 
                     }); // downloader controls scroll
 
+                if !self.settings.logs_open {
+                    left_button_row(ui, |ui| {
+                        self.draw_log_controls(ui);
+                    });
+                }
+
                 if self.settings.videos_docked {
                     self.draw_docked_videos_section(ui, main_split.videos_height);
                 } else {

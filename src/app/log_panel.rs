@@ -156,7 +156,7 @@ impl PydlApp {
             .min_height(260.0)
             .show(ctx, |ui| {
                 left_button_row(ui, |ui| {
-                    self.draw_queue_and_log_controls(ui);
+                    self.draw_log_controls(ui);
                 });
                 self.draw_activity_log_panel(ui);
             });
