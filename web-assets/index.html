@@ -60,15 +60,7 @@
       <div class="summary" id="status-summary"></div>
       <div class="queue-toolbar btn-toolbar">
         <span class="hint">Queue:</span>
-        <div class="btn-group" role="group" aria-label="Clear queue subsets">
-          <button type="button" id="btn-clear-finished" class="secondary" data-icon="clear_all" title="Remove done and failed rows">Clear finished</button>
-          <button type="button" id="btn-clear-done" class="secondary" data-icon="delete" title="Remove done rows only">Clear done</button>
-          <button type="button" id="btn-clear-failed" class="secondary" data-icon="delete" title="Remove failed rows only">Clear failed</button>
-          <button type="button" id="btn-clear-inactive" class="secondary" data-icon="remove_circle_outline" title="Remove all rows except queued/downloading">Clear inactive</button>
-        </div>
-        <div class="btn-group" role="group" aria-label="Clear entire queue">
-          <button type="button" id="btn-clear-all" class="danger" data-icon="delete_forever" title="Remove every row (cancels active downloads)">Clear all</button>
-        </div>
+        <div class="btn-group" role="group" aria-label="Clear queue" id="queue-clear-menu"></div>
       </div>
       <div id="queue" class="queue"></div>
     </section>

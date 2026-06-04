@@ -915,6 +915,76 @@ async function clearQueue(filter, confirmMessage) {
   await refreshAll();
 }
 
+const QUEUE_CLEAR_ACTIONS = [
+  {
+    filter: "finished",
+    label: "Clear finished",
+    title: "Remove done and failed rows",
+    confirm: "Remove all done and failed items from the queue?",
+  },
+  {
+    filter: "done",
+    label: "Clear done",
+    title: "Remove done rows only",
+    confirm: "Remove all done items from the queue?",
+  },
+  {
+    filter: "failed",
+    label: "Clear failed",
+    title: "Remove failed rows only",
+    confirm: "Remove all failed items from the queue?",
+  },
+  {
+    filter: "inactive",
+    label: "Clear inactive",
+    title: "Remove all rows except queued or downloading",
+    confirm:
+      "Remove all items except those queued or downloading? Active downloads are not cancelled.",
+  },
+  {
+    filter: "all",
+    label: "Clear all",
+    title: "Remove every row (cancels active downloads)",
+    confirm:
+      "Remove every item from the queue? Downloads in progress will be cancelled.",
+    danger: true,
+  },
+];
+
+function mountClearQueueMenu(container) {
+  const menu = document.createElement("details");
+  menu.className = "btn-menu queue-clear-menu";
+
+  const trigger = document.createElement("summary");
+  trigger.className = "btn-menu-trigger secondary";
+  trigger.title = "Remove queue rows by status";
+  setButtonLabel(trigger, ICON.clear, "Clear...");
+  menu.appendChild(trigger);
+
+  const panel = document.createElement("div");
+  panel.className = "btn-menu-panel btn-menu-panel-down";
+  panel.setAttribute("role", "menu");
+
+  for (const action of QUEUE_CLEAR_ACTIONS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn-menu-item" + (action.danger ? " danger" : "");
+    btn.textContent = action.label;
+    btn.title = action.title;
+    btn.onclick = (e) => {
+      e.preventDefault();
+      menu.open = false;
+      clearQueue(action.filter, action.confirm).catch((err) =>
+        alert(err.message || String(err))
+      );
+    };
+    panel.appendChild(btn);
+  }
+
+  menu.appendChild(panel);
+  container.appendChild(menu);
+}
+
 async function clearActivityLog() {
   await api("/api/logs/clear", { method: "POST" });
   await refreshLogs();
@@ -1215,32 +1285,8 @@ document.getElementById("btn-add").onclick = async () => {
 
 document.getElementById("btn-clear-url-input").onclick = () => clearUrlInput();
 
-document.getElementById("btn-clear-finished").onclick = () =>
-  clearQueue("finished", "Remove all done and failed items from the queue?").catch((e) =>
-    alert(e.message || String(e))
-  );
-
-document.getElementById("btn-clear-done").onclick = () =>
-  clearQueue("done", "Remove all done items from the queue?").catch((e) =>
-    alert(e.message || String(e))
-  );
-
-document.getElementById("btn-clear-failed").onclick = () =>
-  clearQueue("failed", "Remove all failed items from the queue?").catch((e) =>
-    alert(e.message || String(e))
-  );
-
-document.getElementById("btn-clear-inactive").onclick = () =>
-  clearQueue(
-    "inactive",
-    "Remove all items except those queued or downloading? Active downloads are not cancelled."
-  ).catch((e) => alert(e.message || String(e)));
-
-document.getElementById("btn-clear-all").onclick = () =>
-  clearQueue(
-    "all",
-    "Remove every item from the queue? Downloads in progress will be cancelled."
-  ).catch((e) => alert(e.message || String(e)));
+const queueClearMount = document.getElementById("queue-clear-menu");
+if (queueClearMount) mountClearQueueMenu(queueClearMount);
 
 document.getElementById("btn-clear-log").onclick = () =>
   clearActivityLog().catch((e) => alert(e.message || String(e)));

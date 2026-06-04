@@ -603,6 +603,21 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
+.btn-menu-panel-down {
+  left: 0;
+  right: auto;
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+
+.queue-toolbar .btn-menu-trigger {
+  border-radius: 6px;
+}
+
+.queue-clear-menu[open] > .btn-menu-panel-down {
+  z-index: 6;
+}
+
 .btn-menu-item {
   width: 100%;
   margin: 0;
