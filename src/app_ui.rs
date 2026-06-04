@@ -339,8 +339,12 @@ pub fn compute_main_column_split(
     }
 }
 
-
-/// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
+/// Clamp a [`egui::ScrollArea`] child to the viewport (prevents horizontal overflow).
+pub fn constrain_to_viewport(ui: &mut egui::Ui) {
+    let w = ui.clip_rect().width();
+    ui.set_width(w);
+    ui.set_max_width(w);
+}
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
@@ -421,7 +425,6 @@ pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
-            ui.set_min_width(width);
             ui.set_width(width);
             add_contents(ui)
         },
@@ -443,7 +446,6 @@ fn alert_box<R>(
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, |ui| {
-                ui.set_min_width(width);
                 ui.set_width(width);
                 add_contents(ui)
             })

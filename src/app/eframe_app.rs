@@ -1,5 +1,5 @@
 use super::*;
-use crate::app_ui::{button_group, button_toolbar, danger_button, draw_mode_nav_bar, left_button_row};
+use crate::app_ui::{button_group, button_toolbar_wrapped, danger_button, draw_mode_nav_bar, left_button_row, constrain_to_viewport};
 
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -64,7 +64,9 @@ impl eframe::App for PydlApp {
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
-                ui.set_width(ui.available_width());
+                let panel_w = ui.available_width();
+                ui.set_width(panel_w);
+                ui.set_max_width(panel_w);
                 self.draw_main_header(ui);
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
@@ -171,11 +173,11 @@ impl eframe::App for PydlApp {
                 );
 
                 let dl_controls_scroll = egui::ScrollArea::vertical()
-                    .id_salt("rustdl_downloader_controls_v2")
+                    .id_salt("rustdl_downloader_controls_v3")
                     .auto_shrink([false, false])
                     .max_height(main_split.controls_max_height);
                 dl_controls_scroll.show(ui, |ui| {
-                    ui.set_width(ui.available_width());
+                    constrain_to_viewport(ui);
 
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -448,7 +450,7 @@ impl eframe::App for PydlApp {
                         self.queue_search.clear();
                     }
                 });
-                button_toolbar(ui, |ui| {
+                button_toolbar_wrapped(ui, |ui| {
                     if self.downloads_paused {
                         button_group(ui, "dl_pause", |g| {
                             if g.success(
