@@ -291,6 +291,15 @@ pub fn content_panel_frame() -> egui::Frame {
 
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
+/// Queue toolbar (profile, search, button groups) pinned below the controls scroll.
+const QUEUE_TOOLBAR_RESERVE: f32 = 150.0;
+/// Compact strip when the video queue is in a floating window.
+const UNDOCKED_STRIP_RESERVE: f32 = 72.0;
+
+/// Space taken below the controls scroll so [`compute_main_column_split`] can size the scroll area.
+pub fn fixed_below_controls_scroll(videos_docked: bool) -> f32 {
+    QUEUE_TOOLBAR_RESERVE + if videos_docked { 0.0 } else { UNDOCKED_STRIP_RESERVE }
+}
 
 /// Split remaining main-panel height between scrollable controls and a docked video queue.
 pub struct MainColumnSplit {
@@ -304,10 +313,11 @@ pub fn compute_main_column_split(
     videos_docked: bool,
     compact_cards: bool,
 ) -> MainColumnSplit {
-    let h = available_height.max(0.0);
+    let fixed = fixed_below_controls_scroll(videos_docked);
+    let h = (available_height - fixed).max(0.0);
     if !videos_docked {
         return MainColumnSplit {
-            controls_max_height: h,
+            controls_max_height: h.max(MIN_CONTROLS_SCROLL_H),
             videos_height: 0.0,
         };
     }
@@ -637,21 +647,26 @@ mod tests {
     #[test]
     fn main_column_split_fits_viewport() {
         let split = compute_main_column_split(600.0, true, false);
+        let fixed = fixed_below_controls_scroll(true);
         assert!(split.controls_max_height >= 100.0);
         assert!(split.videos_height >= 220.0);
-        assert!((split.controls_max_height + split.videos_height - 600.0).abs() < 0.01);
+        assert!(
+            (split.controls_max_height + split.videos_height + fixed - 600.0).abs() < 0.01
+        );
     }
 
     #[test]
     fn main_column_split_never_exceeds_available() {
         let split = compute_main_column_split(280.0, true, false);
-        assert!(split.controls_max_height + split.videos_height <= 280.0 + 0.01);
+        let fixed = fixed_below_controls_scroll(true);
+        assert!(split.controls_max_height + split.videos_height + fixed <= 280.0 + 0.01);
     }
 
     #[test]
     fn main_column_split_undocked_uses_full_height() {
         let split = compute_main_column_split(600.0, false, false);
-        assert_eq!(split.controls_max_height, 600.0);
+        let fixed = fixed_below_controls_scroll(false);
+        assert_eq!(split.controls_max_height, (600.0 - fixed).max(MIN_CONTROLS_SCROLL_H));
         assert_eq!(split.videos_height, 0.0);
     }
 }

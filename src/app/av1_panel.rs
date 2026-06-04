@@ -187,7 +187,7 @@ impl PydlApp {
         );
 
         egui::ScrollArea::vertical()
-            .id_salt("rustdl_av1_controls")
+            .id_salt("rustdl_av1_controls_v2")
             .auto_shrink([false, false])
             .max_height(main_split.controls_max_height)
             .show(ui, |ui| {

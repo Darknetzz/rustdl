@@ -171,7 +171,7 @@ impl eframe::App for PydlApp {
                 );
 
                 let dl_controls_scroll = egui::ScrollArea::vertical()
-                    .id_salt("rustdl_downloader_controls")
+                    .id_salt("rustdl_downloader_controls_v2")
                     .auto_shrink([false, false])
                     .max_height(main_split.controls_max_height);
                 dl_controls_scroll.show(ui, |ui| {
@@ -395,6 +395,8 @@ impl eframe::App for PydlApp {
                     });
                 });
 
+                    }); // downloader controls scroll
+
                 ui.separator();
                 let has_idle_items = self
                     .items
@@ -616,8 +618,6 @@ impl eframe::App for PydlApp {
                 if trigger_download && has_idle_items {
                     self.start_downloads();
                 }
-
-                    }); // downloader controls scroll
 
                 if self.settings.videos_docked {
                     self.draw_docked_videos_section(ui, main_split.videos_height);
