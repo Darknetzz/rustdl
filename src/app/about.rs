@@ -18,6 +18,7 @@ impl PydlApp {
             .open(&mut about_open)
             .resizable(false)
             .default_width(480.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.label(RichText::new("rustdl").strong());
                 ui.label(format!("Version: {}", pkg_version::VERSION));

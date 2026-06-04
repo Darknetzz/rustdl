@@ -647,11 +647,12 @@ impl eframe::App for PydlApp {
 }
 
 impl PydlApp {
-    /// Title on the left; Exit on the right; tool status and nav on a wrapped row below.
+    /// Logo and tool status on the left; Settings/Logs/Videos and Exit aligned on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         let panel_w = constrain_content_width(ui);
         ui.horizontal(|ui| {
             ui.set_width(panel_w);
+            ui.spacing_mut().item_spacing.x = 12.0;
             ui.horizontal(|ui| {
                 let sz = egui::vec2(40.0, 40.0);
                 let img = ui.add(
@@ -668,10 +669,37 @@ impl PydlApp {
                     self.about_open = true;
                 }
             });
-            let right_w = ui.available_width();
-            if right_w > 0.0 {
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                draw_precheck_status(
+                    ui,
+                    "ffprobe",
+                    self.has_ffprobe,
+                    &self.ffprobe_version,
+                );
+                draw_precheck_status(
+                    ui,
+                    "ffmpeg",
+                    self.has_ffmpeg,
+                    &self.ffmpeg_version,
+                );
+                draw_precheck_status(
+                    ui,
+                    "yt-dlp",
+                    self.has_yt_dlp,
+                    &self.yt_dlp_version,
+                );
+                if self.settings.web_ui_enabled && self.web_server.is_some() {
+                    let url =
+                        crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+                    draw_web_ui_header_link(ui, &url);
+                }
+            });
+            let tail_w = ui.available_width();
+            if tail_w > 0.0 {
                 ui.allocate_ui_with_layout(
-                    egui::vec2(right_w, 0.0),
+                    egui::vec2(tail_w, 0.0),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
                         ui.add_space(HEADER_RIGHT_INSET);
@@ -679,67 +707,45 @@ impl PydlApp {
                         {
                             self.open_exit_confirm();
                         }
+                        let videos_btn =
+                            if self.settings.videos_docked || self.settings.videos_open {
+                                format!("{} Videos", ui_icons::VIDEOS)
+                            } else {
+                                format!("{} Videos (hidden)", ui_icons::VIDEOS)
+                            };
+                        button_group(ui, "hdr_nav", |g| {
+                            if g
+                                .secondary(
+                                    &format!("{} Settings", ui_icons::SETTINGS),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
+                                )
+                                .clicked()
+                            {
+                                self.settings_open = true;
+                            }
+                            if g.secondary(&format!("{} Logs", ui_icons::LOGS), true)
+                                .on_hover_text(
+                                    "View activity log (dock under queue or separate window)",
+                                )
+                                .clicked()
+                            {
+                                self.toggle_logs_panel();
+                            }
+                            if g.secondary(&videos_btn, true)
+                                .on_hover_text(
+                                    "Show video queue in main window or a separate floating window",
+                                )
+                                .clicked()
+                            {
+                                self.toggle_videos_panel();
+                            }
+                        });
                     },
                 );
             }
-        });
-        ui.add_space(6.0);
-        ui.horizontal_wrapped(|ui| {
-            constrain_content_width(ui);
-            ui.spacing_mut().item_spacing = egui::vec2(12.0, 8.0);
-            draw_precheck_status(
-                ui,
-                "ffprobe",
-                self.has_ffprobe,
-                &self.ffprobe_version,
-            );
-            draw_precheck_status(
-                ui,
-                "ffmpeg",
-                self.has_ffmpeg,
-                &self.ffmpeg_version,
-            );
-            draw_precheck_status(
-                ui,
-                "yt-dlp",
-                self.has_yt_dlp,
-                &self.yt_dlp_version,
-            );
-            if self.settings.web_ui_enabled && self.web_server.is_some() {
-                let url =
-                    crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
-                draw_web_ui_header_link(ui, &url);
-            }
-            let videos_btn = if self.settings.videos_docked || self.settings.videos_open {
-                format!("{} Videos", ui_icons::VIDEOS)
-            } else {
-                format!("{} Videos (hidden)", ui_icons::VIDEOS)
-            };
-            button_group(ui, "hdr_nav", |g| {
-                if g.secondary(
-                    &format!("{} Settings", ui_icons::SETTINGS),
-                    true,
-                )
-                .on_hover_text("Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads")
-                .clicked()
-                {
-                    self.settings_open = true;
-                }
-                if g.secondary(&format!("{} Logs", ui_icons::LOGS), true)
-                    .on_hover_text("View activity log (dock under queue or separate window)")
-                    .clicked()
-                {
-                    self.toggle_logs_panel();
-                }
-                if g.secondary(&videos_btn, true)
-                    .on_hover_text(
-                        "Show video queue in main window or a separate floating window",
-                    )
-                    .clicked()
-                {
-                    self.toggle_videos_panel();
-                }
-            });
         });
     }
 }

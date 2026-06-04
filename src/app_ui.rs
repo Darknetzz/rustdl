@@ -211,17 +211,19 @@ fn colored_button(
     enabled: bool,
     text_color: Color32,
     bg_fill: Color32,
+    rounding: egui::Rounding,
+    stroke: egui::Stroke,
 ) -> Response {
     let (fill, stroke, text) = if enabled {
         (
             bg_fill,
-            egui::Stroke::new(1.0, shade(bg_fill, 0.78)),
+            stroke,
             text_color,
         )
     } else {
         (
             shade(bg_fill, 0.45),
-            egui::Stroke::new(1.0, shade(bg_fill, 0.35)),
+            egui::Stroke::new(stroke.width, shade(stroke.color, 0.35)),
             shade(text_color, 0.70),
         )
     };
@@ -229,37 +231,55 @@ fn colored_button(
     let button = egui::Button::new(RichText::new(label).color(text))
         .frame(true)
         .fill(fill)
-        .stroke(stroke);
+        .stroke(stroke)
+        .rounding(rounding);
     ui.add_enabled(enabled, button)
 }
 
+fn standalone_button_stroke(bg_fill: Color32) -> egui::Stroke {
+    egui::Stroke::new(1.0, shade(bg_fill, 0.78))
+}
+
+fn grouped_button_stroke() -> egui::Stroke {
+    egui::Stroke::NONE
+}
+
 pub fn danger_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(183, 28, 28);
     colored_button(
         ui,
         label,
         enabled,
         Color32::from_rgb(255, 235, 238),
-        Color32::from_rgb(183, 28, 28),
+        bg,
+        egui::Rounding::same(6.0),
+        standalone_button_stroke(bg),
     )
 }
 
 pub fn success_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(46, 125, 50);
     colored_button(
         ui,
         label,
         enabled,
         Color32::from_rgb(232, 245, 233),
-        Color32::from_rgb(46, 125, 50),
+        bg,
+        egui::Rounding::same(6.0),
+        standalone_button_stroke(bg),
     )
 }
 
 pub fn warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(245, 124, 0);
     colored_button(
         ui,
         label,
         enabled,
         Color32::from_rgb(255, 255, 255),
-        Color32::from_rgb(245, 124, 0),
+        bg,
+        egui::Rounding::same(6.0),
+        standalone_button_stroke(bg),
     )
 }
 
@@ -503,12 +523,67 @@ pub fn modal_backdrop(ctx: &egui::Context, id: egui::Id) -> bool {
 }
 
 pub fn secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(30, 136, 229);
     colored_button(
         ui,
         label,
         enabled,
         Color32::from_rgb(227, 242, 253),
-        Color32::from_rgb(30, 136, 229),
+        bg,
+        egui::Rounding::same(6.0),
+        standalone_button_stroke(bg),
+    )
+}
+
+fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(30, 136, 229);
+    colored_button(
+        ui,
+        label,
+        enabled,
+        Color32::from_rgb(227, 242, 253),
+        bg,
+        egui::Rounding::ZERO,
+        grouped_button_stroke(),
+    )
+}
+
+fn grouped_success_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(46, 125, 50);
+    colored_button(
+        ui,
+        label,
+        enabled,
+        Color32::from_rgb(232, 245, 233),
+        bg,
+        egui::Rounding::ZERO,
+        grouped_button_stroke(),
+    )
+}
+
+fn grouped_danger_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(183, 28, 28);
+    colored_button(
+        ui,
+        label,
+        enabled,
+        Color32::from_rgb(255, 235, 238),
+        bg,
+        egui::Rounding::ZERO,
+        grouped_button_stroke(),
+    )
+}
+
+fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
+    let bg = Color32::from_rgb(245, 124, 0);
+    colored_button(
+        ui,
+        label,
+        enabled,
+        Color32::from_rgb(255, 255, 255),
+        bg,
+        egui::Rounding::ZERO,
+        grouped_button_stroke(),
     )
 }
 
@@ -546,19 +621,19 @@ impl<'a> ButtonGroup<'a> {
     }
 
     pub fn secondary(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| secondary_button(ui, label, enabled))
+        self.add(|ui| grouped_secondary_button(ui, label, enabled))
     }
 
     pub fn success(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| success_button(ui, label, enabled))
+        self.add(|ui| grouped_success_button(ui, label, enabled))
     }
 
     pub fn danger(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| danger_button(ui, label, enabled))
+        self.add(|ui| grouped_danger_button(ui, label, enabled))
     }
 
     pub fn warning(&mut self, label: &str, enabled: bool) -> Response {
-        self.add(|ui| warning_button(ui, label, enabled))
+        self.add(|ui| grouped_warning_button(ui, label, enabled))
     }
 }
 
