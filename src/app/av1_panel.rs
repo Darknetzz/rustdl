@@ -4,9 +4,10 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, compute_main_column_split, constrain_content_width,
-    draw_meta_badge, draw_status_dot, left_button_row, status_color, status_dot_with_label,
-    MetaBadgeKind,
+    draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row, status_color,
+    status_dot_with_label, MetaBadgeKind,
 };
+use crate::config::AppSettings;
 use crate::av1_state::{av1_item_is_skipped, av1_item_status_label, compute_av1_batch_summary};
 use crate::av1_transcode;
 use crate::models::{Av1QueueItem, ItemStatus};
@@ -85,6 +86,43 @@ fn av1_item_has_media(item: &Av1QueueItem) -> bool {
         || item.height.is_some()
         || item.fps.is_some()
         || item.bitrate_bps.is_some()
+}
+
+fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, theme: &str) {
+    let muted = text_muted(theme);
+    let bitrate = if settings.av1_target_bitrate.trim().is_empty() {
+        "auto".to_owned()
+    } else {
+        settings.av1_target_bitrate.clone()
+    };
+    let max_width = format!("{}w", settings.av1_max_width);
+    let min_shrink = format!("{:.0}%", settings.av1_min_shrink_percent);
+    ui.spacing_mut().item_spacing = egui::vec2(8.0, 4.0);
+    draw_labeled_meta_badge(ui, "Bitrate:", &bitrate, MetaBadgeKind::Bitrate, muted);
+    ui.label(RichText::new("·").small().color(muted));
+    draw_labeled_meta_badge(
+        ui,
+        "Max width:",
+        &max_width,
+        MetaBadgeKind::Resolution,
+        muted,
+    );
+    ui.label(RichText::new("·").small().color(muted));
+    draw_labeled_meta_badge(
+        ui,
+        "Preset:",
+        &settings.av1_size_preset,
+        MetaBadgeKind::SizePreset,
+        muted,
+    );
+    ui.label(RichText::new("·").small().color(muted));
+    draw_labeled_meta_badge(
+        ui,
+        "Min shrink:",
+        &min_shrink,
+        MetaBadgeKind::ShrinkPercent,
+        muted,
+    );
 }
 
 fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, theme: &str) {
@@ -263,17 +301,7 @@ impl PydlApp {
                 self.refresh_av1_encoder_detection();
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Encode settings").small());
-                    let br = if self.settings.av1_target_bitrate.trim().is_empty() {
-                        "auto".to_owned()
-                    } else {
-                        self.settings.av1_target_bitrate.clone()
-                    };
-                    ui.label(format!(
-                        "Bitrate: {br} · Max width: {} · Preset: {} · Min shrink: {:.0}%",
-                        self.settings.av1_max_width,
-                        self.settings.av1_size_preset,
-                        self.settings.av1_min_shrink_percent,
-                    ));
+                    draw_av1_encode_settings_badges(ui, &self.settings, &self.settings.theme);
                     if let Some(enc) = &self.av1_encoder_choice {
                         status_dot_with_label(
                             ui,

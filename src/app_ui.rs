@@ -67,6 +67,8 @@ pub enum MetaBadgeKind {
     FrameRate,
     FileSize,
     Bitrate,
+    SizePreset,
+    ShrinkPercent,
 }
 
 fn parse_resolution_height(label: &str) -> u32 {
@@ -171,6 +173,43 @@ fn fps_badge_colors(label: &str) -> (Color32, Color32) {
     }
 }
 
+fn size_preset_badge_colors(label: &str) -> (Color32, Color32) {
+    match label.trim().to_ascii_lowercase().as_str() {
+        "light" => (
+            Color32::from_rgb(30, 100, 70),
+            Color32::from_rgb(210, 255, 230),
+        ),
+        "aggressive" => (
+            Color32::from_rgb(130, 55, 30),
+            Color32::from_rgb(255, 225, 205),
+        ),
+        _ => (
+            Color32::from_rgb(38, 90, 136),
+            Color32::from_rgb(230, 240, 255),
+        ),
+    }
+}
+
+fn shrink_percent_badge_colors(label: &str) -> (Color32, Color32) {
+    let pct: f32 = label.trim().trim_end_matches('%').parse().unwrap_or(0.0);
+    if pct <= 0.0 {
+        (
+            Color32::from_rgb(70, 70, 80),
+            Color32::from_rgb(220, 220, 228),
+        )
+    } else if pct >= 50.0 {
+        (
+            Color32::from_rgb(130, 70, 25),
+            Color32::from_rgb(255, 232, 200),
+        )
+    } else {
+        (
+            Color32::from_rgb(100, 85, 40),
+            Color32::from_rgb(255, 244, 210),
+        )
+    }
+}
+
 fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
     match kind {
         MetaBadgeKind::Resolution => resolution_badge_colors(label),
@@ -184,6 +223,8 @@ fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
             Color32::from_rgb(75, 55, 110),
             Color32::from_rgb(235, 225, 255),
         ),
+        MetaBadgeKind::SizePreset => size_preset_badge_colors(label),
+        MetaBadgeKind::ShrinkPercent => shrink_percent_badge_colors(label),
     }
 }
 
@@ -197,6 +238,21 @@ pub fn draw_meta_badge(ui: &mut egui::Ui, label: &str, kind: MetaBadgeKind) {
         .show(ui, |ui| {
             ui.label(RichText::new(label).small().strong().color(text_color));
         });
+}
+
+/// Muted prefix label plus a colored value pill (e.g. encode settings summary).
+pub fn draw_labeled_meta_badge(
+    ui: &mut egui::Ui,
+    prefix: &str,
+    value: &str,
+    kind: MetaBadgeKind,
+    prefix_color: Color32,
+) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.label(RichText::new(prefix).small().color(prefix_color));
+        draw_meta_badge(ui, value, kind);
+    });
 }
 
 fn shade(color: Color32, factor: f32) -> Color32 {
