@@ -97,6 +97,53 @@ async function refreshStatus() {
   updateQuitButtonState();
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
+  updateDownloadControlButtons(data);
+}
+
+function updateDownloadControlButtons(data) {
+  const pauseBtn = document.getElementById("btn-pause");
+  const resumeBtn = document.getElementById("btn-resume");
+  const startBtn = document.getElementById("btn-start");
+  if (!pauseBtn || !resumeBtn || !startBtn) return;
+
+  const s = data?.status || {};
+  const paused = !!data?.downloads_paused;
+  const queued = s.queued || 0;
+  const active = s.active || 0;
+  const ready = s.ready || 0;
+  const shuttingDown = statusFlags.shutdown_pending || shuttingDown;
+
+  const canPause = !paused && (queued > 0 || active > 0);
+  const canResume = paused;
+  const canStart = !paused && ready > 0 && cachedHasYtDlp;
+
+  pauseBtn.disabled = shuttingDown || !canPause;
+  resumeBtn.disabled = shuttingDown || !canResume;
+  startBtn.disabled = shuttingDown || !canStart;
+
+  pauseBtn.title = shuttingDown
+    ? "Unavailable while shutting down"
+    : canPause
+      ? "Pause active and queued downloads"
+      : paused
+        ? "Downloads are already paused"
+        : "No queued or active downloads to pause";
+
+  resumeBtn.title = shuttingDown
+    ? "Unavailable while shutting down"
+    : canResume
+      ? "Resume downloads and start ready items"
+      : "Downloads are not paused";
+
+  startBtn.title = shuttingDown
+    ? "Unavailable while shutting down"
+    : paused
+      ? "Resume downloads first"
+      : !cachedHasYtDlp
+        ? "yt-dlp not available (check Settings or Refresh tools)"
+        : canStart
+          ? `Start ${ready} ready download(s)`
+          : "No ready items to download";
 }
 
 function updateQuitButtonState() {
