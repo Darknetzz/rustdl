@@ -96,6 +96,7 @@ async function refreshStatus() {
   if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
   renderNavbarStatus();
+  updateTopbarVersion(data);
   updateSettingsOutputDiskHint(data.output_disk_space);
   updateQuitButtonState();
   renderTools(data.tools);
@@ -195,6 +196,34 @@ function renderNavbarStatus() {
   root.title = info.title;
   const label = root.querySelector(".navbar-status-label");
   if (label) label.textContent = info.label;
+}
+
+function updateTopbarVersion(data) {
+  const el = document.getElementById("topbar-version");
+  if (!el || !data?.version) return;
+  el.textContent = `v${data.version}`;
+}
+
+function populateAboutDialog(data) {
+  const versionEl = document.getElementById("about-version");
+  const buildEl = document.getElementById("about-build");
+  if (versionEl) {
+    versionEl.textContent = data?.version
+      ? `Version ${data.version}`
+      : "Version unknown (connect to rustdl to load)";
+  }
+  if (buildEl) {
+    buildEl.textContent = data?.build_date
+      ? `Build ${data.build_date}`
+      : "";
+    buildEl.classList.toggle("hidden", !data?.build_date);
+  }
+}
+
+function openAboutDialog() {
+  populateAboutDialog(lastStatusPayload);
+  const dlg = document.getElementById("about-dialog");
+  if (dlg) dlg.showModal();
 }
 
 function updateDownloadControlButtons(data) {
@@ -1453,6 +1482,13 @@ document.getElementById("btn-resume").onclick = async () => {
   await refreshAll();
 };
 
+document.getElementById("btn-about-brand")?.addEventListener("click", () => openAboutDialog());
+document.getElementById("btn-about-close")?.addEventListener("click", () => {
+  document.getElementById("about-dialog")?.close();
+});
+document.getElementById("about-dialog")?.addEventListener("click", (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.close();
+});
 document.getElementById("btn-settings").onclick = () => openSettingsDialog().catch(console.error);
 
 document.getElementById("btn-settings-cancel").onclick = () => {

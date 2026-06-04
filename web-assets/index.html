@@ -11,7 +11,13 @@
 <body>
   <header class="topbar">
     <div class="topbar-left">
-      <h1>rustdl</h1>
+      <button type="button" id="btn-about-brand" class="topbar-brand" title="About rustdl — click to open" aria-haspopup="dialog">
+        <img src="/favicon.png" alt="" class="topbar-brand-icon" width="32" height="32" decoding="async" />
+        <span class="topbar-brand-text">
+          <span class="topbar-brand-name">rustdl</span>
+          <span id="topbar-version" class="topbar-brand-version"></span>
+        </span>
+      </button>
       <nav class="view-nav btn-group" id="view-nav" aria-label="Section">
         <button type="button" id="nav-downloader" class="nav-btn active" data-view="downloader" data-icon="cloud_download">Downloader</button>
         <button type="button" id="nav-av1" class="nav-btn" data-view="av1" data-icon="bolt">AV1</button>
@@ -104,6 +110,28 @@
       </section>
     </div>
   </main>
+
+  <dialog id="about-dialog" class="settings-dialog about-dialog">
+    <div class="about-header">
+      <img src="/favicon.png" alt="" class="about-logo" width="64" height="64" decoding="async" />
+      <div>
+        <h2>rustdl</h2>
+        <p id="about-version" class="about-meta"></p>
+        <p id="about-build" class="about-meta hint"></p>
+      </div>
+    </div>
+    <div class="about-body">
+      <p>Download and organize videos with yt-dlp, then optionally transcode to AV1.</p>
+      <p class="hint">This page is the LAN web UI. Settings, queue control, and shutdown run on the rustdl instance on your network.</p>
+      <p class="hint">Check for updates from the desktop app (<strong>About rustdl</strong> on the logo in the main window).</p>
+      <p><a id="about-releases-link" href="https://github.com/Darknetzz/code/releases" target="_blank" rel="noopener noreferrer">View releases on GitHub</a></p>
+    </div>
+    <div class="dialog-actions">
+      <div class="btn-group" role="group" aria-label="About dialog">
+        <button type="button" id="btn-about-close" class="primary" data-icon="close">Close</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="settings-dialog" class="settings-dialog">
     <form method="dialog" id="settings-form">

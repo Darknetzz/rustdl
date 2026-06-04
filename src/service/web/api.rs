@@ -63,6 +63,7 @@ struct DiskSpaceJson {
 #[derive(Serialize)]
 struct StatusResponse {
     version: &'static str,
+    build_date: String,
     downloads_paused: bool,
     queue_running: usize,
     add_in_progress: bool,
@@ -220,6 +221,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
     let output_dir = c.effective_output_dir();
     Json(StatusResponse {
         version: crate::pkg_version::VERSION,
+        build_date: crate::pkg_version::build_date_local(),
         downloads_paused: c.downloads_paused,
         queue_running: c.queue_running,
         add_in_progress: c.add_in_progress,

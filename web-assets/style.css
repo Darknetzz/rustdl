@@ -54,7 +54,59 @@ body {
   min-width: 0;
 }
 
-.topbar h1 { margin: 0; font-size: 1.25rem; flex-shrink: 0; }
+.topbar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0.15rem 0.35rem 0.15rem 0.15rem;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.topbar-brand:hover,
+.topbar-brand:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
+.topbar-brand-icon {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.topbar-brand-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+  min-width: 0;
+}
+
+.topbar-brand-name {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.topbar-brand-version {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.topbar-brand-version:empty {
+  display: none;
+}
 
 .navbar-status {
   display: inline-flex;
@@ -764,6 +816,51 @@ button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.5rem;
+}
+
+.about-dialog {
+  max-width: min(480px, calc(100vw - 1rem));
+}
+
+.about-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.25rem 1.25rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-header h2 {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+}
+
+.about-logo {
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.about-meta {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.about-body {
+  padding: 1rem 1.25rem;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.about-body p {
+  margin: 0 0 0.65rem;
+}
+
+.about-body p:last-child {
+  margin-bottom: 0;
+}
+
+.about-body a {
+  color: var(--accent);
 }
 
 .settings-dialog {
