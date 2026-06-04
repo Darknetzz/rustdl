@@ -15,11 +15,13 @@ git filter-repo --path Rust/rustdl/ --path-rename Rust/rustdl/:
 | `github` | `git@github.com:Darknetzz/rustdl.git` |
 | `gitlab` | `ssh://git@gitlab.roste.org/kriss/rustdl.git` |
 
+Default branch on both hosts is **`dev`** (`main` is kept for stable/release alignment).
+
 Push to both after changes:
 
 ```bash
-git push github main
-git push gitlab main
+git push github dev
+git push gitlab dev
 git push github --tags
 git push gitlab --tags
 ```
