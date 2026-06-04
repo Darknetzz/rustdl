@@ -402,17 +402,18 @@ impl PydlApp {
     }
 
     /// AV1 queue scroll area (docked panel or floating window).
-    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui, max_height: f32) {
+    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui) {
         if !self.av1_items.is_empty() {
             ui.add_space(4.0);
             self.draw_av1_queue_status_row(ui);
             self.draw_av1_batch_summary_row(ui);
-            ui.add_space(6.0);
+            ui.add_space(4.0);
         }
+        let scroll_h = ui.available_height().max(120.0);
         egui::ScrollArea::vertical()
             .id_salt("av1_queue_scroll")
-            .auto_shrink([false, false])
-            .max_height(max_height.max(120.0))
+            .auto_shrink([false, true])
+            .max_height(scroll_h)
             .animated(true)
             .drag_to_scroll(true)
             .show(ui, |ui| {

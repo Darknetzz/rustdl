@@ -79,6 +79,182 @@ pub fn status_chip_text_color(status: ItemStatus) -> Color32 {
     }
 }
 
+/// Top-bar activity state (aligned with web `#navbar-status`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NavbarStatusSlug {
+    Idle,
+    Adding,
+    Resolving,
+    Queued,
+    Paused,
+    Downloading,
+    Converting,
+    Shutdown,
+}
+
+#[derive(Clone, Debug)]
+pub struct NavbarStatusInfo {
+    pub slug: NavbarStatusSlug,
+    pub label: &'static str,
+    pub pulse: bool,
+    pub title: String,
+}
+
+pub struct NavbarStatusInputs {
+    pub shutdown_pending: bool,
+    pub add_in_progress: bool,
+    pub av1_running: bool,
+    pub av1_resolving: bool,
+    pub status_resolving: usize,
+    pub status_queued: usize,
+    pub status_active: usize,
+    pub status_ready: usize,
+    pub downloads_paused: bool,
+    pub queue_running: usize,
+}
+
+pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
+    if input.shutdown_pending {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Shutdown,
+            label: "Shutting down",
+            pulse: true,
+            title: "rustdl is saving state and exiting".to_owned(),
+        };
+    }
+    if input.add_in_progress {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Adding,
+            label: "Adding URLs",
+            pulse: true,
+            title: "Fetching metadata for new URLs".to_owned(),
+        };
+    }
+    if input.av1_running {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Converting,
+            label: "Converting",
+            pulse: true,
+            title: "AV1 batch encode in progress".to_owned(),
+        };
+    }
+    if input.status_active > 0 || (input.queue_running > 0 && !input.downloads_paused) {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Downloading,
+            label: "Downloading",
+            pulse: true,
+            title: format!(
+                "{} active · {} worker slot(s)",
+                input.status_active, input.queue_running
+            ),
+        };
+    }
+    if input.status_resolving > 0 || input.av1_resolving {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Resolving,
+            label: "Resolving",
+            pulse: true,
+            title: "Probing media metadata".to_owned(),
+        };
+    }
+    if input.downloads_paused
+        && (input.status_queued > 0 || input.status_active > 0 || input.status_ready > 0)
+    {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Paused,
+            label: "Paused",
+            pulse: false,
+            title: "Downloads paused — resume to continue".to_owned(),
+        };
+    }
+    if input.status_queued > 0 {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Queued,
+            label: "Queued",
+            pulse: false,
+            title: format!("{} item(s) waiting to download", input.status_queued),
+        };
+    }
+    NavbarStatusInfo {
+        slug: NavbarStatusSlug::Idle,
+        label: "Idle",
+        pulse: false,
+        title: "No active downloads or conversions".to_owned(),
+    }
+}
+
+fn navbar_status_colors(slug: NavbarStatusSlug) -> (Color32, Color32, Color32) {
+    let (text, dot) = match slug {
+        NavbarStatusSlug::Idle => (Color32::GRAY, Color32::GRAY),
+        NavbarStatusSlug::Adding | NavbarStatusSlug::Resolving => {
+            (Color32::from_rgb(120, 144, 156), Color32::from_rgb(120, 144, 156))
+        }
+        NavbarStatusSlug::Queued | NavbarStatusSlug::Paused | NavbarStatusSlug::Shutdown => {
+            (
+                Color32::from_rgb(255, 193, 7),
+                Color32::from_rgb(255, 193, 7),
+            )
+        }
+        NavbarStatusSlug::Downloading => (
+            Color32::from_rgb(66, 165, 245),
+            Color32::from_rgb(66, 165, 245),
+        ),
+        NavbarStatusSlug::Converting => (
+            Color32::from_rgb(171, 71, 188),
+            Color32::from_rgb(171, 71, 188),
+        ),
+    };
+    let border = Color32::from_rgba_unmultiplied(
+        dot.r(),
+        dot.g(),
+        dot.b(),
+        (255.0 * 0.35) as u8,
+    );
+    (text, dot, border)
+}
+
+fn fade_color(c: Color32, alpha: f32) -> Color32 {
+    let a = alpha.clamp(0.0, 1.0);
+    Color32::from_rgba_premultiplied(
+        (c.r() as f32 * a) as u8,
+        (c.g() as f32 * a) as u8,
+        (c.b() as f32 * a) as u8,
+        (c.a() as f32 * a) as u8,
+    )
+}
+
+pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> Response {
+    if info.pulse {
+        ui.ctx().request_repaint();
+    }
+    let (text_color, dot_color, border_color) = navbar_status_colors(info.slug);
+    let dot_alpha = if info.pulse {
+        let t = ui.input(|i| i.time);
+        let phase = (t * std::f64::consts::TAU / 1.4).sin() * 0.5 + 0.5;
+        (0.55 + 0.45 * phase) as f32
+    } else {
+        1.0
+    };
+    egui::Frame::none()
+        .stroke(egui::Stroke::new(1.0, border_color))
+        .rounding(egui::Rounding::same(999.0))
+        .inner_margin(egui::Margin::symmetric(8.0, 4.0))
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 5.0;
+                draw_status_dot(ui, fade_color(dot_color, dot_alpha));
+                ui.label(
+                    RichText::new(info.label)
+                        .small()
+                        .strong()
+                        .color(text_color),
+                );
+            })
+        })
+        .response
+        .on_hover_text(&info.title)
+}
+
 pub fn draw_status_chip(ui: &mut egui::Ui, status: ItemStatus) {
     let label = format!("{} {}", status_chip_icon(status), status.as_str());
     let text = RichText::new(label)
@@ -886,5 +1062,45 @@ mod tests {
         let split = compute_main_column_split(600.0, false, false);
         assert_eq!(split.controls_max_height, (528.0_f32).max(MIN_CONTROLS_SCROLL_H));
         assert_eq!(split.videos_height, 0.0);
+    }
+
+    fn idle_inputs() -> NavbarStatusInputs {
+        NavbarStatusInputs {
+            shutdown_pending: false,
+            add_in_progress: false,
+            av1_running: false,
+            av1_resolving: false,
+            status_resolving: 0,
+            status_queued: 0,
+            status_active: 0,
+            status_ready: 0,
+            downloads_paused: false,
+            queue_running: 0,
+        }
+    }
+
+    #[test]
+    fn navbar_status_idle_by_default() {
+        let info = derive_navbar_status(idle_inputs());
+        assert_eq!(info.slug, NavbarStatusSlug::Idle);
+        assert_eq!(info.label, "Idle");
+    }
+
+    #[test]
+    fn navbar_status_downloading_when_active() {
+        let mut input = idle_inputs();
+        input.status_active = 1;
+        input.queue_running = 1;
+        let info = derive_navbar_status(input);
+        assert_eq!(info.slug, NavbarStatusSlug::Downloading);
+    }
+
+    #[test]
+    fn navbar_status_converting_over_downloading() {
+        let mut input = idle_inputs();
+        input.status_active = 2;
+        input.av1_running = true;
+        let info = derive_navbar_status(input);
+        assert_eq!(info.slug, NavbarStatusSlug::Converting);
     }
 }

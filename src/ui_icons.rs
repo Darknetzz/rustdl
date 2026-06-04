@@ -19,6 +19,8 @@ pub const CANCEL_TO_REMOVE: &str = m::ICON_DELETE_FOREVER;
 pub const RECHECK: &str = m::ICON_SEARCH;
 pub const SCAN: &str = m::ICON_SCAN;
 pub const SETTINGS: &str = m::ICON_SETTINGS;
+/// LAN web UI (browser).
+pub const WEB_UI: &str = m::ICON_LANGUAGE;
 pub const SAVE: &str = m::ICON_SAVE;
 pub const DISMISS: &str = m::ICON_CLOSE;
 pub const CLOSE: &str = m::ICON_CLOSE;

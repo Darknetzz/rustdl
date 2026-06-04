@@ -1,7 +1,7 @@
 use super::*;
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, constrain_content_width, content_width, danger_button,
-    draw_mode_nav_bar, left_button_row, with_full_width,
+    draw_mode_nav_bar, draw_navbar_status_badge, left_button_row, with_full_width,
 };
 
 impl eframe::App for PydlApp {
@@ -663,10 +663,16 @@ impl PydlApp {
                     self.has_yt_dlp,
                     &self.yt_dlp_version,
                 );
-                if self.settings.web_ui_enabled && self.web_server.is_some() {
+                ui.separator();
+                let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
+                draw_navbar_status_badge(ui, &navbar);
+                if self.settings.web_ui_enabled {
                     let url =
                         crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
-                    draw_web_ui_header_link(ui, &url);
+                    let running = self.web_server.is_some();
+                    if draw_web_ui_header_button(ui, running, &url) {
+                        self.open_web_ui_in_browser();
+                    }
                 }
             });
             let tail_w = ui.available_width();

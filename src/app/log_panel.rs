@@ -5,7 +5,7 @@ use eframe::egui::{Color32, RichText};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row};
+use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
 use crate::ui_icons;
@@ -417,16 +417,23 @@ pub(crate) fn compact_tool_version_display(version: &str) -> String {
     }
 }
 
-pub(crate) fn draw_web_ui_header_link(ui: &mut egui::Ui, url: &str) {
-    const WEB_UI_OK: Color32 = Color32::from_rgb(132, 235, 156);
+/// Header control: opens the LAN web UI when the embedded server is running.
+pub(crate) fn draw_web_ui_header_button(ui: &mut egui::Ui, running: bool, url: &str) -> bool {
     let host = web_ui_link_host(url);
-    let body = if host.is_empty() {
-        "✔ Web UI".to_owned()
+    let label = if host.is_empty() {
+        format!("{} Web UI", ui_icons::WEB_UI)
     } else {
-        format!("✔ Web UI · {host}")
+        format!("{} Web UI · {host}", ui_icons::WEB_UI)
     };
-    ui.hyperlink_to(RichText::new(body).small().color(WEB_UI_OK).strong(), url)
-        .on_hover_text(format!("Open LAN web UI in browser\n{url}"));
+    let hover = if running {
+        format!("Open LAN web UI in browser\n{url}")
+    } else {
+        "Web UI is enabled in Settings but the server is not running".to_owned()
+    };
+    secondary_button(ui, &label, running)
+        .on_hover_text(hover)
+        .clicked()
+        && running
 }
 
 fn web_ui_link_host(url: &str) -> String {

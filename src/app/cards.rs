@@ -598,11 +598,12 @@ impl PydlApp {
                 if self.settings.card_list_layout {
                     let allow_reorder = label == "Ready";
                     const LIST_ROW_H: f32 = 42.0;
-                    let max_h = ui.available_height().clamp(LIST_ROW_H * 3.0, 480.0);
+                    let row_count = ids.len().max(1);
+                    let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
                     egui::ScrollArea::vertical()
                         .id_salt(format!("rustdl_list_{label}"))
                         .max_height(max_h)
-                        .auto_shrink([false; 2])
+                        .auto_shrink([false, true])
                         .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
                             for row in row_range {
                                 if let Some(item_id) = ids.get(row) {

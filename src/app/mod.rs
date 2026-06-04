@@ -37,7 +37,7 @@ pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
     attach_paste_context_menu, draw_input_line_summary, draw_precheck_status,
-    draw_web_ui_header_link, log_line_color, LOG_COLOR_ERROR, LOG_COLOR_WARN,
+    draw_web_ui_header_button, log_line_color, LOG_COLOR_ERROR, LOG_COLOR_WARN,
 };
 
 use crate::app_actions;
@@ -46,7 +46,7 @@ use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_fro
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, compute_main_column_split,
-    content_panel_frame, modal_backdrop, status_color,
+    content_panel_frame, modal_backdrop, status_color, NavbarStatusInputs,
     ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
@@ -932,6 +932,31 @@ impl PydlApp {
         };
         if let Err(e) = app_actions::open_browser(&url) {
             self.append_log(&format!("Failed to open release page: {e}"));
+        }
+    }
+
+    fn navbar_status_inputs(&self) -> NavbarStatusInputs {
+        let av1_resolving = self.av1_items.iter().any(|it| {
+            it.status == ItemStatus::Resolving || self.av1_media_inflight.contains(&it.item_id)
+        });
+        NavbarStatusInputs {
+            shutdown_pending: self.exit_pending_after_cancel,
+            add_in_progress: self.add_in_progress,
+            av1_running: self.av1_running,
+            av1_resolving,
+            status_resolving: self.status_resolving,
+            status_queued: self.status_queued,
+            status_active: self.status_active,
+            status_ready: self.status_ready,
+            downloads_paused: self.downloads_paused,
+            queue_running: self.queue_running,
+        }
+    }
+
+    fn open_web_ui_in_browser(&mut self) {
+        let url = crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+        if let Err(e) = app_actions::open_browser(&url) {
+            self.append_log(&format!("Failed to open web UI: {e}"));
         }
     }
 
