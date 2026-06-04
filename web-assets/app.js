@@ -496,6 +496,7 @@ function thumbPlaceholderText(item, showThumbnails) {
 function itemHasThumbnailSource(item) {
   if (item.thumbnail_url) return true;
   if (item.video_id && String(item.video_id).trim()) return true;
+  if (item.playable || item.can_delete_file) return true;
   const line = item.source_line || item.webpage_url || "";
   return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
 }
@@ -505,9 +506,31 @@ function thumbCacheKey(item) {
     item.item_id,
     item.video_id || "",
     item.thumbnail_url || "",
+    item.local_path || "",
+    item.media_filename || "",
     item.source_line || "",
     item.webpage_url || "",
   ].join("|");
+}
+
+/** Extensions the built-in video/audio element can decode in typical browsers. */
+function browserCanPlayMediaFilename(name) {
+  const ext = String(name || "")
+    .split(".")
+    .pop()
+    ?.toLowerCase();
+  if (!ext) return true;
+  return [
+    "mp4",
+    "m4v",
+    "webm",
+    "mp3",
+    "m4a",
+    "opus",
+    "ogg",
+    "wav",
+    "aac",
+  ].includes(ext);
 }
 
 function revokeThumbBlob(cacheKey) {
@@ -600,6 +623,19 @@ function toggleCardMedia(item, thumb) {
     return;
   }
   stopActiveMedia();
+  if (
+    item.media_filename &&
+    !browserCanPlayMediaFilename(item.media_filename)
+  ) {
+    const ph = thumb.querySelector(".card-thumb-placeholder");
+    if (ph) {
+      ph.textContent =
+        "In-browser playback is not supported for this file type (e.g. MKV). Open the file on the PC running rustdl.";
+      ph.classList.remove("hidden");
+    }
+    thumb.querySelector("img")?.classList.add("hidden");
+    return;
+  }
   const tag = item.media_kind === "audio" ? "audio" : "video";
   const el = document.createElement(tag);
   el.className = "card-media";
@@ -1427,10 +1463,26 @@ async function applyProfile(name) {
   await refreshToolsOnly();
 }
 
+function clearThumbnailCaches() {
+  thumbFailedKeys.clear();
+  for (const key of thumbBlobCache.keys()) {
+    revokeThumbBlob(key);
+  }
+  thumbInflight.clear();
+  av1ThumbFailedKeys.clear();
+  for (const key of av1ThumbBlobCache.keys()) {
+    const url = av1ThumbBlobCache.get(key);
+    if (url) URL.revokeObjectURL(url);
+    av1ThumbBlobCache.delete(key);
+  }
+  av1ThumbInflight.clear();
+}
+
 function saveTokenFromForm() {
   const v = document.getElementById("token-input").value.trim();
   if (!v) return;
   localStorage.setItem(TOKEN_KEY, v);
+  clearThumbnailCaches();
   document.getElementById("auth-status").textContent = "Token saved.";
   showApp();
   refreshAll().catch((e) => {

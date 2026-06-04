@@ -71,9 +71,10 @@ pub fn resolve_item_media_path(
     core: &DownloadCore,
     item: &QueueItem,
 ) -> Result<PathBuf, StatusCode> {
+    let output_dir = core.effective_output_dir();
     let (path, _) = core
         .done_file_index
-        .find_path_for_queue_item(&core.output_dir, item)
+        .find_path_for_queue_item(&output_dir, item)
         .ok_or(StatusCode::NOT_FOUND)?;
     Ok(path)
 }
@@ -103,14 +104,15 @@ pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Respo
     let mime = mime_for_path(path);
     let mut file = File::open(path).await.map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let (start, end) = if let Some(range) = headers
+    let range_header = headers
         .get(header::RANGE)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| parse_range(v, total))
-    {
-        range
-    } else {
-        (0, total.saturating_sub(1))
+        .and_then(|v| v.to_str().ok());
+    let (start, end, partial) = match range_header {
+        None => (0, total.saturating_sub(1), false),
+        Some(spec) => match parse_range(spec, total) {
+            Some(range) => (range.0, range.1, true),
+            None => return Err(StatusCode::RANGE_NOT_SATISFIABLE),
+        },
     };
 
     let len = end.saturating_sub(start).saturating_add(1);
@@ -124,9 +126,10 @@ pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Respo
     let mut builder = Response::builder()
         .header(header::CONTENT_TYPE, mime)
         .header(header::ACCEPT_RANGES, "bytes")
-        .header(header::CACHE_CONTROL, "private, max-age=60");
+        .header(header::CACHE_CONTROL, "private, max-age=60")
+        .header(header::CONTENT_DISPOSITION, "inline");
 
-    if start == 0 && end + 1 >= total {
+    if !partial {
         builder = builder
             .status(StatusCode::OK)
             .header(header::CONTENT_LENGTH, total.to_string());
@@ -190,5 +193,10 @@ mod tests {
         let (s, e) = parse_range("bytes=0-", 100).unwrap();
         assert_eq!(s, 0);
         assert_eq!(e, 99);
+    }
+
+    #[test]
+    fn parse_range_rejects_out_of_bounds() {
+        assert!(parse_range("bytes=50-200", 100).is_none());
     }
 }

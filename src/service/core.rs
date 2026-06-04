@@ -419,7 +419,11 @@ impl DownloadCore {
     }
 
     pub fn refresh_done_file_lookup(&mut self) {
-        self.done_file_index.refresh(&self.output_dir);
+        let output_dir = self.effective_output_dir();
+        if !output_dir.is_empty() {
+            self.output_dir = output_dir.clone();
+        }
+        self.done_file_index.refresh(&output_dir);
         self.backfill_local_paths_for_done_items();
         if self.done_file_index.scan_truncated {
             if !self.done_lookup_truncation_logged {
@@ -443,7 +447,7 @@ impl DownloadCore {
             ) {
                 continue;
             }
-            let output_dir = self.output_dir.clone();
+            let output_dir = self.effective_output_dir();
             if let Some(ref saved) = self.items[idx].local_path {
                 if crate::app::done_file_index::resolve_path_under_output(&output_dir, saved)
                     .is_some()
@@ -466,7 +470,7 @@ impl DownloadCore {
         let Some(idx) = self.item_idx(item_id) else {
             return;
         };
-        let output_dir = self.output_dir.clone();
+        let output_dir = self.effective_output_dir();
         let item = self.items[idx].clone();
         if let Some((path, _)) = self
             .done_file_index
@@ -861,9 +865,9 @@ impl DownloadCore {
     }
 
     pub fn item_has_file_on_disk(&self, item: &QueueItem) -> bool {
-        let output_dir = self.output_dir.as_str();
+        let output_dir = self.effective_output_dir();
         self.done_file_index
-            .find_path_for_queue_item(output_dir, item)
+            .find_path_for_queue_item(&output_dir, item)
             .or_else(|| self.done_file_index.find_path_in_index(item))
             .is_some()
     }

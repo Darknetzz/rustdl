@@ -566,7 +566,7 @@ async fn thumbnail_proxy(
             c.refresh_deps();
         }
         let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
-        let output_dir = c.output_dir.clone();
+        let output_dir = c.effective_output_dir();
         let index = &c.done_file_index;
         let ffmpeg_path = c.settings.ffmpeg_path.clone();
         let has_ffmpeg = c.has_ffmpeg;
@@ -583,14 +583,14 @@ async fn thumbnail_proxy(
             has_ffmpeg,
         )
     };
-    for url in candidates {
-        if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
-            return Ok(thumbnail_response(bytes, content_type));
-        }
-    }
     if let Some(path) = local_thumb {
         if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
             return Ok(thumbnail_response(bytes, "image/png"));
+        }
+    }
+    for url in candidates {
+        if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
+            return Ok(thumbnail_response(bytes, content_type));
         }
     }
     Err(StatusCode::NOT_FOUND)
