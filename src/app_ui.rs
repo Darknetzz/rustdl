@@ -329,6 +329,16 @@ pub fn compute_main_column_split(
     }
 }
 
+/// Usable content width for the current panel/row (stable during layout; prefer over [`egui::Ui::available_width`] alone).
+pub fn content_width(ui: &egui::Ui) -> f32 {
+    ui.max_rect().width().max(ui.available_width())
+}
+
+/// Call once at the top of [`egui::CentralPanel`] content.
+pub fn prepare_central_panel(ui: &mut egui::Ui) {
+    set_row_width(ui, content_width(ui));
+}
+
 /// Ensure a child uses the full width of its parent row (egui vertical layouts shrink-wrap by default).
 pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
     let w = width.max(0.0);
@@ -338,7 +348,7 @@ pub fn set_row_width(ui: &mut egui::Ui, width: f32) {
 
 /// Call at the start of [`egui::ScrollArea`] content so inner controls use the viewport width.
 pub fn prepare_scroll_content(ui: &mut egui::Ui, viewport_width: f32) {
-    let w = viewport_width.max(ui.max_rect().width()).max(0.0);
+    let w = viewport_width.max(content_width(ui)).max(0.0);
     if w > 0.0 {
         set_row_width(ui, w);
     }
@@ -385,7 +395,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
         .clicked()
     };
     with_full_width(ui, |ui| {
-        let width = ui.available_width();
+        let width = content_width(ui);
         let mut nav_frame = egui::Frame::group(ui.style());
         nav_frame.fill = Color32::from_rgb(28, 32, 38);
         nav_frame.stroke = egui::Stroke::new(1.0, Color32::from_rgb(64, 72, 86));
@@ -393,7 +403,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
         nav_frame.inner_margin = egui::Margin::symmetric(12.0, 10.0);
         nav_frame.show(ui, |ui| {
             set_row_width(ui, width);
-            let row_w = ui.available_width();
+            let row_w = content_width(ui);
             let tab_h = 34.0;
             let (row_rect, _) =
                 ui.allocate_exact_size(egui::vec2(row_w, tab_h), egui::Sense::hover());
@@ -435,7 +445,7 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = ui.available_width();
+    let width = content_width(ui);
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),
@@ -454,7 +464,7 @@ fn alert_box<R>(
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     with_full_width(ui, |ui| {
-        let width = ui.available_width();
+        let width = content_width(ui);
         egui::Frame::none()
             .fill(bg)
             .stroke(egui::Stroke::new(1.0, border))
@@ -484,7 +494,7 @@ pub fn centered_button_row<R>(
     id_salt: impl Hash,
     mut add_contents: impl FnMut(&mut egui::Ui) -> R,
 ) -> R {
-    let avail_w = ui.available_width();
+    let avail_w = content_width(ui);
     let row_width = {
         let mut sizing_ui = ui.new_child(
             egui::UiBuilder::new()
@@ -611,7 +621,7 @@ pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> 
 
 /// Row of one or more [`button_group`]s with spacing between groups.
 pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let row_w = ui.available_width();
+    let row_w = content_width(ui);
     ui.scope(|ui| {
         set_row_width(ui, row_w);
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -624,7 +634,7 @@ pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let row_w = ui.available_width();
+    let row_w = content_width(ui);
     ui.scope(|ui| {
         set_row_width(ui, row_w);
         ui.with_layout(
