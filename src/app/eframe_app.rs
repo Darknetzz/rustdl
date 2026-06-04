@@ -164,19 +164,6 @@ impl eframe::App for PydlApp {
                     return;
                 }
 
-                let main_split = compute_main_column_split(
-                    ui.available_height(),
-                    self.settings.videos_docked,
-                    self.settings.compact_cards,
-                );
-
-                egui::ScrollArea::vertical()
-                    .id_salt("rustdl_downloader_controls_v4")
-                    .auto_shrink([false, false])
-                    .max_height(main_split.controls_max_height)
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
                     ui.label(
@@ -295,6 +282,21 @@ impl eframe::App for PydlApp {
                         ui.label(RichText::new(msg).small().color(Color32::LIGHT_BLUE));
                     }
                 });
+
+                let main_split = compute_main_column_split(
+                    ui.available_height(),
+                    self.settings.videos_docked,
+                    self.settings.compact_cards,
+                );
+
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_downloader_controls_v5")
+                    .hscroll(false)
+                    .auto_shrink([false, false])
+                    .max_height(main_split.controls_max_height)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+
                 self.draw_downloader_queue_status_row(ui);
                 let total_finished = self.status_done + self.status_failed;
                 let total_known =

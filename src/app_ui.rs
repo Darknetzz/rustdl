@@ -305,8 +305,9 @@ pub fn compute_main_column_split(
 ) -> MainColumnSplit {
     let h = available_height.max(0.0);
     if !videos_docked {
+        const UNDOCKED_STRIP: f32 = 72.0;
         return MainColumnSplit {
-            controls_max_height: h,
+            controls_max_height: (h - UNDOCKED_STRIP).max(MIN_CONTROLS_SCROLL_H),
             videos_height: 0.0,
         };
     }
@@ -647,7 +648,7 @@ mod tests {
     #[test]
     fn main_column_split_undocked_uses_full_height() {
         let split = compute_main_column_split(600.0, false, false);
-        assert_eq!(split.controls_max_height, 600.0);
+        assert_eq!(split.controls_max_height, (528.0_f32).max(MIN_CONTROLS_SCROLL_H));
         assert_eq!(split.videos_height, 0.0);
     }
 }
