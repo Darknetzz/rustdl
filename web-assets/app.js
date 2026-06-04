@@ -894,6 +894,7 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-av1-encoder-override", s.av1_encoder_override);
   setCheck("set-av1-recursive", s.av1_recursive);
   setCheck("set-av1-dry-run", s.av1_dry_run);
+  setCheck("set-av1-auto-start", s.av1_auto_start_on_add);
   setCheck("set-av1-overwrite", s.av1_overwrite);
   setCheck("set-av1-reencode", s.av1_reencode_av1);
   setCheck("set-av1-delete-original", s.av1_delete_original);
@@ -962,6 +963,7 @@ function collectSettingsForm(base) {
   s.av1_encoder_override = document.getElementById("set-av1-encoder-override").value;
   s.av1_recursive = document.getElementById("set-av1-recursive").checked;
   s.av1_dry_run = document.getElementById("set-av1-dry-run").checked;
+  s.av1_auto_start_on_add = document.getElementById("set-av1-auto-start").checked;
   s.av1_overwrite = document.getElementById("set-av1-overwrite").checked;
   s.av1_reencode_av1 = document.getElementById("set-av1-reencode").checked;
   s.av1_delete_original = document.getElementById("set-av1-delete-original").checked;

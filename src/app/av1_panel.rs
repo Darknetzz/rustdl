@@ -246,6 +246,19 @@ impl PydlApp {
                     {
                         self.persist_settings();
                     }
+                    if ui
+                        .checkbox(
+                            &mut self.settings.av1_auto_start_on_add,
+                            "Start batch when paths are added",
+                        )
+                        .on_hover_text(
+                            "Automatically run Start AV1 batch after Browse, Scan inputs, \
+                             or drag-and-drop adds new ready items.",
+                        )
+                        .changed()
+                    {
+                        self.persist_settings();
+                    }
                 });
                 self.refresh_av1_encoder_detection();
                 ui.horizontal_wrapped(|ui| {

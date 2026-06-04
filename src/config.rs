@@ -81,6 +81,9 @@ pub struct AppSettings {
     /// Dry-run mode for AV1 conversion planning.
     #[serde(default)]
     pub av1_dry_run: bool,
+    /// Start the AV1 batch automatically after new paths are scanned into the queue.
+    #[serde(default)]
+    pub av1_auto_start_on_add: bool,
     /// Delete original input file after successful AV1 conversion.
     #[serde(default)]
     pub av1_delete_original: bool,
@@ -307,6 +310,7 @@ impl Default for AppSettings {
             log_relative_time: false,
             av1_recursive: true,
             av1_dry_run: false,
+            av1_auto_start_on_add: false,
             av1_delete_original: false,
             av1_rename_original: false,
             av1_overwrite: false,

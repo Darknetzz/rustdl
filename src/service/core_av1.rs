@@ -117,12 +117,31 @@ impl DownloadCore {
         let added = self.push_av1_plan_items(plan);
         if added > 0 {
             self.append_log(&format!("AV1: added {added} video(s) to queue as ready."));
+            self.maybe_auto_start_av1_batch();
         } else {
             self.append_log("AV1: all video(s) from path(s) are already in the queue.");
         }
         remove_scanned_av1_input_lines(&mut self.av1_input_paths, &lines);
         self.schedule_av1_queue_save();
         self.bump_generation();
+    }
+
+    /// Starts the AV1 batch when [`AppSettings::av1_auto_start_on_add`] is enabled and tools are ready.
+    pub fn maybe_auto_start_av1_batch(&mut self) {
+        if !self.settings.av1_auto_start_on_add || self.av1_running {
+            return;
+        }
+        if !self.has_ffmpeg || !self.has_ffprobe {
+            return;
+        }
+        if !self
+            .av1_items
+            .iter()
+            .any(|item| item.status == ItemStatus::Idle)
+        {
+            return;
+        }
+        self.start_av1_batch();
     }
 
     /// Adds plan items not already in the AV1 queue. Returns how many were added.

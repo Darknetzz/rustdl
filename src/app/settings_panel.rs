@@ -872,6 +872,16 @@ impl PydlApp {
                             .changed();
                         changed |= ui
                             .checkbox(
+                                &mut self.settings.av1_auto_start_on_add,
+                                "Automatically start batch when paths are added",
+                            )
+                            .on_hover_text(
+                                "After Browse, Scan inputs, drag-and-drop, or paste paths, \
+                                 start encoding when new ready items are added to the queue.",
+                            )
+                            .changed();
+                        changed |= ui
+                            .checkbox(
                                 &mut self.settings.av1_delete_original,
                                 "Delete original after success",
                             )
