@@ -621,7 +621,7 @@ impl eframe::App for PydlApp {
 }
 
 impl PydlApp {
-    /// Logo and tool status on the left; Settings/Logs/Videos and Exit aligned on the right.
+    /// Logo and tool status on the left; status badge, Web UI, Settings, and Exit grouped on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         constrain_content_width(ui);
         ui.horizontal(|ui| {
@@ -644,7 +644,7 @@ impl PydlApp {
             });
             ui.separator();
             ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 10.0;
+                ui.spacing_mut().item_spacing.x = 8.0;
                 draw_precheck_status(
                     ui,
                     "ffprobe",
@@ -663,24 +663,14 @@ impl PydlApp {
                     self.has_yt_dlp,
                     &self.yt_dlp_version,
                 );
-                ui.separator();
-                let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
-                draw_navbar_status_badge(ui, &navbar);
-                if self.settings.web_ui_enabled {
-                    let url =
-                        crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
-                    let running = self.web_server.is_some();
-                    if draw_web_ui_header_button(ui, running, &url) {
-                        self.open_web_ui_in_browser();
-                    }
-                }
             });
             let tail_w = ui.available_width();
             if tail_w > 0.0 {
-                ui.with_layout(
+                ui.allocate_ui_with_layout(
+                    egui::vec2(tail_w, 0.0),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        ui.set_max_width(tail_w);
+                        ui.spacing_mut().item_spacing.x = 6.0;
                         if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked()
                         {
                             self.open_exit_confirm();
@@ -700,6 +690,18 @@ impl PydlApp {
                                 self.settings_open = true;
                             }
                         });
+                        if self.settings.web_ui_enabled {
+                            let url = crate::service::web::web_ui_browser_url(
+                                &self.settings.web_bind_address,
+                            );
+                            let running = self.web_server.is_some();
+                            if draw_web_ui_header_button(ui, running, &url) {
+                                self.open_web_ui_in_browser();
+                            }
+                        }
+                        let navbar =
+                            crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
+                        draw_navbar_status_badge(ui, &navbar);
                     },
                 );
             }

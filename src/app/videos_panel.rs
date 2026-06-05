@@ -12,8 +12,8 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
-/// Header + queue toolbar + status row inside the docked Videos frame (approximate).
-const DOCKED_VIDEOS_CHROME_EST: f32 = 108.0;
+/// Header toolbar + status row inside the docked Videos frame (approximate).
+const DOCKED_VIDEOS_CHROME_EST: f32 = 72.0;
 
 impl PydlApp {
     pub(super) fn ensure_videos_window_open(&mut self) {
@@ -38,11 +38,8 @@ impl PydlApp {
                 self.draw_av1_queue_status_row(ui);
                 self.draw_av1_batch_summary_row(ui);
             }
-        } else {
-            self.draw_downloader_queue_action_toolbar(ui);
-            if !self.items.is_empty() {
-                self.draw_downloader_queue_status_row(ui);
-            }
+        } else if !self.items.is_empty() {
+            self.draw_downloader_queue_status_row(ui);
         }
         let scroll_h = list_scroll_max.max(80.0);
         ui.allocate_ui_with_layout(
@@ -132,10 +129,6 @@ impl PydlApp {
                     self.mark_queue_dirty();
                 }
             });
-    }
-
-    pub(super) fn draw_downloader_queue_action_toolbar(&mut self, ui: &mut egui::Ui) {
-        button_toolbar_wrapped(ui, |ui| self.draw_downloader_queue_action_toolbar_inner(ui));
     }
 
     fn draw_downloader_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
@@ -277,17 +270,13 @@ impl PydlApp {
     }
 
     fn draw_videos_header_toolbar(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
+        button_toolbar_wrapped(ui, |ui| {
             let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
             ui.label(RichText::new(heading).strong());
-            let tail_w = ui.available_width();
-            ui.allocate_ui_with_layout(
-                egui::vec2(tail_w.max(0.0), 0.0),
-                egui::Layout::right_to_left(egui::Align::Center),
-                |ui| {
-                    self.draw_video_queue_controls(ui);
-                },
-            );
+            self.draw_video_queue_controls_inner(ui);
+            if !self.av1_mode {
+                self.draw_downloader_queue_action_toolbar_inner(ui);
+            }
         });
     }
 
