@@ -16,7 +16,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
-- Main panel layout: controls scroll when space is tight; docked video queue stays visible at the bottom instead of extending past the window.
+- Main panel scrolls below the header so the docked **Videos** queue is reachable; the card list keeps its own scroll inside the panel.
+- Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
 
 ## [0.1.1] - 2026-06-02

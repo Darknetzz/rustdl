@@ -3,7 +3,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compute_main_column_split, constrain_content_width,
+    button_group, button_toolbar_wrapped, constrain_content_width, docked_videos_panel_height,
     draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row, status_color,
     status_dot_with_label, MetaBadgeKind,
 };
@@ -239,21 +239,9 @@ impl PydlApp {
     }
 
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
-        let main_split = compute_main_column_split(
-            ui.available_height(),
-            self.settings.videos_docked,
-            self.settings.compact_cards,
-        );
+        constrain_content_width(ui);
 
-        egui::ScrollArea::vertical()
-            .id_salt("rustdl_av1_controls_v5")
-            .hscroll(false)
-            .auto_shrink([false, true])
-            .max_height(main_split.controls_max_height)
-            .show(ui, |ui| {
-                constrain_content_width(ui);
-
-                ui.horizontal_wrapped(|ui| {
+        ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("AV1 Converter").heading());
                     ui.label(
                         RichText::new("Near-parity mode for local video transcoding.")
@@ -389,10 +377,11 @@ impl PydlApp {
                         }
                     });
                 });
-            }); // av1 controls scroll
 
         if self.settings.videos_docked {
-            self.draw_docked_videos_section(ui, main_split.videos_height);
+            let videos_h =
+                docked_videos_panel_height(ui.ctx(), self.settings.compact_cards);
+            self.draw_docked_videos_section(ui, videos_h);
         } else {
             self.draw_videos_undocked_strip(ui);
             if self.settings.logs_open && self.settings.logs_docked {

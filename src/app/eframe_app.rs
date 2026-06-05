@@ -1,7 +1,8 @@
 use super::*;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, content_width, danger_button,
-    draw_mode_nav_bar, draw_navbar_status_badge, left_button_row, with_full_width,
+    button_group, button_toolbar_wrapped, constrain_content_width, content_width,
+    docked_videos_panel_height, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row,
+    with_full_width,
 };
 
 impl eframe::App for PydlApp {
@@ -69,6 +70,13 @@ impl eframe::App for PydlApp {
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
+                let body_h = ui.available_height().max(120.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_main_body_v1")
+                    .auto_shrink([false, false])
+                    .max_height(body_h)
+                    .drag_to_scroll(true)
+                    .show(ui, |ui| {
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
@@ -288,19 +296,7 @@ impl eframe::App for PydlApp {
                 });
                 }); // pinned URL block
 
-                let main_split = compute_main_column_split(
-                    ui.available_height(),
-                    self.settings.videos_docked,
-                    self.settings.compact_cards,
-                );
-
-                egui::ScrollArea::vertical()
-                    .id_salt("rustdl_downloader_controls_v6")
-                    .hscroll(false)
-                    .auto_shrink([false, true])
-                    .max_height(main_split.controls_max_height)
-                    .show(ui, |ui| {
-                        constrain_content_width(ui);
+                constrain_content_width(ui);
 
                 self.draw_downloader_queue_status_row(ui);
                 let total_finished = self.status_done + self.status_failed;
@@ -575,8 +571,6 @@ impl eframe::App for PydlApp {
                     self.start_downloads();
                 }
 
-                    }); // downloader controls scroll
-
                 if !self.settings.logs_open {
                     left_button_row(ui, |ui| {
                         self.draw_log_controls(ui);
@@ -584,7 +578,9 @@ impl eframe::App for PydlApp {
                 }
 
                 if self.settings.videos_docked {
-                    self.draw_docked_videos_section(ui, main_split.videos_height);
+                    let videos_h =
+                        docked_videos_panel_height(ctx, self.settings.compact_cards);
+                    self.draw_docked_videos_section(ui, videos_h);
                 } else {
                     self.draw_videos_undocked_strip(ui);
                     if self.settings.logs_open && self.settings.logs_docked {
@@ -592,6 +588,7 @@ impl eframe::App for PydlApp {
                     }
                 }
         });
+                    }); // main body scroll
 
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
@@ -621,7 +618,7 @@ impl eframe::App for PydlApp {
 }
 
 impl PydlApp {
-    /// Logo and tool status on the left; status badge, Web UI, Settings, and Exit grouped on the right.
+    /// Logo and tool status on the left; status badge, Web UI, then Settings + Exit on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         constrain_content_width(ui);
         ui.horizontal(|ui| {
@@ -671,10 +668,6 @@ impl PydlApp {
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
-                        if danger_button(ui, &format!("{} Exit", ui_icons::EXIT), true).clicked()
-                        {
-                            self.open_exit_confirm();
-                        }
                         button_group(ui, "hdr_nav", |g| {
                             if g
                                 .secondary(
@@ -688,6 +681,12 @@ impl PydlApp {
                                 .clicked()
                             {
                                 self.settings_open = true;
+                            }
+                            if g
+                                .danger(&format!("{} Exit", ui_icons::EXIT), true)
+                                .clicked()
+                            {
+                                self.open_exit_confirm();
                             }
                         });
                         if self.settings.web_ui_enabled {

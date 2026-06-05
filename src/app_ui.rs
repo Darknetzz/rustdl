@@ -589,6 +589,13 @@ pub struct MainColumnSplit {
     pub videos_height: f32,
 }
 
+/// Height budget for a docked video queue panel (toolbar + scrollable cards).
+pub fn docked_videos_panel_height(ctx: &egui::Context, compact_cards: bool) -> f32 {
+    let screen_h = ctx.input(|i| i.screen_rect.height());
+    let min_h = if compact_cards { 200.0 } else { 240.0 };
+    (screen_h * 0.38).clamp(min_h, 480.0)
+}
+
 pub fn compute_main_column_split(
     available_height: f32,
     videos_docked: bool,

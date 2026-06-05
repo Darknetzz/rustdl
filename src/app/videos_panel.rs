@@ -41,11 +41,12 @@ impl PydlApp {
         } else if !self.items.is_empty() {
             self.draw_downloader_queue_status_row(ui);
         }
-        let scroll_h = list_scroll_max.max(80.0);
+        let scroll_h = list_scroll_max.max(120.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width().max(1.0), scroll_h),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
+                ui.set_min_height(scroll_h);
                 ui.set_max_height(scroll_h);
                 if self.av1_mode {
                     self.draw_av1_queue_list_scroll(ui, scroll_h);
