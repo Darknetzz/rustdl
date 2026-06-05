@@ -110,7 +110,7 @@ fn volume_label_for_path(output_dir: &str, query_path: &Path) -> Option<String> 
                 return Some(s.to_string());
             }
         }
-        return None;
+        None
     }
     #[cfg(not(windows))]
     {

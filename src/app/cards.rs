@@ -321,19 +321,18 @@ impl PydlApp {
                                 {
                                     self.reveal_file_path(p);
                                 }
-                            } else if done_but_file_missing {
-                                if g.secondary(
+                            } else if done_but_file_missing
+                                && g.secondary(
                                     &format!("{} Folder", ui_icons::REVEAL_FOLDER),
                                     true,
                                 )
                                 .on_hover_text("Open the output folder for this download")
                                 .clicked()
-                                {
-                                    self.open_item_output_folder(id);
-                                }
+                            {
+                                self.open_item_output_folder(id);
                             }
-                            if done_file.is_some() {
-                                if g.secondary(
+                            if done_file.is_some()
+                                && g.secondary(
                                     &format!("{} Streams", ui_icons::CHECK_STREAMS),
                                     self.has_ffprobe,
                                 )
@@ -344,9 +343,8 @@ impl PydlApp {
                                     "Configure ffprobe in Settings → Executables.",
                                 )
                                 .clicked()
-                                {
-                                    self.check_streams_for_item_id(id);
-                                }
+                            {
+                                self.check_streams_for_item_id(id);
                             }
                             if g.secondary(
                                 &format!("{} Redo", ui_icons::REDOWNLOAD),
