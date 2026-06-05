@@ -13,6 +13,8 @@ const statusFlags = {
 let shuttingDown = false;
 /** @type {number | null} */
 let refreshIntervalId = null;
+/** Debounce SSE/poll rebuilds so in-flight thumbnails are not aborted every tick. */
+let refreshAllTimer = null;
 /** @type {object | null} */
 let lastStatusPayload = null;
 /** @type {object | null} */
@@ -39,6 +41,21 @@ function headers() {
   const t = token();
   if (t) h["X-Rustdl-Token"] = t;
   return h;
+}
+
+/** Auth headers for binary GETs (no JSON Content-Type). */
+function imageFetchHeaders() {
+  const h = {};
+  const t = token();
+  if (t) h["X-Rustdl-Token"] = t;
+  return h;
+}
+
+async function blobFromImageResponse(res) {
+  const ct =
+    res.headers.get("Content-Type")?.split(";")[0]?.trim() || "image/jpeg";
+  const buf = await res.arrayBuffer();
+  return new Blob([buf], { type: ct });
 }
 
 async function api(path, options = {}) {
@@ -571,14 +588,14 @@ async function fetchQueueThumbnailBlob(item) {
   }
   const work = (async () => {
     try {
-      const res = await fetch(apiUrl, { headers: headers() });
+      const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
         if (res.status !== 401) {
           thumbFailedKeys.add(cacheKey);
         }
         return null;
       }
-      const blob = await res.blob();
+      const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
         thumbFailedKeys.add(cacheKey);
         return null;
@@ -686,14 +703,19 @@ function thumbnailApiUrl(itemId) {
   return `/api/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
+function revealThumbImage(img, placeholder, cacheKey) {
+  img.classList.remove("hidden");
+  placeholder.classList.add("hidden");
+  thumbFailedKeys.delete(cacheKey);
+}
+
 function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl) {
   img.onload = () => {
-    img.classList.remove("hidden");
-    placeholder.classList.add("hidden");
-    thumbFailedKeys.delete(cacheKey);
+    if (!img.isConnected) return;
+    revealThumbImage(img, placeholder, cacheKey);
   };
   img.onerror = () => {
-    thumbFailedKeys.add(cacheKey);
+    if (!img.isConnected) return;
     revokeThumbBlob(cacheKey);
     img.classList.add("hidden");
     img.removeAttribute("src");
@@ -701,6 +723,9 @@ function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl) {
     placeholder.classList.remove("hidden");
   };
   img.src = objUrl;
+  if (img.complete && img.naturalWidth > 0) {
+    revealThumbImage(img, placeholder, cacheKey);
+  }
 }
 
 function attachCardThumbnail(img, placeholder, item, showThumbnails) {
@@ -970,7 +995,9 @@ function renderQueueCard(item, settings) {
   return card;
 }
 
-function renderQueueCardListRow(item) {
+function renderQueueCardListRow(item, settings) {
+  const s = settings || {};
+  const showThumbnails = s.show_thumbnails !== false;
   const slug = statusSlug(item.status);
   const card = document.createElement("article");
   card.className = "card";
@@ -984,7 +1011,7 @@ function renderQueueCardListRow(item) {
   img.alt = "";
   img.className = "hidden";
   thumb.appendChild(img);
-  attachCardThumbnail(img, placeholder, item, true);
+  attachCardThumbnail(img, placeholder, item, showThumbnails);
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
 
@@ -1036,7 +1063,7 @@ async function refreshQueue() {
   root.innerHTML = "";
   for (const item of data.items) {
     const card = settings.card_list_layout
-      ? renderQueueCardListRow(item)
+      ? renderQueueCardListRow(item, settings)
       : renderQueueCard(item, settings);
     root.appendChild(card);
   }
@@ -1226,6 +1253,14 @@ async function refreshAll() {
   ]);
 }
 
+function scheduleRefreshAll(delayMs = 400) {
+  if (refreshAllTimer) clearTimeout(refreshAllTimer);
+  refreshAllTimer = setTimeout(() => {
+    refreshAllTimer = null;
+    refreshAll().catch(() => {});
+  }, delayMs);
+}
+
 function connectSse() {
   const t = token();
   if (!t) return;
@@ -1243,7 +1278,7 @@ function connectSse() {
     } catch {
       /* ignore malformed payloads */
     }
-    refreshAll().catch(() => {});
+    scheduleRefreshAll();
   };
   es.onerror = () => {
     es.close();
@@ -1604,6 +1639,10 @@ function baseName(p) {
 
 function setView(view) {
   currentView = view === "av1" ? "av1" : "downloader";
+  document.body.classList.remove("view-downloader", "view-av1");
+  document.body.classList.add(
+    currentView === "av1" ? "view-av1" : "view-downloader"
+  );
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === currentView);
   });
@@ -1660,14 +1699,19 @@ function av1ThumbnailUrl(itemId) {
   return `/api/av1/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
+function revealAv1ThumbImage(img, placeholder, key) {
+  img.classList.remove("hidden");
+  placeholder.classList.add("hidden");
+  av1ThumbFailedKeys.delete(key);
+}
+
 function applyAv1ThumbBlobToImg(img, placeholder, key, objUrl) {
   img.onload = () => {
-    img.classList.remove("hidden");
-    placeholder.classList.add("hidden");
-    av1ThumbFailedKeys.delete(key);
+    if (!img.isConnected) return;
+    revealAv1ThumbImage(img, placeholder, key);
   };
   img.onerror = () => {
-    av1ThumbFailedKeys.add(key);
+    if (!img.isConnected) return;
     revokeAv1ThumbBlob(key);
     img.classList.add("hidden");
     img.removeAttribute("src");
@@ -1675,6 +1719,9 @@ function applyAv1ThumbBlobToImg(img, placeholder, key, objUrl) {
     placeholder.classList.remove("hidden");
   };
   img.src = objUrl;
+  if (img.complete && img.naturalWidth > 0) {
+    revealAv1ThumbImage(img, placeholder, key);
+  }
 }
 
 function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
@@ -1971,14 +2018,14 @@ async function fetchAv1ThumbnailBlob(item) {
   }
   const work = (async () => {
     try {
-      const res = await fetch(apiUrl, { headers: headers() });
+      const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
         if (res.status !== 401) {
           av1ThumbFailedKeys.add(cacheKey);
         }
         return null;
       }
-      const blob = await res.blob();
+      const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
         av1ThumbFailedKeys.add(cacheKey);
         return null;
@@ -2089,6 +2136,8 @@ document.getElementById("btn-av1-settings").onclick = () =>
 
 applyStaticButtonIcons();
 
+document.body.classList.add("view-downloader");
+
 if (token()) {
   document.getElementById("token-input").value = token();
   showApp();
@@ -2096,6 +2145,6 @@ if (token()) {
   connectSse();
   refreshIntervalId = setInterval(() => {
     if (shuttingDown) return;
-    refreshAll().catch(() => {});
+    scheduleRefreshAll(0);
   }, 5000);
 }

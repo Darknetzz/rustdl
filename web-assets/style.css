@@ -8,6 +8,12 @@
   --muted: #a8aab2;
   --hint: #9698a0;
   --accent: #42a5f5;
+  --mode-downloader: #42a5f5;
+  --mode-downloader-soft: rgba(66, 165, 245, 0.1);
+  --mode-downloader-border: rgba(66, 165, 245, 0.32);
+  --mode-av1: #ab47bc;
+  --mode-av1-soft: rgba(171, 71, 188, 0.1);
+  --mode-av1-border: rgba(171, 71, 188, 0.32);
   --danger: #ef5350;
   --ok: #81c784;
   --warn: #ffc107;
@@ -189,6 +195,18 @@ body {
   background: var(--panel);
   border: 1px solid var(--border-panel);
   border-radius: 10px;
+}
+
+body.view-downloader #downloader-main .panel {
+  border-color: var(--mode-downloader-border);
+  box-shadow: inset 3px 0 0 var(--mode-downloader);
+  background: linear-gradient(90deg, var(--mode-downloader-soft) 0%, var(--panel) 28%);
+}
+
+body.view-av1 #av1-main .panel {
+  border-color: var(--mode-av1-border);
+  box-shadow: inset 3px 0 0 var(--mode-av1);
+  background: linear-gradient(90deg, var(--mode-av1-soft) 0%, var(--panel) 28%);
 }
 
 .hidden { display: none !important; }
@@ -910,6 +928,14 @@ dialog::backdrop {
   color: #fff;
 }
 
+.settings-tab[data-tab="downloader"].active {
+  background: var(--mode-downloader);
+}
+
+.settings-tab[data-tab="av1"].active {
+  background: var(--mode-av1);
+}
+
 .settings-scroll {
   overflow: auto;
   padding: 0.75rem 1rem;
@@ -1014,17 +1040,52 @@ body.shutdown-mode .shutdown-screen {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .nav-btn:hover { color: var(--text); }
-.nav-btn.active { background: var(--accent); color: #fff; }
+
+.nav-btn[data-view="downloader"].active {
+  background: var(--mode-downloader);
+  color: #fff;
+}
+
+.nav-btn[data-view="av1"].active {
+  background: var(--mode-av1);
+  color: #fff;
+}
 
 .view-nav.btn-group {
   background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .view-nav.btn-group > .nav-btn.active {
   z-index: 1;
+}
+
+body.view-downloader {
+  --accent: var(--mode-downloader);
+}
+
+body.view-av1 {
+  --accent: var(--mode-av1);
+}
+
+body.view-downloader button.primary {
+  background: var(--mode-downloader);
+}
+
+body.view-av1 button.primary {
+  background: var(--mode-av1);
+}
+
+body.view-downloader .card-progress-fill:not([class*="status-"]) {
+  background: var(--mode-downloader);
+}
+
+body.view-av1 .card-progress-fill:not([class*="status-"]) {
+  background: var(--mode-av1);
 }
 
 .av1-input-label { display: block; }
