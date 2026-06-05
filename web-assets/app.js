@@ -254,17 +254,17 @@ function updateDownloadControlButtons(data) {
   const queued = s.queued || 0;
   const active = s.active || 0;
   const ready = s.ready || 0;
-  const shuttingDown = statusFlags.shutdown_pending || shuttingDown;
+  const isShuttingDown = statusFlags.shutdown_pending || shuttingDown;
 
   const canPause = !paused && (queued > 0 || active > 0);
   const canResume = paused;
   const canStart = !paused && ready > 0 && cachedHasYtDlp;
 
-  pauseBtn.disabled = shuttingDown || !canPause;
-  resumeBtn.disabled = shuttingDown || !canResume;
-  startBtn.disabled = shuttingDown || !canStart;
+  pauseBtn.disabled = isShuttingDown || !canPause;
+  resumeBtn.disabled = isShuttingDown || !canResume;
+  startBtn.disabled = isShuttingDown || !canStart;
 
-  pauseBtn.title = shuttingDown
+  pauseBtn.title = isShuttingDown
     ? "Unavailable while shutting down"
     : canPause
       ? "Pause active and queued downloads"
@@ -272,13 +272,13 @@ function updateDownloadControlButtons(data) {
         ? "Downloads are already paused"
         : "No queued or active downloads to pause";
 
-  resumeBtn.title = shuttingDown
+  resumeBtn.title = isShuttingDown
     ? "Unavailable while shutting down"
     : canResume
       ? "Resume downloads and start ready items"
       : "Downloads are not paused";
 
-  startBtn.title = shuttingDown
+  startBtn.title = isShuttingDown
     ? "Unavailable while shutting down"
     : paused
       ? "Resume downloads first"

@@ -18,6 +18,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
 - LAN web UI: queue thumbnails load reliably during live SSE updates (debounced refresh, ignore aborted image loads, typed image blobs).
+
+### Fixed
+
+- LAN web UI: clearing finished downloader queue items (or any action that refreshed status) no longer throws “Cannot access 'shuttingDown' before initialization”.
 - Main panel scrolls below the header so the docked **Videos** queue is reachable; the card list keeps its own scroll inside the panel.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
