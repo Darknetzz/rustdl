@@ -80,8 +80,49 @@ When editing UI spacing or panels, check both **docked** (main window) and **flo
 ## Versioning and releases
 
 - App version: `Cargo.toml` `version` field (also `rustdl --version` / About).
-- User-facing changes: `CHANGELOG.md` (Keep a Changelog).
-- Releases: tag `rustdl-vX.Y.Z`, workflow in `.github/workflows/release.yml`.
+- User-facing history: `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)), [Semantic Versioning](https://semver.org/).
+
+### CHANGELOG on every commit
+
+When committing **any** product or user-visible change, update `CHANGELOG.md` in the **same commit**:
+
+1. Add a bullet under `## [Unreleased]` in the right subsection (`Added`, `Changed`, `Fixed`, `Removed`, `Documentation`, etc.).
+2. Write for end users, not implementers (what changed in the app, not file names or refactors).
+3. One line per notable item; group related tweaks under a single bullet when sensible.
+4. Skip `CHANGELOG.md` only for changes with **no** user-facing effect (e.g. CI-only, internal refactors, agent/docs-only edits to `AGENTS.md`).
+
+Do not wait until release day to record changes—the `[Unreleased]` section is the running draft.
+
+### Cutting a release
+
+1. **Finish the changelog** — move `[Unreleased]` bullets into a new dated section `## [X.Y.Z] - YYYY-MM-DD`; leave `[Unreleased]` empty (subsection headers optional until the next change).
+2. **Bump version** — set `version` in `Cargo.toml` to `X.Y.Z` (must match the changelog section and tag).
+3. **Update compare links** — at the bottom of `CHANGELOG.md`, add `[X.Y.Z]: https://github.com/Darknetzz/rustdl/compare/rustdl-vPREV...rustdl-vX.Y.Z` and point `[Unreleased]` at `...rustdl-vX.Y.Z...dev`.
+4. **Commit** on `dev` (e.g. `release: vX.Y.Z`).
+5. **Tag and push** — `git tag rustdl-vX.Y.Z` then `git push origin rustdl-vX.Y.Z` (and push `dev` if not already). Prefer the `rustdl-v*` prefix; `v*` tags also trigger the workflow.
+
+### Release workflow (`.github/workflows/release.yml`)
+
+Triggered by pushing a tag matching `rustdl-v*` or `v*`.
+
+| Job | What it does |
+|-----|----------------|
+| **build** (matrix) | `cargo build --release` for `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`, `x86_64-apple-darwin`, `aarch64-apple-darwin`; uploads `rustdl` / `rustdl.exe` artifacts. |
+| **release** | Downloads artifacts, runs `gh release create` with title `rustdl X.Y.Z`, release notes linking to `CHANGELOG.md` on `dev`, attaches all binaries. |
+
+Requires `contents: write` on the repo. Release notes on GitHub are a short pointer to the changelog—not a duplicate of every bullet.
+
+### CI workflow (`.github/workflows/ci.yml`)
+
+Runs on pushes to `dev` and on pull requests:
+
+| Job | Checks |
+|-----|--------|
+| **test-linux** | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`; on `dev` pushes only: `cargo deny`, `cargo audit`. |
+| **test-windows** | `cargo clippy`, `cargo test`. |
+| **test-macos** | `cargo clippy`, `cargo test`. |
+
+Fix clippy/fmt/test failures before tagging a release.
 
 ## Agent conventions
 
@@ -89,7 +130,7 @@ When editing UI spacing or panels, check both **docked** (main window) and **flo
 - **Comments**: Only for non-obvious behavior; prefer clear code.
 - **Tests**: Add or extend tests when fixing real behavior bugs; avoid trivial tests unless requested.
 - **Docs**: Do not add new markdown files unless asked (this file is the exception the user requested).
-- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config.
+- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]` (see **Versioning and releases**).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.
 
 ## Further reading
