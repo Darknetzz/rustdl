@@ -401,15 +401,8 @@ impl PydlApp {
         }
     }
 
-    /// AV1 queue scroll area (docked panel or floating window).
-    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui) {
-        if !self.av1_items.is_empty() {
-            ui.add_space(4.0);
-            self.draw_av1_queue_status_row(ui);
-            self.draw_av1_batch_summary_row(ui);
-            ui.add_space(4.0);
-        }
-        let scroll_h = ui.available_height().max(120.0);
+    pub(super) fn draw_av1_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
+        let scroll_h = scroll_max.max(120.0);
         egui::ScrollArea::vertical()
             .id_salt("av1_queue_scroll")
             .auto_shrink([false, true])
@@ -417,9 +410,10 @@ impl PydlApp {
             .animated(true)
             .drag_to_scroll(true)
             .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
                 if self.av1_items.is_empty() {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(32.0);
+                        ui.add_space(8.0);
                         ui.label(
                             RichText::new("Nothing here yet")
                                 .color(text_muted(&self.settings.theme)),
@@ -435,6 +429,16 @@ impl PydlApp {
                 }
                 self.draw_av1_grouped_cards(ui);
             });
+    }
+
+    /// AV1 queue scroll area (floating window).
+    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
+        ui.spacing_mut().item_spacing.y = 4.0;
+        if !self.av1_items.is_empty() {
+            self.draw_av1_queue_status_row(ui);
+            self.draw_av1_batch_summary_row(ui);
+        }
+        self.draw_av1_queue_list_scroll(ui, scroll_max);
     }
 
     fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
@@ -619,7 +623,7 @@ impl PydlApp {
         });
     }
 
-    fn draw_av1_batch_summary_row(&self, ui: &mut egui::Ui) {
+    pub(super) fn draw_av1_batch_summary_row(&self, ui: &mut egui::Ui) {
         let batch = compute_av1_batch_summary(&self.av1_items);
         if batch.completed == 0 && batch.pending_count == 0 {
             return;

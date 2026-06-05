@@ -12,6 +12,9 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
+/// Header + queue toolbar + status row inside the docked Videos frame (approximate).
+const DOCKED_VIDEOS_CHROME_EST: f32 = 108.0;
+
 impl PydlApp {
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
@@ -27,13 +30,33 @@ impl PydlApp {
         }
     }
 
-    /// Scrollable card grid (shared by docked panel and floating window).
-    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui) {
+    /// Docked panel: toolbar/status chrome, then a fixed-height scroll area for cards.
+    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui, list_scroll_max: f32) {
+        ui.spacing_mut().item_spacing.y = 4.0;
         if self.av1_mode {
-            self.draw_av1_queue_cards(ui);
+            if !self.av1_items.is_empty() {
+                self.draw_av1_queue_status_row(ui);
+                self.draw_av1_batch_summary_row(ui);
+            }
         } else {
-            self.draw_downloader_queue_cards(ui);
+            self.draw_downloader_queue_action_toolbar(ui);
+            if !self.items.is_empty() {
+                self.draw_downloader_queue_status_row(ui);
+            }
         }
+        let scroll_h = list_scroll_max.max(80.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), scroll_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_max_height(scroll_h);
+                if self.av1_mode {
+                    self.draw_av1_queue_list_scroll(ui, scroll_h);
+                } else {
+                    self.draw_downloader_queue_list_scroll(ui, scroll_h);
+                }
+            },
+        );
     }
 
     /// Pause/export/import/recheck/clear — lives in the video queue card or floating window.
@@ -115,18 +138,19 @@ impl PydlApp {
         button_toolbar_wrapped(ui, |ui| self.draw_downloader_queue_action_toolbar_inner(ui));
     }
 
-    fn draw_downloader_queue_list_scroll(&mut self, ui: &mut egui::Ui) {
-        let scroll_h = ui.available_height().max(120.0);
+    fn draw_downloader_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
+        let scroll_h = scroll_max.max(120.0);
         egui::ScrollArea::vertical()
             .id_salt("rustdl_videos_scroll")
-            .auto_shrink([false, true])
+            .auto_shrink([false, false])
             .max_height(scroll_h)
             .animated(true)
             .drag_to_scroll(true)
             .show(ui, |ui| {
+                ui.spacing_mut().item_spacing.y = 2.0;
                 if self.items.is_empty() {
                     ui.vertical_centered(|ui| {
-                        ui.add_space(16.0);
+                        ui.add_space(8.0);
                         ui.label(RichText::new("Nothing here yet").color(TEXT_MUTED));
                         ui.label(
                             RichText::new(
@@ -150,16 +174,6 @@ impl PydlApp {
                     }
                 }
             });
-    }
-
-    fn draw_downloader_queue_cards(&mut self, ui: &mut egui::Ui) {
-        self.draw_downloader_queue_action_toolbar(ui);
-        if !self.items.is_empty() {
-            ui.add_space(4.0);
-            self.draw_downloader_queue_status_row(ui);
-            ui.add_space(4.0);
-        }
-        self.draw_downloader_queue_list_scroll(ui);
     }
 
     /// Dock/undock and show/hide for the video queue (videos window and docked panel only).
@@ -467,26 +481,23 @@ impl PydlApp {
         egui::Frame::dark_canvas(ui.style())
             .fill(fill)
             .stroke(egui::Stroke::new(1.0, border))
-            .inner_margin(egui::Margin::same(10.0))
+            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
-                constrain_content_width(ui);
-                self.draw_videos_header_toolbar(ui);
                 let dock_log = self.settings.logs_open && self.settings.logs_docked;
                 let log_h = if dock_log {
                     self.settings.log_dock_height.clamp(80.0, 480.0)
                 } else {
                     0.0
                 };
-                let log_chrome = if dock_log { 52.0 } else { 0.0 };
-                let queue_block_h = (video_scroll_h - log_h - log_chrome).max(120.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width(), queue_block_h),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        self.draw_queue_cards(ui);
-                    },
-                );
+                let log_chrome = if dock_log { 48.0 } else { 0.0 };
+                ui.set_max_height((video_scroll_h + log_h + log_chrome).max(160.0));
+                ui.spacing_mut().item_spacing.y = 4.0;
+                constrain_content_width(ui);
+                self.draw_videos_header_toolbar(ui);
+                let list_scroll_max =
+                    (video_scroll_h - DOCKED_VIDEOS_CHROME_EST).max(100.0);
+                self.draw_queue_cards(ui, list_scroll_max);
                 if dock_log {
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
@@ -539,14 +550,12 @@ impl PydlApp {
                     }
                 });
                 if self.av1_mode {
-                    self.draw_av1_queue_cards(ui);
+                    self.draw_av1_queue_cards(ui, ui.available_height().max(200.0));
                 } else {
                     if !self.items.is_empty() {
-                        ui.add_space(4.0);
                         self.draw_downloader_queue_status_row(ui);
-                        ui.add_space(4.0);
                     }
-                    self.draw_downloader_queue_list_scroll(ui);
+                    self.draw_downloader_queue_list_scroll(ui, ui.available_height().max(200.0));
                 }
             });
         if let Some(inner) = response {

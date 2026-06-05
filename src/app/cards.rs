@@ -534,7 +534,13 @@ impl PydlApp {
             return false;
         }
         match label {
-            "Done" => false,
+            "Done" => {
+                self.status_done > 0
+                    && self.status_active == 0
+                    && self.status_queued == 0
+                    && self.status_ready == 0
+                    && self.status_resolving == 0
+            }
             "Ready" => self.items.len() <= 12,
             "Issues" => true,
             _ => self.queue_search.is_empty(),
@@ -594,7 +600,7 @@ impl PydlApp {
                 status_dot_with_label(ui, &header_text, header_color, true)
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
                 if self.settings.card_list_layout {
                     let allow_reorder = label == "Ready";
                     const LIST_ROW_H: f32 = 42.0;
