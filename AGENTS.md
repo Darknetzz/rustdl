@@ -93,10 +93,24 @@ When committing **any** product or user-visible change, update `CHANGELOG.md` in
 
 Do not wait until release day to record changes—the `[Unreleased]` section is the running draft.
 
+### Version bump on medium/bigger commits
+
+When committing **medium or larger** user-visible work, bump `version` in `Cargo.toml` in the **same commit** as the `CHANGELOG.md` update (still under `[Unreleased]` until a release is cut):
+
+| Size | Semver | Examples |
+|------|--------|----------|
+| **Patch** (+0.0.1) | `Z` | Bug fixes, small UX polish, single-setting tweaks |
+| **Minor** (+0.1.0) | `Y` | New features, notable behavior changes, multi-area improvements |
+| **Major** (+1.0.0) | `X` | Breaking changes (rare) |
+
+**Bump the version** for anything you would call a medium or bigger change—do not wait for release day.
+
+**Skip the version bump** for trivial one-off fixes (typo, tiny tweak) and changes with no user-facing effect (CI, internal refactors, docs-only edits such as this file).
+
 ### Cutting a release
 
 1. **Finish the changelog** — move `[Unreleased]` bullets into a new dated section `## [X.Y.Z] - YYYY-MM-DD`; leave `[Unreleased]` empty (subsection headers optional until the next change).
-2. **Bump version** — set `version` in `Cargo.toml` to `X.Y.Z` (must match the changelog section and tag).
+2. **Confirm version** — `version` in `Cargo.toml` must be `X.Y.Z` (usually already bumped on prior commits; adjust if the release number differs).
 3. **Update compare links** — at the bottom of `CHANGELOG.md`, add `[X.Y.Z]: https://github.com/Darknetzz/rustdl/compare/rustdl-vPREV...rustdl-vX.Y.Z` and point `[Unreleased]` at `...rustdl-vX.Y.Z...dev`.
 4. **Commit** on `dev` (e.g. `release: vX.Y.Z`).
 5. **Tag and push** — `git tag rustdl-vX.Y.Z` then `git push origin rustdl-vX.Y.Z` (and push `dev` if not already). Prefer the `rustdl-v*` prefix; `v*` tags also trigger the workflow.
@@ -130,7 +144,7 @@ Fix clippy/fmt/test failures before tagging a release.
 - **Comments**: Only for non-obvious behavior; prefer clear code.
 - **Tests**: Add or extend tests when fixing real behavior bugs; avoid trivial tests unless requested.
 - **Docs**: Do not add new markdown files unless asked (this file is the exception the user requested).
-- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]` (see **Versioning and releases**).
+- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]`; bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.
 
 ## Further reading
