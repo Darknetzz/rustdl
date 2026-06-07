@@ -65,8 +65,8 @@ impl eframe::App for PydlApp {
         let trigger_add = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
 
+        let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
         if self.settings.videos_docked {
-            let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
             let log_under_videos = self.settings.logs_open && self.settings.logs_docked;
             let dock_h = compute_main_column_split(
                 body_est.max(200.0),
@@ -84,6 +84,24 @@ impl eframe::App for PydlApp {
                 .show(ctx, |ui| {
                     self.draw_docked_videos_panel(ui);
                 });
+        } else {
+            let log_docked = self.settings.logs_open && self.settings.logs_docked;
+            let footer_h = compute_main_column_split(
+                body_est.max(200.0),
+                false,
+                self.settings.compact_cards,
+                log_docked,
+                false,
+                self.settings.log_dock_height,
+            )
+            .footer_height;
+            egui::TopBottomPanel::bottom("rustdl_undocked_footer")
+                .resizable(log_docked)
+                .default_height(footer_h)
+                .height_range(100.0..=800.0)
+                .show(ctx, |ui| {
+                    self.draw_queue_footer(ui);
+                });
         }
 
         egui::CentralPanel::default()
@@ -92,27 +110,11 @@ impl eframe::App for PydlApp {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 let videos_docked = self.settings.videos_docked;
-                let body_h = bounded_ui_height(ui, 120.0);
-                let log_docked = self.settings.logs_open && self.settings.logs_docked;
-                let undocked_footer = if videos_docked {
-                    None
-                } else {
-                    Some(compute_main_column_split(
-                        body_h,
-                        false,
-                        self.settings.compact_cards,
-                        log_docked,
-                        false,
-                        self.settings.log_dock_height,
-                    ))
-                };
                 let scroll_max = if videos_docked {
                     // Docked queue lives in TopBottomPanel; keep controls content-sized only.
                     None
-                } else if let Some(ref split) = undocked_footer {
-                    Some(split.controls_max_height.max(100.0))
                 } else {
-                    Some(body_h.max(100.0))
+                    Some(bounded_ui_height(ui, 100.0).max(100.0))
                 };
                 let mut main_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
@@ -621,16 +623,6 @@ impl eframe::App for PydlApp {
                 }
                 } // downloader mode
         });
-                if let Some(ref split) = undocked_footer {
-                    let footer_h = split.footer_height.max(80.0);
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(ui.available_width().max(1.0), footer_h),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            self.draw_queue_footer(ui);
-                        },
-                    );
-                }
                     }); // central panel
 
         self.draw_settings_window(ctx);

@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, constrain_content_width,
-    draw_status_dot, left_button_row, status_color, with_full_width,
+    draw_status_dot, left_button_row, remaining_ui_height, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -20,6 +20,20 @@ const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 160.0;
 
 impl PydlApp {
+    fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
+        let max_log = max_log.max(80.0).round();
+        let mut px = self.settings.log_dock_height.round().clamp(80.0, max_log) as i32;
+        let max_i = max_log as i32;
+        let changed = ui
+            .add(egui::Slider::new(&mut px, 80..=max_i.max(80)).text("px"))
+            .changed();
+        if changed {
+            self.settings.log_dock_height = px as f32;
+            self.persist_settings();
+        }
+        changed
+    }
+
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
             self.settings.videos_open = true;
@@ -435,8 +449,8 @@ impl PydlApp {
     }
 
     /// Activity log docked in the main panel when the video queue is undocked.
-    pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui) {
-        let section_h = bounded_ui_height(ui, 120.0);
+    pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui, section_h: f32) {
+        let section_h = section_h.max(120.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width().max(1.0), section_h),
             egui::Layout::top_down(egui::Align::Min),
@@ -468,15 +482,7 @@ impl PydlApp {
                             .log_dock_height
                             .clamp(80.0, 480.0)
                             .min(max_log);
-                        if ui
-                            .add(egui::Slider::new(
-                                &mut self.settings.log_dock_height,
-                                80.0..=max_log,
-                            ))
-                            .changed()
-                        {
-                            self.persist_settings();
-                        }
+                        self.draw_log_height_slider(ui, max_log);
                         self.draw_activity_log_toolbar(ui);
                         self.draw_activity_log_lines_scroll(ui, log_h);
                     });
@@ -484,12 +490,20 @@ impl PydlApp {
         );
     }
 
-    /// Pinned footer when the queue is undocked (docked queue uses [`TopBottomPanel`]).
+    /// Pinned footer when the queue is undocked (`TopBottomPanel` body).
     pub(super) fn draw_queue_footer(&mut self, ui: &mut egui::Ui) {
-        self.draw_videos_undocked_strip(ui);
-        if self.settings.logs_open && self.settings.logs_docked {
-            self.draw_docked_log_only_section(ui);
-        }
+        let panel_h = ui.clip_rect().height().max(80.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), panel_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                self.draw_videos_undocked_strip(ui);
+                if self.settings.logs_open && self.settings.logs_docked {
+                    let log_section_h = remaining_ui_height(ui).max(120.0);
+                    self.draw_docked_log_only_section(ui, log_section_h);
+                }
+            },
+        );
     }
 
     fn docked_log_height_budget(&self, remaining: f32) -> f32 {
@@ -559,15 +573,7 @@ impl PydlApp {
                                 - DOCKED_QUEUE_LIST_MIN_H
                                 - DOCKED_LOG_UNDER_VIDEOS_CHROME)
                                 .max(80.0);
-                            if ui
-                                .add(egui::Slider::new(
-                                    &mut self.settings.log_dock_height,
-                                    80.0..=max_log,
-                                ))
-                                .changed()
-                            {
-                                self.persist_settings();
-                            }
+                            self.draw_log_height_slider(ui, max_log);
                             self.draw_activity_log_toolbar(ui);
                             self.draw_activity_log_lines_scroll(ui, log_h);
                         }
@@ -600,15 +606,13 @@ impl PydlApp {
                         self.draw_downloader_queue_action_toolbar_inner(ui);
                     }
                 });
-                let body_h = bounded_ui_height(ui, 160.0);
+                let list_h = remaining_ui_height(ui).max(120.0);
+                let fill = self.videos_panel_fill();
+                let border = self.videos_panel_border();
                 ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width().max(1.0), body_h),
+                    egui::vec2(ui.available_width().max(1.0), list_h),
                     egui::Layout::top_down(egui::Align::Min),
                     |ui| {
-                        ui.set_min_height(body_h);
-                        ui.set_max_height(body_h);
-                        let fill = self.videos_panel_fill();
-                        let border = self.videos_panel_border();
                         egui::Frame::dark_canvas(ui.style())
                             .fill(fill)
                             .stroke(egui::Stroke::new(1.0, border))
@@ -616,6 +620,7 @@ impl PydlApp {
                             .rounding(egui::Rounding::same(8.0))
                             .show(ui, |ui| {
                                 ui.set_width(ui.available_width());
+                                ui.set_min_height(list_h);
                                 if self.av1_mode {
                                     if !self.av1_items.is_empty() {
                                         self.draw_av1_queue_status_row(ui);

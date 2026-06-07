@@ -607,7 +607,7 @@ pub struct MainColumnSplit {
     pub footer_height: f32,
 }
 
-const UNDOCKED_VIDEOS_STRIP_H: f32 = 72.0;
+const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 /// Header row, height slider, and filter toolbar above docked log lines.
 const DOCKED_LOG_CHROME_H: f32 = 100.0;
 
@@ -1089,7 +1089,7 @@ mod tests {
     #[test]
     fn main_column_split_undocked_uses_full_height() {
         let split = compute_main_column_split(600.0, false, false, false, false, 120.0);
-        assert_eq!(split.controls_max_height, (528.0_f32).max(MIN_CONTROLS_SCROLL_H));
+        assert_eq!(split.controls_max_height, (500.0_f32).max(MIN_CONTROLS_SCROLL_H));
         assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H);
     }
 

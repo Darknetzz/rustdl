@@ -25,7 +25,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Videos** queue uses a resizable bottom panel in the main window (egui `TopBottomPanel`) with a fixed-height scroll region (fixes infinite layout from unbounded `available_height()`); floating **Videos** window uses the same pattern.
 - Docked activity log under **Videos** no longer shrinks the card list below usable size (log height is capped so the queue keeps at least ~160px; log toolbar is not nested twice).
 - Main controls no longer leave a large empty gap above the docked **Videos** panel when the queue is pinned to the bottom of the window.
-- Docked activity log with an undocked **Videos** window no longer scatters controls across empty space (footer height is pinned; log lines use a bounded scroll region).
+- Undocked **Videos** strip and docked activity log use a resizable bottom panel (same layout model as docked **Videos**), fixing overlapping log controls and empty space below the footer.
+- Floating **Videos** window card list fills the space below the toolbar again.
+- Log height slider shows whole pixels instead of long floating-point values.
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
