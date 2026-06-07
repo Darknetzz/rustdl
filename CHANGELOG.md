@@ -35,7 +35,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Fixed startup crash (`FontFamily::Name("material-icons")`) when drawing the mode tabs.
 - Floating **Videos** window: toolbar pins to the top, queue list fills the remaining height, and cards scroll again.
 - **Downloader** / **AV1 Converter** mode tabs use full row width with visible icon + label text (layout no longer shrink-wraps inside the main scroll area).
-- Docked **Videos** queue fills the bottom panel width/height, pins the card list under the toolbar, and uses cursor-based height so cards scroll instead of leaving a blank panel.
+- Docked **Videos** queue fills the bottom panel width/height, pins the card list under the toolbar, and sizes the scroll area from the panel clip rect so cards are not clipped to a thin strip.
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
