@@ -383,11 +383,12 @@ impl PydlApp {
         let scroll_h = scroll_max.max(120.0);
         egui::ScrollArea::vertical()
             .id_salt("av1_queue_scroll")
-            .auto_shrink([false, true])
+            .auto_shrink([false, false])
             .max_height(scroll_h)
             .animated(true)
             .drag_to_scroll(true)
             .show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 2.0;
                 if self.av1_items.is_empty() {
                     ui.vertical_centered(|ui| {

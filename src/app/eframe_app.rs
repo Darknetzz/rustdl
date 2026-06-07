@@ -64,6 +64,27 @@ impl eframe::App for PydlApp {
         let trigger_add = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
 
+        if self.settings.videos_docked {
+            let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
+            let log_under_videos = self.settings.logs_open && self.settings.logs_docked;
+            let dock_h = compute_main_column_split(
+                body_est.max(200.0),
+                true,
+                self.settings.compact_cards,
+                false,
+                log_under_videos,
+                self.settings.log_dock_height,
+            )
+            .footer_height;
+            egui::TopBottomPanel::bottom("rustdl_videos_dock")
+                .resizable(true)
+                .default_height(dock_h)
+                .height_range(180.0..=800.0)
+                .show(ctx, |ui| {
+                    self.draw_docked_videos_panel(ui);
+                });
+        }
+
         egui::CentralPanel::default()
             .frame(content_panel_frame())
             .show(ctx, |ui| {
@@ -71,20 +92,26 @@ impl eframe::App for PydlApp {
                 self.draw_main_header(ui);
                 let body_h = ui.available_height().max(120.0);
                 let log_docked = self.settings.logs_open && self.settings.logs_docked;
-                let split = compute_main_column_split(
-                    body_h,
-                    self.settings.videos_docked,
-                    self.settings.compact_cards,
-                    log_docked && !self.settings.videos_docked,
-                    log_docked && self.settings.videos_docked,
-                    self.settings.log_dock_height,
-                );
-                ui.vertical(|ui| {
-                let footer_h = split.footer_height;
-                let max_controls = (ui.available_height() - footer_h).max(100.0);
+                let undocked_footer = if self.settings.videos_docked {
+                    None
+                } else {
+                    Some(compute_main_column_split(
+                        body_h,
+                        false,
+                        self.settings.compact_cards,
+                        log_docked,
+                        false,
+                        self.settings.log_dock_height,
+                    ))
+                };
+                let footer_reserve = undocked_footer
+                    .as_ref()
+                    .map(|split| split.footer_height)
+                    .unwrap_or(0.0);
+                let max_controls = (ui.available_height() - footer_reserve).max(100.0);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, true])
+                    .auto_shrink([false, false])
                     .max_height(max_controls)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
@@ -587,8 +614,9 @@ impl eframe::App for PydlApp {
                 }
                 } // downloader mode
         });
-                self.draw_queue_footer(ui, footer_h);
-                }); // body column (scroll + footer)
+                if undocked_footer.is_some() {
+                    self.draw_queue_footer(ui);
+                }
                     }); // central panel
 
         self.draw_settings_window(ctx);
