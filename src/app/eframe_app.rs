@@ -116,7 +116,7 @@ impl eframe::App for PydlApp {
                 };
                 let mut main_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, scroll_max.is_none()])
+                    .auto_shrink([false, true])
                     .drag_to_scroll(true);
                 if let Some(h) = scroll_max {
                     main_scroll = main_scroll.max_height(h);
@@ -621,8 +621,15 @@ impl eframe::App for PydlApp {
                 }
                 } // downloader mode
         });
-                if undocked_footer.is_some() {
-                    self.draw_queue_footer(ui);
+                if let Some(ref split) = undocked_footer {
+                    let footer_h = split.footer_height.max(80.0);
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(ui.available_width().max(1.0), footer_h),
+                        egui::Layout::top_down(egui::Align::Min),
+                        |ui| {
+                            self.draw_queue_footer(ui);
+                        },
+                    );
                 }
                     }); // central panel
 

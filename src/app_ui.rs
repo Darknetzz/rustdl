@@ -608,7 +608,8 @@ pub struct MainColumnSplit {
 }
 
 const UNDOCKED_VIDEOS_STRIP_H: f32 = 72.0;
-const DOCKED_LOG_CHROME_H: f32 = 48.0;
+/// Header row, height slider, and filter toolbar above docked log lines.
+const DOCKED_LOG_CHROME_H: f32 = 100.0;
 
 pub fn compute_main_column_split(
     available_height: f32,

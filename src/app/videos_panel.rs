@@ -14,6 +14,8 @@ use super::PydlApp;
 
 /// Chrome below the queue list when the activity log is docked under Videos (header, slider, toolbar).
 const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
+/// Chrome above log lines when the activity log is docked in the main column (videos undocked).
+const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 160.0;
 
@@ -434,37 +436,52 @@ impl PydlApp {
 
     /// Activity log docked in the main panel when the video queue is undocked.
     pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui) {
-        let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
-        egui::Frame::dark_canvas(ui.style())
-            .fill(BG_CANVAS)
-            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
-            .inner_margin(egui::Margin::same(10.0))
-            .rounding(egui::Rounding::same(8.0))
-            .show(ui, |ui| {
-                constrain_content_width(ui);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Activity log").small().strong());
-                    let tail_w = ui.available_width();
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(tail_w.max(0.0), 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            self.draw_log_controls(ui);
-                        },
-                    );
-                });
-                if ui
-                    .add(egui::Slider::new(
-                        &mut self.settings.log_dock_height,
-                        80.0..=480.0,
-                    ))
-                    .changed()
-                {
-                    self.persist_settings();
-                }
-                self.draw_activity_log_toolbar(ui);
-                self.draw_activity_log_lines_scroll(ui, log_h);
-            });
+        let section_h = bounded_ui_height(ui, 120.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), section_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                egui::Frame::dark_canvas(ui.style())
+                    .fill(BG_CANVAS)
+                    .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .rounding(egui::Rounding::same(8.0))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.set_min_height(section_h);
+                        constrain_content_width(ui);
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new("Activity log").small().strong());
+                            let tail_w = ui.available_width();
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(tail_w.max(0.0), 0.0),
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    self.draw_log_controls(ui);
+                                },
+                            );
+                        });
+                        let remaining = bounded_ui_height(ui, 60.0);
+                        let max_log = (remaining - UNDOCKED_DOCKED_LOG_CHROME).max(80.0);
+                        let log_h = self
+                            .settings
+                            .log_dock_height
+                            .clamp(80.0, 480.0)
+                            .min(max_log);
+                        if ui
+                            .add(egui::Slider::new(
+                                &mut self.settings.log_dock_height,
+                                80.0..=max_log,
+                            ))
+                            .changed()
+                        {
+                            self.persist_settings();
+                        }
+                        self.draw_activity_log_toolbar(ui);
+                        self.draw_activity_log_lines_scroll(ui, log_h);
+                    });
+            },
+        );
     }
 
     /// Pinned footer when the queue is undocked (docked queue uses [`TopBottomPanel`]).
