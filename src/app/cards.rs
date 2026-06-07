@@ -51,7 +51,7 @@ impl PydlApp {
             && video_id_nonempty
             && done_file.is_none();
         let show_saved_file_actions = matches!(status, ItemStatus::Done | ItemStatus::Failed);
-        let can_redownload = show_saved_file_actions && {
+        let can_redownload = status == ItemStatus::Done && {
             let it = &self.items[idx];
             self.item_has_redownload_target(it)
         };
@@ -352,10 +352,11 @@ impl PydlApp {
                             {
                                 self.check_streams_for_item_id(id);
                             }
-                            if g.secondary(
-                                &format!("{} Redo", ui_icons::REDOWNLOAD),
-                                self.has_yt_dlp && output_ready && can_redownload,
-                            )
+                            if status == ItemStatus::Done
+                                && g.secondary(
+                                    &format!("{} Redo", ui_icons::REDOWNLOAD),
+                                    self.has_yt_dlp && output_ready && can_redownload,
+                                )
                             .on_hover_text(
                                 "Deletes the matched file in the output folder (if found), then downloads this URL again.",
                             )

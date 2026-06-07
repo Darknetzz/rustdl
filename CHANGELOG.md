@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Failed download cards show **Retry** only (not a duplicate **Redo**); **Redo** remains on completed downloads.
 - LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
 - LAN web UI: queue thumbnails load reliably during live SSE updates (debounced refresh, ignore aborted image loads, typed image blobs).
 
