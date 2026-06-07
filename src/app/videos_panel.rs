@@ -14,6 +14,8 @@ use super::PydlApp;
 
 /// Header toolbar + status row inside the docked Videos frame (approximate).
 const DOCKED_VIDEOS_CHROME_EST: f32 = 72.0;
+/// Status row drawn above the card list in the floating queue window.
+const FLOAT_QUEUE_STATUS_EST: f32 = 28.0;
 
 impl PydlApp {
     pub(super) fn ensure_videos_window_open(&mut self) {
@@ -454,8 +456,20 @@ impl PydlApp {
             });
     }
 
+    /// Pinned footer: docked queue, undocked strip, and optional docked log (when queue is undocked).
+    pub(super) fn draw_queue_footer(&mut self, ui: &mut egui::Ui, footer_height: f32) {
+        if self.settings.videos_docked {
+            self.draw_docked_videos_section(ui, footer_height);
+        } else {
+            self.draw_videos_undocked_strip(ui);
+            if self.settings.logs_open && self.settings.logs_docked {
+                self.draw_docked_log_only_section(ui);
+            }
+        }
+    }
+
     /// Docked video frame (cards + optional docked log below).
-    pub(super) fn draw_docked_videos_section(&mut self, ui: &mut egui::Ui, video_scroll_h: f32) {
+    pub(super) fn draw_docked_videos_section(&mut self, ui: &mut egui::Ui, footer_height: f32) {
         let theme = self.settings.theme.clone();
         let fill = if self.av1_mode {
             canvas_bg(&theme)
@@ -481,12 +495,15 @@ impl PydlApp {
                     0.0
                 };
                 let log_chrome = if dock_log { 48.0 } else { 0.0 };
-                ui.set_max_height((video_scroll_h + log_h + log_chrome).max(160.0));
+                ui.set_max_height(footer_height.max(160.0));
                 ui.spacing_mut().item_spacing.y = 4.0;
                 constrain_content_width(ui);
                 self.draw_videos_header_toolbar(ui);
-                let list_scroll_max =
-                    (video_scroll_h - DOCKED_VIDEOS_CHROME_EST).max(100.0);
+                let list_scroll_max = (footer_height
+                    - DOCKED_VIDEOS_CHROME_EST
+                    - log_h
+                    - log_chrome)
+                    .max(100.0);
                 self.draw_queue_cards(ui, list_scroll_max);
                 if dock_log {
                     ui.add_space(6.0);
@@ -539,14 +556,17 @@ impl PydlApp {
                         self.draw_downloader_queue_action_toolbar_inner(ui);
                     }
                 });
-                if self.av1_mode {
-                    self.draw_av1_queue_cards(ui, ui.available_height().max(200.0));
-                } else {
-                    if !self.items.is_empty() {
-                        self.draw_downloader_queue_status_row(ui);
-                    }
-                    self.draw_downloader_queue_list_scroll(ui, ui.available_height().max(200.0));
-                }
+                let scroll_h = ui.available_height().max(200.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width().max(1.0), scroll_h),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_min_height(scroll_h);
+                        ui.set_max_height(scroll_h);
+                        let list_h = (scroll_h - FLOAT_QUEUE_STATUS_EST).max(120.0);
+                        self.draw_queue_cards(ui, list_h);
+                    },
+                );
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();

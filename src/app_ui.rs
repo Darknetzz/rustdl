@@ -583,39 +583,43 @@ pub fn content_panel_frame() -> egui::Frame {
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
 
-/// Split remaining main-panel height between scrollable controls and a docked video queue.
+/// Split remaining main-panel height between scrollable controls and a pinned footer.
 pub struct MainColumnSplit {
     pub controls_max_height: f32,
-    pub videos_height: f32,
+    /// Height reserved for the pinned footer (docked video queue and/or undocked strip + docked log).
+    pub footer_height: f32,
 }
 
-/// Height budget for a docked video queue panel (toolbar + scrollable cards).
-pub fn docked_videos_panel_height(ctx: &egui::Context, compact_cards: bool) -> f32 {
-    let screen_h = ctx.input(|i| i.screen_rect.height());
-    let min_h = if compact_cards { 200.0 } else { 240.0 };
-    (screen_h * 0.38).clamp(min_h, 480.0)
-}
+const UNDOCKED_VIDEOS_STRIP_H: f32 = 72.0;
+const DOCKED_LOG_CHROME_H: f32 = 48.0;
 
 pub fn compute_main_column_split(
     available_height: f32,
     videos_docked: bool,
     compact_cards: bool,
+    log_docked_separate: bool,
+    log_docked_under_videos: bool,
+    log_dock_height: f32,
 ) -> MainColumnSplit {
     let h = available_height.max(0.0);
+    let log_h = log_dock_height.clamp(80.0, 480.0) + DOCKED_LOG_CHROME_H;
+    let log_footer = if log_docked_separate { log_h } else { 0.0 };
     if !videos_docked {
-        const UNDOCKED_STRIP: f32 = 72.0;
+        let footer = UNDOCKED_VIDEOS_STRIP_H + log_footer;
         return MainColumnSplit {
-            controls_max_height: (h - UNDOCKED_STRIP).max(MIN_CONTROLS_SCROLL_H),
-            videos_height: 0.0,
+            controls_max_height: (h - footer).max(MIN_CONTROLS_SCROLL_H),
+            footer_height: footer,
         };
     }
+    let log_reserve = if log_docked_under_videos { log_h } else { 0.0 };
     let min_videos = if compact_cards { 180.0 } else { 220.0 };
+    let min_videos = min_videos + log_reserve;
     if h <= MIN_CONTROLS_SCROLL_H + min_videos {
         let videos_h = (h * 0.45).clamp(120.0, (h - 60.0).max(120.0));
         let controls_h = (h - videos_h).max(60.0);
         return MainColumnSplit {
             controls_max_height: controls_h,
-            videos_height: videos_h,
+            footer_height: videos_h,
         };
     }
     let videos_h = (h * VIDEOS_DOCKED_HEIGHT_RATIO)
@@ -623,7 +627,7 @@ pub fn compute_main_column_split(
         .min(h - MIN_CONTROLS_SCROLL_H);
     MainColumnSplit {
         controls_max_height: h - videos_h,
-        videos_height: videos_h,
+        footer_height: videos_h,
     }
 }
 
@@ -1052,23 +1056,30 @@ mod tests {
 
     #[test]
     fn main_column_split_fits_viewport() {
-        let split = compute_main_column_split(600.0, true, false);
+        let split = compute_main_column_split(600.0, true, false, false, false, 120.0);
         assert!(split.controls_max_height >= 100.0);
-        assert!(split.videos_height >= 220.0);
-        assert!((split.controls_max_height + split.videos_height - 600.0).abs() < 0.01);
+        assert!(split.footer_height >= 220.0);
+        assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
     }
 
     #[test]
     fn main_column_split_never_exceeds_available() {
-        let split = compute_main_column_split(280.0, true, false);
-        assert!(split.controls_max_height + split.videos_height <= 280.0 + 0.01);
+        let split = compute_main_column_split(280.0, true, false, false, false, 120.0);
+        assert!(split.controls_max_height + split.footer_height <= 280.0 + 0.01);
     }
 
     #[test]
     fn main_column_split_undocked_uses_full_height() {
-        let split = compute_main_column_split(600.0, false, false);
+        let split = compute_main_column_split(600.0, false, false, false, false, 120.0);
         assert_eq!(split.controls_max_height, (528.0_f32).max(MIN_CONTROLS_SCROLL_H));
-        assert_eq!(split.videos_height, 0.0);
+        assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H);
+    }
+
+    #[test]
+    fn main_column_split_undocked_reserves_docked_log() {
+        let split = compute_main_column_split(600.0, false, false, true, false, 120.0);
+        assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H + 120.0 + DOCKED_LOG_CHROME_H);
+        assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
     }
 
     fn idle_inputs() -> NavbarStatusInputs {

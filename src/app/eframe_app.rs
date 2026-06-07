@@ -1,8 +1,7 @@
 use super::*;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, content_width,
-    docked_videos_panel_height, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row,
-    with_full_width,
+    button_group, button_toolbar_wrapped, compute_main_column_split, constrain_content_width,
+    content_width, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row, with_full_width,
 };
 
 impl eframe::App for PydlApp {
@@ -71,10 +70,19 @@ impl eframe::App for PydlApp {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 let body_h = ui.available_height().max(120.0);
+                let log_docked = self.settings.logs_open && self.settings.logs_docked;
+                let split = compute_main_column_split(
+                    body_h,
+                    self.settings.videos_docked,
+                    self.settings.compact_cards,
+                    log_docked && !self.settings.videos_docked,
+                    log_docked && self.settings.videos_docked,
+                    self.settings.log_dock_height,
+                );
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
                     .auto_shrink([false, false])
-                    .max_height(body_h)
+                    .max_height(split.controls_max_height)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
                 ui.label(
@@ -172,9 +180,7 @@ impl eframe::App for PydlApp {
                 ui.separator();
                 if self.av1_mode {
                     self.draw_av1_panel(ui);
-                    return;
-                }
-
+                } else {
                 with_full_width(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -576,19 +582,10 @@ impl eframe::App for PydlApp {
                         self.draw_log_controls(ui);
                     });
                 }
-
-                if self.settings.videos_docked {
-                    let videos_h =
-                        docked_videos_panel_height(ctx, self.settings.compact_cards);
-                    self.draw_docked_videos_section(ui, videos_h);
-                } else {
-                    self.draw_videos_undocked_strip(ui);
-                    if self.settings.logs_open && self.settings.logs_docked {
-                        self.draw_docked_log_only_section(ui);
-                    }
-                }
+                } // downloader mode
         });
-                    }); // main body scroll
+                self.draw_queue_footer(ui, split.footer_height);
+                    }); // central panel
 
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);

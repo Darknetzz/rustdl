@@ -3,9 +3,9 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, docked_videos_panel_height,
-    draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row, status_color,
-    status_dot_with_label, MetaBadgeKind,
+    button_group, button_toolbar_wrapped, constrain_content_width, draw_labeled_meta_badge,
+    draw_meta_badge, draw_status_dot, left_button_row, status_color, status_dot_with_label,
+    MetaBadgeKind,
 };
 use crate::config::AppSettings;
 use crate::av1_state::{
@@ -377,17 +377,6 @@ impl PydlApp {
                         }
                     });
                 });
-
-        if self.settings.videos_docked {
-            let videos_h =
-                docked_videos_panel_height(ui.ctx(), self.settings.compact_cards);
-            self.draw_docked_videos_section(ui, videos_h);
-        } else {
-            self.draw_videos_undocked_strip(ui);
-            if self.settings.logs_open && self.settings.logs_docked {
-                self.draw_docked_log_only_section(ui);
-            }
-        }
     }
 
     pub(super) fn draw_av1_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
@@ -418,16 +407,6 @@ impl PydlApp {
                 }
                 self.draw_av1_grouped_cards(ui);
             });
-    }
-
-    /// AV1 queue scroll area (floating window).
-    pub(super) fn draw_av1_queue_cards(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
-        ui.spacing_mut().item_spacing.y = 4.0;
-        if !self.av1_items.is_empty() {
-            self.draw_av1_queue_status_row(ui);
-            self.draw_av1_batch_summary_row(ui);
-        }
-        self.draw_av1_queue_list_scroll(ui, scroll_max);
     }
 
     fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
