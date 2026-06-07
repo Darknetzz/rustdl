@@ -32,6 +32,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Docked **Videos** bottom panel respects manual resize (content no longer forces the panel back to full height); card list fills space below the toolbar.
 - Docked **Videos** card list uses `available_height` layout (fixes toolbar floating mid-panel and invisible queue from stale panel state).
 - **Downloader** / **AV1 Converter** mode tabs show their labels again (icon + text use separate fonts; tabs no longer rely on oversized min-width buttons).
+- Fixed startup crash (`FontFamily::Name("material-icons")`) when drawing the mode tabs.
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.

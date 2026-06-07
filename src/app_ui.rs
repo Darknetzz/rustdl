@@ -651,8 +651,9 @@ pub fn compute_main_column_split(
 
 fn mode_nav_button_label(icon: &str, title: &str, text_color: Color32) -> egui::WidgetText {
     let mut job = egui::text::LayoutJob::default();
+    // Material icons are registered on the Proportional family fallback chain, not as a named family.
     let icon_fmt = egui::text::TextFormat {
-        font_id: egui::FontId::new(18.0, egui::FontFamily::Name("material-icons".into())),
+        font_id: egui::FontId::new(18.0, egui::FontFamily::Proportional),
         color: text_color,
         ..Default::default()
     };
