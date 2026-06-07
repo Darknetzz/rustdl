@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, constrain_content_width, draw_status_dot,
-    left_button_row, status_color, with_full_width,
+    left_button_row, remaining_clip_height, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -27,24 +27,32 @@ impl PydlApp {
         }
     }
 
-    /// Status row + scrollable cards. Parent must set a height budget (`available_height`).
-    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui) {
-        ui.spacing_mut().item_spacing.y = 4.0;
-        if self.av1_mode {
-            if !self.av1_items.is_empty() {
-                self.draw_av1_queue_status_row(ui);
-                self.draw_av1_batch_summary_row(ui);
-            }
-        } else if !self.items.is_empty() {
-            self.draw_downloader_queue_status_row(ui);
-        }
-        let scroll_h = ui.available_height().max(80.0);
+    /// Status row + scrollable cards inside a fixed vertical budget.
+    pub(super) fn draw_queue_cards(
+        &mut self,
+        ui: &mut egui::Ui,
+        area_height: f32,
+        show_status: bool,
+    ) {
+        let area_h = area_height.max(100.0);
         ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width().max(1.0), scroll_h),
+            egui::vec2(ui.available_width().max(1.0), area_h),
             egui::Layout::top_down(egui::Align::Min),
             |ui| {
-                ui.set_min_height(scroll_h);
-                ui.set_max_height(scroll_h);
+                ui.set_min_height(area_h);
+                ui.set_max_height(area_h);
+                ui.spacing_mut().item_spacing.y = 4.0;
+                if show_status {
+                    if self.av1_mode {
+                        if !self.av1_items.is_empty() {
+                            self.draw_av1_queue_status_row(ui);
+                            self.draw_av1_batch_summary_row(ui);
+                        }
+                    } else if !self.items.is_empty() {
+                        self.draw_downloader_queue_status_row(ui);
+                    }
+                }
+                let scroll_h = remaining_clip_height(ui).max(80.0);
                 if self.av1_mode {
                     self.draw_av1_queue_list_scroll(ui, scroll_h);
                 } else {
@@ -130,10 +138,10 @@ impl PydlApp {
     }
 
     fn draw_downloader_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
-        let scroll_h = scroll_max.max(120.0);
+        let scroll_h = scroll_max.max(80.0);
         egui::ScrollArea::vertical()
             .id_salt("rustdl_videos_scroll")
-            .auto_shrink([false, false])
+            .auto_shrink([false, true])
             .max_height(scroll_h)
             .animated(true)
             .drag_to_scroll(true)
@@ -490,6 +498,8 @@ impl PydlApp {
                     .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                     .rounding(egui::Rounding::same(8.0))
                     .show(ui, |ui| {
+                        ui.set_min_height(footer_h - 16.0);
+                        ui.set_max_height(footer_h - 16.0);
                         ui.spacing_mut().item_spacing.y = 4.0;
                         constrain_content_width(ui);
                         self.draw_videos_header_toolbar(ui);
@@ -498,16 +508,9 @@ impl PydlApp {
                         if dock_log {
                             let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
                             let log_chrome = 54.0;
-                            let list_h = (ui.available_height() - log_h - log_chrome).max(80.0);
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(ui.available_width().max(1.0), list_h),
-                                egui::Layout::top_down(egui::Align::Min),
-                                |ui| {
-                                    ui.set_min_height(list_h);
-                                    ui.set_max_height(list_h);
-                                    self.draw_queue_cards(ui);
-                                },
-                            );
+                            let list_h =
+                                (remaining_clip_height(ui) - log_h - log_chrome).max(100.0);
+                            self.draw_queue_cards(ui, list_h, false);
                             ui.add_space(6.0);
                             ui.horizontal(|ui| {
                                 ui.label(RichText::new("Activity log").small().strong());
@@ -536,7 +539,8 @@ impl PydlApp {
                                     self.draw_activity_log_panel(ui);
                                 });
                         } else {
-                            self.draw_queue_cards(ui);
+                            let list_h = remaining_clip_height(ui).max(100.0);
+                            self.draw_queue_cards(ui, list_h, false);
                         }
                     });
             },
@@ -567,16 +571,8 @@ impl PydlApp {
                         self.draw_downloader_queue_action_toolbar_inner(ui);
                     }
                 });
-                let scroll_h = ui.available_height().max(200.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width().max(1.0), scroll_h),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_min_height(scroll_h);
-                        ui.set_max_height(scroll_h);
-                        self.draw_queue_cards(ui);
-                    },
-                );
+                let list_h = remaining_clip_height(ui).max(120.0);
+                self.draw_queue_cards(ui, list_h, true);
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();

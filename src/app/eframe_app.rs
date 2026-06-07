@@ -81,19 +81,13 @@ impl eframe::App for PydlApp {
                 );
                 ui.vertical(|ui| {
                 let footer_h = split.footer_height;
-                let controls_h = (ui.available_height() - footer_h).max(100.0);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(ui.available_width().max(1.0), controls_h),
-                    egui::Layout::top_down(egui::Align::Min),
-                    |ui| {
-                        ui.set_min_height(controls_h);
-                        ui.set_max_height(controls_h);
-                        egui::ScrollArea::vertical()
-                            .id_salt("rustdl_main_body_v1")
-                            .auto_shrink([false, false])
-                            .max_height(controls_h)
-                            .drag_to_scroll(true)
-                            .show(ui, |ui| {
+                let max_controls = (ui.available_height() - footer_h).max(100.0);
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_main_body_v1")
+                    .auto_shrink([false, true])
+                    .max_height(max_controls)
+                    .drag_to_scroll(true)
+                    .show(ui, |ui| {
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
@@ -593,7 +587,6 @@ impl eframe::App for PydlApp {
                 }
                 } // downloader mode
         });
-                    });
                 self.draw_queue_footer(ui, footer_h);
                 }); // body column (scroll + footer)
                     }); // central panel

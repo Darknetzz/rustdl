@@ -581,7 +581,13 @@ pub fn content_panel_frame() -> egui::Frame {
 }
 
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
-const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.45;
+const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
+
+/// Remaining vertical space inside the current clip (finite even in content-sized frames).
+pub fn remaining_clip_height(ui: &egui::Ui) -> f32 {
+    let top = ui.min_rect().bottom();
+    (ui.clip_rect().bottom() - top).max(0.0)
+}
 
 /// Split remaining main-panel height between scrollable controls and a pinned footer.
 pub struct MainColumnSplit {
