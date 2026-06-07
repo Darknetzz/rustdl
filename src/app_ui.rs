@@ -583,10 +583,9 @@ pub fn content_panel_frame() -> egui::Frame {
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
-/// Vertical space from the cursor to the bottom of the clip rect (always finite).
+/// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
 pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
-    let top = ui.min_rect().bottom();
-    (ui.clip_rect().bottom() - top).max(0.0)
+    (ui.clip_rect().bottom() - ui.cursor().min.y).max(0.0)
 }
 
 /// Like [`remaining_ui_height`] but ignores unbounded `available_height()` from content-sized parents.
