@@ -43,6 +43,9 @@ pub struct QueueItem {
     /// Absolute path to the finished download when known (survives restarts; used for play/thumbnails).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_path: Option<String>,
+    /// Unix seconds when this row last reached Done (display order for the Done group).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at: Option<u64>,
 }
 
 impl Default for QueueItem {
@@ -67,6 +70,7 @@ impl Default for QueueItem {
             detail: String::new(),
             sort_order: 0,
             local_path: None,
+            completed_at: None,
         }
     }
 }
@@ -93,6 +97,7 @@ impl QueueItem {
             detail: "Fetching metadata...".to_owned(),
             sort_order: item_id,
             local_path: None,
+            completed_at: None,
         }
     }
 
@@ -130,6 +135,7 @@ impl QueueItem {
             detail: String::new(),
             sort_order: item_id,
             local_path: None,
+            completed_at: None,
         }
     }
 }

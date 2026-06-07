@@ -312,7 +312,7 @@ impl DownloadCore {
 
     pub fn set_item_status_at(&mut self, idx: usize, new: ItemStatus) {
         if idx < self.items.len() {
-            self.items[idx].status = new;
+            crate::app_state::transition_queue_item_status(&mut self.items[idx], new);
             self.update_status();
         }
     }

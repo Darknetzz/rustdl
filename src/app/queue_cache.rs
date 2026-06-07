@@ -92,10 +92,11 @@ impl PydlApp {
 
     pub(super) fn set_item_status_at(&mut self, idx: usize, new: ItemStatus) {
         let old = self.items[idx].status;
-        if old != new {
-            self.items[idx].status = new;
-            self.apply_status_delta(old, new);
+        if old == new {
+            return;
         }
+        crate::app_state::transition_queue_item_status(&mut self.items[idx], new);
+        self.apply_status_delta(old, new);
     }
 
     pub(super) fn mark_transfer_totals_dirty(&mut self) {

@@ -50,6 +50,34 @@ pub fn dec_status_count(counts: &mut StatusCounts, status: ItemStatus) {
     }
 }
 
+pub fn unix_secs_now() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Updates `status` and maintains `completed_at` when entering or leaving Done.
+pub fn transition_queue_item_status(item: &mut QueueItem, new: ItemStatus) {
+    let old = item.status;
+    if old == new {
+        return;
+    }
+    if new == ItemStatus::Done {
+        item.completed_at = Some(unix_secs_now());
+    } else if old == ItemStatus::Done {
+        item.completed_at = None;
+    }
+    item.status = new;
+}
+
+/// Sort key for Done rows: newest completion first (left in the card strip).
+pub fn done_item_sort_key(item: &QueueItem) -> (u64, u64) {
+    let t = item.completed_at.unwrap_or(item.item_id);
+    (t, item.item_id)
+}
+
 pub fn compute_transfer_totals(items: &[QueueItem]) -> TransferTotals {
     use crate::app_parsing::parse_item_size_text;
     let mut totals = TransferTotals::default();
@@ -228,6 +256,38 @@ mod tests {
         dec_status_count(&mut counts, ItemStatus::Queued);
         assert_eq!(counts.queued, 0);
         assert_eq!(counts.active, 1);
+    }
+
+    #[test]
+    fn transition_queue_item_status_sets_completed_at() {
+        let mut item = QueueItem {
+            item_id: 7,
+            status: ItemStatus::Downloading,
+            ..Default::default()
+        };
+        transition_queue_item_status(&mut item, ItemStatus::Done);
+        assert_eq!(item.status, ItemStatus::Done);
+        assert!(item.completed_at.is_some());
+        transition_queue_item_status(&mut item, ItemStatus::Idle);
+        assert_eq!(item.status, ItemStatus::Idle);
+        assert!(item.completed_at.is_none());
+    }
+
+    #[test]
+    fn done_item_sort_key_prefers_newer_completion() {
+        let older = QueueItem {
+            item_id: 1,
+            completed_at: Some(100),
+            status: ItemStatus::Done,
+            ..Default::default()
+        };
+        let newer = QueueItem {
+            item_id: 2,
+            completed_at: Some(200),
+            status: ItemStatus::Done,
+            ..Default::default()
+        };
+        assert!(done_item_sort_key(&newer) > done_item_sort_key(&older));
     }
 
     #[test]

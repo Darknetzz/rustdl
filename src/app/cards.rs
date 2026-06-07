@@ -580,6 +580,15 @@ impl PydlApp {
                         })
                         .unwrap_or(*id)
                 });
+            } else if label == "Done" {
+                ids.sort_by(|a, b| {
+                    let key = |id: u64| {
+                        self.item_idx(id)
+                            .map(|idx| crate::app_state::done_item_sort_key(&self.items[idx]))
+                            .unwrap_or((0, id))
+                    };
+                    key(*b).cmp(&key(*a))
+                });
             }
             if ids.is_empty() {
                 continue;

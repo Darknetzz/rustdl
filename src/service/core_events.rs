@@ -362,7 +362,7 @@ impl super::core::DownloadCore {
             } else {
                 ItemStatus::Failed
             };
-            self.items[idx].status = new_status;
+            crate::app_state::transition_queue_item_status(&mut self.items[idx], new_status);
             if completed {
                 self.items[idx].percent = 100.0;
                 self.items[idx].eta_text = "0s".to_owned();

@@ -1314,7 +1314,7 @@ impl PydlApp {
                 Err(e) => Some(e),
             };
             if let Some(msg) = fail_msg {
-                self.items[idx].status = ItemStatus::Failed;
+                self.set_item_status_at(idx, ItemStatus::Failed);
                 self.items[idx].detail = msg.clone();
                 issues += 1;
                 self.append_log(&format!("[item {item_id}] Re-check: {msg}"));
