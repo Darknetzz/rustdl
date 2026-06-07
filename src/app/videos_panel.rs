@@ -64,9 +64,12 @@ impl PydlApp {
         }
     }
 
-    /// Scrollable card list (height capped with [`bounded_ui_height`] — windows report unbounded `available_height`).
+    /// Scrollable card list (`scroll_h` should be remaining height from the parent; cards scroll inside).
     fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32, scroll_id: &str) {
-        let scroll_h = scroll_h.max(80.0).min(bounded_ui_height(ui, 80.0));
+        let mut scroll_h = scroll_h.max(80.0);
+        if !scroll_h.is_finite() {
+            scroll_h = bounded_ui_height(ui, 80.0);
+        }
         ui.set_width(ui.available_width());
         ui.set_height(scroll_h);
         if self.av1_mode {
@@ -509,12 +512,12 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.set_min_height(panel_h);
+                ui.set_height(panel_h);
                 ui.spacing_mut().item_spacing.y = 4.0;
                 constrain_content_width(ui);
                 self.draw_videos_header_toolbar(ui);
 
-                let below_toolbar = bounded_ui_height(ui, DOCKED_QUEUE_LIST_MIN_H);
+                let below_toolbar = remaining_ui_height(ui).max(DOCKED_QUEUE_LIST_MIN_H);
                 if dock_log {
                     let log_chrome = DOCKED_LOG_UNDER_VIDEOS_CHROME;
                     let log_pref = self.docked_log_height_budget(below_toolbar);
@@ -538,10 +541,10 @@ impl PydlApp {
                         (below_toolbar - DOCKED_QUEUE_LIST_MIN_H - log_chrome).max(80.0);
                     self.draw_log_height_slider(ui, max_log);
                     self.draw_activity_log_toolbar(ui);
-                    let log_lines_h = bounded_ui_height(ui, 60.0);
+                    let log_lines_h = remaining_ui_height(ui).max(60.0);
                     self.draw_activity_log_lines_scroll(ui, log_lines_h);
                 } else {
-                    let list_h = bounded_ui_height(ui, DOCKED_QUEUE_LIST_MIN_H);
+                    let list_h = remaining_ui_height(ui).max(DOCKED_QUEUE_LIST_MIN_H);
                     self.draw_queue_list_body(ui, list_h, "rustdl_videos_dock_scroll");
                 }
             });
@@ -575,41 +578,35 @@ impl PydlApp {
                         .layout(egui::Layout::top_down(egui::Align::Min)),
                     |ui| {
                         ui.spacing_mut().item_spacing.y = 6.0;
-                        button_toolbar_wrapped(ui, |ui| {
-                            self.draw_video_queue_controls_inner(ui);
-                            if !self.av1_mode {
-                                self.draw_downloader_queue_action_toolbar_inner(ui);
-                            }
-                        });
-                        let list_h = bounded_ui_height(ui, 120.0);
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(ui.available_width(), list_h),
-                            egui::Layout::top_down(egui::Align::Min),
-                            |ui| {
-                                egui::Frame::dark_canvas(ui.style())
-                                    .fill(fill)
-                                    .stroke(egui::Stroke::new(1.0, border))
-                                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-                                    .rounding(egui::Rounding::same(8.0))
-                                    .show(ui, |ui| {
-                                        ui.set_width(ui.available_width());
-                                        if self.av1_mode {
-                                            if !self.av1_items.is_empty() {
-                                                self.draw_av1_queue_status_row(ui);
-                                                self.draw_av1_batch_summary_row(ui);
-                                            }
-                                        } else if !self.items.is_empty() {
-                                            self.draw_downloader_queue_status_row(ui);
-                                        }
-                                        let scroll_h = bounded_ui_height(ui, 80.0);
-                                        self.draw_queue_list_body(
-                                            ui,
-                                            scroll_h,
-                                            "rustdl_videos_float_v3",
-                                        );
-                                    });
-                            },
-                        );
+                        egui::Frame::dark_canvas(ui.style())
+                            .fill(fill)
+                            .stroke(egui::Stroke::new(1.0, border))
+                            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                            .rounding(egui::Rounding::same(8.0))
+                            .show(ui, |ui| {
+                                ui.set_width(ui.max_rect().width());
+                                ui.set_height(ui.max_rect().height());
+                                button_toolbar_wrapped(ui, |ui| {
+                                    self.draw_video_queue_controls_inner(ui);
+                                    if !self.av1_mode {
+                                        self.draw_downloader_queue_action_toolbar_inner(ui);
+                                    }
+                                });
+                                if self.av1_mode {
+                                    if !self.av1_items.is_empty() {
+                                        self.draw_av1_queue_status_row(ui);
+                                        self.draw_av1_batch_summary_row(ui);
+                                    }
+                                } else if !self.items.is_empty() {
+                                    self.draw_downloader_queue_status_row(ui);
+                                }
+                                let scroll_h = remaining_ui_height(ui).max(120.0);
+                                self.draw_queue_list_body(
+                                    ui,
+                                    scroll_h,
+                                    "rustdl_videos_float_v3",
+                                );
+                            });
                     },
                 );
             });
