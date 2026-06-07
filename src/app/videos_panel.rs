@@ -12,11 +12,6 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
-/// Header toolbar + status row inside the docked Videos frame (approximate).
-const DOCKED_VIDEOS_CHROME_EST: f32 = 72.0;
-/// Status row drawn above the card list in the floating queue window.
-const FLOAT_QUEUE_STATUS_EST: f32 = 28.0;
-
 impl PydlApp {
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
@@ -32,8 +27,8 @@ impl PydlApp {
         }
     }
 
-    /// Docked panel: toolbar/status chrome, then a fixed-height scroll area for cards.
-    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui, list_scroll_max: f32) {
+    /// Status row + scrollable cards. Parent must set a height budget (`available_height`).
+    pub(super) fn draw_queue_cards(&mut self, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 4.0;
         if self.av1_mode {
             if !self.av1_items.is_empty() {
@@ -43,7 +38,7 @@ impl PydlApp {
         } else if !self.items.is_empty() {
             self.draw_downloader_queue_status_row(ui);
         }
-        let scroll_h = list_scroll_max.max(120.0);
+        let scroll_h = ui.available_height().max(80.0);
         ui.allocate_ui_with_layout(
             egui::vec2(ui.available_width().max(1.0), scroll_h),
             egui::Layout::top_down(egui::Align::Min),
@@ -481,55 +476,71 @@ impl PydlApp {
         } else {
             BORDER_PANEL
         };
+        let footer_h = footer_height.max(160.0);
 
-        egui::Frame::dark_canvas(ui.style())
-            .fill(fill)
-            .stroke(egui::Stroke::new(1.0, border))
-            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-            .rounding(egui::Rounding::same(8.0))
-            .show(ui, |ui| {
-                let dock_log = self.settings.logs_open && self.settings.logs_docked;
-                let log_h = if dock_log {
-                    self.settings.log_dock_height.clamp(80.0, 480.0)
-                } else {
-                    0.0
-                };
-                let log_chrome = if dock_log { 48.0 } else { 0.0 };
-                ui.set_max_height(footer_height.max(160.0));
-                ui.spacing_mut().item_spacing.y = 4.0;
-                constrain_content_width(ui);
-                self.draw_videos_header_toolbar(ui);
-                let list_scroll_max = (footer_height
-                    - DOCKED_VIDEOS_CHROME_EST
-                    - log_h
-                    - log_chrome)
-                    .max(100.0);
-                self.draw_queue_cards(ui, list_scroll_max);
-                if dock_log {
-                    ui.add_space(6.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Activity log").small().strong());
-                        let tail_w = ui.available_width();
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(tail_w.max(0.0), 0.0),
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                self.draw_log_controls(ui);
-                            },
-                        );
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), footer_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_height(footer_h);
+                ui.set_max_height(footer_h);
+                egui::Frame::dark_canvas(ui.style())
+                    .fill(fill)
+                    .stroke(egui::Stroke::new(1.0, border))
+                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                    .rounding(egui::Rounding::same(8.0))
+                    .show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        constrain_content_width(ui);
+                        self.draw_videos_header_toolbar(ui);
+
+                        let dock_log = self.settings.logs_open && self.settings.logs_docked;
+                        if dock_log {
+                            let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
+                            let log_chrome = 54.0;
+                            let list_h = (ui.available_height() - log_h - log_chrome).max(80.0);
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(ui.available_width().max(1.0), list_h),
+                                egui::Layout::top_down(egui::Align::Min),
+                                |ui| {
+                                    ui.set_min_height(list_h);
+                                    ui.set_max_height(list_h);
+                                    self.draw_queue_cards(ui);
+                                },
+                            );
+                            ui.add_space(6.0);
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("Activity log").small().strong());
+                                let tail_w = ui.available_width();
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(tail_w.max(0.0), 0.0),
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        self.draw_log_controls(ui);
+                                    },
+                                );
+                            });
+                            if ui
+                                .add(egui::Slider::new(
+                                    &mut self.settings.log_dock_height,
+                                    80.0..=480.0,
+                                ))
+                                .changed()
+                            {
+                                self.persist_settings();
+                            }
+                            egui::ScrollArea::vertical()
+                                .id_salt("rustdl_log_docked_under_videos")
+                                .max_height(log_h)
+                                .show(ui, |ui| {
+                                    self.draw_activity_log_panel(ui);
+                                });
+                        } else {
+                            self.draw_queue_cards(ui);
+                        }
                     });
-                    if ui
-                        .add(egui::Slider::new(
-                            &mut self.settings.log_dock_height,
-                            80.0..=480.0,
-                        ))
-                        .changed()
-                    {
-                        self.persist_settings();
-                    }
-                    self.draw_activity_log_panel(ui);
-                }
-            });
+            },
+        );
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {
@@ -563,8 +574,7 @@ impl PydlApp {
                     |ui| {
                         ui.set_min_height(scroll_h);
                         ui.set_max_height(scroll_h);
-                        let list_h = (scroll_h - FLOAT_QUEUE_STATUS_EST).max(120.0);
-                        self.draw_queue_cards(ui, list_h);
+                        self.draw_queue_cards(ui);
                     },
                 );
             });

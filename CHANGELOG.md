@@ -22,7 +22,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - LAN web UI: clearing finished downloader queue items (or any action that refreshed status) no longer throws “Cannot access 'shuttingDown' before initialization”.
-- **Videos** queue stays pinned at the bottom of the main window (controls scroll above it); the card list scrolls inside the panel. Floating **Videos** window scroll area uses the full window height.
+- **Videos** queue stays pinned at the bottom of the main window (controls scroll above it); the card list scrolls inside the panel and sizes from remaining height after the toolbar. Floating **Videos** window scroll area uses the full window height.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
 
