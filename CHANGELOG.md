@@ -29,6 +29,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Floating **Videos** window card list fills the space below the toolbar again.
 - Log height slider shows whole pixels instead of long floating-point values.
 - Main controls scroll fills the central panel (no dead gap above the bottom footer); docked log lines expand to use remaining footer space.
+- Docked **Videos** bottom panel respects manual resize (content no longer forces the panel back to full height); card list fills space below the toolbar.
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
