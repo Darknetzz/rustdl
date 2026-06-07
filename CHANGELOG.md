@@ -43,6 +43,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Main window header, mode tabs, and controls respect the right content margin again (no longer sized from the full window clip rect).
 - **Videos** queue card list fills the panel below the toolbar (explicit height allocation; scroll region uses space down to the panel bottom, not shrink-wrapped `max_rect`).
 - **Videos** / **AV1 queue** panels show cards from the top with dock/hide/action buttons pinned below the list (floating window layout simplified).
+- Docked **Videos** panel height is remembered when you drag the resize handle (content fills the panel; height saved in settings).
+- **AV1 Converter**: Start/Cancel/Clear batch actions moved to the queue panel footer (same layout as Downloader queue actions).
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.

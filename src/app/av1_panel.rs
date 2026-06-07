@@ -3,7 +3,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, draw_labeled_meta_badge,
+    button_group, constrain_content_width, draw_labeled_meta_badge,
     draw_meta_badge, draw_status_dot, left_button_row, status_color, status_dot_with_label,
     MetaBadgeKind,
 };
@@ -238,6 +238,49 @@ impl PydlApp {
         }
     }
 
+    /// Start/cancel/clear — lives in the AV1 queue panel footer (docked or floating window).
+    pub(super) fn draw_av1_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui) {
+        let ready_count = self
+            .av1_items
+            .iter()
+            .filter(|item| item.status == ItemStatus::Idle)
+            .count();
+        button_group(ui, "av1_batch", |g| {
+            if g
+                .success(
+                    &format!("{} Start AV1 batch", ui_icons::PLAY),
+                    !self.av1_running
+                        && self.has_ffmpeg
+                        && self.has_ffprobe
+                        && ready_count > 0,
+                )
+                .clicked()
+            {
+                self.start_av1_batch();
+            }
+            if g
+                .danger(
+                    &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
+                    self.av1_running,
+                )
+                .clicked()
+            {
+                self.av1_core_action(|core| core.cancel_av1_batch());
+            }
+        });
+        button_group(ui, "av1_queue", |g| {
+            if g
+                .secondary(
+                    &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
+                    !self.av1_running,
+                )
+                .clicked()
+            {
+                self.clear_av1_queue();
+            }
+        });
+    }
+
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
         constrain_content_width(ui);
 
@@ -336,44 +379,6 @@ impl PydlApp {
                         {
                             self.settings_open = true;
                             self.settings_tab = super::SettingsTab::Av1;
-                        }
-                    });
-                });
-                button_toolbar_wrapped(ui, |ui| {
-                    let ready_count = self
-                        .av1_items
-                        .iter()
-                        .filter(|item| item.status == ItemStatus::Idle)
-                        .count();
-                    button_group(ui, "av1_batch", |g| {
-                        if g.success(
-                            &format!("{} Start AV1 batch", ui_icons::PLAY),
-                            !self.av1_running
-                                && self.has_ffmpeg
-                                && self.has_ffprobe
-                                && ready_count > 0,
-                        )
-                        .clicked()
-                        {
-                            self.start_av1_batch();
-                        }
-                        if g.danger(
-                            &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
-                            self.av1_running,
-                        )
-                        .clicked()
-                        {
-                            self.av1_core_action(|core| core.cancel_av1_batch());
-                        }
-                    });
-                    button_group(ui, "av1_queue", |g| {
-                        if g.secondary(
-                            &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
-                            !self.av1_running,
-                        )
-                        .clicked()
-                        {
-                            self.clear_av1_queue();
                         }
                     });
                 });

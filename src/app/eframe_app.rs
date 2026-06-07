@@ -67,19 +67,9 @@ impl eframe::App for PydlApp {
 
         let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
         if self.settings.videos_docked {
-            let log_under_videos = self.settings.logs_open && self.settings.logs_docked;
-            let dock_h = compute_main_column_split(
-                body_est.max(200.0),
-                true,
-                self.settings.compact_cards,
-                false,
-                log_under_videos,
-                self.settings.log_dock_height,
-            )
-            .footer_height;
             egui::TopBottomPanel::bottom("rustdl_videos_dock_v3")
                 .resizable(true)
-                .default_height(dock_h)
+                .default_height(self.settings.videos_dock_height)
                 .height_range(180.0..=800.0)
                 .show(ctx, |ui| {
                     self.draw_docked_videos_panel(ui);

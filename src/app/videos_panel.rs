@@ -317,7 +317,9 @@ impl PydlApp {
             };
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_inner(ui);
-            if !self.av1_mode {
+            if self.av1_mode {
+                self.draw_av1_queue_action_toolbar_inner(ui);
+            } else {
                 self.draw_downloader_queue_action_toolbar_inner(ui);
             }
         });
@@ -576,6 +578,8 @@ impl PydlApp {
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
         let panel_h = remaining_ui_height(ui).max(180.0);
         let panel_w = content_width(ui).max(1.0);
+        // egui persists panel height from the content rect; fill the panel so resize sticks.
+        ui.set_min_size(egui::vec2(panel_w, panel_h));
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
@@ -586,7 +590,9 @@ impl PydlApp {
             .inner_margin(egui::Margin::symmetric(10.0, 8.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
-                allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
+                let inner_h = remaining_ui_height(ui).max(180.0);
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
                     self.draw_videos_queue_body(
                         ui,
                         ui.max_rect().bottom(),
@@ -595,6 +601,10 @@ impl PydlApp {
                     );
                 });
             });
+        if (panel_h - self.settings.videos_dock_height).abs() > 0.5 {
+            self.settings.videos_dock_height = panel_h.clamp(180.0, 800.0);
+            self.persist_settings();
+        }
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {

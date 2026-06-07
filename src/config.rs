@@ -68,6 +68,9 @@ pub struct AppSettings {
     pub video_float_width: f32,
     #[serde(default = "default_video_float_height")]
     pub video_float_height: f32,
+    /// Height of the docked video queue panel in the main window (resizable divider).
+    #[serde(default = "default_videos_dock_height")]
+    pub videos_dock_height: f32,
     /// Show activity log docked under the video queue (vs floating window).
     #[serde(default = "default_logs_docked")]
     pub logs_docked: bool,
@@ -244,6 +247,10 @@ fn default_video_float_height() -> f32 {
     640.0
 }
 
+fn default_videos_dock_height() -> f32 {
+    360.0
+}
+
 fn default_logs_docked() -> bool {
     true
 }
@@ -319,6 +326,7 @@ impl Default for AppSettings {
             videos_open: true,
             video_float_width: default_video_float_width(),
             video_float_height: default_video_float_height(),
+            videos_dock_height: default_videos_dock_height(),
             logs_docked: true,
             logs_open: false,
             log_dock_height: 180.0,
@@ -474,6 +482,7 @@ pub fn load_settings() -> AppSettings {
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
+    cfg.videos_dock_height = cfg.videos_dock_height.clamp(180.0, 800.0);
     cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
     cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);
     cfg.av1_max_width = cfg.av1_max_width.clamp(320, 7680);
