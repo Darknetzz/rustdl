@@ -3,8 +3,8 @@
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, constrain_content_width, draw_status_dot,
-    left_button_row, status_color, with_full_width,
+    bounded_ui_height, button_group, button_toolbar_wrapped, constrain_content_width,
+    draw_status_dot, left_button_row, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -43,16 +43,22 @@ impl PydlApp {
         }
     }
 
-    /// Scrollable card list (parent must set width + min-height on the surrounding frame).
-    fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
-        let scroll_h = scroll_h.max(80.0);
-        ui.set_width(ui.available_width());
-        ui.set_min_height(scroll_h);
-        if self.av1_mode {
-            self.draw_av1_queue_list_scroll(ui, scroll_h);
-        } else {
-            self.draw_downloader_queue_list_scroll(ui, scroll_h);
-        }
+    /// Fixed-height scroll region for queue cards (fills `list_h` exactly).
+    fn draw_queue_list_region(&mut self, ui: &mut egui::Ui, list_h: f32) {
+        let list_h = list_h.max(80.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), list_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_height(list_h);
+                ui.set_max_height(list_h);
+                if self.av1_mode {
+                    self.draw_av1_queue_list_scroll(ui, list_h);
+                } else {
+                    self.draw_downloader_queue_list_scroll(ui, list_h);
+                }
+            },
+        );
     }
 
     /// Pause/export/import/recheck/clear — lives in the video queue card or floating window.
@@ -136,6 +142,7 @@ impl PydlApp {
             .max_height(scroll_h)
             .animated(true)
             .drag_to_scroll(true)
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 2.0;
@@ -467,9 +474,7 @@ impl PydlApp {
         }
     }
 
-    /// Docked video queue (`TopBottomPanel` body).
-    pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = ui.available_height().max(120.0);
+    fn draw_docked_videos_panel_inner(&mut self, ui: &mut egui::Ui) {
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
 
@@ -480,7 +485,6 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.set_min_height(panel_h);
                 ui.spacing_mut().item_spacing.y = 4.0;
                 constrain_content_width(ui);
                 self.draw_videos_header_toolbar(ui);
@@ -489,8 +493,8 @@ impl PydlApp {
                 if dock_log {
                     let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
                     let log_chrome = 54.0;
-                    let list_h = (ui.available_height() - log_h - log_chrome).max(80.0);
-                    self.draw_queue_list_body(ui, list_h);
+                    let list_h = (bounded_ui_height(ui, 80.0) - log_h - log_chrome).max(80.0);
+                    self.draw_queue_list_region(ui, list_h);
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Activity log").small().strong());
@@ -520,10 +524,24 @@ impl PydlApp {
                             self.draw_activity_log_panel(ui);
                         });
                 } else {
-                    let list_h = ui.available_height().max(80.0);
-                    self.draw_queue_list_body(ui, list_h);
+                    let list_h = bounded_ui_height(ui, 80.0);
+                    self.draw_queue_list_region(ui, list_h);
                 }
             });
+    }
+
+    /// Docked video queue (`TopBottomPanel` body).
+    pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
+        let panel_h = bounded_ui_height(ui, 160.0);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), panel_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_height(panel_h);
+                ui.set_max_height(panel_h);
+                self.draw_docked_videos_panel_inner(ui);
+            },
+        );
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {
@@ -550,28 +568,35 @@ impl PydlApp {
                         self.draw_downloader_queue_action_toolbar_inner(ui);
                     }
                 });
-                let panel_h = ui.available_height().max(120.0);
-                let fill = self.videos_panel_fill();
-                let border = self.videos_panel_border();
-                egui::Frame::dark_canvas(ui.style())
-                    .fill(fill)
-                    .stroke(egui::Stroke::new(1.0, border))
-                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-                    .rounding(egui::Rounding::same(8.0))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.set_min_height(panel_h);
-                        if self.av1_mode {
-                            if !self.av1_items.is_empty() {
-                                self.draw_av1_queue_status_row(ui);
-                                self.draw_av1_batch_summary_row(ui);
-                            }
-                        } else if !self.items.is_empty() {
-                            self.draw_downloader_queue_status_row(ui);
-                        }
-                        let scroll_h = ui.available_height().max(80.0);
-                        self.draw_queue_list_body(ui, scroll_h);
-                    });
+                let body_h = bounded_ui_height(ui, 160.0);
+                ui.allocate_ui_with_layout(
+                    egui::vec2(ui.available_width().max(1.0), body_h),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_min_height(body_h);
+                        ui.set_max_height(body_h);
+                        let fill = self.videos_panel_fill();
+                        let border = self.videos_panel_border();
+                        egui::Frame::dark_canvas(ui.style())
+                            .fill(fill)
+                            .stroke(egui::Stroke::new(1.0, border))
+                            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                            .rounding(egui::Rounding::same(8.0))
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                if self.av1_mode {
+                                    if !self.av1_items.is_empty() {
+                                        self.draw_av1_queue_status_row(ui);
+                                        self.draw_av1_batch_summary_row(ui);
+                                    }
+                                } else if !self.items.is_empty() {
+                                    self.draw_downloader_queue_status_row(ui);
+                                }
+                                let scroll_h = bounded_ui_height(ui, 80.0);
+                                self.draw_queue_list_region(ui, scroll_h);
+                            });
+                    },
+                );
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();

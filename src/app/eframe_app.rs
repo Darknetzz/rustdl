@@ -1,7 +1,8 @@
 use super::*;
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compute_main_column_split, constrain_content_width,
-    content_width, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row, with_full_width,
+    bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
+    constrain_content_width, content_width, draw_mode_nav_bar, draw_navbar_status_badge,
+    left_button_row, with_full_width,
 };
 
 impl eframe::App for PydlApp {
@@ -108,10 +109,12 @@ impl eframe::App for PydlApp {
                     .as_ref()
                     .map(|split| split.footer_height)
                     .unwrap_or(0.0);
-                let max_controls = (ui.available_height() - footer_reserve).max(100.0);
+                let max_controls =
+                    (bounded_ui_height(ui, 100.0) - footer_reserve).max(100.0);
+                let shrink_controls = undocked_footer.is_none();
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, false])
+                    .auto_shrink([false, shrink_controls])
                     .max_height(max_controls)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
@@ -650,9 +653,10 @@ impl PydlApp {
     /// Logo and tool status on the left; status badge, Web UI, then Settings + Exit on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         constrain_content_width(ui);
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 12.0;
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 6.0;
             ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 12.0;
                 let sz = egui::vec2(40.0, 40.0);
                 let img = ui.add(
                     egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
@@ -667,10 +671,53 @@ impl PydlApp {
                 if header.clicked() {
                     self.about_open = true;
                 }
+                let tail_w = ui.available_width();
+                if tail_w > 0.0 {
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(tail_w, 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            ui.spacing_mut().item_spacing.x = 6.0;
+                            let navbar = crate::app_ui::derive_navbar_status(
+                                self.navbar_status_inputs(),
+                            );
+                            draw_navbar_status_badge(ui, &navbar);
+                            if self.settings.web_ui_enabled {
+                                let url = crate::service::web::web_ui_browser_url(
+                                    &self.settings.web_bind_address,
+                                );
+                                let running = self.web_server.is_some();
+                                if draw_web_ui_header_button(ui, running, &url) {
+                                    self.open_web_ui_in_browser();
+                                }
+                            }
+                            button_group(ui, "hdr_nav", |g| {
+                                if g
+                                    .secondary(
+                                        &format!("{} Settings", ui_icons::SETTINGS),
+                                        true,
+                                    )
+                                    .on_hover_text(
+                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads · \
+                                         Queue and log controls are below the URL area",
+                                    )
+                                    .clicked()
+                                {
+                                    self.settings_open = true;
+                                }
+                                if g
+                                    .danger(&format!("{} Exit", ui_icons::EXIT), true)
+                                    .clicked()
+                                {
+                                    self.open_exit_confirm();
+                                }
+                            });
+                        },
+                    );
+                }
             });
-            ui.separator();
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
                 draw_precheck_status(
                     ui,
                     "ffprobe",
@@ -690,49 +737,6 @@ impl PydlApp {
                     &self.yt_dlp_version,
                 );
             });
-            let tail_w = ui.available_width();
-            if tail_w > 0.0 {
-                ui.allocate_ui_with_layout(
-                    egui::vec2(tail_w, 0.0),
-                    egui::Layout::right_to_left(egui::Align::Center),
-                    |ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        button_group(ui, "hdr_nav", |g| {
-                            if g
-                                .secondary(
-                                    &format!("{} Settings", ui_icons::SETTINGS),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads · \
-                                     Queue and log controls are below the URL area",
-                                )
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                            }
-                            if g
-                                .danger(&format!("{} Exit", ui_icons::EXIT), true)
-                                .clicked()
-                            {
-                                self.open_exit_confirm();
-                            }
-                        });
-                        if self.settings.web_ui_enabled {
-                            let url = crate::service::web::web_ui_browser_url(
-                                &self.settings.web_bind_address,
-                            );
-                            let running = self.web_server.is_some();
-                            if draw_web_ui_header_button(ui, running, &url) {
-                                self.open_web_ui_in_browser();
-                            }
-                        }
-                        let navbar =
-                            crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
-                        draw_navbar_status_badge(ui, &navbar);
-                    },
-                );
-            }
         });
     }
 }
