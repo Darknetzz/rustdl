@@ -560,44 +560,58 @@ impl PydlApp {
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
         let response = egui::Window::new(title)
+            // Bust stale resize/scroll state from pre-v3 layout (title-only id reused "Videos").
+            .id(egui::Id::new("rustdl_videos_float_v3"))
             .open(&mut open)
             .default_size(default_size)
             .min_width(480.0)
             .min_height(320.0)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.spacing_mut().item_spacing.y = 6.0;
-                button_toolbar_wrapped(ui, |ui| {
-                    self.draw_video_queue_controls_inner(ui);
-                    if !self.av1_mode {
-                        self.draw_downloader_queue_action_toolbar_inner(ui);
-                    }
-                });
-                let body = ui.available_rect_before_wrap();
-                let body_h = body.height().max(200.0);
-                let body_rect =
-                    egui::Rect::from_min_size(body.min, egui::vec2(body.width().max(480.0), body_h));
-                ui.allocate_new_ui(egui::UiBuilder::new().max_rect(body_rect), |ui| {
-                    egui::Frame::dark_canvas(ui.style())
-                        .fill(fill)
-                        .stroke(egui::Stroke::new(1.0, border))
-                        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-                        .rounding(egui::Rounding::same(8.0))
-                        .show(ui, |ui| {
-                            ui.set_width(ui.max_rect().width());
-                            ui.set_height(ui.max_rect().height());
-                            if self.av1_mode {
-                                if !self.av1_items.is_empty() {
-                                    self.draw_av1_queue_status_row(ui);
-                                    self.draw_av1_batch_summary_row(ui);
-                                }
-                            } else if !self.items.is_empty() {
-                                self.draw_downloader_queue_status_row(ui);
+                let bounds = egui::Rect::from_min_max(ui.cursor().min, ui.max_rect().max);
+                ui.allocate_new_ui(
+                    egui::UiBuilder::new()
+                        .max_rect(bounds)
+                        .layout(egui::Layout::top_down(egui::Align::Min)),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.y = 6.0;
+                        button_toolbar_wrapped(ui, |ui| {
+                            self.draw_video_queue_controls_inner(ui);
+                            if !self.av1_mode {
+                                self.draw_downloader_queue_action_toolbar_inner(ui);
                             }
-                            let scroll_h = bounded_ui_height(ui, 120.0);
-                            self.draw_queue_list_body(ui, scroll_h, "rustdl_videos_float_scroll");
                         });
-                });
+                        let list_h = bounded_ui_height(ui, 120.0);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), list_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                egui::Frame::dark_canvas(ui.style())
+                                    .fill(fill)
+                                    .stroke(egui::Stroke::new(1.0, border))
+                                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                                    .rounding(egui::Rounding::same(8.0))
+                                    .show(ui, |ui| {
+                                        ui.set_width(ui.available_width());
+                                        if self.av1_mode {
+                                            if !self.av1_items.is_empty() {
+                                                self.draw_av1_queue_status_row(ui);
+                                                self.draw_av1_batch_summary_row(ui);
+                                            }
+                                        } else if !self.items.is_empty() {
+                                            self.draw_downloader_queue_status_row(ui);
+                                        }
+                                        let scroll_h = bounded_ui_height(ui, 80.0);
+                                        self.draw_queue_list_body(
+                                            ui,
+                                            scroll_h,
+                                            "rustdl_videos_float_v3",
+                                        );
+                                    });
+                            },
+                        );
+                    },
+                );
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();

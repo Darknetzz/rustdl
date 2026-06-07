@@ -585,17 +585,24 @@ const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
 pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
-    (ui.clip_rect().bottom() - ui.cursor().min.y).max(0.0)
+    let y = ui.cursor().min.y;
+    let to_bottom = |bottom: f32| (bottom - y).max(0.0);
+    let mut h = to_bottom(ui.clip_rect().bottom());
+    let max = ui.max_rect();
+    if max.is_finite() {
+        h = h.min(to_bottom(max.bottom()));
+    }
+    h
 }
 
 /// Like [`remaining_ui_height`] but ignores unbounded `available_height()` from content-sized parents.
 pub fn bounded_ui_height(ui: &egui::Ui, min: f32) -> f32 {
-    let from_clip = remaining_ui_height(ui);
+    let cap = remaining_ui_height(ui);
     let avail = ui.available_height();
     if avail.is_finite() && avail > 0.0 && avail < 50_000.0 {
-        avail.min(from_clip).max(min)
+        avail.min(cap).max(min)
     } else {
-        from_clip.max(min)
+        cap.max(min)
     }
 }
 
