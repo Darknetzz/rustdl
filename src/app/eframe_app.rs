@@ -4,7 +4,6 @@ use crate::app_ui::{
     constrain_content_width, content_width, draw_mode_nav_bar, draw_navbar_status_badge,
     left_button_row, with_full_width,
 };
-
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         {
@@ -199,7 +198,7 @@ impl eframe::App for PydlApp {
                         "Tip: browser drag-and-drop for URLs is supported on Windows only; paste URLs or drop .url/.txt files on other platforms.",
                     )
                     .small()
-                    .color(TEXT_MUTED),
+                    .color(crate::theme::TEXT_MUTED),
                 );
                 ui.separator();
                 if self.av1_mode {
@@ -453,8 +452,6 @@ impl eframe::App for PydlApp {
                                 }
                             });
                         });
-                        self.draw_output_disk_space(ui);
-
                         ui.add_space(4.0);
                         let profiles = crate::profiles::all_profiles(&self.profile_store);
                         ui.horizontal(|ui| {
@@ -518,7 +515,6 @@ impl eframe::App for PydlApp {
                     }
                 }
 
-                ui.label(RichText::new("Queue").small().color(TEXT_MUTED));
                 button_toolbar_wrapped(ui, |ui| {
                     if has_idle_items {
                         button_group(ui, "dl_actions", |g| {
@@ -731,6 +727,7 @@ impl PydlApp {
                     self.has_yt_dlp,
                     &self.yt_dlp_version,
                 );
+                self.draw_output_disk_space(ui);
             });
         });
     }

@@ -17,6 +17,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Changed
 
 - **Show log** moved to the top header (next to Settings) instead of above the download queue.
+- Destination disk free space is shown in the top header next to the yt-dlp/ffmpeg/ffprobe checks (removed from Download options); redundant **Queue** label above the action toolbar removed.
 - Done download cards show the most recently finished items first (left in the horizontal strip).
 - Failed download cards show **Retry** only (not a duplicate **Redo**); **Redo** remains on completed downloads.
 - LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
