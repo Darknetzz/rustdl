@@ -241,6 +241,31 @@ button.success { background: rgba(129, 199, 132, 0.25); color: var(--done); bord
 button.warning { background: rgba(255, 167, 38, 0.22); color: #ffb74d; border: 1px solid rgba(255, 167, 38, 0.45); }
 button.danger { background: rgba(239, 83, 80, 0.2); color: var(--failed); border: 1px solid rgba(239, 83, 80, 0.45); }
 
+button:disabled,
+.btn-group > button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.primary:disabled,
+.btn-group > button.primary:disabled {
+  background: var(--border);
+  color: var(--muted);
+}
+
+button.danger:disabled,
+.btn-group > button.danger:disabled {
+  background: var(--border);
+  color: var(--muted);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.btn-group > button:disabled:hover,
+.btn-group > button:disabled:focus-visible {
+  z-index: auto;
+}
+
 /* Bootstrap-style segmented controls */
 .btn-toolbar {
   display: flex;

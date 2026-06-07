@@ -2070,7 +2070,12 @@ async function refreshAv1() {
   const cancelBtn = document.getElementById("btn-av1-cancel");
   const readyCount = data.items.filter((it) => it.status === "Idle").length;
   if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
-  if (cancelBtn) cancelBtn.disabled = !data.running;
+  if (cancelBtn) {
+    cancelBtn.disabled = !data.running;
+    cancelBtn.title = data.running
+      ? "Cancel the running AV1 batch"
+      : "No AV1 batch is running";
+  }
 
   const root = document.getElementById("av1-queue");
   if (!root) return;
