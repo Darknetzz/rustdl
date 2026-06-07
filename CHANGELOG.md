@@ -42,6 +42,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Floating **Videos** window: toolbar and card list pin to the top of the window (bounded `max_rect` layout; resets stale egui resize state from earlier builds).
 - Main window header, mode tabs, and controls respect the right content margin again (no longer sized from the full window clip rect).
 - **Videos** queue card list fills the panel below the toolbar (explicit height allocation; scroll region uses space down to the panel bottom, not shrink-wrapped `max_rect`).
+- **Videos** / **AV1 queue** panels show cards from the top with dock/hide/action buttons pinned below the list (floating window layout simplified).
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
