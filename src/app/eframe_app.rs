@@ -77,7 +77,7 @@ impl eframe::App for PydlApp {
                 self.settings.log_dock_height,
             )
             .footer_height;
-            egui::TopBottomPanel::bottom("rustdl_videos_dock")
+            egui::TopBottomPanel::bottom("rustdl_videos_dock_v3")
                 .resizable(true)
                 .default_height(dock_h)
                 .height_range(180.0..=800.0)
@@ -97,7 +97,7 @@ impl eframe::App for PydlApp {
             .footer_height
             .min(body_est * 0.42)
             .max(100.0);
-            egui::TopBottomPanel::bottom("rustdl_undocked_footer")
+            egui::TopBottomPanel::bottom("rustdl_undocked_footer_v3")
                 .resizable(log_docked)
                 .default_height(footer_h)
                 .height_range(100.0..=600.0)
@@ -114,7 +114,7 @@ impl eframe::App for PydlApp {
                 let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, false])
+                    .auto_shrink([false, true])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
