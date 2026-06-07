@@ -486,70 +486,77 @@ impl PydlApp {
 
     /// Docked video queue (`TopBottomPanel` body).
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = bounded_ui_height(ui, 200.0);
+        let panel_h = ui.clip_rect().height().max(180.0);
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
 
-        egui::Frame::dark_canvas(ui.style())
-            .fill(fill)
-            .stroke(egui::Stroke::new(1.0, border))
-            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-            .rounding(egui::Rounding::same(8.0))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.set_min_height(panel_h);
-                ui.set_max_height(panel_h);
-                ui.spacing_mut().item_spacing.y = 4.0;
-                constrain_content_width(ui);
-                self.draw_videos_header_toolbar(ui);
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), panel_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                egui::Frame::dark_canvas(ui.style())
+                    .fill(fill)
+                    .stroke(egui::Stroke::new(1.0, border))
+                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+                    .rounding(egui::Rounding::same(8.0))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.set_min_height(panel_h);
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        constrain_content_width(ui);
+                        self.draw_videos_header_toolbar(ui);
 
-                let remaining = bounded_ui_height(ui, DOCKED_QUEUE_LIST_MIN_H);
-                let log_h = if dock_log {
-                    self.docked_log_height_budget(remaining)
-                } else {
-                    0.0
-                };
-                let log_chrome = if dock_log {
-                    DOCKED_LOG_UNDER_VIDEOS_CHROME
-                } else {
-                    0.0
-                };
-                let list_h = if dock_log {
-                    (remaining - log_h - log_chrome).max(DOCKED_QUEUE_LIST_MIN_H)
-                } else {
-                    remaining.max(DOCKED_QUEUE_LIST_MIN_H)
-                };
-                self.draw_queue_list_region(ui, list_h);
+                        let remaining = bounded_ui_height(ui, DOCKED_QUEUE_LIST_MIN_H);
+                        let log_h = if dock_log {
+                            self.docked_log_height_budget(remaining)
+                        } else {
+                            0.0
+                        };
+                        let log_chrome = if dock_log {
+                            DOCKED_LOG_UNDER_VIDEOS_CHROME
+                        } else {
+                            0.0
+                        };
+                        let list_h = if dock_log {
+                            (remaining - log_h - log_chrome).max(DOCKED_QUEUE_LIST_MIN_H)
+                        } else {
+                            remaining.max(DOCKED_QUEUE_LIST_MIN_H)
+                        };
+                        self.draw_queue_list_region(ui, list_h);
 
-                if dock_log {
-                    ui.add_space(4.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new("Activity log").small().strong());
-                        let tail_w = ui.available_width();
-                        ui.allocate_ui_with_layout(
-                            egui::vec2(tail_w.max(0.0), 0.0),
-                            egui::Layout::right_to_left(egui::Align::Center),
-                            |ui| {
-                                self.draw_log_controls(ui);
-                            },
-                        );
+                        if dock_log {
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new("Activity log").small().strong());
+                                let tail_w = ui.available_width();
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(tail_w.max(0.0), 0.0),
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        self.draw_log_controls(ui);
+                                    },
+                                );
+                            });
+                            let max_log = (remaining
+                                - DOCKED_QUEUE_LIST_MIN_H
+                                - DOCKED_LOG_UNDER_VIDEOS_CHROME)
+                                .max(80.0);
+                            if ui
+                                .add(egui::Slider::new(
+                                    &mut self.settings.log_dock_height,
+                                    80.0..=max_log,
+                                ))
+                                .changed()
+                            {
+                                self.persist_settings();
+                            }
+                            self.draw_activity_log_toolbar(ui);
+                            self.draw_activity_log_lines_scroll(ui, log_h);
+                        }
                     });
-                    let max_log = (remaining - DOCKED_QUEUE_LIST_MIN_H - DOCKED_LOG_UNDER_VIDEOS_CHROME)
-                        .max(80.0);
-                    if ui
-                        .add(egui::Slider::new(
-                            &mut self.settings.log_dock_height,
-                            80.0..=max_log,
-                        ))
-                        .changed()
-                    {
-                        self.persist_settings();
-                    }
-                    self.draw_activity_log_toolbar(ui);
-                    self.draw_activity_log_lines_scroll(ui, log_h);
-                }
-            });
+            },
+        );
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {

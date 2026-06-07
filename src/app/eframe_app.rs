@@ -91,9 +91,10 @@ impl eframe::App for PydlApp {
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
-                let body_h = ui.available_height().max(120.0);
+                let videos_docked = self.settings.videos_docked;
+                let body_h = bounded_ui_height(ui, 120.0);
                 let log_docked = self.settings.logs_open && self.settings.logs_docked;
-                let undocked_footer = if self.settings.videos_docked {
+                let undocked_footer = if videos_docked {
                     None
                 } else {
                     Some(compute_main_column_split(
@@ -105,19 +106,22 @@ impl eframe::App for PydlApp {
                         self.settings.log_dock_height,
                     ))
                 };
-                let footer_reserve = undocked_footer
-                    .as_ref()
-                    .map(|split| split.footer_height)
-                    .unwrap_or(0.0);
-                let max_controls =
-                    (bounded_ui_height(ui, 100.0) - footer_reserve).max(100.0);
-                let shrink_controls = undocked_footer.is_none();
-                egui::ScrollArea::vertical()
+                let scroll_max = if videos_docked {
+                    // Docked queue lives in TopBottomPanel; keep controls content-sized only.
+                    None
+                } else if let Some(ref split) = undocked_footer {
+                    Some(split.controls_max_height.max(100.0))
+                } else {
+                    Some(body_h.max(100.0))
+                };
+                let mut main_scroll = egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, shrink_controls])
-                    .max_height(max_controls)
-                    .drag_to_scroll(true)
-                    .show(ui, |ui| {
+                    .auto_shrink([false, scroll_max.is_none()])
+                    .drag_to_scroll(true);
+                if let Some(h) = scroll_max {
+                    main_scroll = main_scroll.max_height(h);
+                }
+                main_scroll.show(ui, |ui| {
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
