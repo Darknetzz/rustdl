@@ -3,6 +3,8 @@ use std::path::PathBuf;
 use eframe::egui;
 use image::imageops::FilterType;
 
+use crate::av1_state::av1_source_path_missing;
+
 use super::queue_cache::{THUMBNAIL_DECODE_MAX_WIDTH, THUMBNAIL_QUEUE_SOFT_CAP};
 use super::{background_spawn, events::try_send_ui, PydlApp, UiEvent};
 
@@ -127,6 +129,10 @@ impl PydlApp {
             .map(|it| (it.item_id, PathBuf::from(&it.source_path)))
             .collect();
         for (item_id, path) in pending {
+            if av1_source_path_missing(path.to_string_lossy().as_ref()) {
+                self.thumbnail_attempted.insert(item_id);
+                continue;
+            }
             self.queue_av1_local_thumbnail(item_id, path, ffmpeg_path.clone());
         }
     }

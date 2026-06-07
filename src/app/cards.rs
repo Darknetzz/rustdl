@@ -104,8 +104,7 @@ impl PydlApp {
                 }
                 // Fixed max cell; image keeps aspect ratio and never exceeds thumb (no upscale).
                 let (thumb_rect, _) = ui.allocate_exact_size(thumb, egui::Sense::hover());
-                let thumb_painter = ui.painter();
-                thumb_painter.rect_filled(
+                ui.painter().rect_filled(
                     thumb_rect,
                     egui::Rounding::same(8.0),
                     theme::THUMB_PLACEHOLDER,
@@ -116,42 +115,49 @@ impl PydlApp {
                     if draw_sz.x >= 1.0 && draw_sz.y >= 1.0 {
                         let img_rect =
                             egui::Rect::from_center_size(thumb_rect.center(), draw_sz);
-                        thumb_painter.image(
+                        ui.painter().image(
                             tex.id(),
                             img_rect,
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
                     }
+                } else if done_but_file_missing {
+                    ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(thumb_rect),
+                        |ui| {
+                            ui.centered_and_justified(|ui| {
+                                draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                            });
+                        },
+                    );
                 } else {
-                    let center_msg = if done_but_file_missing {
-                        "Removed"
-                    } else if !self.settings.show_thumbnails {
+                    let center_msg = if !self.settings.show_thumbnails {
                         "Thumbnails off"
                     } else if has_thumbnail_url {
                         "Fetching thumbnail..."
                     } else {
                         "No preview available"
                     };
-                    thumb_painter.text(
+                    ui.painter().text(
                         thumb_rect.center(),
                         egui::Align2::CENTER_CENTER,
                         center_msg,
                         egui::TextStyle::Body.resolve(ui.style()),
-                        if done_but_file_missing {
-                            LOG_COLOR_WARN
-                        } else {
-                            Color32::from_gray(130)
-                        },
+                        Color32::from_gray(130),
                     );
                 }
                 if done_but_file_missing && self.textures.contains_key(&id) {
-                    thumb_painter.text(
-                        thumb_rect.center_bottom() + egui::vec2(0.0, -6.0),
-                        egui::Align2::CENTER_BOTTOM,
-                        "Removed",
-                        egui::TextStyle::Small.resolve(ui.style()),
-                        LOG_COLOR_WARN,
+                    ui.allocate_new_ui(
+                        egui::UiBuilder::new().max_rect(thumb_rect),
+                        |ui| {
+                            ui.with_layout(
+                                egui::Layout::bottom_up(egui::Align::Center),
+                                |ui| {
+                                    draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                                },
+                            );
+                        },
                     );
                 }
 

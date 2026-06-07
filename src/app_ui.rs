@@ -281,6 +281,7 @@ pub enum MetaBadgeKind {
     SizePreset,
     ShrinkPercent,
     Av1WillSkip,
+    FileMissing,
 }
 
 fn parse_resolution_height(label: &str) -> u32 {
@@ -440,6 +441,10 @@ fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
         MetaBadgeKind::Av1WillSkip => (
             Color32::from_rgb(120, 70, 20),
             Color32::from_rgb(255, 220, 180),
+        ),
+        MetaBadgeKind::FileMissing => (
+            Color32::from_rgb(110, 32, 32),
+            Color32::from_rgb(255, 210, 210),
         ),
     }
 }

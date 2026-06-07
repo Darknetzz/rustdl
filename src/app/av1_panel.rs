@@ -10,7 +10,7 @@ use crate::app_ui::{
 use crate::config::AppSettings;
 use crate::av1_state::{
     av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
-    compute_av1_batch_summary,
+    av1_source_path_missing, compute_av1_batch_summary,
 };
 use crate::av1_transcode;
 use crate::models::{Av1QueueItem, ItemStatus};
@@ -687,27 +687,38 @@ impl PydlApp {
                     ui.spacing_mut().item_spacing.x = 10.0;
                     let thumb_size = egui::vec2(90.0, 52.0);
                     let (thumb_rect, _) = ui.allocate_exact_size(thumb_size, egui::Sense::hover());
-                    let painter = ui.painter();
-                    painter.rect_filled(
+                    ui.painter().rect_filled(
                         thumb_rect,
                         egui::Rounding::same(4.0),
                         theme::THUMB_PLACEHOLDER,
                     );
                     if let Some(tex) = self.textures.get(&it.item_id) {
-                        painter.image(
+                        ui.painter().image(
                             tex.id(),
                             thumb_rect,
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
+                    } else if av1_source_path_missing(&it.source_path) {
+                        ui.allocate_new_ui(
+                            egui::UiBuilder::new().max_rect(thumb_rect),
+                            |ui| {
+                                ui.centered_and_justified(|ui| {
+                                    draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                                });
+                            },
+                        );
                     } else {
-                        let center_msg =
-                            if !self.has_ffmpeg || self.thumbnail_attempted.contains(&it.item_id) {
-                                "No preview available"
-                            } else {
-                                "Fetching thumbnail..."
-                            };
-                        painter.text(
+                        let center_msg = if !self.has_ffmpeg {
+                            "ffmpeg not found"
+                        } else if self.thumbnail_inflight.contains(&it.item_id) {
+                            "Fetching thumbnail..."
+                        } else if self.thumbnail_attempted.contains(&it.item_id) {
+                            "No preview"
+                        } else {
+                            "Fetching thumbnail..."
+                        };
+                        ui.painter().text(
                             thumb_rect.center(),
                             egui::Align2::CENTER_CENTER,
                             center_msg,

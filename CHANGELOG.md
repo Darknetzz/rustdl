@@ -45,6 +45,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Videos** / **AV1 queue** panels show cards from the top with dock/hide/action buttons pinned below the list (floating window layout simplified).
 - Docked **Videos** panel height is remembered when you drag the resize handle (content fills the panel; height saved in settings).
 - **AV1 Converter**: Start/Cancel/Clear batch actions moved to the queue panel footer (same layout as Downloader queue actions).
+- Queue cards show a **File missing** badge on the thumbnail when the source file is not on disk (AV1 queue and finished Downloader rows with a missing save).
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.

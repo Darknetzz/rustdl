@@ -14,6 +14,12 @@ pub fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
 }
 
+/// True when the queue row points at a path that is not an existing file on disk.
+pub fn av1_source_path_missing(source_path: &str) -> bool {
+    let p = Path::new(source_path.trim());
+    !p.is_file()
+}
+
 /// True when the input file is already AV1 (matches ffprobe / yt-dlp style names).
 pub fn is_av1_video_codec(codec: &str) -> bool {
     let c = codec.trim().to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
