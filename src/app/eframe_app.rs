@@ -600,12 +600,6 @@ impl eframe::App for PydlApp {
                 if trigger_download && has_idle_items {
                     self.start_downloads();
                 }
-
-                if !self.settings.logs_open {
-                    left_button_row(ui, |ui| {
-                        self.draw_log_controls(ui);
-                    });
-                }
                 } // downloader mode
         });
                     }); // central panel
@@ -686,12 +680,25 @@ impl PydlApp {
                                         true,
                                     )
                                     .on_hover_text(
-                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads · \
-                                         Queue and log controls are below the URL area",
+                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
                                     )
                                     .clicked()
                                 {
                                     self.settings_open = true;
+                                }
+                                if !self.settings.logs_open
+                                    && g
+                                        .secondary(
+                                            &format!("{} Show log", ui_icons::LOGS),
+                                            true,
+                                        )
+                                        .on_hover_text(
+                                            "Open the activity log (dock under the queue or in its own window)",
+                                        )
+                                        .clicked()
+                                {
+                                    self.settings.logs_open = true;
+                                    self.persist_settings();
                                 }
                                 if g
                                     .danger(&format!("{} Exit", ui_icons::EXIT), true)
