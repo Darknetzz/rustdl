@@ -38,6 +38,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Docked **Videos** queue fills the bottom panel width/height, pins the card list under the toolbar, and sizes the scroll area from the panel clip rect so cards are not clipped to a thin strip.
 - Fixed docked/floating **Videos** toolbar vertically centering in the panel (shrink-wrapped content inside a tall `min_size` region).
 - Docked **Videos** card list uses `available_rect_before_wrap` (no extra panel/frame allocation on top of `TopBottomPanel`).
+- Restored docked/floating **Videos** layout to the proven `available_height` + `set_min_height` pattern (reverts experimental height helpers that broke the queue).
 - Main controls scroll shrinks to content height (removes the large empty gap above the bottom panel).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
