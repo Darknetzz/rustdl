@@ -751,6 +751,28 @@ pub fn constrain_content_width(ui: &mut egui::Ui) -> f32 {
     w
 }
 
+/// Allocate a top-down child region with an explicit size (avoids shrink-wrapped `max_rect`).
+pub fn allocate_top_down_rect<R>(
+    ui: &mut egui::Ui,
+    size: egui::Vec2,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let size = egui::vec2(size.x.max(1.0), size.y.max(1.0));
+    let rect = egui::Rect::from_min_size(ui.cursor().min, size);
+    ui.allocate_new_ui(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+        add,
+    )
+    .inner
+}
+
+/// Vertical space from the cursor to a fixed bottom edge.
+pub fn height_to_bottom(ui: &egui::Ui, bottom_y: f32) -> f32 {
+    (bottom_y - ui.cursor().min.y).max(0.0)
+}
+
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
     let width = content_width(ui);
