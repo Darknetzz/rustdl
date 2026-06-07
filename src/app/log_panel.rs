@@ -5,7 +5,9 @@ use eframe::egui::{Color32, RichText};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-use crate::app_ui::{button_group, button_toolbar_wrapped, left_button_row, secondary_button};
+use crate::app_ui::{
+    bounded_ui_height, button_group, button_toolbar_wrapped, left_button_row, secondary_button,
+};
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
 use crate::ui_icons;
@@ -171,7 +173,7 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_activity_log_toolbar(&mut self, ui: &mut egui::Ui) {
         button_toolbar_wrapped(ui, |ui| {
             button_group(ui, "log_clear", |g| {
                 if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
@@ -193,11 +195,12 @@ impl PydlApp {
                 self.persist_settings();
             }
             button_group(ui, "log_actions", |g| {
-                if g.secondary(
-                    &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
-                    true,
-                )
-                .clicked()
+                if g
+                    .secondary(
+                        &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
+                        true,
+                    )
+                    .clicked()
                 {
                     if let Some(last) = self
                         .log_lines
@@ -212,17 +215,22 @@ impl PydlApp {
                 {
                     self.open_activity_log_file();
                 }
-                if g.secondary(
-                    &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                    true,
-                )
-                .clicked()
+                if g
+                    .secondary(
+                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                        true,
+                    )
+                    .clicked()
                 {
                     self.open_config_folder();
                 }
             });
         });
-        let scroll_h = ui.available_height().max(80.0);
+    }
+
+    /// Scrollable log lines only (toolbar is separate).
+    pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
+        let scroll_h = scroll_h.max(60.0);
         egui::Frame::dark_canvas(ui.style())
             .fill(log_bg(&self.settings.theme))
             .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
@@ -230,7 +238,6 @@ impl PydlApp {
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
-                ui.set_min_height(scroll_h);
                 if self.log_lines.is_empty() {
                     ui.label(
                         RichText::new("Download activity will appear here.")
@@ -273,11 +280,12 @@ impl PydlApp {
                             let r = ui.add(label);
                             r.context_menu(|ui| {
                                 button_group(ui, "log_copy_line", |g| {
-                                    if g.secondary(
-                                        &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
-                                        true,
-                                    )
-                                    .clicked()
+                                    if g
+                                        .secondary(
+                                            &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                            true,
+                                        )
+                                        .clicked()
                                     {
                                         g.ui().ctx().copy_text((*line).clone());
                                         g.ui().close_menu();
@@ -287,6 +295,12 @@ impl PydlApp {
                         }
                     });
             });
+    }
+
+    pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
+        self.draw_activity_log_toolbar(ui);
+        let scroll_h = bounded_ui_height(ui, 80.0);
+        self.draw_activity_log_lines_scroll(ui, scroll_h);
     }
 }
 

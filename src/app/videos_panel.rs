@@ -12,6 +12,11 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
+/// Chrome below the queue list when the activity log is docked under Videos (header, slider, toolbar).
+const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
+/// Minimum scroll height for queue cards in the docked bottom panel.
+const DOCKED_QUEUE_LIST_MIN_H: f32 = 160.0;
+
 impl PydlApp {
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
@@ -457,12 +462,8 @@ impl PydlApp {
                 {
                     self.persist_settings();
                 }
-                egui::ScrollArea::vertical()
-                    .id_salt("rustdl_log_docked_only")
-                    .max_height(log_h)
-                    .show(ui, |ui| {
-                        self.draw_activity_log_panel(ui);
-                    });
+                self.draw_activity_log_toolbar(ui);
+                self.draw_activity_log_lines_scroll(ui, log_h);
             });
     }
 
@@ -474,9 +475,21 @@ impl PydlApp {
         }
     }
 
-    fn draw_docked_videos_panel_inner(&mut self, ui: &mut egui::Ui) {
+    fn docked_log_height_budget(&self, remaining: f32) -> f32 {
+        let max_log = (remaining - DOCKED_QUEUE_LIST_MIN_H - DOCKED_LOG_UNDER_VIDEOS_CHROME)
+            .max(80.0);
+        self.settings
+            .log_dock_height
+            .clamp(80.0, 480.0)
+            .min(max_log)
+    }
+
+    /// Docked video queue (`TopBottomPanel` body).
+    pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
+        let panel_h = bounded_ui_height(ui, 200.0);
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
+        let dock_log = self.settings.logs_open && self.settings.logs_docked;
 
         egui::Frame::dark_canvas(ui.style())
             .fill(fill)
@@ -485,17 +498,32 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
+                ui.set_min_height(panel_h);
+                ui.set_max_height(panel_h);
                 ui.spacing_mut().item_spacing.y = 4.0;
                 constrain_content_width(ui);
                 self.draw_videos_header_toolbar(ui);
 
-                let dock_log = self.settings.logs_open && self.settings.logs_docked;
+                let remaining = bounded_ui_height(ui, DOCKED_QUEUE_LIST_MIN_H);
+                let log_h = if dock_log {
+                    self.docked_log_height_budget(remaining)
+                } else {
+                    0.0
+                };
+                let log_chrome = if dock_log {
+                    DOCKED_LOG_UNDER_VIDEOS_CHROME
+                } else {
+                    0.0
+                };
+                let list_h = if dock_log {
+                    (remaining - log_h - log_chrome).max(DOCKED_QUEUE_LIST_MIN_H)
+                } else {
+                    remaining.max(DOCKED_QUEUE_LIST_MIN_H)
+                };
+                self.draw_queue_list_region(ui, list_h);
+
                 if dock_log {
-                    let log_h = self.settings.log_dock_height.clamp(80.0, 480.0);
-                    let log_chrome = 54.0;
-                    let list_h = (bounded_ui_height(ui, 80.0) - log_h - log_chrome).max(80.0);
-                    self.draw_queue_list_region(ui, list_h);
-                    ui.add_space(6.0);
+                    ui.add_space(4.0);
                     ui.horizontal(|ui| {
                         ui.label(RichText::new("Activity log").small().strong());
                         let tail_w = ui.available_width();
@@ -507,41 +535,21 @@ impl PydlApp {
                             },
                         );
                     });
+                    let max_log = (remaining - DOCKED_QUEUE_LIST_MIN_H - DOCKED_LOG_UNDER_VIDEOS_CHROME)
+                        .max(80.0);
                     if ui
                         .add(egui::Slider::new(
                             &mut self.settings.log_dock_height,
-                            80.0..=480.0,
+                            80.0..=max_log,
                         ))
                         .changed()
                     {
                         self.persist_settings();
                     }
-                    egui::ScrollArea::vertical()
-                        .id_salt("rustdl_log_docked_under_videos")
-                        .auto_shrink([false, false])
-                        .max_height(log_h)
-                        .show(ui, |ui| {
-                            self.draw_activity_log_panel(ui);
-                        });
-                } else {
-                    let list_h = bounded_ui_height(ui, 80.0);
-                    self.draw_queue_list_region(ui, list_h);
+                    self.draw_activity_log_toolbar(ui);
+                    self.draw_activity_log_lines_scroll(ui, log_h);
                 }
             });
-    }
-
-    /// Docked video queue (`TopBottomPanel` body).
-    pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = bounded_ui_height(ui, 160.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width().max(1.0), panel_h),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.set_min_height(panel_h);
-                ui.set_max_height(panel_h);
-                self.draw_docked_videos_panel_inner(ui);
-            },
-        );
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {
