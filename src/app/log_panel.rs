@@ -6,7 +6,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, left_button_row, secondary_button,
+    bounded_ui_height, button_group, button_toolbar_wrapped, left_button_row,
+    remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -231,70 +232,82 @@ impl PydlApp {
     /// Scrollable log lines only (toolbar is separate).
     pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
         let scroll_h = scroll_h.max(60.0);
-        egui::Frame::dark_canvas(ui.style())
-            .fill(log_bg(&self.settings.theme))
-            .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
-            .inner_margin(egui::Margin::same(10.0))
-            .rounding(egui::Rounding::same(6.0))
-            .show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                if self.log_lines.is_empty() {
-                    ui.label(
-                        RichText::new("Download activity will appear here.")
-                            .small()
-                            .color(text_hint(&self.settings.theme)),
-                    );
-                    return;
-                }
-                ui.spacing_mut().item_spacing.y = 3.0;
-                let relative = self.settings.log_relative_time;
-                let filtered: Vec<&String> = self
-                    .log_lines
-                    .iter()
-                    .filter(|line| self.log_filter.accepts(line))
-                    .collect();
-                let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
-                let window = &filtered[start..];
-                egui::ScrollArea::vertical()
-                    .max_height(scroll_h)
-                    .animated(true)
-                    .auto_shrink([false, false])
-                    .stick_to_bottom(self.settings.autoscroll_log)
+        ui.allocate_ui_with_layout(
+            egui::vec2(ui.available_width().max(1.0), scroll_h),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_min_height(scroll_h);
+                ui.set_max_height(scroll_h);
+                egui::Frame::dark_canvas(ui.style())
+                    .fill(log_bg(&self.settings.theme))
+                    .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
+                    .inner_margin(egui::Margin::same(10.0))
+                    .rounding(egui::Rounding::same(6.0))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
-                        if start > 0 {
+                        if self.log_lines.is_empty() {
                             ui.label(
-                                RichText::new(format!(
-                                    "Showing last {} of {} matching lines",
-                                    window.len(),
-                                    filtered.len()
-                                ))
-                                .small()
-                                .color(text_hint(&self.settings.theme)),
+                                RichText::new("Download activity will appear here.")
+                                    .small()
+                                    .color(text_hint(&self.settings.theme)),
                             );
+                            return;
                         }
-                        for line in window {
-                            let color = log_line_color(line);
-                            let widget = log_line_widget(line, color, ui, relative);
-                            let label = egui::Label::new(widget).wrap().selectable(true);
-                            let r = ui.add(label);
-                            r.context_menu(|ui| {
-                                button_group(ui, "log_copy_line", |g| {
-                                    if g
-                                        .secondary(
-                                            &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
-                                            true,
-                                        )
-                                        .clicked()
-                                    {
-                                        g.ui().ctx().copy_text((*line).clone());
-                                        g.ui().close_menu();
-                                    }
-                                });
+                        ui.spacing_mut().item_spacing.y = 3.0;
+                        let relative = self.settings.log_relative_time;
+                        let filtered: Vec<&String> = self
+                            .log_lines
+                            .iter()
+                            .filter(|line| self.log_filter.accepts(line))
+                            .collect();
+                        let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
+                        let window = &filtered[start..];
+                        let inner_h = remaining_ui_height(ui).max(40.0);
+                        egui::ScrollArea::vertical()
+                            .max_height(inner_h)
+                            .animated(true)
+                            .auto_shrink([false, false])
+                            .stick_to_bottom(self.settings.autoscroll_log)
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                if start > 0 {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "Showing last {} of {} matching lines",
+                                            window.len(),
+                                            filtered.len()
+                                        ))
+                                        .small()
+                                        .color(text_hint(&self.settings.theme)),
+                                    );
+                                }
+                                for line in window {
+                                    let color = log_line_color(line);
+                                    let widget = log_line_widget(line, color, ui, relative);
+                                    let label = egui::Label::new(widget).wrap().selectable(true);
+                                    let r = ui.add(label);
+                                    r.context_menu(|ui| {
+                                        button_group(ui, "log_copy_line", |g| {
+                                            if g
+                                                .secondary(
+                                                    &format!(
+                                                        "{} Copy line",
+                                                        ui_icons::COPY_CLIPBOARD
+                                                    ),
+                                                    true,
+                                                )
+                                                .clicked()
+                                            {
+                                                g.ui().ctx().copy_text((*line).clone());
+                                                g.ui().close_menu();
+                                            }
+                                        });
+                                    });
+                                }
                             });
-                        }
                     });
-            });
+            },
+        );
     }
 
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {

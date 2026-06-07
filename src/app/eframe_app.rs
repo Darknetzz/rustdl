@@ -94,11 +94,13 @@ impl eframe::App for PydlApp {
                 false,
                 self.settings.log_dock_height,
             )
-            .footer_height;
+            .footer_height
+            .min(body_est * 0.42)
+            .max(100.0);
             egui::TopBottomPanel::bottom("rustdl_undocked_footer")
                 .resizable(log_docked)
                 .default_height(footer_h)
-                .height_range(100.0..=800.0)
+                .height_range(100.0..=600.0)
                 .show(ctx, |ui| {
                     self.draw_queue_footer(ui);
                 });
@@ -109,21 +111,13 @@ impl eframe::App for PydlApp {
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
-                let videos_docked = self.settings.videos_docked;
-                let scroll_max = if videos_docked {
-                    // Docked queue lives in TopBottomPanel; keep controls content-sized only.
-                    None
-                } else {
-                    Some(bounded_ui_height(ui, 100.0).max(100.0))
-                };
-                let mut main_scroll = egui::ScrollArea::vertical()
+                let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
+                egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, true])
-                    .drag_to_scroll(true);
-                if let Some(h) = scroll_max {
-                    main_scroll = main_scroll.max_height(h);
-                }
-                main_scroll.show(ui, |ui| {
+                    .auto_shrink([false, false])
+                    .max_height(scroll_h)
+                    .drag_to_scroll(true)
+                    .show(ui, |ui| {
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );

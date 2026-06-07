@@ -28,6 +28,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Undocked **Videos** strip and docked activity log use a resizable bottom panel (same layout model as docked **Videos**), fixing overlapping log controls and empty space below the footer.
 - Floating **Videos** window card list fills the space below the toolbar again.
 - Log height slider shows whole pixels instead of long floating-point values.
+- Main controls scroll fills the central panel (no dead gap above the bottom footer); docked log lines expand to use remaining footer space.
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.

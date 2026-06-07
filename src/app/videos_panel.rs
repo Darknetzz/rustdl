@@ -449,61 +449,45 @@ impl PydlApp {
     }
 
     /// Activity log docked in the main panel when the video queue is undocked.
-    pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui, section_h: f32) {
-        let section_h = section_h.max(120.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width().max(1.0), section_h),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                egui::Frame::dark_canvas(ui.style())
-                    .fill(BG_CANVAS)
-                    .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
-                    .inner_margin(egui::Margin::same(10.0))
-                    .rounding(egui::Rounding::same(8.0))
-                    .show(ui, |ui| {
-                        ui.set_width(ui.available_width());
-                        ui.set_min_height(section_h);
-                        constrain_content_width(ui);
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Activity log").small().strong());
-                            let tail_w = ui.available_width();
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(tail_w.max(0.0), 0.0),
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    self.draw_log_controls(ui);
-                                },
-                            );
-                        });
-                        let remaining = bounded_ui_height(ui, 60.0);
-                        let max_log = (remaining - UNDOCKED_DOCKED_LOG_CHROME).max(80.0);
-                        let log_h = self
-                            .settings
-                            .log_dock_height
-                            .clamp(80.0, 480.0)
-                            .min(max_log);
-                        self.draw_log_height_slider(ui, max_log);
-                        self.draw_activity_log_toolbar(ui);
-                        self.draw_activity_log_lines_scroll(ui, log_h);
-                    });
-            },
-        );
+    pub(super) fn draw_docked_log_only_section(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(4.0);
+        egui::Frame::dark_canvas(ui.style())
+            .fill(BG_CANVAS)
+            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .inner_margin(egui::Margin::same(10.0))
+            .rounding(egui::Rounding::same(8.0))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                constrain_content_width(ui);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Activity log").small().strong());
+                    let tail_w = ui.available_width();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(tail_w.max(0.0), 0.0),
+                        egui::Layout::right_to_left(egui::Align::Center),
+                        |ui| {
+                            self.draw_log_controls(ui);
+                        },
+                    );
+                });
+                let budget = remaining_ui_height(ui).max(80.0);
+                let max_log = (budget - UNDOCKED_DOCKED_LOG_CHROME).max(80.0);
+                self.draw_log_height_slider(ui, max_log);
+                self.draw_activity_log_toolbar(ui);
+                let log_h = remaining_ui_height(ui).max(60.0);
+                self.draw_activity_log_lines_scroll(ui, log_h);
+            });
     }
 
     /// Pinned footer when the queue is undocked (`TopBottomPanel` body).
     pub(super) fn draw_queue_footer(&mut self, ui: &mut egui::Ui) {
         let panel_h = ui.clip_rect().height().max(80.0);
-        ui.allocate_ui_with_layout(
-            egui::vec2(ui.available_width().max(1.0), panel_h),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                self.draw_videos_undocked_strip(ui);
-                if self.settings.logs_open && self.settings.logs_docked {
-                    let log_section_h = remaining_ui_height(ui).max(120.0);
-                    self.draw_docked_log_only_section(ui, log_section_h);
-                }
-            },
-        );
+        ui.set_min_height(panel_h);
+        ui.set_max_height(panel_h);
+        self.draw_videos_undocked_strip(ui);
+        if self.settings.logs_open && self.settings.logs_docked {
+            self.draw_docked_log_only_section(ui);
+        }
     }
 
     fn docked_log_height_budget(&self, remaining: f32) -> f32 {
@@ -575,7 +559,8 @@ impl PydlApp {
                                 .max(80.0);
                             self.draw_log_height_slider(ui, max_log);
                             self.draw_activity_log_toolbar(ui);
-                            self.draw_activity_log_lines_scroll(ui, log_h);
+                            let log_lines_h = remaining_ui_height(ui).max(60.0);
+                            self.draw_activity_log_lines_scroll(ui, log_lines_h);
                         }
                     });
             },
