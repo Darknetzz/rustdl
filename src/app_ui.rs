@@ -649,89 +649,84 @@ pub fn compute_main_column_split(
     }
 }
 
-fn mode_nav_button_label(icon: &str, title: &str, text_color: Color32) -> egui::WidgetText {
-    let mut job = egui::text::LayoutJob::default();
-    // Material icons are registered on the Proportional family fallback chain, not as a named family.
-    let icon_fmt = egui::text::TextFormat {
-        font_id: egui::FontId::new(18.0, egui::FontFamily::Proportional),
-        color: text_color,
-        ..Default::default()
-    };
-    let text_fmt = egui::text::TextFormat {
-        font_id: egui::FontId::proportional(14.0),
-        color: text_color,
-        ..Default::default()
-    };
-    job.append(icon, 0.0, icon_fmt);
-    job.append(" ", 0.0, text_fmt.clone());
-    job.append(title, 0.0, text_fmt);
-    egui::WidgetText::from(job)
-}
-
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
 pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
-    with_full_width(ui, |ui| {
-        let row_w = ui.available_width().max(1.0);
-        let btn_w = row_w * 0.5;
-        ui.horizontal(|ui| {
+    let row_w = content_width(ui).max(1.0);
+    ui.allocate_ui_with_layout(
+        egui::vec2(row_w, 38.0),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
             ui.set_width(row_w);
-            ui.spacing_mut().item_spacing.x = 0.0;
-            let dl_text = if dl_active {
-                Color32::from_rgb(10, 32, 10)
-            } else {
-                Color32::from_rgb(210, 220, 235)
-            };
-            let dl = ui.add_sized(
-                [btn_w, 36.0],
-                egui::Button::new(mode_nav_button_label(
-                    crate::ui_icons::NAV_DOWNLOADER,
-                    "Downloader",
-                    dl_text,
-                ))
-                .fill(if dl_active {
-                    Color32::from_rgb(152, 255, 152)
+            let btn_w = row_w * 0.5;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                let dl_text = if dl_active {
+                    Color32::from_rgb(10, 32, 10)
                 } else {
-                    Color32::from_rgb(44, 52, 64)
-                })
-                .stroke(egui::Stroke::NONE)
-                .rounding(egui::Rounding::same(6.0)),
-            );
-            if dl.clicked() {
-                dl_clicked = true;
-            }
-            let av1_text = if av1_active {
-                Color32::from_rgb(45, 27, 0)
-            } else {
-                Color32::from_rgb(210, 220, 235)
-            };
-            let av1 = ui.add_sized(
-                [btn_w, 36.0],
-                egui::Button::new(mode_nav_button_label(
-                    crate::ui_icons::NAV_AV1,
-                    "AV1 Converter",
-                    av1_text,
+                    Color32::from_rgb(210, 220, 235)
+                };
+                let dl_label = RichText::new(format!(
+                    "{} Downloader",
+                    crate::ui_icons::NAV_DOWNLOADER
                 ))
-                .fill(if av1_active {
-                    Color32::from_rgb(255, 190, 90)
+                .color(dl_text)
+                .size(14.0);
+                let dl = ui.add_sized(
+                    [btn_w, 36.0],
+                    egui::Button::new(dl_label)
+                        .fill(if dl_active {
+                            Color32::from_rgb(152, 255, 152)
+                        } else {
+                            Color32::from_rgb(44, 52, 64)
+                        })
+                        .stroke(egui::Stroke::NONE)
+                        .rounding(egui::Rounding::same(6.0)),
+                );
+                if dl.clicked() {
+                    dl_clicked = true;
+                }
+                let av1_text = if av1_active {
+                    Color32::from_rgb(45, 27, 0)
                 } else {
-                    Color32::from_rgb(44, 52, 64)
-                })
-                .stroke(egui::Stroke::NONE)
-                .rounding(egui::Rounding::same(6.0)),
-            );
-            if av1.clicked() {
-                av1_clicked = true;
-            }
-        });
-    });
+                    Color32::from_rgb(210, 220, 235)
+                };
+                let av1_label = RichText::new(format!(
+                    "{} AV1 Converter",
+                    crate::ui_icons::NAV_AV1
+                ))
+                .color(av1_text)
+                .size(14.0);
+                let av1 = ui.add_sized(
+                    [btn_w, 36.0],
+                    egui::Button::new(av1_label)
+                        .fill(if av1_active {
+                            Color32::from_rgb(255, 190, 90)
+                        } else {
+                            Color32::from_rgb(44, 52, 64)
+                        })
+                        .stroke(egui::Stroke::NONE)
+                        .rounding(egui::Rounding::same(6.0)),
+                );
+                if av1.clicked() {
+                    av1_clicked = true;
+                }
+            });
+        },
+    );
     (dl_clicked, av1_clicked)
 }
 
 /// Width of the current layout region (respects [`content_panel_frame`] margins).
 pub fn content_width(ui: &egui::Ui) -> f32 {
-    ui.max_rect().width().max(0.0)
+    // `max_rect` shrink-wraps to children inside scroll areas; `clip_rect` is the full row.
+    let w = ui.clip_rect().width();
+    if w.is_finite() && w > 0.0 {
+        w
+    } else {
+        ui.max_rect().width().max(0.0)
+    }
 }
 
 /// Cap layout width without forcing horizontal expansion (preserves panel margins).

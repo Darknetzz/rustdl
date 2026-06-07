@@ -491,6 +491,7 @@ impl PydlApp {
     /// Docked video queue (`TopBottomPanel` body). Keep heights within `ui.available_height()`
     /// so egui does not expand the panel rect and fight user resize.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
+        ui.set_width(ui.available_width());
         let fill = self.videos_panel_fill();
         let border = self.videos_panel_border();
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
@@ -513,7 +514,14 @@ impl PydlApp {
                         let log_pref = self.docked_log_height_budget(total);
                         let list_h =
                             (total - log_pref - log_chrome).max(DOCKED_QUEUE_LIST_MIN_H);
-                        self.draw_queue_list_region(ui, list_h);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), list_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_width(ui.available_width());
+                                self.draw_queue_list_region(ui, list_h);
+                            },
+                        );
 
                         ui.add_space(4.0);
                         ui.horizontal(|ui| {
@@ -531,11 +539,18 @@ impl PydlApp {
                             (total - DOCKED_QUEUE_LIST_MIN_H - log_chrome).max(80.0);
                         self.draw_log_height_slider(ui, max_log);
                         self.draw_activity_log_toolbar(ui);
-                        let log_lines_h = ui.available_height().max(60.0);
+                        let log_lines_h = remaining_ui_height(ui).max(60.0);
                         self.draw_activity_log_lines_scroll(ui, log_lines_h);
                     } else {
                         let list_h = remaining_ui_height(ui).max(DOCKED_QUEUE_LIST_MIN_H);
-                        self.draw_queue_list_region(ui, list_h);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(ui.available_width(), list_h),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.set_width(ui.available_width());
+                                self.draw_queue_list_region(ui, list_h);
+                            },
+                        );
                     }
                 });
             });

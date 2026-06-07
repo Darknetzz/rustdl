@@ -111,10 +111,17 @@ impl eframe::App for PydlApp {
             .show(ctx, |ui| {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
+                let (dl_nav, av1_nav) = draw_mode_nav_bar(ui, !self.av1_mode, self.av1_mode);
+                if dl_nav {
+                    self.set_app_mode(false);
+                }
+                if av1_nav {
+                    self.set_app_mode(true);
+                }
                 let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, true])
+                    .auto_shrink([false, false])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
@@ -188,13 +195,6 @@ impl eframe::App for PydlApp {
                             });
                         });
                     });
-                }
-                let (dl_nav, av1_nav) = draw_mode_nav_bar(ui, !self.av1_mode, self.av1_mode);
-                if dl_nav {
-                    self.set_app_mode(false);
-                }
-                if av1_nav {
-                    self.set_app_mode(true);
                 }
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
                     ui.colored_label(
