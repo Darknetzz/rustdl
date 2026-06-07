@@ -726,13 +726,22 @@ pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -
 
 /// Width of the current layout region (respects [`content_panel_frame`] margins).
 pub fn content_width(ui: &egui::Ui) -> f32 {
-    // `max_rect` shrink-wraps to children inside scroll areas; `clip_rect` is the full row.
-    let w = ui.clip_rect().width();
-    if w.is_finite() && w > 0.0 {
-        w
-    } else {
-        ui.max_rect().width().max(0.0)
+    let max_w = ui.max_rect().width();
+    if max_w.is_finite() && max_w > 0.0 {
+        // Inside a scroll area, nested rows shrink-wrap `max_rect`; use the viewport clip then.
+        if ui.stack().contained_in(egui::UiKind::ScrollArea) {
+            let clip_w = ui.clip_rect().width();
+            if clip_w.is_finite() && clip_w > max_w + 4.0 {
+                return clip_w;
+            }
+        }
+        return max_w;
     }
+    let avail = ui.available_width();
+    if avail.is_finite() && avail > 0.0 && avail < 50_000.0 {
+        return avail;
+    }
+    ui.clip_rect().width().max(0.0)
 }
 
 /// Cap layout width without forcing horizontal expansion (preserves panel margins).

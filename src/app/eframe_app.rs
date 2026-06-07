@@ -109,6 +109,7 @@ impl eframe::App for PydlApp {
         egui::CentralPanel::default()
             .frame(content_panel_frame())
             .show(ctx, |ui| {
+                constrain_content_width(ui);
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 let (dl_nav, av1_nav) = draw_mode_nav_bar(ui, !self.av1_mode, self.av1_mode);
