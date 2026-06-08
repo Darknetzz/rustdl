@@ -10,6 +10,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Floating **Activity log** window shows log lines again (scroll area fills the window; toolbar controls stay in a single row at the top).
 - Queue card **URL…** and **Remove…** dropdowns no longer clip inside the card (desktop popups render above the scroll area; LAN web UI menus are no longer cut off by card overflow).
 
 ### Changed
