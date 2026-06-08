@@ -27,6 +27,10 @@ impl DiskSpace {
         (self.available_bytes as f64 / self.total_bytes as f64) * 100.0
     }
 
+    pub fn percent_used(&self) -> f64 {
+        (100.0 - self.percent_free()).clamp(0.0, 100.0)
+    }
+
     pub fn level(&self) -> DiskSpaceLevel {
         const TWO_GIB: u64 = 2 * 1024 * 1024 * 1024;
         const TEN_GIB: u64 = 10 * 1024 * 1024 * 1024;
@@ -207,6 +211,17 @@ mod tests {
         let line = space.format_available_total();
         assert!(line.contains("free /"));
         assert!(line.contains("(D:)"));
+    }
+
+    #[test]
+    fn percent_used_complements_free() {
+        let space = DiskSpace {
+            available_bytes: 200 * 1024 * 1024 * 1024,
+            total_bytes: 1000 * 1024 * 1024 * 1024,
+            volume_label: None,
+        };
+        assert!((space.percent_free() - 20.0).abs() < 0.01);
+        assert!((space.percent_used() - 80.0).abs() < 0.01);
     }
 
     #[test]

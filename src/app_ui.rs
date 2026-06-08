@@ -45,14 +45,15 @@ fn disk_space_bar_track_color(ui: &egui::Ui) -> Color32 {
     }
 }
 
-/// Thin progress bar showing remaining free-space percentage; fill color reflects [`DiskSpaceLevel`].
+/// Thin progress bar showing used disk percentage; fill color reflects free-space [`DiskSpaceLevel`].
 pub fn draw_disk_space_progress_bar(
     ui: &mut egui::Ui,
     percent_free: f64,
     level: DiskSpaceLevel,
     width: f32,
 ) -> Response {
-    let fraction = (percent_free / 100.0).clamp(0.0, 1.0) as f32;
+    let percent_used = (100.0 - percent_free).clamp(0.0, 100.0);
+    let fraction = (percent_used / 100.0).clamp(0.0, 1.0) as f32;
     let height = 12.0;
     let rounding = height * 0.5;
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
@@ -74,19 +75,28 @@ pub fn draw_disk_space_progress_bar(
         let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_w, rect.height()));
         ui.painter().rect_filled(fill_rect, rounding, fill_color);
 
-        let pct_text = format!("{:.0}%", percent_free);
+        let pct_text = format!("{:.0}%", percent_used);
         let font = egui::FontId::proportional(10.0);
         let galley = ui.painter().layout_no_wrap(pct_text, font, label_color);
-        let text_home = if fill_w >= galley.size().x + 6.0 {
+        let text_home = if fraction > 0.0 && fill_w >= galley.size().x + 6.0 {
             fill_rect
         } else {
             rect
         };
         let pos = text_home.center() - galley.size() * 0.5;
         ui.painter().galley(pos, galley, label_color);
+    } else {
+        let pct_text = format!("{:.0}%", percent_used);
+        let font = egui::FontId::proportional(10.0);
+        let galley = ui.painter().layout_no_wrap(pct_text, font, label_color);
+        let pos = rect.center() - galley.size() * 0.5;
+        ui.painter().galley(pos, galley, label_color);
     }
 
-    response.on_hover_text(format!("{:.1}% free space remaining", percent_free))
+    response.on_hover_text(format!(
+        "{:.1}% used · {:.1}% free space remaining",
+        percent_used, percent_free
+    ))
 }
 
 pub fn status_color(s: ItemStatus) -> Color32 {

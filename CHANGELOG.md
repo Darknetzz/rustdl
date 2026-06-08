@@ -51,6 +51,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Main header **Settings** and **Exit** buttons align to the far right again (header row uses full content width).
+- Destination disk progress bar shows **used** percentage (e.g. 80%) instead of free; hover still shows both used and free.
 - Settings → Shared: **Copy** API token button briefly shows **Copied!** after a successful clipboard copy.
 - Main window and docked queue panels keep the right-side content inset again (scroll-area width no longer bleeds to the window edge).
 - LAN web UI: queue thumbnails load from a shared cache populated by the desktop app and fixed proxy fetch order (metadata URL before local ffmpeg); thumbnail retries no longer stick after transient failures.

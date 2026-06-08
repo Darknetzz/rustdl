@@ -571,11 +571,16 @@ function diskSpaceFreeHtml(disk) {
   return `<span class="disk-space-free disk-space-free-${level}">${free} free</span>`;
 }
 
+function diskSpacePercentUsed(disk) {
+  if (disk?.percent_free == null || !isFinite(disk.percent_free)) return null;
+  return Math.max(0, Math.min(100, Math.round(100 - disk.percent_free)));
+}
+
 function diskSpaceBarHtml(disk) {
-  if (disk?.percent_free == null || !isFinite(disk.percent_free)) return "";
+  const pct = diskSpacePercentUsed(disk);
+  if (pct == null) return "";
   const level = diskSpaceLevel(disk);
-  const pct = Math.max(0, Math.min(100, Math.round(disk.percent_free)));
-  return `<div class="disk-space-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Free disk space">
+  return `<div class="disk-space-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Used disk space">
     <div class="disk-space-bar-fill disk-space-bar-fill-${level}" style="width:${pct}%">${pct}%</div>
   </div>`;
 }
@@ -604,11 +609,9 @@ function renderNavbarDiskSpace(disk) {
   const el = document.createElement("span");
   el.className = `status-badge disk-space disk-space-${level}`;
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
-  const pct =
-    disk.percent_free != null && isFinite(disk.percent_free)
-      ? ` · ${Math.round(disk.percent_free)}% free`
-      : "";
-  el.title = "Free and total space on the output folder volume";
+  const pctUsed = diskSpacePercentUsed(disk);
+  const pct = pctUsed != null ? ` · ${pctUsed}% used` : "";
+  el.title = "Used and free space on the output folder volume";
   el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${diskSpaceFreeHtml(
     disk
   )} / ${formatBytes(disk.total_bytes)}${pct}`;
