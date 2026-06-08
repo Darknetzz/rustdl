@@ -16,6 +16,10 @@ impl PydlApp {
         self.queue_dirty = true;
     }
 
+    pub(super) fn mark_settings_dirty(&mut self) {
+        self.settings_dirty = true;
+    }
+
     pub(super) fn rebuild_item_index(&mut self) {
         self.item_index_by_id = app_state::rebuild_item_index_map(&self.items);
     }

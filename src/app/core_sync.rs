@@ -46,8 +46,13 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
     core.ffmpeg_version = app.ffmpeg_version.clone();
     core.ffprobe_version = app.ffprobe_version.clone();
     // Activity log is owned by DownloadCore; the GUI mirrors it via sync_core_to_app.
-    core.settings = app.settings.clone();
-    core.profile_store = app.profile_store.clone();
+    if app.settings_dirty {
+        core.settings = app.settings.clone();
+        core.profile_store = app.profile_store.clone();
+        core.bump_settings_generation();
+        app.synced_settings_generation = core.settings_generation;
+        app.settings_dirty = false;
+    }
     core.downloads_paused = app.downloads_paused;
     core.session_complete_notified = app.session_complete_notified;
     // The AV1 input textarea is GUI-editable; mirror it like output_dir. The rest of the AV1
@@ -69,9 +74,25 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.yt_dlp_version = core.yt_dlp_version.clone();
     app.ffmpeg_version = core.ffmpeg_version.clone();
     app.ffprobe_version = core.ffprobe_version.clone();
-    app.log_lines = core.log_lines.clone();
-    app.settings = core.settings.clone();
-    app.profile_store = core.profile_store.clone();
+
+    // Incremental log sync: append only new lines instead of cloning the full deque.
+    if core.log_lines.len() < app.synced_log_len {
+        app.log_lines.clear();
+        app.synced_log_len = 0;
+    }
+    if app.synced_log_len < core.log_lines.len() {
+        for line in core.log_lines.iter().skip(app.synced_log_len) {
+            app.log_lines.push_back(line.clone());
+        }
+        app.synced_log_len = core.log_lines.len();
+    }
+
+    if core.settings_generation != app.synced_settings_generation {
+        app.settings = core.settings.clone();
+        app.profile_store = core.profile_store.clone();
+        app.synced_settings_generation = core.settings_generation;
+    }
+
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
     app.convert_input_paths = core.convert_input_paths.clone();

@@ -3,6 +3,8 @@ use std::path::Path;
 
 use crate::app_parsing::split_cli_like;
 use crate::config::{AppSettings, DEFAULT_OUTPUT_FILENAME_TEMPLATE};
+use crate::models::QueueItem;
+use crate::profiles::{find_profile, ProfileStore};
 use crate::ytdlp;
 
 /// Cookies and impersonation flags for `yt-dlp -J` when resolving URLs.
@@ -131,6 +133,30 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
     if !post_args.trim().is_empty() {
         args.push("--postprocessor-args".to_owned());
         args.push(post_args);
+    }
+    args
+}
+
+/// Builds download args for a queue row, honoring optional per-item profile/format overrides.
+pub fn build_download_extra_args_for_item(
+    settings: &AppSettings,
+    profile_store: &ProfileStore,
+    item: &QueueItem,
+) -> Vec<String> {
+    let mut effective = settings.clone();
+    if let Some(name) = item.profile_override.as_deref() {
+        if let Some(profile) = find_profile(profile_store, name.trim()) {
+            profile.apply_to(&mut effective);
+        }
+    }
+    let mut args = build_download_extra_args(&effective);
+    if let Some(fmt) = item.format_override.as_deref() {
+        let fmt = fmt.trim();
+        if !fmt.is_empty() {
+            strip_cli_flag_pair(&mut args, "-f");
+            args.push("-f".to_owned());
+            args.push(fmt.to_owned());
+        }
     }
     args
 }

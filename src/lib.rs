@@ -10,6 +10,7 @@ pub mod cli;
 pub mod config;
 pub mod convert_state;
 pub mod disk_space;
+pub mod domain;
 pub mod external_tools;
 pub mod http_client;
 pub mod models;

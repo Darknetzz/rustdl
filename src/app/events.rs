@@ -1,114 +1,11 @@
-use std::sync::Once;
-
-use crossbeam_channel::Sender;
 use eframe::egui;
-use tokio::sync::broadcast;
 
-static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
-
-/// Upper bound on UI work per frame so one burst of download lines cannot freeze the window.
-const MAX_UI_EVENTS_PER_FRAME: usize = 128;
-
-/// Delivers UI events to the egui thread and the shared [`DownloadCore`] event loop.
-#[derive(Clone)]
-pub struct UiEventBus {
-    tx: Sender<UiEvent>,
-    broadcast: broadcast::Sender<UiEvent>,
-}
-
-impl UiEventBus {
-    pub fn new(tx: Sender<UiEvent>, broadcast: broadcast::Sender<UiEvent>) -> Self {
-        Self { tx, broadcast }
-    }
-
-    pub fn publish(&self, event: UiEvent) -> bool {
-        let _ = self.broadcast.send(event.clone());
-        match self.tx.send(event) {
-            Ok(()) => true,
-            Err(_) => {
-                UI_CHANNEL_CLOSED_WARN.call_once(|| {
-                    eprintln!(
-                        "rustdl: UI event channel closed; background tasks may not update the window."
-                    );
-                });
-                false
-            }
-        }
-    }
-}
-
-/// Publishes an event to the GUI and DownloadCore (see [`UiEventBus::publish`]).
-pub(crate) fn try_send_ui(bus: &UiEventBus, event: UiEvent) -> bool {
-    bus.publish(event)
-}
-use crate::models::{ItemStatus, VideoPreview};
+pub use crate::domain::events::{try_send_ui, UiEvent};
 
 use super::PydlApp;
 
-#[derive(Clone)]
-pub(crate) enum UiEvent {
-    AddResolved {
-        rows: Vec<VideoPreview>,
-        source_line: String,
-    },
-    AddProgress {
-        processed: usize,
-        total: usize,
-        current: Option<String>,
-    },
-    AddDone,
-    DownloadLine {
-        item_id: u64,
-        line: String,
-    },
-    DownloadDone {
-        item_id: u64,
-        ok: bool,
-        detail: String,
-    },
-    UpdateCheckDone {
-        latest_version: Option<String>,
-        release_url: Option<String>,
-        has_update: bool,
-        message: String,
-    },
-    ThumbnailFetched {
-        item_id: u64,
-        /// Decoded on a worker thread; GPU upload is deferred (see `pending_thumbnail_uploads`).
-        image: Option<egui::ColorImage>,
-    },
-    ConvertLine {
-        item_id: u64,
-        line: String,
-    },
-    ConvertDuration {
-        item_id: u64,
-        duration_ms: u64,
-    },
-    ConvertMediaProbed {
-        item_id: u64,
-        media: crate::transcode::ConvertInputMedia,
-    },
-    ConvertDone {
-        item_id: u64,
-        ok: bool,
-        detail: String,
-        final_output_path: Option<String>,
-    },
-    ConvertBatchDone,
-    /// Activity log line (web SSE subscribers).
-    LogLine {
-        line: String,
-    },
-    /// Graceful shutdown finished (web SSE + desktop window close).
-    ShutdownRequested,
-}
-
-/// yt-dlp progress lines that would flood the log if recorded every event.
-pub(crate) fn is_throttled_download_log_line(line: &str) -> bool {
-    let l = line.to_ascii_lowercase();
-    (l.contains("[download]") && (l.contains('%') || l.contains("frag"))) || l.contains("[merger]")
-}
+/// Upper bound on UI work per frame so one burst of download lines cannot freeze the window.
+const MAX_UI_EVENTS_PER_FRAME: usize = 128;
 
 impl PydlApp {
     pub(super) fn process_events(&mut self, ctx: &egui::Context) {
@@ -138,58 +35,15 @@ impl PydlApp {
                 UiEvent::DownloadLine { .. } => {
                     ctx.request_repaint();
                 }
-                UiEvent::DownloadDone {
-                    item_id,
-                    ok,
-                    detail,
-                } => {
-                    let mut completed = ok;
-                    let mut final_detail = detail;
+                UiEvent::DownloadDone { item_id, ok, detail: _ } => {
                     if ok {
-                        self.done_file_index.force_refresh();
-                        self.refresh_done_file_lookup();
-                        if let Some(msg) = self.verify_done_item_has_video_and_audio(item_id) {
-                            completed = false;
-                            final_detail = msg.clone();
-                            self.append_log(&format!("[item {item_id}] {msg}"));
-                        }
-                    }
-                    if !completed && ok {
-                        if let Some(idx) = self.item_idx(item_id) {
-                            self.set_item_status_at(idx, ItemStatus::Failed);
-                            let it = &mut self.items[idx];
-                            it.detail = final_detail.clone();
-                        }
-                        let summary = final_detail.trim();
-                        if !summary.is_empty() {
-                            self.append_log(&format!(
-                                "[item {item_id}] Post-download verification failed: {summary}"
-                            ));
-                        }
-                    }
-                    if completed {
                         self.probe_done_item_resolution_if_missing(item_id);
-                        if let Some(core_item) = self
-                            .shared_core
-                            .lock()
-                            .items
-                            .iter()
-                            .find(|it| it.item_id == item_id)
-                        {
-                            if let Some(idx) = self.item_idx(item_id) {
-                                if core_item.local_path.is_some() {
-                                    self.items[idx].local_path = core_item.local_path.clone();
-                                }
-                            }
-                        }
-                        // Auto-enqueue to AV1 is applied on DownloadCore (works headless too).
                         if self.settings.show_thumbnails && !self.textures.contains_key(&item_id) {
                             self.thumbnail_attempted.remove(&item_id);
                             self.queue_thumbnail_load(item_id);
                         }
                     }
                     self.mark_transfer_totals_dirty();
-                    self.schedule_queue_save();
                 }
                 UiEvent::UpdateCheckDone {
                     latest_version,
@@ -259,23 +113,5 @@ impl PydlApp {
         if !self.pending_thumbnail_uploads.is_empty() {
             ctx.request_repaint();
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::is_throttled_download_log_line;
-
-    #[test]
-    fn throttle_matches_progress_spam_not_errors() {
-        assert!(is_throttled_download_log_line(
-            "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
-        ));
-        assert!(is_throttled_download_log_line(
-            "[Merger] Merging formats into mkv"
-        ));
-        assert!(!is_throttled_download_log_line(
-            "ERROR: unable to download video"
-        ));
     }
 }

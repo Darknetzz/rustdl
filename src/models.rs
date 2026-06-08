@@ -49,6 +49,12 @@ pub struct QueueItem {
     /// Unix seconds when this row last reached Done (display order for the Done group).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u64>,
+    /// Optional per-item yt-dlp format string (`-f`); overrides session quality when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format_override: Option<String>,
+    /// Optional named download profile; overrides session profile for this row only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub profile_override: Option<String>,
 }
 
 impl Default for QueueItem {
@@ -75,6 +81,8 @@ impl Default for QueueItem {
             local_path: None,
             thumbnail_path: None,
             completed_at: None,
+            format_override: None,
+            profile_override: None,
         }
     }
 }
@@ -103,6 +111,8 @@ impl QueueItem {
             local_path: None,
             thumbnail_path: None,
             completed_at: None,
+            format_override: None,
+            profile_override: None,
         }
     }
 
@@ -142,6 +152,8 @@ impl QueueItem {
             local_path: None,
             thumbnail_path: None,
             completed_at: None,
+            format_override: None,
+            profile_override: None,
         }
     }
 }

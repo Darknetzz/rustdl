@@ -6,8 +6,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::app::events::is_throttled_download_log_line;
-use crate::app::UiEvent;
+use crate::domain::events::is_throttled_download_log_line;
+use crate::domain::UiEvent;
 use crate::app_parsing::{
     convert_detail_is_user_cancellation, parse_speed_eta, reset_convert_item_to_ready,
 };
@@ -31,7 +31,7 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
                         c.apply_ui_event(ev)
                     };
                     for item_id in prefetch_ids {
-                        crate::app::background_spawn::spawn_queue_thumbnail_prefetch(
+                        crate::service::background_spawn::spawn_queue_thumbnail_prefetch(
                             core.clone(),
                             item_id,
                         );
@@ -397,8 +397,17 @@ impl super::core::DownloadCore {
             return;
         }
 
-        let completed = ok;
-        let final_detail = detail.to_owned();
+        let mut completed = ok;
+        let mut final_detail = detail.to_owned();
+        if completed {
+            self.done_file_index.force_refresh();
+            self.refresh_done_file_lookup();
+            self.bind_local_path_for_item(item_id);
+            if let Some(msg) = self.verify_done_item_streams(item_id) {
+                completed = false;
+                final_detail = msg;
+            }
+        }
         if let Some(idx) = self.item_idx(item_id) {
             let new_status = if completed {
                 ItemStatus::Done
@@ -409,9 +418,6 @@ impl super::core::DownloadCore {
             if completed {
                 self.items[idx].percent = 100.0;
                 self.items[idx].eta_text = "0s".to_owned();
-                self.done_file_index.force_refresh();
-                self.refresh_done_file_lookup();
-                self.bind_local_path_for_item(item_id);
             }
             self.items[idx].detail = final_detail.clone();
         }
@@ -422,6 +428,10 @@ impl super::core::DownloadCore {
             let summary = final_detail.trim();
             if summary.is_empty() {
                 self.append_log(&format!("[item {item_id}] Download failed."));
+            } else if ok {
+                self.append_log(&format!(
+                    "[item {item_id}] Post-download verification failed: {summary}"
+                ));
             } else {
                 self.append_log(&format!("[item {item_id}] Download failed: {summary}"));
             }
@@ -444,6 +454,56 @@ impl super::core::DownloadCore {
         if has_idle {
             self.start_downloads();
         }
+    }
+
+    pub fn verify_done_item_streams(&self, item_id: u64) -> Option<String> {
+        if !self.settings.verify_output_video_audio
+            || self.settings.ffmpeg_extract_audio_mp3
+            || !self.has_ffprobe
+        {
+            return None;
+        }
+        let idx = self.item_idx(item_id)?;
+        let item = &self.items[idx];
+        if item.video_id.trim().is_empty() {
+            return None;
+        }
+        let output_dir = self.effective_output_dir();
+        let (path, _) = self
+            .done_file_index
+            .find_path_for_queue_item(&output_dir, item)?;
+        let path_str = path.to_string_lossy().to_string();
+        let (has_video, has_audio) = match ytdlp::probe_video_audio_stream_presence(
+            &path_str,
+            &self.settings.ffprobe_path,
+        ) {
+            Some(v) => v,
+            None => {
+                return Some(
+                    "ffprobe failed or could not parse output. Check the file and ffprobe path."
+                        .to_owned(),
+                );
+            }
+        };
+        streams_incomplete_message(has_video, has_audio)
+    }
+}
+
+fn streams_incomplete_message(has_video: bool, has_audio: bool) -> Option<String> {
+    if !has_video && !has_audio {
+        Some("File has neither video nor audio streams according to ffprobe.".to_owned())
+    } else if !has_video {
+        Some(
+            "Download has audio only (no video stream). Try yt-dlp -f \"bv*+ba/b\" with ffmpeg merge, or check available formats (-F)."
+                .to_owned(),
+        )
+    } else if !has_audio {
+        Some(
+            "Download has video but no audio stream. Try a different format or merge (bestvideo+bestaudio)."
+                .to_owned(),
+        )
+    } else {
+        None
     }
 }
 

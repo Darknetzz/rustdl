@@ -1807,6 +1807,59 @@ function mountClearQueueMenu(container) {
   container.appendChild(menu);
 }
 
+async function exportQueueUrls() {
+  const res = await api("/api/queue/export");
+  if (!res.ok) {
+    throw new Error("Could not export queue URLs.");
+  }
+  const text = await res.text();
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "rustdl-queue.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function importQueueUrlsFromPrompt() {
+  const raw = prompt("Paste URLs to add (one per line):");
+  if (!raw || !raw.trim()) return;
+  const urls = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+  if (!urls.length) return;
+  const res = await api("/api/queue/import", {
+    method: "POST",
+    body: JSON.stringify({ urls }),
+  });
+  if (!res.ok) {
+    throw new Error("Import failed.");
+  }
+  await refreshAll();
+}
+
+function mountQueueImportExport(container) {
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.className = "secondary";
+  setButtonLabel(exportBtn, ICON.download, "Export URLs");
+  exportBtn.title = "Download queue URLs as a .txt file";
+  exportBtn.onclick = () =>
+    exportQueueUrls().catch((err) => alert(err.message || String(err)));
+
+  const importBtn = document.createElement("button");
+  importBtn.type = "button";
+  importBtn.className = "secondary";
+  setButtonLabel(importBtn, ICON.add, "Import URLs");
+  importBtn.title = "Paste URLs to append to the queue";
+  importBtn.onclick = () =>
+    importQueueUrlsFromPrompt().catch((err) => alert(err.message || String(err)));
+
+  container.appendChild(exportBtn);
+  container.appendChild(importBtn);
+}
+
 async function clearActivityLog() {
   await api("/api/logs/clear", { method: "POST" });
   await refreshLogs();
@@ -2217,7 +2270,10 @@ document.getElementById("btn-add").onclick = async () => {
 document.getElementById("btn-clear-url-input").onclick = () => clearUrlInput();
 
 const queueClearMount = document.getElementById("queue-clear-menu");
-if (queueClearMount) mountClearQueueMenu(queueClearMount);
+if (queueClearMount) {
+  mountQueueImportExport(queueClearMount);
+  mountClearQueueMenu(queueClearMount);
+}
 
 document.getElementById("btn-clear-log").onclick = () =>
   clearActivityLog().catch((e) => alert(e.message || String(e)));

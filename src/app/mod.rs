@@ -28,13 +28,13 @@ pub(crate) mod log_panel;
 mod queue_cache;
 mod queue_persist;
 mod settings_panel;
-mod thumbnails;
-mod update_check;
+pub(crate) mod thumbnails;
+pub(crate) mod update_check;
 mod videos_panel;
 mod web_qr;
 
 pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
-pub(crate) use events::UiEvent;
+pub(crate) use crate::domain::events::UiEvent;
 pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
@@ -106,9 +106,15 @@ pub struct PydlApp {
     pub(crate) core_generation: u64,
     /// Set when the desktop UI mutates the queue; pushed to [`DownloadCore`] on the next sync.
     pub(crate) queue_dirty: bool,
+    /// Set when the desktop UI mutates settings; pushed to [`DownloadCore`] on the next sync.
+    pub(crate) settings_dirty: bool,
+    /// Last mirrored log line count from core (incremental sync).
+    pub(crate) synced_log_len: usize,
+    /// Last mirrored settings generation from core.
+    pub(crate) synced_settings_generation: u64,
     pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
-    ui_bus: crate::app::events::UiEventBus,
+    ui_bus: crate::domain::UiEventBus,
     rx: Receiver<UiEvent>,
 
     input_urls: String,
@@ -177,6 +183,8 @@ pub struct PydlApp {
     /// Scroll target set when focusing a queue group from the summary row.
     scroll_to_queue_group: Option<&'static str>,
     queue_search: String,
+    /// When set, Done group shows only items completed within this many days.
+    history_filter_days: Option<u32>,
     selected_item_ids: HashSet<u64>,
     downloads_paused: bool,
     /// Avoid repeating desktop notifications for the same idle spell.
@@ -300,6 +308,9 @@ impl PydlApp {
             shared_core: shared_core.clone(),
             core_generation: shared_core.lock().generation,
             queue_dirty: false,
+            settings_dirty: false,
+            synced_log_len: log_lines.len(),
+            synced_settings_generation: shared_core.lock().settings_generation,
             web_server,
             runtime,
             ui_bus,
@@ -362,6 +373,7 @@ impl PydlApp {
             queue_group_focus: None,
             scroll_to_queue_group: None,
             queue_search,
+            history_filter_days: None,
             selected_item_ids: HashSet::new(),
             downloads_paused: false,
             session_complete_notified: false,
@@ -467,72 +479,41 @@ impl PydlApp {
     }
 
     pub(super) fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) {
-        if dragged_id == target_id {
-            return;
+        self.download_core_action(|core| {
+            core.reorder_ready_items(dragged_id, target_id);
+        });
+    }
+
+    pub(super) fn requeue_done_items(&mut self, item_ids: &[u64]) -> usize {
+        let mut count = 0usize;
+        self.download_core_action(|core| {
+            count = core.requeue_done_items(item_ids);
+        });
+        count
+    }
+
+    /// True when list layout should be used (user preference or large queue auto-switch).
+    pub(super) fn effective_card_list_layout(&self) -> bool {
+        const AUTO_LIST_THRESHOLD: usize = 50;
+        self.settings.card_list_layout || self.items.len() > AUTO_LIST_THRESHOLD
+    }
+
+    pub(super) fn item_matches_history_filter(&self, item: &QueueItem) -> bool {
+        if item.status != ItemStatus::Done {
+            return true;
         }
-        let Some(dragged_order) = self
-            .items
-            .iter()
-            .find(|it| it.item_id == dragged_id)
-            .map(|it| {
-                if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                }
-            })
-        else {
-            return;
+        let Some(days) = self.history_filter_days else {
+            return true;
         };
-        let Some(target_order) = self
-            .items
-            .iter()
-            .find(|it| it.item_id == target_id)
-            .map(|it| {
-                if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                }
-            })
-        else {
-            return;
+        let Some(completed_at) = item.completed_at else {
+            return true;
         };
-        if dragged_order < target_order {
-            for it in &mut self.items {
-                if it.status != ItemStatus::Idle {
-                    continue;
-                }
-                let order = if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                };
-                if it.item_id == dragged_id {
-                    it.sort_order = target_order;
-                } else if order > dragged_order && order <= target_order {
-                    it.sort_order = order.saturating_sub(1);
-                }
-            }
-        } else {
-            for it in &mut self.items {
-                if it.status != ItemStatus::Idle {
-                    continue;
-                }
-                let order = if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                };
-                if it.item_id == dragged_id {
-                    it.sort_order = target_order;
-                } else if order >= target_order && order < dragged_order {
-                    it.sort_order = order.saturating_add(1);
-                }
-            }
-        }
-        self.schedule_queue_save();
-        self.mark_queue_dirty();
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let cutoff = now.saturating_sub(days as u64 * 86_400);
+        completed_at >= cutoff
     }
 
     pub(super) fn sync_theme_if_needed(&mut self, ctx: &egui::Context) {
@@ -704,7 +685,12 @@ impl PydlApp {
     pub(super) fn append_log(&mut self, message: &str) {
         let mut core = self.shared_core.lock();
         core.append_log(message);
-        self.log_lines = core.log_lines.clone();
+        if self.synced_log_len < core.log_lines.len() {
+            for line in core.log_lines.iter().skip(self.synced_log_len) {
+                self.log_lines.push_back(line.clone());
+            }
+            self.synced_log_len = core.log_lines.len();
+        }
     }
 
     fn poll_done_file_lookup(&mut self) {
@@ -751,6 +737,7 @@ impl PydlApp {
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
+        self.mark_settings_dirty();
         // Convert queue persistence is owned by DownloadCore; mirror this preference change there.
         {
             let mut core = self.shared_core.lock();
@@ -1428,25 +1415,6 @@ impl PydlApp {
         ));
     }
 
-    fn verify_done_item_has_video_and_audio(&self, item_id: u64) -> Option<String> {
-        if !self.settings.verify_output_video_audio
-            || self.settings.ffmpeg_extract_audio_mp3
-            || !self.has_ffprobe
-        {
-            return None;
-        }
-        let idx = self.item_idx(item_id)?;
-        let item = &self.items[idx];
-        if item.video_id.trim().is_empty() {
-            return None;
-        }
-        let (_path, _) = self.find_downloaded_file_for_item(item)?;
-        let (has_video, has_audio) = match self.probe_saved_file_streams(item) {
-            Ok(x) => x,
-            Err(msg) => return Some(msg),
-        };
-        Self::streams_incomplete_message(has_video, has_audio)
-    }
 
     #[cfg(windows)]
     fn maybe_install_win_browser_drop_target(&mut self, frame: &eframe::Frame) {

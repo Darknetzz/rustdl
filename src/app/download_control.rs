@@ -76,4 +76,20 @@ impl PydlApp {
     pub(super) fn retry_failed_items(&mut self) {
         self.download_core_action(|core| core.retry_failed_items());
     }
+
+    pub(super) fn set_item_download_overrides(
+        &mut self,
+        item_id: u64,
+        format_override: Option<String>,
+        profile_override: Option<String>,
+    ) {
+        self.download_core_action(|core| {
+            if let Some(idx) = core.item_idx(item_id) {
+                core.items[idx].format_override = format_override;
+                core.items[idx].profile_override = profile_override;
+                core.schedule_queue_save();
+                core.bump_generation();
+            }
+        });
+    }
 }

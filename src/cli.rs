@@ -268,6 +268,46 @@ pub fn parse_cli_download_args(args: &[String]) -> Result<Option<CliDownloadOpti
     }))
 }
 
+pub async fn run_headless_enqueue(urls: Vec<String>) -> Result<()> {
+    if urls.is_empty() {
+        return Err(anyhow!("no URLs to enqueue"));
+    }
+    let rt = Arc::new(tokio::runtime::Runtime::new()?);
+    let (service, _rx) = RustdlService::new(rt);
+    let core = service.shared_core();
+    let stats = {
+        let mut c = core.lock();
+        c.queue_urls_for_resolve(urls)
+    };
+    println!(
+        "Enqueued {} URL(s) (skipped {} duplicate(s), {} invalid).",
+        stats.accepted,
+        stats.duplicate_in_input + stats.duplicate_existing,
+        stats.invalid
+    );
+    Ok(())
+}
+
+pub fn parse_cli_enqueue_args(args: &[String]) -> Result<String> {
+    let mut source = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--enqueue" => {
+                i += 1;
+                source = Some(
+                    args.get(i)
+                        .ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))?
+                        .clone(),
+                );
+            }
+            s => return Err(anyhow!("unknown option: {s}")),
+        }
+        i += 1;
+    }
+    source.ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))
+}
+
 pub async fn run_headless_batch(urls: Vec<String>, opts: CliDownloadOptions) -> Result<()> {
     let total = urls.len();
     for (idx, url) in urls.into_iter().enumerate() {
@@ -326,6 +366,32 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
             print_help();
             true
         }
+        "--enqueue" => match parse_cli_enqueue_args(&args) {
+            Ok(source) => {
+                let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+                match read_urls_from_batch_source(&source) {
+                    Ok(urls) if urls.is_empty() => {
+                        eprintln!("no URLs to enqueue");
+                        process::exit(2);
+                    }
+                    Ok(urls) => {
+                        if let Err(e) = rt.block_on(run_headless_enqueue(urls)) {
+                            eprintln!("Enqueue failed: {e:#}");
+                            process::exit(1);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{e:#}");
+                        process::exit(2);
+                    }
+                }
+                true
+            }
+            Err(e) => {
+                eprintln!("{e:#}");
+                process::exit(2);
+            }
+        },
         "--download" => match parse_cli_download_args(&args) {
             Ok(Some(opts)) => {
                 let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
@@ -404,6 +470,7 @@ fn print_help() {
     );
     println!("Usage:");
     println!("  rustdl                          Start the graphical interface");
+    println!("  rustdl --enqueue URL|@file|-   Append URLs to the saved download queue");
     println!("  rustdl --download URL [OPTS]    Headless download (no GUI)");
     println!("  rustdl --web-only [OPTS]        Headless LAN web UI (no GUI)");
     println!("  rustdl --list-profiles          List download profile names");

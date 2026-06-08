@@ -10,14 +10,16 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-06-08
+
 ### Added
 
 - The video / convert queue **auto-undocks** when the main window is resized to the minimum inner size (920×760); it **re-docks** when the window grows again. Manual dock/undock (toolbar or Settings) is remembered until you change it.
-
-### Fixed
-
-- Floating **Activity log** window shows log lines again (scroll area fills the window; toolbar controls stay in a single row at the top).
-- Queue card **URL…** and **Remove…** dropdowns no longer clip inside the card (desktop popups render above the scroll area; LAN web UI menus are no longer cut off by card overflow).
+- **Per-item format override** on Ready queue rows (list layout): set a custom yt-dlp `-f` string per download.
+- **Download history** filters on the Done group (All time, 24h, 7 days, 30 days) and **Re-queue visible** to move filtered Done items back to Ready.
+- **`rustdl --enqueue`** CLI flag to append URLs to the persisted download queue without starting the GUI.
+- LAN web UI: **Export URLs** / **Import URLs** buttons; API endpoints for queue reorder, export, import, requeue, and field-level settings `patch`.
+- Integration tests for LAN API auth, queue access, reorder validation, and settings merge.
 
 ### Changed
 
@@ -25,6 +27,16 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Show log** / **Hide log** live only in the main header (also removed from the floating/docked log chrome); **Dock log** / **Undock log** stay on the log panel. Hiding the log no longer resets dock preference, so **Show log** restores the log where you left it.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
 - **Remove…** menu items (**Remove from queue**, **Delete file**) show icons on desktop and in the LAN web UI.
+- **DownloadCore** owns queue reorder, re-queue, and post-download ffprobe verification (desktop and web stay in sync).
+- Activity log and settings sync incrementally from core (append-only log lines; settings push/pull via generation counter) for better performance on large queues.
+- Queues with more than 50 items auto-use **list layout**; horizontal card groups cap at 24 visible cards.
+- Shared **`domain`** module (`UiEvent`, `DoneFileIndex`) and **`service::background_spawn`** invert layering so core no longer depends on GUI modules for spawn helpers.
+
+### Fixed
+
+- Floating **Activity log** window shows log lines again (scroll area fills the window; toolbar controls stay in a single row at the top).
+- Queue card **URL…** and **Remove…** dropdowns no longer clip inside the card (desktop popups render above the scroll area; LAN web UI menus are no longer cut off by card overflow).
+- Per-item download args honor optional `profile_override` and `format_override` on queue rows when starting downloads.
 
 ## [0.4.7] - 2026-06-08
 

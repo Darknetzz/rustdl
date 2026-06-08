@@ -7,9 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::app::background_spawn;
-use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
-use crate::app::events::{UiEvent, UiEventBus};
+use crate::service::background_spawn;
+use crate::domain::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
+use crate::domain::events::{UiEvent, UiEventBus};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
 use crate::config::{
@@ -22,7 +22,7 @@ use crate::profiles::{load_profiles, ProfileStore};
 use crate::transcode::EncoderChoice;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
-    build_download_extra_args, build_redownload_extra_args, metadata_extra_args,
+    build_redownload_extra_args, metadata_extra_args,
     output_filename_template, remove_video_ids_from_download_archive,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -193,6 +193,8 @@ pub struct DownloadCore {
     pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
+    /// Incremented when settings or profile store change; GUI pulls settings when this differs.
+    pub settings_generation: u64,
     /// Parse failures for user JSON files at startup (settings, queue, profiles, log).
     pub config_load_issues: Vec<crate::config::ConfigLoadIssue>,
 
@@ -318,6 +320,7 @@ impl DownloadCore {
             download_log_throttle: HashMap::new(),
             thumbnail_cache: HashMap::new(),
             generation: 1,
+            settings_generation: 1,
             config_load_issues: Vec::new(),
             convert_input_paths,
             convert_items,
@@ -463,6 +466,10 @@ impl DownloadCore {
         self.generation = self.generation.saturating_add(1);
     }
 
+    pub fn bump_settings_generation(&mut self) {
+        self.settings_generation = self.settings_generation.saturating_add(1);
+    }
+
     pub fn append_log(&mut self, message: &str) {
         let line = crate::time_format::format_log_line(message);
         self.log_lines.push_back(line.clone());
@@ -492,6 +499,7 @@ impl DownloadCore {
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
+        self.bump_settings_generation();
     }
 
     pub fn work_in_progress(&self) -> bool {
@@ -719,8 +727,127 @@ impl DownloadCore {
         }
     }
 
-    pub fn download_extra_args(&self) -> Vec<String> {
-        build_download_extra_args(&self.settings)
+    pub fn download_extra_args_for_item(&self, item: &QueueItem) -> Vec<String> {
+        crate::ytdlp_download_args::build_download_extra_args_for_item(
+            &self.settings,
+            &self.profile_store,
+            item,
+        )
+    }
+
+    /// Reorders Ready (Idle) items by drag-and-drop; returns false when ids are invalid.
+    pub fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) -> bool {
+        if dragged_id == target_id {
+            return false;
+        }
+        let Some(dragged_order) = self
+            .items
+            .iter()
+            .find(|it| it.item_id == dragged_id)
+            .map(|it| {
+                if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                }
+            })
+        else {
+            return false;
+        };
+        let Some(target_order) = self
+            .items
+            .iter()
+            .find(|it| it.item_id == target_id)
+            .map(|it| {
+                if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                }
+            })
+        else {
+            return false;
+        };
+        if dragged_order < target_order {
+            for it in &mut self.items {
+                if it.status != ItemStatus::Idle {
+                    continue;
+                }
+                let order = if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                };
+                if it.item_id == dragged_id {
+                    it.sort_order = target_order;
+                } else if order > dragged_order && order <= target_order {
+                    it.sort_order = order.saturating_sub(1);
+                }
+            }
+        } else {
+            for it in &mut self.items {
+                if it.status != ItemStatus::Idle {
+                    continue;
+                }
+                let order = if it.sort_order == 0 {
+                    it.item_id
+                } else {
+                    it.sort_order
+                };
+                if it.item_id == dragged_id {
+                    it.sort_order = target_order;
+                } else if order >= target_order && order < dragged_order {
+                    it.sort_order = order.saturating_add(1);
+                }
+            }
+        }
+        self.schedule_queue_save();
+        self.bump_generation();
+        true
+    }
+
+    pub fn export_queue_url_lines(&self) -> Vec<String> {
+        self.items
+            .iter()
+            .filter_map(|it| {
+                let u = if !it.webpage_url.trim().is_empty() {
+                    it.webpage_url.as_str()
+                } else {
+                    it.source_line.as_str()
+                };
+                let u = u.trim();
+                if u.is_empty() {
+                    None
+                } else {
+                    Some(u.to_owned())
+                }
+            })
+            .collect()
+    }
+
+    pub fn requeue_done_items(&mut self, item_ids: &[u64]) -> usize {
+        let mut count = 0usize;
+        for &item_id in item_ids {
+            let Some(idx) = self.item_idx(item_id) else {
+                continue;
+            };
+            if self.items[idx].status != ItemStatus::Done {
+                continue;
+            }
+            self.set_item_status_at(idx, ItemStatus::Idle);
+            self.items[idx].percent = 0.0;
+            self.items[idx].speed_text = "-".to_owned();
+            self.items[idx].eta_text = "-".to_owned();
+            self.items[idx].detail = "Ready".to_owned();
+            self.items[idx].error = None;
+            count += 1;
+        }
+        if count > 0 {
+            self.update_status();
+            self.schedule_queue_save();
+            self.bump_generation();
+        }
+        count
     }
 
     pub fn yt_dlp_bin(&self) -> String {
@@ -922,11 +1049,6 @@ impl DownloadCore {
         for (idx, iid) in pending_ids.into_iter().enumerate() {
             groups[idx % groups_len].push(iid);
         }
-        let download_args = if force_redownload {
-            build_redownload_extra_args(&self.settings)
-        } else {
-            self.download_extra_args()
-        };
         let yt_dlp_bin = self.yt_dlp_bin();
         let ffmpeg_bin = self.ffmpeg_bin();
         let output_template = output_filename_template(&self.settings);
@@ -934,26 +1056,30 @@ impl DownloadCore {
 
         for ids in groups.into_iter().filter(|g| !g.is_empty()) {
             self.queue_running += 1;
-            let urls = ids
+            let urls: Vec<_> = ids
                 .iter()
                 .filter_map(|iid| {
-                    self.items.iter().find(|x| x.item_id == *iid).and_then(|x| {
-                        let target_url = app_state::resolve_item_download_url(x)?;
-                        let cancel_flag = self
-                            .download_cancel_flags
-                            .entry(*iid)
-                            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-                            .clone();
-                        Some((*iid, target_url, cancel_flag))
-                    })
+                    let idx = self.item_idx(*iid)?;
+                    let item = self.items[idx].clone();
+                    let target_url = app_state::resolve_item_download_url(&item)?;
+                    let cancel_flag = self
+                        .download_cancel_flags
+                        .entry(*iid)
+                        .or_insert_with(|| Arc::new(AtomicBool::new(false)))
+                        .clone();
+                    let extra = if force_redownload {
+                        build_redownload_extra_args(&self.settings)
+                    } else {
+                        self.download_extra_args_for_item(&item)
+                    };
+                    Some((*iid, target_url, cancel_flag, extra))
                 })
-                .collect::<Vec<_>>();
+                .collect();
             background_spawn::spawn_download_worker(
                 &self.runtime,
                 &self.ui_event_bus(),
                 output_dir.clone(),
                 output_template.clone(),
-                download_args.clone(),
                 yt_dlp_bin.clone(),
                 ffmpeg_bin.clone(),
                 urls,
@@ -1322,6 +1448,15 @@ impl DownloadCore {
         self.bump_generation();
     }
 
+    /// Merges a partial JSON object into settings (field-level PATCH for the web UI).
+    pub fn merge_settings_patch(&mut self, patch: &serde_json::Value) -> Result<(), String> {
+        let mut current = serde_json::to_value(&self.settings).map_err(|e| e.to_string())?;
+        merge_json_values(&mut current, patch);
+        let merged: AppSettings = serde_json::from_value(current).map_err(|e| e.to_string())?;
+        self.apply_settings_patch(merged);
+        Ok(())
+    }
+
     pub fn tools_status_json(&self) -> serde_json::Value {
         serde_json::json!({
             "yt_dlp": tool_json("yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, &self.settings.yt_dlp_path),
@@ -1339,6 +1474,26 @@ fn queue_clear_matches(status: ItemStatus, filter: QueueClearFilter) -> bool {
             matches!(status, ItemStatus::Done | ItemStatus::Failed)
         }
         QueueClearFilter::Inactive | QueueClearFilter::All => false,
+    }
+}
+
+fn merge_json_values(base: &mut serde_json::Value, patch: &serde_json::Value) {
+    match (base, patch) {
+        (serde_json::Value::Object(base_map), serde_json::Value::Object(patch_map)) => {
+            for (k, v) in patch_map {
+                match base_map.get_mut(k) {
+                    Some(existing) if v.is_object() && existing.is_object() => {
+                        merge_json_values(existing, v);
+                    }
+                    _ => {
+                        base_map.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (base_slot, patch_val) => {
+            *base_slot = patch_val.clone();
+        }
     }
 }
 

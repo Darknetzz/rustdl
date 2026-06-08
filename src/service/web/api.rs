@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::app::UiEvent;
+use crate::domain::UiEvent;
 use crate::config::AppSettings;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
@@ -157,7 +157,26 @@ struct QueueClearResponse {
 
 #[derive(Deserialize)]
 struct PatchSettingsBody {
-    settings: AppSettings,
+    #[serde(default)]
+    settings: Option<AppSettings>,
+    #[serde(default)]
+    patch: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+struct QueueReorderBody {
+    dragged_id: u64,
+    target_id: u64,
+}
+
+#[derive(Deserialize)]
+struct QueueRequeueBody {
+    item_ids: Vec<u64>,
+}
+
+#[derive(Serialize)]
+struct QueueRequeueResponse {
+    requeued: usize,
 }
 
 #[derive(Serialize)]
@@ -205,6 +224,10 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/queue", post(queue_add))
         .route("/api/queue/:id", axum::routing::delete(queue_remove))
         .route("/api/queue/clear", post(queue_clear))
+        .route("/api/queue/reorder", post(queue_reorder))
+        .route("/api/queue/export", get(queue_export))
+        .route("/api/queue/import", post(queue_import))
+        .route("/api/queue/requeue", post(queue_requeue))
         .route(
             "/api/queue/:id/file",
             axum::routing::delete(queue_delete_file),
@@ -517,6 +540,48 @@ async fn queue_clear(
     Ok(Json(QueueClearResponse { removed }))
 }
 
+async fn queue_reorder(
+    State(st): State<ApiState>,
+    Json(body): Json<QueueReorderBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    if c.reorder_ready_items(body.dragged_id, body.target_id) {
+        Ok(StatusCode::OK)
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "Invalid reorder (items must be Ready).".to_owned(),
+            }),
+        ))
+    }
+}
+
+async fn queue_export(State(st): State<ApiState>) -> impl IntoResponse {
+    let c = st.core.lock();
+    let body = c.export_queue_url_lines().join("\n");
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        body,
+    )
+}
+
+async fn queue_import(
+    State(st): State<ApiState>,
+    Json(body): Json<AddUrlsBody>,
+) -> Result<Json<AddUrlsResponse>, StatusCode> {
+    queue_add(State(st), Json(body)).await
+}
+
+async fn queue_requeue(
+    State(st): State<ApiState>,
+    Json(body): Json<QueueRequeueBody>,
+) -> Json<QueueRequeueResponse> {
+    let mut c = st.core.lock();
+    let requeued = c.requeue_done_items(&body.item_ids);
+    Json(QueueRequeueResponse { requeued })
+}
+
 async fn queue_delete_file(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
     let mut c = st.core.lock();
     if c.delete_item_file_on_disk(id) {
@@ -597,10 +662,26 @@ async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {
 async fn settings_patch(
     State(st): State<ApiState>,
     Json(body): Json<PatchSettingsBody>,
-) -> StatusCode {
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
-    c.apply_settings_patch(body.settings);
-    StatusCode::OK
+    if let Some(patch) = body.patch {
+        c.merge_settings_patch(&patch).map_err(|e| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ApiErrorBody { error: e }),
+            )
+        })?;
+    } else if let Some(settings) = body.settings {
+        c.apply_settings_patch(settings);
+    } else {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "settings or patch required".into(),
+            }),
+        ));
+    }
+    Ok(StatusCode::OK)
 }
 
 async fn logs_get(State(st): State<ApiState>) -> Json<LogsResponse> {
@@ -793,4 +874,114 @@ pub(super) fn thumbnail_response_owned(bytes: Vec<u8>, content_type: String) -> 
         bytes,
     )
         .into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tokio::runtime::Runtime;
+    use tower::ServiceExt;
+
+    use crate::service::core::DownloadCore;
+
+    use super::{api_router, ApiState};
+
+    fn test_state(rt: Arc<Runtime>) -> ApiState {
+        let (core, _rx) = DownloadCore::new_shared(rt, true);
+        {
+            let mut c = core.lock();
+            c.settings.web_auth_token = "test-token".to_owned();
+        }
+        ApiState::new(core)
+    }
+
+    #[test]
+    fn queue_list_requires_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/queue")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        });
+    }
+
+    #[test]
+    fn queue_list_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/queue")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn queue_reorder_rejects_invalid() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let body = Body::from(r#"{"dragged_id":1,"target_id":2}"#);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/queue/reorder")
+                        .header("Authorization", "Bearer test-token")
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        });
+    }
+
+    #[test]
+    fn settings_merge_patch() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state.clone());
+            let body = Body::from(r#"{"patch":{"auto_start_downloads":false}}"#);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/settings")
+                        .header("Authorization", "Bearer test-token")
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let c = state.core.lock();
+            assert!(!c.settings.auto_start_downloads);
+        });
+    }
 }

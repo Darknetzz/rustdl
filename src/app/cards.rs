@@ -539,6 +539,25 @@ impl PydlApp {
             if status == ItemStatus::Downloading || status == ItemStatus::Queued {
                 ui.add(egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage());
             }
+            if status == ItemStatus::Idle {
+                let current = self.items[idx].format_override.clone().unwrap_or_default();
+                let mut fmt_buf = current.clone();
+                let response = ui.add(
+                    egui::TextEdit::singleline(&mut fmt_buf)
+                        .hint_text("Format (-f)")
+                        .desired_width(140.0),
+                );
+                if response.lost_focus() && fmt_buf.trim() != current.trim() {
+                    let trimmed = fmt_buf.trim();
+                    let format_override = if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some(trimmed.to_owned())
+                    };
+                    let profile_override = self.items[idx].profile_override.clone();
+                    self.set_item_download_overrides(id, format_override, profile_override);
+                }
+            }
             if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
                 let ctx = ui.ctx().clone();
                 let mut copy_url = false;
@@ -599,7 +618,7 @@ impl PydlApp {
                 it.status == ItemStatus::Failed
                     || (it.status == ItemStatus::Idle && it.error.is_some())
             }
-            "Done" => it.status == ItemStatus::Done,
+            "Done" => it.status == ItemStatus::Done && self.item_matches_history_filter(it),
             "Resolving" => it.status == ItemStatus::Resolving,
             _ => false,
         }
@@ -685,11 +704,43 @@ impl PydlApp {
                 default_open,
             )
             .show_header(ui, |ui| {
-                status_dot_with_label(ui, &header_text, header_color, true)
+                status_dot_with_label(ui, &header_text, header_color, true);
+                if label == "Done" && !ids.is_empty() {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if ui
+                            .small_button("Re-queue visible")
+                            .on_hover_text("Move visible Done items back to Ready")
+                            .clicked()
+                        {
+                            let n = self.requeue_done_items(&ids);
+                            if n > 0 {
+                                self.append_log(&format!("Re-queued {n} done item(s)."));
+                            }
+                        }
+                        ui.label("History:");
+                        egui::ComboBox::from_id_salt(format!("history_filter_{label}"))
+                            .selected_text(match self.history_filter_days {
+                                None => "All time".to_owned(),
+                                Some(1) => "Last 24h".to_owned(),
+                                Some(7) => "Last 7 days".to_owned(),
+                                Some(30) => "Last 30 days".to_owned(),
+                                Some(d) => format!("Last {d} days"),
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.history_filter_days, None, "All time");
+                                ui.selectable_value(&mut self.history_filter_days, Some(1), "Last 24h");
+                                ui.selectable_value(&mut self.history_filter_days, Some(7), "Last 7 days");
+                                ui.selectable_value(&mut self.history_filter_days, Some(30), "Last 30 days");
+                            });
+                    });
+                }
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
-                if self.settings.card_list_layout {
+                let use_list_layout = self.effective_card_list_layout()
+                    || ids.len() > 24
+                    || (label == "Ready" && ids.len() > 12);
+                if use_list_layout {
                     let allow_reorder = label == "Ready";
                     const LIST_ROW_H: f32 = 42.0;
                     let row_count = ids.len().max(1);
@@ -709,6 +760,12 @@ impl PydlApp {
                             }
                         });
                 } else {
+                    const HORIZONTAL_CARD_CAP: usize = 24;
+                    let visible_ids: &[u64] = if ids.len() > HORIZONTAL_CARD_CAP {
+                        &ids[..HORIZONTAL_CARD_CAP]
+                    } else {
+                        &ids
+                    };
                     let row_width = ui.available_width().max(1.0);
                     let card_h = if self.settings.compact_cards {
                         240.0
@@ -725,7 +782,7 @@ impl PydlApp {
                         .show(ui, |ui| {
                             ui.horizontal(|ui| {
                                 ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                for id in &ids {
+                                for id in visible_ids {
                                     let idx = self.item_idx(*id).or_else(|| {
                                         self.items.iter().position(|it| it.item_id == *id)
                                     });
@@ -735,6 +792,16 @@ impl PydlApp {
                                 }
                             });
                         });
+                    if ids.len() > HORIZONTAL_CARD_CAP {
+                        ui.label(
+                            RichText::new(format!(
+                                "Showing first {HORIZONTAL_CARD_CAP} of {} — switch to list layout in Settings or reduce queue size.",
+                                ids.len()
+                            ))
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                    }
                 }
             });
             if scroll_here {

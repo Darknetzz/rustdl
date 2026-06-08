@@ -3,6 +3,7 @@
 pub mod core;
 pub mod core_convert;
 pub mod core_events;
+pub mod background_spawn;
 pub mod web;
 
 pub use core::{CancelPostAction, DownloadCore, SharedCore};
@@ -17,13 +18,13 @@ pub struct RustdlService {
 impl RustdlService {
     pub fn new(
         runtime: Arc<tokio::runtime::Runtime>,
-    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+    ) -> (Self, crossbeam_channel::Receiver<crate::domain::UiEvent>) {
         Self::new_with_restore_policy(runtime, true)
     }
 
     pub fn new_gui(
         runtime: Arc<tokio::runtime::Runtime>,
-    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+    ) -> (Self, crossbeam_channel::Receiver<crate::domain::UiEvent>) {
         let settings = crate::config::load_settings();
         let auto = crate::config::session_restore_auto_load(&settings.session_restore_preference);
         Self::new_with_restore_policy(runtime, auto)
@@ -32,7 +33,7 @@ impl RustdlService {
     fn new_with_restore_policy(
         runtime: Arc<tokio::runtime::Runtime>,
         auto_restore: bool,
-    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+    ) -> (Self, crossbeam_channel::Receiver<crate::domain::UiEvent>) {
         let (core, rx) = DownloadCore::new_shared(runtime.clone(), auto_restore);
         core_events::spawn_core_event_loop(runtime, core.clone());
         (Self { core: core.clone() }, rx)
