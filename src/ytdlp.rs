@@ -314,6 +314,42 @@ pub fn thumbnail_url_candidates(item: &crate::models::QueueItem) -> Vec<String> 
     out
 }
 
+/// Remote URLs for the LAN thumbnail proxy: metadata URL first (desktop parity), then YouTube CDN.
+pub fn thumbnail_proxy_url_candidates(item: &crate::models::QueueItem) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut push = |raw: &str| {
+        let url = normalize_thumbnail_url(raw);
+        if !url.is_empty() && !out.iter().any(|u| u == &url) {
+            out.push(url);
+        }
+    };
+    if let Some(u) = item.thumbnail_url.as_ref() {
+        push(u);
+    }
+    if let Some(vid) = youtube_video_id_from_item(item) {
+        let mut yt = Vec::new();
+        push_ytimg_candidates(&mut yt, &vid);
+        for url in yt {
+            if !out.iter().any(|u| u == &url) {
+                out.push(url);
+            }
+        }
+    }
+    out
+}
+
+pub fn guess_image_content_type(bytes: &[u8]) -> &'static str {
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") || bytes.starts_with(b"\x89PNG") {
+        "image/png"
+    } else if bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a") || bytes.starts_with(b"GIF") {
+        "image/gif"
+    } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        "image/webp"
+    } else {
+        "image/jpeg"
+    }
+}
+
 fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
     let title = entry
         .get("title")
@@ -866,6 +902,18 @@ mod tests {
         let urls = thumbnail_url_candidates(&item);
         assert!(urls[0].starts_with("https://"));
         assert!(urls.iter().any(|u| u.contains("hqdefault")));
+    }
+
+    #[test]
+    fn thumbnail_proxy_url_candidates_prefers_metadata_url() {
+        let item = crate::models::QueueItem {
+            source_line: "https://www.youtube.com/watch?v=abc123".to_owned(),
+            thumbnail_url: Some("https://example.com/poster.jpg".to_owned()),
+            ..Default::default()
+        };
+        let urls = thumbnail_proxy_url_candidates(&item);
+        assert_eq!(urls.first().map(String::as_str), Some("https://example.com/poster.jpg"));
+        assert!(urls.iter().any(|u| u.contains("ytimg.com")));
     }
 
     #[test]

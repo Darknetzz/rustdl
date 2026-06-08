@@ -61,6 +61,14 @@ impl RedownloadError {
     }
 }
 
+/// LAN web / desktop-shared thumbnail bytes keyed by queue or AV1 item id.
+#[derive(Clone, Debug)]
+pub struct CachedThumbnail {
+    pub source_key: String,
+    pub bytes: Vec<u8>,
+    pub content_type: String,
+}
+
 /// Bulk queue cleanup modes (web UI and API).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueueClearFilter {
@@ -121,6 +129,8 @@ pub struct DownloadCore {
     pub done_file_index: DoneFileIndex,
     pub done_lookup_truncation_logged: bool,
     pub download_log_throttle: HashMap<u64, f64>,
+    /// Thumbnail image bytes shared between the desktop GUI and LAN `/api/thumbnail` proxy.
+    pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
     /// Parse failures for user JSON files at startup (settings, queue, profiles, log).
@@ -160,7 +170,7 @@ impl DownloadCore {
             .max()
             .unwrap_or(0)
             .saturating_add(1);
-        let http_client = build_http_client(&settings);
+        let http_client = crate::http_client::build_http_client(&settings);
         let av1_snapshot = if settings.av1_remember_queue {
             load_av1_queue_snapshot()
         } else {
@@ -226,6 +236,7 @@ impl DownloadCore {
             done_file_index: DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             download_log_throttle: HashMap::new(),
+            thumbnail_cache: HashMap::new(),
             generation: 1,
             config_load_issues: Vec::new(),
             av1_input_paths: av1_snapshot.input_paths,
@@ -422,7 +433,59 @@ impl DownloadCore {
         } else {
             String::new()
         };
-        self.http_client = build_http_client(&self.settings);
+        self.http_client = crate::http_client::build_http_client(&self.settings);
+    }
+
+    /// Cache key for downloader queue thumbnails (invalidates when metadata or local path changes).
+    pub fn queue_thumbnail_source_key(item: &QueueItem) -> String {
+        format!(
+            "{}|{}|{}|{}|{}",
+            item.video_id.trim(),
+            item.thumbnail_url.as_deref().unwrap_or(""),
+            item.local_path.as_deref().unwrap_or(""),
+            item.webpage_url.trim(),
+            item.source_line.trim(),
+        )
+    }
+
+    pub fn av1_thumbnail_source_key(source_path: &str) -> String {
+        source_path.trim().to_owned()
+    }
+
+    pub fn cache_thumbnail_bytes(
+        &mut self,
+        item_id: u64,
+        source_key: String,
+        bytes: Vec<u8>,
+        content_type: impl Into<String>,
+    ) {
+        if bytes.len() < 32 {
+            return;
+        }
+        self.thumbnail_cache.insert(
+            item_id,
+            CachedThumbnail {
+                source_key,
+                bytes,
+                content_type: content_type.into(),
+            },
+        );
+    }
+
+    pub fn cached_thumbnail_bytes(
+        &self,
+        item_id: u64,
+        source_key: &str,
+    ) -> Option<(Vec<u8>, String)> {
+        let entry = self.thumbnail_cache.get(&item_id)?;
+        if entry.source_key != source_key {
+            return None;
+        }
+        Some((entry.bytes.clone(), entry.content_type.clone()))
+    }
+
+    pub fn evict_thumbnail(&mut self, item_id: u64) {
+        self.thumbnail_cache.remove(&item_id);
     }
 
     pub fn refresh_done_file_lookup(&mut self) {
@@ -755,6 +818,7 @@ impl DownloadCore {
         if self.items[idx].status == ItemStatus::Resolving {
             self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
         }
+        self.evict_thumbnail(item_id);
         self.items.remove(idx);
         self.rebuild_item_index();
         self.invalidate_queue_caches();
@@ -1122,16 +1186,19 @@ fn tool_json(name: &str, ok: bool, version: &str, configured_path: &str) -> serd
     })
 }
 
-fn build_http_client(settings: &crate::config::AppSettings) -> reqwest::Client {
-    let mut builder = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .connect_timeout(Duration::from_secs(15))
-        .user_agent(format!("rustdl/{}", crate::pkg_version::VERSION));
-    let proxy = settings.yt_proxy.trim();
-    if !proxy.is_empty() {
-        if let Ok(p) = reqwest::Proxy::all(proxy) {
-            builder = builder.proxy(p);
-        }
+#[cfg(test)]
+mod thumbnail_cache_tests {
+    use super::*;
+
+    #[test]
+    fn cached_thumbnail_requires_matching_source_key() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        let mut core = shared.lock();
+        core.cache_thumbnail_bytes(1, "a".to_owned(), vec![0u8; 64], "image/png");
+        assert!(core.cached_thumbnail_bytes(1, "a").is_some());
+        assert!(core.cached_thumbnail_bytes(1, "b").is_none());
+        core.evict_thumbnail(1);
+        assert!(core.cached_thumbnail_bytes(1, "a").is_none());
     }
-    builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }

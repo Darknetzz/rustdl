@@ -22,8 +22,15 @@ let lastAv1Payload = null;
 
 let cachedHasYtDlp = false;
 
-/** Skip re-fetching thumbnails that already returned 404 until item metadata changes. */
-const thumbFailedKeys = new Set();
+/** Last queue generation from `/api/queue` (skip rebuild when unchanged). */
+let lastQueueGeneration = 0;
+/** Last status generation from `/api/status`. */
+let lastStatusGeneration = 0;
+let sseConnected = false;
+
+const THUMB_MAX_RETRIES = 3;
+/** Per-cache-key failed fetch/decode attempts (cleared on success or metadata change). */
+const thumbRetryCounts = new Map();
 /** Blob URLs survive queue DOM rebuilds (SSE / polling used to abort direct img src loads). */
 const thumbBlobCache = new Map();
 /** @type {Map<string, Promise<string|null>>} */
@@ -100,6 +107,7 @@ async function refreshToolsOnly() {
   const res = await api("/api/tools/refresh", { method: "POST" });
   const tools = await res.json();
   renderTools(tools);
+  clearThumbnailCaches();
 }
 
 async function refreshStatus() {
@@ -119,6 +127,9 @@ async function refreshStatus() {
   renderTools(data.tools);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
   updateDownloadControlButtons(data);
+  if (typeof data.generation === "number") {
+    lastStatusGeneration = data.generation;
+  }
 }
 
 /**
@@ -559,10 +570,18 @@ function revokeThumbBlob(cacheKey) {
   }
 }
 
+function thumbFailuresExhausted(cacheKey) {
+  return (thumbRetryCounts.get(cacheKey) || 0) >= THUMB_MAX_RETRIES;
+}
+
+function noteThumbFailure(cacheKey) {
+  thumbRetryCounts.set(cacheKey, (thumbRetryCounts.get(cacheKey) || 0) + 1);
+}
+
 function pruneThumbFailedKeys(activeItems) {
   const active = new Set(activeItems.map((item) => thumbCacheKey(item)));
-  for (const key of thumbFailedKeys) {
-    if (!active.has(key)) thumbFailedKeys.delete(key);
+  for (const key of thumbRetryCounts.keys()) {
+    if (!active.has(key)) thumbRetryCounts.delete(key);
   }
   for (const key of thumbBlobCache.keys()) {
     if (!active.has(key)) revokeThumbBlob(key);
@@ -572,12 +591,12 @@ function pruneThumbFailedKeys(activeItems) {
   }
 }
 
-async function fetchQueueThumbnailBlob(item) {
+async function fetchQueueThumbnailBlob(item, options = {}) {
   const cacheKey = thumbCacheKey(item);
   if (thumbBlobCache.has(cacheKey)) {
     return thumbBlobCache.get(cacheKey);
   }
-  if (thumbFailedKeys.has(cacheKey)) {
+  if (!options.force && thumbFailuresExhausted(cacheKey)) {
     return null;
   }
   if (thumbInflight.has(cacheKey)) {
@@ -592,21 +611,21 @@ async function fetchQueueThumbnailBlob(item) {
       const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
         if (res.status !== 401) {
-          thumbFailedKeys.add(cacheKey);
+          noteThumbFailure(cacheKey);
         }
         return null;
       }
       const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
-        thumbFailedKeys.add(cacheKey);
+        noteThumbFailure(cacheKey);
         return null;
       }
       const objUrl = URL.createObjectURL(blob);
       thumbBlobCache.set(cacheKey, objUrl);
-      thumbFailedKeys.delete(cacheKey);
+      thumbRetryCounts.delete(cacheKey);
       return objUrl;
     } catch {
-      thumbFailedKeys.add(cacheKey);
+      noteThumbFailure(cacheKey);
       return null;
     }
   })();
@@ -707,10 +726,10 @@ function thumbnailApiUrl(itemId) {
 function revealThumbImage(img, placeholder, cacheKey) {
   img.classList.remove("hidden");
   placeholder.classList.add("hidden");
-  thumbFailedKeys.delete(cacheKey);
+  thumbRetryCounts.delete(cacheKey);
 }
 
-function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl) {
+function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl, item, showThumbnails) {
   img.onload = () => {
     if (!img.isConnected) return;
     revealThumbImage(img, placeholder, cacheKey);
@@ -720,6 +739,23 @@ function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl) {
     revokeThumbBlob(cacheKey);
     img.classList.add("hidden");
     img.removeAttribute("src");
+    noteThumbFailure(cacheKey);
+    if (item && !thumbFailuresExhausted(cacheKey)) {
+      placeholder.textContent = "Fetching thumbnail…";
+      placeholder.classList.remove("hidden");
+      fetchQueueThumbnailBlob(item, { force: true }).then((retryUrl) => {
+        if (!img.isConnected) return;
+        if (retryUrl) {
+          applyThumbBlobToImg(img, placeholder, cacheKey, retryUrl, item, showThumbnails);
+        } else {
+          placeholder.textContent = thumbFailuresExhausted(cacheKey)
+            ? "Thumbnail unavailable"
+            : "Fetching thumbnail…";
+          placeholder.classList.remove("hidden");
+        }
+      });
+      return;
+    }
     placeholder.textContent = "Thumbnail unavailable";
     placeholder.classList.remove("hidden");
   };
@@ -742,14 +778,14 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
     return;
   }
   const cacheKey = thumbCacheKey(item);
-  if (thumbFailedKeys.has(cacheKey)) {
+  if (thumbFailuresExhausted(cacheKey)) {
     placeholder.textContent = "Thumbnail unavailable";
     return;
   }
 
   const cached = thumbBlobCache.get(cacheKey);
   if (cached) {
-    applyThumbBlobToImg(img, placeholder, cacheKey, cached);
+    applyThumbBlobToImg(img, placeholder, cacheKey, cached, item, showThumbnails);
     return;
   }
 
@@ -757,9 +793,9 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   fetchQueueThumbnailBlob(item).then((objUrl) => {
     if (!img.isConnected) return;
     if (objUrl) {
-      applyThumbBlobToImg(img, placeholder, cacheKey, objUrl);
+      applyThumbBlobToImg(img, placeholder, cacheKey, objUrl, item, showThumbnails);
     } else {
-      placeholder.textContent = thumbFailedKeys.has(cacheKey)
+      placeholder.textContent = thumbFailuresExhausted(cacheKey)
         ? "Thumbnail unavailable"
         : "Save API token to load thumbnails";
       placeholder.classList.remove("hidden");
@@ -889,6 +925,7 @@ function renderQueueCard(item, settings) {
 
   const card = document.createElement("article");
   card.className = "card" + (compact ? " compact" : "") + (highlightDone ? " card-done-highlight" : "");
+  card.dataset.itemId = String(item.item_id);
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -1002,6 +1039,7 @@ function renderQueueCardListRow(item, settings) {
   const slug = statusSlug(item.status);
   const card = document.createElement("article");
   card.className = "card";
+  card.dataset.itemId = String(item.item_id);
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -1053,9 +1091,41 @@ function renderQueueCardListRow(item, settings) {
   return card;
 }
 
-async function refreshQueue() {
+function findQueueCard(itemId) {
+  return document.querySelector(`#queue [data-item-id="${itemId}"]`);
+}
+
+function patchQueueCardDownloadLine(itemId, line) {
+  const card = findQueueCard(itemId);
+  if (!card) return;
+  const detail = card.querySelector(".card-detail");
+  if (detail && line) {
+    detail.textContent = line;
+    detail.classList.remove("hidden");
+  }
+  const footer = card.querySelector(".card-footer");
+  if (footer && line) {
+    footer.textContent = line;
+  }
+}
+
+function appendLogLine(line) {
+  const log = document.getElementById("log-view");
+  if (!log || !line) return;
+  const text = log.textContent;
+  log.textContent = text ? `${text}\n${line}` : line;
+  log.scrollTop = log.scrollHeight;
+}
+
+async function refreshQueue(force = false) {
   const res = await api("/api/queue");
   const data = await res.json();
+  if (!force && typeof data.generation === "number" && data.generation === lastQueueGeneration) {
+    return;
+  }
+  if (typeof data.generation === "number") {
+    lastQueueGeneration = data.generation;
+  }
   const root = document.getElementById("queue");
   const settings = cachedSettings || {};
   pruneThumbFailedKeys(data.items);
@@ -1262,33 +1332,92 @@ function scheduleRefreshAll(delayMs = 400) {
   }, delayMs);
 }
 
+function handleSseEvent(data) {
+  if (!data || typeof data !== "object") {
+    scheduleRefreshAll();
+    return;
+  }
+  switch (data.type) {
+    case "shutdown":
+      showShutdownNotice("rustdl has shut down. You can close this tab.");
+      return;
+    case "download_line":
+      if (data.item_id != null) {
+        patchQueueCardDownloadLine(data.item_id, data.line || "");
+      }
+      return;
+    case "log":
+      appendLogLine(data.line || "");
+      return;
+    case "download_done":
+      refreshStatus().catch(() => {});
+      refreshQueue(true).catch(() => {});
+      return;
+    case "add_progress":
+    case "add_resolved":
+    case "add_done":
+      refreshStatus().catch(() => {});
+      refreshQueue(true).catch(() => {});
+      return;
+    case "av1_line":
+      scheduleRefreshAll(800);
+      return;
+    case "av1_done":
+    case "av1_batch_done":
+    case "av1_duration":
+    case "av1_media_probed":
+      refreshAv1().catch(() => {});
+      refreshStatus().catch(() => {});
+      return;
+    default:
+      scheduleRefreshAll();
+  }
+}
+
 function connectSse() {
   const t = token();
   if (!t) return;
   const es = new EventSource(`/api/events?token=${encodeURIComponent(t)}`);
+  es.onopen = () => {
+    sseConnected = true;
+    if (refreshIntervalId != null) {
+      clearInterval(refreshIntervalId);
+      refreshIntervalId = null;
+    }
+  };
   es.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data);
       if (data?.type === "shutdown") {
-        showShutdownNotice(
-          "rustdl has shut down. You can close this tab."
-        );
+        showShutdownNotice("rustdl has shut down. You can close this tab.");
         es.close();
+        sseConnected = false;
+        startFallbackPolling();
         return;
       }
+      handleSseEvent(data);
     } catch {
-      /* ignore malformed payloads */
+      scheduleRefreshAll();
     }
-    scheduleRefreshAll();
   };
   es.onerror = () => {
     es.close();
+    sseConnected = false;
+    startFallbackPolling();
     if (shuttingDown) {
       showShutdownNotice("rustdl has shut down. You can close this tab.");
       return;
     }
     setTimeout(connectSse, 3000);
   };
+}
+
+function startFallbackPolling() {
+  if (refreshIntervalId != null || shuttingDown) return;
+  refreshIntervalId = setInterval(() => {
+    if (shuttingDown) return;
+    scheduleRefreshAll(0);
+  }, 5000);
 }
 
 function setCheck(id, v) {
@@ -1500,7 +1629,7 @@ async function applyProfile(name) {
 }
 
 function clearThumbnailCaches() {
-  thumbFailedKeys.clear();
+  thumbRetryCounts.clear();
   for (const key of thumbBlobCache.keys()) {
     revokeThumbBlob(key);
   }
@@ -1586,10 +1715,14 @@ document.getElementById("btn-settings-cancel").onclick = () => {
 document.getElementById("settings-form").onsubmit = async (e) => {
   e.preventDefault();
   if (!cachedSettings) return;
+  const wasThumbnails = cachedSettings.show_thumbnails !== false;
   const patch = collectSettingsForm(cachedSettings);
   await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
   cachedSettings = patch;
   statusFlags.auto_add_pasted_urls = !!patch.auto_add_pasted_urls;
+  if (patch.show_thumbnails && !wasThumbnails) {
+    clearThumbnailCaches();
+  }
   document.getElementById("settings-dialog").close();
   await refreshAll();
 };
@@ -2149,8 +2282,5 @@ if (token()) {
   showApp();
   refreshAll().catch(() => {});
   connectSse();
-  refreshIntervalId = setInterval(() => {
-    if (shuttingDown) return;
-    scheduleRefreshAll(0);
-  }, 5000);
+  startFallbackPolling();
 }

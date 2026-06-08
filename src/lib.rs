@@ -12,6 +12,7 @@ pub mod cli;
 pub mod config;
 pub mod disk_space;
 pub mod external_tools;
+pub mod http_client;
 pub mod models;
 pub mod pkg_version;
 pub mod profiles;

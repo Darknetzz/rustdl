@@ -248,19 +248,32 @@ pub(crate) fn spawn_download_worker(
 pub(crate) fn spawn_av1_local_thumbnail(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
+    shared_core: &crate::service::SharedCore,
     item_id: u64,
     file_path: std::path::PathBuf,
     ffmpeg_path: String,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
+    let shared_core = shared_core.clone();
+    let source_key = crate::service::core::DownloadCore::av1_thumbnail_source_key(
+        file_path.to_string_lossy().as_ref(),
+    );
     rt.spawn(async move {
-        let image = tokio::task::spawn_blocking(move || {
-            av1_transcode::extract_thumbnail(&file_path, &ffmpeg_path)
+        let outcome = tokio::task::spawn_blocking(move || {
+            let png = av1_transcode::extract_thumbnail_png_bytes(&file_path, &ffmpeg_path)?;
+            let image = super::thumbnails::decode_thumbnail_image(png.clone());
+            Some((png, image))
         })
         .await
         .ok()
         .flatten();
+        if let Some((png, _)) = &outcome {
+            shared_core
+                .lock()
+                .cache_thumbnail_bytes(item_id, source_key.clone(), png.clone(), "image/png");
+        }
+        let image = outcome.and_then(|(_, image)| image);
         let _ = try_send_ui(&bus, UiEvent::ThumbnailFetched { item_id, image });
     });
 }

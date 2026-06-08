@@ -8,7 +8,7 @@ use crate::av1_state::av1_source_path_missing;
 use super::queue_cache::{THUMBNAIL_DECODE_MAX_WIDTH, THUMBNAIL_QUEUE_SOFT_CAP};
 use super::{background_spawn, events::try_send_ui, PydlApp, UiEvent};
 
-fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage> {
+pub(crate) fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage> {
     let img = image::load_from_memory(&bytes).ok()?;
     let img = if img.width() > THUMBNAIL_DECODE_MAX_WIDTH {
         img.resize(
@@ -52,10 +52,14 @@ impl PydlApp {
             return;
         }
         self.thumbnail_inflight.insert(item_id);
+        let source_key = self.item_idx(item_id).map(|idx| {
+            crate::service::core::DownloadCore::queue_thumbnail_source_key(&self.items[idx])
+        });
         let bus = self.ui_bus.clone();
         let rt = self.runtime.clone();
         let client = self.http_client.clone();
         let sem = self.thumb_semaphore.clone();
+        let shared_core = self.shared_core.clone();
         rt.spawn(async move {
             let permit = sem.acquire_owned().await;
             let Ok(_permit) = permit else {
@@ -79,6 +83,12 @@ impl PydlApp {
                 }
                 _ => None,
             };
+            if let (Some(ref raw), Some(key)) = (&bytes, &source_key) {
+                let content_type = crate::ytdlp::guess_image_content_type(raw).to_owned();
+                shared_core
+                    .lock()
+                    .cache_thumbnail_bytes(item_id, key.clone(), raw.clone(), content_type);
+            }
             let image = match bytes {
                 None => None,
                 Some(b) => tokio::task::spawn_blocking(move || decode_thumbnail_image(b))
@@ -106,6 +116,7 @@ impl PydlApp {
         background_spawn::spawn_av1_local_thumbnail(
             &self.runtime,
             &self.ui_bus,
+            &self.shared_core,
             item_id,
             file_path,
             ffmpeg_path,

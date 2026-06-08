@@ -298,8 +298,10 @@ impl DownloadCore {
         if self.av1_items.is_empty() && self.av1_input_paths.is_empty() {
             return;
         }
-        for item in &self.av1_items {
-            self.av1_media_inflight.remove(&item.item_id);
+        let item_ids: Vec<u64> = self.av1_items.iter().map(|it| it.item_id).collect();
+        for item_id in item_ids {
+            self.av1_media_inflight.remove(&item_id);
+            self.evict_thumbnail(item_id);
         }
         self.av1_items.clear();
         self.av1_duration_ms.clear();

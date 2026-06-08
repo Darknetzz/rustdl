@@ -54,7 +54,6 @@ use crate::config::{
 };
 use crate::models::Av1QueueItem;
 use crate::models::{ItemStatus, QueueItem};
-use crate::pkg_version;
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
 use crate::theme::{self, BG_LOG, BORDER_PANEL};
 use crate::ui_icons;
@@ -267,12 +266,7 @@ impl PydlApp {
             .max()
             .unwrap_or(0)
             .saturating_add(1);
-        let http_client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(15))
-            .user_agent(format!("rustdl/{}", pkg_version::VERSION))
-            .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        let http_client = crate::http_client::build_http_client(&settings);
         let thumb_semaphore = Arc::new(Semaphore::new(8));
         let av1_mode = settings.last_mode == "av1";
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
@@ -671,6 +665,11 @@ impl PydlApp {
         } else {
             String::new()
         };
+        self.http_client = crate::http_client::build_http_client(&self.settings);
+        {
+            let mut core = self.shared_core.lock();
+            core.http_client = self.http_client.clone();
+        }
         self.refresh_av1_encoder_detection();
     }
 

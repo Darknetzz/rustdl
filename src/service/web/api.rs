@@ -21,7 +21,8 @@ use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
 use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
 use crate::service::web::media;
-use crate::ytdlp::{self, thumbnail_url_candidates};
+use crate::service::core::DownloadCore;
+use crate::ytdlp::{self, thumbnail_proxy_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
 use super::assets;
@@ -64,6 +65,7 @@ struct DiskSpaceJson {
 struct StatusResponse {
     version: &'static str,
     build_date: String,
+    generation: u64,
     downloads_paused: bool,
     queue_running: usize,
     add_in_progress: bool,
@@ -100,6 +102,7 @@ struct QueueItemView {
 
 #[derive(Serialize)]
 struct QueueResponse {
+    generation: u64,
     items: Vec<QueueItemView>,
 }
 
@@ -234,6 +237,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
     Json(StatusResponse {
         version: crate::pkg_version::VERSION,
         build_date: crate::pkg_version::build_date_local(),
+        generation: c.generation,
         downloads_paused: c.downloads_paused,
         queue_running: c.queue_running,
         add_in_progress: c.add_in_progress,
@@ -320,7 +324,10 @@ async fn queue_list(State(st): State<ApiState>) -> Json<QueueResponse> {
             }
         })
         .collect();
-    Json(QueueResponse { items })
+    Json(QueueResponse {
+        generation: c.generation,
+        items,
+    })
 }
 
 async fn media_stream(
@@ -571,8 +578,17 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
 async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg) = {
+) -> Result<Response, StatusCode> {
+    let (
+        candidates,
+        client,
+        local_thumb,
+        ffmpeg_path,
+        has_ffmpeg,
+        source_key,
+        cached,
+        core_ref,
+    ) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
         if !c.has_ffmpeg {
@@ -584,7 +600,9 @@ async fn thumbnail_proxy(
         let ffmpeg_path = c.settings.ffmpeg_path.clone();
         let has_ffmpeg = c.has_ffmpeg;
         let item = c.items[idx].clone();
-        let urls = thumbnail_url_candidates(&item);
+        let source_key = DownloadCore::queue_thumbnail_source_key(&item);
+        let cached = c.cached_thumbnail_bytes(id, &source_key);
+        let urls = thumbnail_proxy_url_candidates(&item);
         let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
             .ok()
             .filter(|p| media::media_kind_for_path(p).is_some());
@@ -594,16 +612,35 @@ async fn thumbnail_proxy(
             local_media,
             ffmpeg_path,
             has_ffmpeg,
+            source_key,
+            cached,
+            st.core.clone(),
         )
     };
-    if let Some(path) = local_thumb {
-        if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
-            return Ok(thumbnail_response(bytes, "image/png"));
+    if let Some((bytes, content_type)) = cached {
+        return Ok(thumbnail_response_owned(bytes, content_type));
+    }
+    for url in &candidates {
+        if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, url).await {
+            {
+                let mut c = core_ref.lock();
+                c.cache_thumbnail_bytes(
+                    id,
+                    source_key.clone(),
+                    bytes.clone(),
+                    content_type.to_string(),
+                );
+            }
+            return Ok(thumbnail_response(bytes, content_type));
         }
     }
-    for url in candidates {
-        if let Some((bytes, content_type)) = fetch_thumbnail_image(&client, &url).await {
-            return Ok(thumbnail_response(bytes, content_type));
+    if let Some(path) = local_thumb {
+        if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
+            {
+                let mut c = core_ref.lock();
+                c.cache_thumbnail_bytes(id, source_key, bytes.clone(), "image/png");
+            }
+            return Ok(thumbnail_response(bytes, "image/png"));
         }
     }
     Err(StatusCode::NOT_FOUND)
@@ -627,7 +664,7 @@ pub(super) async fn extract_local_video_thumbnail(
     .flatten()
 }
 
-pub(super) fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> impl IntoResponse {
+pub(super) fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> Response {
     (
         StatusCode::OK,
         [
@@ -636,6 +673,22 @@ pub(super) fn thumbnail_response(bytes: Vec<u8>, content_type: &'static str) -> 
         ],
         bytes,
     )
+        .into_response()
+}
+
+pub(super) fn thumbnail_response_owned(bytes: Vec<u8>, content_type: String) -> Response {
+    (
+        StatusCode::OK,
+        [
+            (axum::http::header::CONTENT_TYPE, content_type),
+            (
+                axum::http::header::CACHE_CONTROL,
+                "private, max-age=300".to_owned(),
+            ),
+        ],
+        bytes,
+    )
+        .into_response()
 }
 
 async fn fetch_thumbnail_image(

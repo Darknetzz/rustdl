@@ -3,7 +3,6 @@
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -165,8 +164,8 @@ async fn av1_clear(State(st): State<ApiState>) -> StatusCode {
 async fn av1_thumbnail(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
-) -> Result<impl IntoResponse, StatusCode> {
-    let (source_path, ffmpeg_path, has_ffmpeg) = {
+) -> Result<axum::response::Response, StatusCode> {
+    let (source_path, ffmpeg_path, has_ffmpeg, source_key, cached, core_ref) = {
         let mut c = st.core.lock();
         if !c.has_ffmpeg {
             c.refresh_deps();
@@ -176,14 +175,29 @@ async fn av1_thumbnail(
             .iter()
             .find(|it| it.item_id == id)
             .ok_or(StatusCode::NOT_FOUND)?;
+        let source_key =
+            crate::service::core::DownloadCore::av1_thumbnail_source_key(&item.source_path);
+        let cached = c.cached_thumbnail_bytes(id, &source_key);
         (
             std::path::PathBuf::from(&item.source_path),
             c.settings.ffmpeg_path.clone(),
             c.has_ffmpeg,
+            source_key,
+            cached,
+            st.core.clone(),
         )
     };
+    if let Some((bytes, content_type)) = cached {
+        return Ok(super::api::thumbnail_response_owned(bytes, content_type));
+    }
     match extract_local_video_thumbnail(&source_path, &ffmpeg_path, has_ffmpeg).await {
-        Some(bytes) => Ok(thumbnail_response(bytes, "image/png")),
+        Some(bytes) => {
+            {
+                let mut c = core_ref.lock();
+                c.cache_thumbnail_bytes(id, source_key, bytes.clone(), "image/png");
+            }
+            Ok(thumbnail_response(bytes, "image/png"))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
