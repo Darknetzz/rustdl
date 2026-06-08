@@ -1413,4 +1413,28 @@ mod thumbnail_cache_tests {
             "expected saved thumbnail for item 316 (key={key})"
         );
     }
+
+    #[test]
+    fn cached_thumbnail_falls_back_to_disk_image_when_key_drifts() {
+        let dir = crate::thumbnail_store::downloader_thumbnail_dir();
+        if !dir.join("316.json").is_file() {
+            return;
+        }
+        let raw = std::fs::read_to_string(crate::config::queue_file_path()).expect("queue json");
+        let items: Vec<QueueItem> = serde_json::from_str(&raw).expect("parse queue");
+        let mut item = items
+            .into_iter()
+            .find(|it| it.item_id == 316)
+            .expect("item 316 in queue");
+        item.local_path = Some(r"D:\different\path.mkv".into());
+        let drift_key = DownloadCore::queue_thumbnail_source_key(&item);
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let mut core = shared.lock();
+        core.items = vec![item];
+        assert!(
+            core.cached_thumbnail_bytes(316, &drift_key).is_some(),
+            "expected disk fallback for item 316 after key drift"
+        );
+    }
 }
