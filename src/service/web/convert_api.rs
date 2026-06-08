@@ -70,7 +70,7 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/cancel", post(convert_cancel))
         .route("/api/convert/clear", post(convert_clear))
         .route("/api/convert/retry-skipped", post(convert_retry_skipped))
-        .route("/api/convert/thumbnail/{id}", get(convert_thumbnail))
+        .route("/api/convert/thumbnail/:id", get(convert_thumbnail))
 }
 
 async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse> {

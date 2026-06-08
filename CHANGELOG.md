@@ -20,7 +20,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
-- Floating **Activity log** window shows log lines again and is resizable (restored fixed body-height layout; stale egui window state reset).
+- LAN web UI queue card thumbnails (and in-browser playback) work again: Axum 0.7 path routes used `{id}` syntax from 0.8, so `/api/thumbnail/:id` and `/api/media/:id` never matched and always returned 404.
+- Saved downloader thumbnails load in the LAN web UI even when the cache key drifts (e.g. after `local_path` is backfilled on Windows extended-length paths); Windows `\\?\` download paths are recognized under the output folder again.
 - Completed downloader cards no longer stay on **Thumbnail unavailable** when the file is on disk: Done/Failed rows always load previews (even in large queues), saved `local_path` is used for ffmpeg frame grabs, and the local file is tried before remote CDN URLs.
 - Downloader queue card thumbnails load again when YouTube CDN URLs fail: the desktop UI now tries all preview URL candidates (not only the metadata URL) and falls back to an ffmpeg frame grab from the downloaded file, matching the LAN web UI. Cards show **Thumbnail unavailable** after all sources fail instead of staying on **Fetching thumbnail...** forever; thumbnails retry automatically when a download finishes.
 

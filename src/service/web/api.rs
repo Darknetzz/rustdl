@@ -203,18 +203,18 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/status", get(status))
         .route("/api/queue", get(queue_list))
         .route("/api/queue", post(queue_add))
-        .route("/api/queue/{id}", axum::routing::delete(queue_remove))
+        .route("/api/queue/:id", axum::routing::delete(queue_remove))
         .route("/api/queue/clear", post(queue_clear))
         .route(
-            "/api/queue/{id}/file",
+            "/api/queue/:id/file",
             axum::routing::delete(queue_delete_file),
         )
         .route("/api/logs/clear", post(logs_clear))
         .route("/api/downloads/start", post(downloads_start))
         .route("/api/downloads/pause", post(downloads_pause))
         .route("/api/downloads/resume", post(downloads_resume))
-        .route("/api/downloads/cancel/{id}", post(downloads_cancel))
-        .route("/api/downloads/redownload/{id}", post(downloads_redownload))
+        .route("/api/downloads/cancel/:id", post(downloads_cancel))
+        .route("/api/downloads/redownload/:id", post(downloads_redownload))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route("/api/profiles", get(profiles_list))
@@ -225,8 +225,8 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/logs", get(logs_get))
         .route("/api/shutdown", post(app_shutdown))
         .route("/api/events", get(events_sse))
-        .route("/api/thumbnail/{id}", get(thumbnail_proxy))
-        .route("/api/media/{id}", get(media_stream));
+        .route("/api/thumbnail/:id", get(thumbnail_proxy))
+        .route("/api/media/:id", get(media_stream));
     let protected = super::convert_api::register(protected)
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
@@ -707,16 +707,7 @@ async fn thumbnail_proxy(
         if !c.has_ffmpeg {
             c.refresh_deps();
         }
-        let idx = match c.item_idx(id) {
-            Some(idx) => idx,
-            None => {
-                eprintln!(
-                    "rustdl: thumbnail {id}: queue item not found ({} items)",
-                    c.items.len()
-                );
-                return Err(StatusCode::NOT_FOUND);
-            }
-        };
+        let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
         let output_dir = c.effective_output_dir();
         let index = &c.done_file_index;
         let ffmpeg_path = c.settings.ffmpeg_path.clone();
@@ -728,14 +719,6 @@ async fn thumbnail_proxy(
         let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
             .ok()
             .filter(|p| media::media_kind_for_path(p).is_some());
-        if cached.is_none() {
-            eprintln!(
-                "rustdl: thumbnail {id}: cache miss (thumb_path={:?}, urls={}, local={})",
-                item.thumbnail_path,
-                urls.len(),
-                local_media.is_some(),
-            );
-        }
         (
             urls,
             c.http_client.clone(),
