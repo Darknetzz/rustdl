@@ -859,13 +859,22 @@ impl PydlApp {
         let trimmed = self.output_dir.trim();
         if trimmed.is_empty() {
             ui.label(
-                header_status_rich("Destination disk: set an output folder to see free space.")
-                    .color(muted),
+                header_status_rich(format!(
+                    "{} Destination disk: set an output folder to see free space.",
+                    ui_icons::DESTINATION_DISK
+                ))
+                .color(muted),
             );
             return;
         }
         let Some(space) = self.output_disk_space.as_ref() else {
-            ui.label(header_status_rich("Destination disk: …").color(muted));
+            ui.label(
+                header_status_rich(format!(
+                    "{} Destination disk: …",
+                    ui_icons::DESTINATION_DISK
+                ))
+                .color(muted),
+            );
             return;
         };
         let level = space.level();
@@ -880,7 +889,13 @@ impl PydlApp {
         let tail = format!(" / {}{}", human_bytes_ui(space.total_bytes), vol);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label(header_status_rich("Destination disk: ").color(muted));
+            ui.label(
+                header_status_rich(format!(
+                    "{} Destination disk: ",
+                    ui_icons::DESTINATION_DISK
+                ))
+                .color(muted),
+            );
             ui.label(
                 header_status_rich(format!("{} free", human_bytes_ui(space.available_bytes)))
                     .strong()

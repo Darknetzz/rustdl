@@ -829,6 +829,10 @@ function diskSpaceBarHtml(disk) {
   </div>`;
 }
 
+function destinationDiskLabelHtml(suffix = "") {
+  return `<span class="material-icons disk-space-label-icon" aria-hidden="true">${ICON.storage}</span> Destination disk${suffix}`;
+}
+
 function updateSettingsOutputDiskHint(disk) {
   const el = document.getElementById("settings-output-disk");
   if (!el) return;
@@ -838,7 +842,7 @@ function updateSettingsOutputDiskHint(disk) {
     return;
   }
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
-  el.innerHTML = `Destination disk${vol}: ${diskSpaceFreeHtml(disk)} / ${formatBytes(
+  el.innerHTML = `${destinationDiskLabelHtml(vol)}: ${diskSpaceFreeHtml(disk)} / ${formatBytes(
     disk.total_bytes
   )} total${diskSpaceBarHtml(disk)}`;
   el.classList.remove("hidden");
@@ -856,7 +860,7 @@ function renderNavbarDiskSpace(disk) {
   const pctUsed = diskSpacePercentUsed(disk);
   const pct = pctUsed != null ? ` · ${pctUsed}% used` : "";
   el.title = "Used and free space on the output folder volume";
-  el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${diskSpaceFreeHtml(
+  el.innerHTML = `${destinationDiskLabelHtml(vol)}: ${diskSpaceFreeHtml(
     disk
   )} / ${formatBytes(disk.total_bytes)}${pct}`;
   root.appendChild(el);

@@ -23,7 +23,7 @@ const ICON = {
   save: "save",
   search: "search",
   settings: "settings",
-  star: "star",
+  storage: "storage",
   stop: "stop",
   tune: "tune",
   upload: "upload",

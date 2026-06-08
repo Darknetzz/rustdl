@@ -486,6 +486,23 @@ button.danger:disabled,
 
 .status-badge.disk-space { color: var(--muted); border-color: rgba(158, 158, 158, 0.35); }
 
+.disk-space-label-icon,
+.status-badge.disk-space .disk-space-label-icon {
+  font-size: 0.95em;
+  vertical-align: -2px;
+  margin-right: 0.12rem;
+}
+
+.status-badge.disk-space-ok .disk-space-label-icon { color: var(--ok); }
+.status-badge.disk-space-low .disk-space-label-icon { color: var(--warn); }
+.status-badge.disk-space-critical .disk-space-label-icon { color: var(--failed); }
+
+#settings-output-disk .disk-space-label-icon {
+  font-size: 1em;
+  vertical-align: -3px;
+  margin-right: 0.2rem;
+}
+
 .status-badge.disk-space-ok .status-dot { background: var(--ok); }
 .status-badge.disk-space-low .status-dot { background: var(--warn); }
 .status-badge.disk-space-critical .status-dot { background: var(--failed); }

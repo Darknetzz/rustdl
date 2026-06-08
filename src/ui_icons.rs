@@ -10,6 +10,8 @@ pub const LOGS: &str = m::ICON_ARTICLE;
 pub const IMPORT_FILE: &str = m::ICON_DESCRIPTION;
 pub const EXPORT: &str = m::ICON_UPLOAD;
 pub const USE_DOWNLOADS: &str = m::ICON_DOWNLOAD;
+/// Output / destination volume free space (header, settings hint).
+pub const DESTINATION_DISK: &str = m::ICON_STORAGE;
 pub const OPEN_FOLDER: &str = m::ICON_FOLDER_OPEN;
 pub const BROWSE: &str = m::ICON_FOLDER_OPEN;
 pub const RETRY: &str = m::ICON_REFRESH;
