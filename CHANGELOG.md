@@ -8,6 +8,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Documentation
+
+- Release routine scripts: `scripts/bump_version.*` (semver bump in `Cargo.toml`) and `scripts/release.*` (finalize changelog, commit, tag, optional push). Documented in `AGENTS.md` and `README.md`.
+
 ### Added
 
 - **Mode panel colors** in Settings → Shared (desktop and LAN web UI): customize the Downloader and Video Converter panel tint / accent (defaults: blue and purple). Use **Default** to restore built-in colors.

@@ -64,6 +64,8 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`) |
 | `tests/` | Integration tests (ytdlp fixtures, queue perf, subprocess smoke) |
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
+| `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` during development |
+| `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
 
 User data (not in repo): `<config_dir>/rustdl/` — `rustdl_config.json`, `rustdl_queue.json`, `rustdl_activity_log.json`. See `README.md` for paths.
@@ -92,6 +94,21 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 
 - App version: `Cargo.toml` `version` field (also `rustdl --version` / About).
 - User-facing history: `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)), [Semantic Versioning](https://semver.org/).
+- Git remotes: **`github`** (canonical; triggers release CI) and **`gitlab`** (mirror). There is no `origin` remote.
+
+### Day-to-day development
+
+1. **User-visible change** → add a bullet under `## [Unreleased]` in `CHANGELOG.md` (same commit as the change).
+2. **Medium or larger change** → bump `Cargo.toml` in that same commit (still under `[Unreleased]` until release day):
+
+   | Platform | Command |
+   |----------|---------|
+   | Windows | `.\scripts\bump_version.ps1` / `minor` / `major` |
+   | Unix | `./scripts/bump_version.sh` / `minor` / `major` |
+
+   Default is **patch** (`0.4.6` → `0.4.7`). Skip bumps for trivial fixes and non-user-facing work.
+
+3. **Before opening a PR** → run CI checks locally (see **Running and testing locally**).
 
 ### CHANGELOG on every commit
 
@@ -120,11 +137,33 @@ When committing **medium or larger** user-visible work, bump `version` in `Cargo
 
 ### Cutting a release
 
-1. **Finish the changelog** — move `[Unreleased]` bullets into a new dated section `## [X.Y.Z] - YYYY-MM-DD`; leave `[Unreleased]` empty (subsection headers optional until the next change).
-2. **Confirm version** — `version` in `Cargo.toml` must be `X.Y.Z` (usually already bumped on prior commits; adjust if the release number differs).
-3. **Update compare links** — at the bottom of `CHANGELOG.md`, add `[X.Y.Z]: https://github.com/Darknetzz/rustdl/compare/rustdl-vPREV...rustdl-vX.Y.Z` and point `[Unreleased]` at `...rustdl-vX.Y.Z...dev`.
-4. **Commit** on `dev` (e.g. `release: vX.Y.Z`).
-5. **Tag and push** — `git tag rustdl-vX.Y.Z` then `git push origin rustdl-vX.Y.Z` (and push `dev` if not already). Prefer the `rustdl-v*` prefix; `v*` tags also trigger the workflow.
+Use the release scripts on a **clean** `dev` checkout (all `[Unreleased]` work already committed; `Cargo.toml` version is the number you are shipping):
+
+| Step | Windows | Unix |
+|------|---------|------|
+| Preview | `.\scripts\release.ps1 -DryRun` | `./scripts/release.sh --dry-run` |
+| Cut locally | `.\scripts\release.ps1` | `./scripts/release.sh` |
+| Publish | `.\scripts\release.ps1 -Push -Yes` | `./scripts/release.sh --push --yes` |
+
+The script runs `cargo fmt --check`, `clippy`, and `test` unless you pass `-SkipChecks` / `--skip-checks`. It then:
+
+1. Moves `[Unreleased]` bullets into `## [X.Y.Z] - YYYY-MM-DD` (leaves `[Unreleased]` empty).
+2. Updates compare links at the bottom of `CHANGELOG.md`.
+3. Commits `release: vX.Y.Z` on `dev`.
+4. Creates annotated tag `rustdl-vX.Y.Z` (prefer this prefix; bare `v*` tags also trigger CI).
+5. With `-Push` / `--push`, pushes `dev` and the tag to **`github`** (override with `-Remote` / `--remote`).
+
+**Manual equivalent** (if you cannot run the scripts):
+
+1. Finish the changelog — move `[Unreleased]` into a dated `## [X.Y.Z]` section; leave `[Unreleased]` empty.
+2. Confirm `Cargo.toml` `version` matches `X.Y.Z`.
+3. Update compare links — `[X.Y.Z]: …/compare/rustdl-vPREV…rustdl-vX.Y.Z` and `[Unreleased]: …/compare/rustdl-vX.Y.Z…dev`.
+4. Commit on `dev` (`release: vX.Y.Z`).
+5. `git tag rustdl-vX.Y.Z` then `git push github dev` and `git push github rustdl-vX.Y.Z`.
+
+After the tag push, `.github/workflows/release.yml` builds Linux / Windows / macOS binaries and opens a GitHub Release. Mirror to GitLab separately if needed (`git push gitlab dev --tags`).
+
+**First release / missing older tags:** compare links use `rustdl-vPREV...rustdl-vX.Y.Z`. If `rustdl-vPREV` was never pushed (this repo had changelog-only versions before tagging), either backfill that tag on the old release commit or accept that the compare URL works only after both tags exist.
 
 ### Release workflow (`.github/workflows/release.yml`)
 

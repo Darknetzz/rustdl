@@ -46,7 +46,8 @@ On first run without a saved API token, rustdl generates one and prints it. Open
 
 - App version comes from `Cargo.toml` (shown in **About** and `rustdl --version`).
 - User-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/) style).
-- For a release: bump `version` in `Cargo.toml`, finalize `CHANGELOG.md`, commit, and push tag `rustdl-vX.Y.Z` (see [.github/workflows/release.yml](.github/workflows/release.yml); [GitHub releases](https://github.com/Darknetzz/rustdl/releases)).
+- During development: add bullets under `[Unreleased]`; bump version on medium+ changes with `.\scripts\bump_version.ps1` (Windows) or `./scripts/bump_version.sh` (Unix).
+- To ship a release: `.\scripts\release.ps1 -DryRun` then `.\scripts\release.ps1 -Push` (or `./scripts/release.sh --dry-run` then `--push --yes`). That finalizes the changelog, commits `release: vX.Y.Z`, tags `rustdl-vX.Y.Z`, and pushes to GitHub—which triggers [.github/workflows/release.yml](.github/workflows/release.yml) and [GitHub releases](https://github.com/Darknetzz/rustdl/releases). See `AGENTS.md` for the full routine.
 
 ## Development checks
 

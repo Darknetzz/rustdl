@@ -1415,6 +1415,28 @@ mod thumbnail_cache_tests {
     }
 
     #[test]
+    fn cached_thumbnail_survives_done_file_refresh() {
+        if !crate::thumbnail_store::downloader_thumbnail_dir()
+            .join("316.json")
+            .is_file()
+        {
+            return;
+        }
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let mut core = shared.lock();
+        core.refresh_done_file_lookup();
+        let idx = core.item_idx(316).expect("item 316");
+        let item = core.items[idx].clone();
+        let key = DownloadCore::queue_thumbnail_source_key(&item);
+        assert!(
+            core.cached_thumbnail_bytes(316, &key).is_some(),
+            "thumbnail missing after refresh (key={key}, local_path={:?})",
+            item.local_path
+        );
+    }
+
+    #[test]
     fn cached_thumbnail_falls_back_to_disk_image_when_key_drifts() {
         let dir = crate::thumbnail_store::downloader_thumbnail_dir();
         if !dir.join("316.json").is_file() {
