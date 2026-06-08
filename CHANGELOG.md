@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI startup no longer blocks for several seconds on ffmpeg encoder smoke tests; the window appears immediately and encoder detection runs in the background when you open Video Converter.
+
 ## [0.4.8] - 2026-06-08
 
 ### Added

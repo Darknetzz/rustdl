@@ -99,6 +99,11 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.convert_items = core.convert_items.clone();
     app.convert_running = core.convert_running;
     app.convert_media_inflight = core.convert_media_inflight.clone();
+    app.convert_encoder_choice = core.convert_encoder_choice.clone();
+    app.convert_encoder_detect_key = core.convert_encoder_detect_key.clone();
+    if app.convert_encoder_choice.is_some() {
+        app.convert_encoder_detection_inflight = false;
+    }
 }
 
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {

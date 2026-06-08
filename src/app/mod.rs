@@ -206,6 +206,7 @@ pub struct PydlApp {
     /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
     convert_encoder_choice: Option<crate::transcode::EncoderChoice>,
     convert_encoder_detect_key: String,
+    convert_encoder_detection_inflight: bool,
 
     done_file_index: done_file_index::DoneFileIndex,
     /// Suppress repeat log spam when output index hits [`DONE_LOOKUP_MAX_ENTRIES`].
@@ -250,11 +251,8 @@ pub struct PydlApp {
 
 impl PydlApp {
     pub fn new(cc: &eframe::CreationContext<'_>, runtime: Arc<Runtime>) -> Self {
-        eprintln!("rustdl startup: PydlApp::new begin");
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
-        eprintln!("rustdl startup: logo loaded");
         let (rustdl_service, rx) = crate::service::RustdlService::new_gui(runtime.clone());
-        eprintln!("rustdl startup: RustdlService ready");
         let shared_core = rustdl_service.shared_core();
         let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
@@ -304,15 +302,8 @@ impl PydlApp {
         let queue_search = settings.queue_search.clone();
         let applied_theme = settings.theme.clone();
 
-        eprintln!("rustdl startup: spawning initial web server");
-        let web_server =
-            crate::service::web::spawn_web_server(runtime.clone(), shared_core.clone(), &settings);
-        eprintln!("rustdl startup: building app struct");
-        eprintln!("rustdl startup: locking core for generation");
         let core_generation = shared_core.lock().generation;
-        eprintln!("rustdl startup: core generation={core_generation}");
         let synced_settings_generation = shared_core.lock().settings_generation;
-        eprintln!("rustdl startup: settings generation={synced_settings_generation}");
 
         let mut app = Self {
             shared_core: shared_core.clone(),
@@ -321,7 +312,7 @@ impl PydlApp {
             settings_dirty: false,
             synced_log_len: log_lines.len(),
             synced_settings_generation,
-            web_server,
+            web_server: None,
             runtime,
             ui_bus,
             rx,
@@ -399,6 +390,7 @@ impl PydlApp {
             convert_running: false,
             convert_encoder_choice: None,
             convert_encoder_detect_key: String::new(),
+            convert_encoder_detection_inflight: false,
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             http_client,
@@ -426,7 +418,18 @@ impl PydlApp {
             videos_auto_undocked_for_size: false,
             videos_dock_user_prefers_docked: false,
         };
-        eprintln!("rustdl startup: app struct built");
+        {
+            let core = shared_core.lock();
+            app.has_yt_dlp = core.has_yt_dlp;
+            app.has_ffmpeg = core.has_ffmpeg;
+            app.has_ffprobe = core.has_ffprobe;
+            app.yt_dlp_version = core.yt_dlp_version.clone();
+            app.ffmpeg_version = core.ffmpeg_version.clone();
+            app.ffprobe_version = core.ffprobe_version.clone();
+            app.http_client = core.http_client.clone();
+            app.convert_encoder_choice = core.convert_encoder_choice.clone();
+            app.convert_encoder_detect_key = core.convert_encoder_detect_key.clone();
+        }
         let startup_config_issues = app.config_load_issues.clone();
         for issue in &startup_config_issues {
             app.append_log(&format!(
@@ -439,31 +442,23 @@ impl PydlApp {
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         ));
-        eprintln!("rustdl startup: refresh_deps");
-        app.refresh_deps();
-        eprintln!("rustdl startup: invalidate_queue_caches");
         app.invalidate_queue_caches();
         app.queue_dirty = true;
+        app.settings_dirty = true;
         let shared = app.shared_core.clone();
-        eprintln!("rustdl startup: push_app_to_core");
         core_sync::push_app_to_core(&mut app, &shared);
         if app.settings.web_ui_enabled {
-            eprintln!("rustdl startup: restart_web_server");
             app.restart_web_server();
         }
         // Pull the core-owned Convert queue into the GUI mirror and kick off thumbnail loads.
         {
             let shared = app.shared_core.clone();
             let core = shared.lock();
-            eprintln!("rustdl startup: sync_core_to_app");
             core_sync::sync_core_to_app(&core, &mut app);
         }
-        eprintln!("rustdl startup: ensure thumbnails");
         app.ensure_convert_thumbnails();
         app.ensure_downloader_thumbnails();
-        eprintln!("rustdl startup: refresh_input_line_info");
         app.refresh_input_line_info();
-        eprintln!("rustdl startup: PydlApp::new done");
         app
     }
 
@@ -667,7 +662,6 @@ impl PydlApp {
     }
 
     pub(super) fn refresh_deps(&mut self) {
-        eprintln!("rustdl startup: refresh_deps tools");
         let (yt, ffm, ffp) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
             &self.settings.ffmpeg_path,
@@ -676,37 +670,40 @@ impl PydlApp {
         self.has_yt_dlp = yt;
         self.has_ffmpeg = ffm;
         self.has_ffprobe = ffp;
-        eprintln!("rustdl startup: refresh_deps yt-dlp version");
         self.yt_dlp_version = if yt {
             ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
-        eprintln!("rustdl startup: refresh_deps ffmpeg version");
         self.ffmpeg_version = if ffm {
             ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
-        eprintln!("rustdl startup: refresh_deps ffprobe version");
         self.ffprobe_version = if ffp {
             ytdlp::read_ffprobe_version(&self.settings.ffprobe_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
-        eprintln!("rustdl startup: refresh_deps http client");
         self.http_client = crate::http_client::build_http_client(&self.settings);
-        eprintln!("rustdl startup: refresh_deps sync http client to core");
         {
             let mut core = self.shared_core.lock();
+            core.has_yt_dlp = self.has_yt_dlp;
+            core.has_ffmpeg = self.has_ffmpeg;
+            core.has_ffprobe = self.has_ffprobe;
+            core.yt_dlp_version = self.yt_dlp_version.clone();
+            core.ffmpeg_version = self.ffmpeg_version.clone();
+            core.ffprobe_version = self.ffprobe_version.clone();
             core.http_client = self.http_client.clone();
         }
-        eprintln!("rustdl startup: refresh_deps encoder detection");
-        self.refresh_convert_encoder_detection();
-        eprintln!("rustdl startup: refresh_deps done");
+        if !self.has_ffmpeg {
+            self.convert_encoder_choice = None;
+            self.convert_encoder_detect_key.clear();
+            self.convert_encoder_detection_inflight = false;
+        }
     }
 
     pub(super) fn append_log(&mut self, message: &str) {

@@ -205,30 +205,60 @@ fn draw_convert_media_badges(
     });
 }
 
-fn convert_encoder_detect_key(ffmpeg_path: &str, encoder_override: &str) -> String {
-    format!("{ffmpeg_path}\0{encoder_override}")
+fn convert_encoder_detect_key(
+    ffmpeg_path: &str,
+    encoder_override: &str,
+    target_codec: &str,
+) -> String {
+    format!("{ffmpeg_path}\0{encoder_override}\0{target_codec}")
 }
 
 impl PydlApp {
-    pub(super) fn refresh_convert_encoder_detection(&mut self) {
+    /// Probes ffmpeg encoders on a worker thread so the UI stays responsive (smoke tests can take many seconds).
+    pub(super) fn refresh_convert_encoder_detection(&mut self, ctx: &egui::Context) {
         if !self.has_ffmpeg {
             self.convert_encoder_choice = None;
             self.convert_encoder_detect_key.clear();
+            self.convert_encoder_detection_inflight = false;
             return;
         }
         let key = convert_encoder_detect_key(
             &self.settings.ffmpeg_path,
             &self.settings.convert_encoder_override,
+            &self.settings.convert_target_codec,
         );
-        if self.convert_encoder_detect_key == key {
+        if self.convert_encoder_detect_key == key && self.convert_encoder_choice.is_some() {
             return;
         }
-        self.convert_encoder_choice = Some(transcode::detect_encoder_with_override(
-            &self.settings.ffmpeg_path,
-            &self.settings.convert_encoder_override,
-            &self.settings.convert_target_codec,
-        ));
-        self.convert_encoder_detect_key = key;
+        if self.convert_encoder_detection_inflight {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+            return;
+        }
+        self.convert_encoder_detection_inflight = true;
+        let shared = self.shared_core.clone();
+        let rt = self.runtime.clone();
+        let ffmpeg_path = self.settings.ffmpeg_path.clone();
+        let override_enc = self.settings.convert_encoder_override.clone();
+        let target_codec = self.settings.convert_target_codec.clone();
+        let ctx = ctx.clone();
+        rt.spawn(async move {
+            let choice = tokio::task::spawn_blocking(move || {
+                transcode::detect_encoder_with_override(
+                    &ffmpeg_path,
+                    &override_enc,
+                    &target_codec,
+                )
+            })
+            .await
+            .ok();
+            if let Some(choice) = choice {
+                let mut core = shared.lock();
+                core.convert_encoder_choice = Some(choice);
+                core.convert_encoder_detect_key = key;
+                core.bump_generation();
+            }
+            ctx.request_repaint();
+        });
     }
 
     /// Runs an AV1 mutation against the shared `DownloadCore` (the single source of truth) and
@@ -392,7 +422,7 @@ impl PydlApp {
                 self.persist_settings();
             }
         });
-        self.refresh_convert_encoder_detection();
+        self.refresh_convert_encoder_detection(ui.ctx());
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Encode settings").small());
             draw_convert_encode_settings_badges(ui, &self.settings, &self.settings.theme);
@@ -408,6 +438,13 @@ impl PydlApp {
                     ui,
                     "Encoder: ffmpeg not found",
                     Color32::from_rgb(255, 193, 120),
+                    true,
+                );
+            } else if self.convert_encoder_detection_inflight {
+                status_dot_with_label(
+                    ui,
+                    "Encoder: detecting…",
+                    Color32::from_rgb(180, 180, 180),
                     true,
                 );
             }
