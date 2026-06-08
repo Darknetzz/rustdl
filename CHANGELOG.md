@@ -55,6 +55,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Destination disk bar color follows **used** space (warning from 75%, critical from 90%); free-space text color still reflects absolute free bytes.
 - Main header **Settings** button no longer clips away when disk status is wide (actions reserve a fixed right column).
 - Main header **Show log**, **Settings**, and **Exit** sit flush on the right (flex spacer between status row and actions).
+- Main header actions stay inside the content right margin (left status row is width-capped so buttons cannot overflow).
 - Header status text (tool checks, activity badge, destination disk) is slightly larger (+2px).
 - Settings → Shared: **Copy** API token button briefly shows **Copied!** after a successful clipboard copy.
 - Main window and docked queue panels keep the right-side content inset again (scroll-area width no longer bleeds to the window edge).
