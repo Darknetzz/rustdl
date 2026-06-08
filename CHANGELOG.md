@@ -16,7 +16,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
-- Destination disk free space is shown as a color-coded progress bar (green → amber → red as space runs low) in the desktop header and LAN web UI.
+- **Activity log** controls are on the **Videos** panel toolbar (Show/Hide/Dock log); the header always shows **Show log** or **Hide log** (no longer hidden when the log is open).
+- New installs open the activity log by default (dock under the queue); existing saved settings are unchanged.
 - **Show log** is its own header button (not fused with Settings/Exit); queue **Videos** dock/hide controls sit on a separate row from Pause/Export/Clear; docked activity log uses the same placement vs. toolbar split as the floating log window.
 - Import and export actions are grouped under an **Import/Export** dropdown (URL input, download queue, settings, and profiles) instead of separate toolbar buttons.
 - **Show log** moved to the top header (next to Settings) instead of above the download queue.

@@ -212,6 +212,11 @@ impl PydlApp {
         button_toolbar_wrapped(ui, |ui| self.draw_log_controls_inner(ui, false));
     }
 
+    /// Dock/undock/hide log — compact row in the Videos panel footer.
+    pub(super) fn draw_log_controls_compact(&mut self, ui: &mut egui::Ui) {
+        self.draw_log_controls_inner(ui, true);
+    }
+
     fn draw_log_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {

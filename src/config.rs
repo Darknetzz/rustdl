@@ -340,7 +340,7 @@ impl Default for AppSettings {
             video_float_height: default_video_float_height(),
             videos_dock_height: default_videos_dock_height(),
             logs_docked: true,
-            logs_open: false,
+            logs_open: true,
             log_dock_height: 180.0,
             log_float_width: default_log_float_width(),
             log_float_height: default_log_float_height(),

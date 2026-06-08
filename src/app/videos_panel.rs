@@ -324,6 +324,7 @@ impl PydlApp {
         left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
+            self.draw_log_controls_compact(ui);
         });
         left_button_row(ui, |ui| {
             if self.av1_mode {
@@ -440,6 +441,7 @@ impl PydlApp {
                     });
                     left_button_row(ui, |ui| {
                         self.draw_video_queue_controls(ui);
+                        self.draw_log_controls_compact(ui);
                     });
                     let show_status = if self.av1_mode {
                         !self.av1_items.is_empty()

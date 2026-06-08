@@ -652,23 +652,36 @@ impl PydlApp {
                                     self.open_web_ui_in_browser();
                                 }
                             }
-                            if !self.settings.logs_open {
-                                button_group(ui, "hdr_log", |g| {
+                            button_group(ui, "hdr_log", |g| {
+                                if self.settings.logs_open {
                                     if g
                                         .secondary(
-                                            &format!("{} Show log", ui_icons::LOGS),
+                                            &format!("{} Hide log", ui_icons::DISMISS),
                                             true,
                                         )
                                         .on_hover_text(
-                                            "Open the activity log (dock under the queue or in its own window)",
+                                            "Close the activity log (also in the Videos panel toolbar)",
                                         )
                                         .clicked()
                                     {
-                                        self.settings.logs_open = true;
+                                        self.settings.logs_open = false;
+                                        self.settings.logs_docked = false;
                                         self.persist_settings();
                                     }
-                                });
-                            }
+                                } else if g
+                                    .secondary(
+                                        &format!("{} Show log", ui_icons::LOGS),
+                                        true,
+                                    )
+                                    .on_hover_text(
+                                        "Open the activity log (dock under the queue or in its own window)",
+                                    )
+                                    .clicked()
+                                {
+                                    self.settings.logs_open = true;
+                                    self.persist_settings();
+                                }
+                            });
                             button_group(ui, "hdr_nav", |g| {
                                 if g
                                     .secondary(
