@@ -599,16 +599,27 @@ fn mode_panel_gradient_shape(rect: egui::Rect, left: Color32, right: Color32) ->
     Shape::mesh(mesh)
 }
 
-fn paint_mode_panel_background(
-    painter: &egui::Painter,
-    shape_idx: ShapeIdx,
-    rect: egui::Rect,
+struct ModePanelStyle {
     accent: Color32,
     panel: Color32,
     soft: Color32,
     rounding: egui::Rounding,
     stroke: Stroke,
+}
+
+fn paint_mode_panel_background(
+    painter: &egui::Painter,
+    shape_idx: ShapeIdx,
+    rect: egui::Rect,
+    style: &ModePanelStyle,
 ) {
+    let ModePanelStyle {
+        accent,
+        panel,
+        soft,
+        rounding,
+        stroke,
+    } = *style;
     let mut shapes = vec![Shape::rect_filled(rect, rounding, panel)];
     let fade_w = rect.width() * 0.28;
     if fade_w > 1.0 {
@@ -653,7 +664,13 @@ pub fn show_mode_panel<R>(
     let panel = panel_fill(theme);
     let soft = mode_soft_tint(accent, theme);
     let rounding = egui::Rounding::same(rounding);
-    let stroke = Stroke::new(1.0, border);
+    let style = ModePanelStyle {
+        accent,
+        panel,
+        soft,
+        rounding,
+        stroke: Stroke::new(1.0, border),
+    };
 
     egui::Frame::none()
         .inner_margin(inner_margin)
@@ -662,16 +679,7 @@ pub fn show_mode_panel<R>(
             let ret = add_contents(ui);
             let paint_rect = ui.min_rect() + inner_margin;
             if ui.is_rect_visible(paint_rect) {
-                paint_mode_panel_background(
-                    ui.painter(),
-                    bg_idx,
-                    paint_rect,
-                    accent,
-                    panel,
-                    soft,
-                    rounding,
-                    stroke,
-                );
+                paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
             }
             ret
         })
