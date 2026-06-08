@@ -3,16 +3,15 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, constrain_content_width, draw_labeled_meta_badge,
-    draw_meta_badge, draw_status_dot, left_button_row, status_color, status_dot_with_label,
-    MetaBadgeKind,
+    button_group, constrain_content_width, draw_labeled_meta_badge, draw_meta_badge,
+    draw_status_dot, left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
-use crate::config::AppSettings;
 use crate::av1_state::{
     av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
     av1_source_path_missing, compute_av1_batch_summary,
 };
 use crate::av1_transcode;
+use crate::config::AppSettings;
 use crate::models::{Av1QueueItem, ItemStatus};
 use crate::service::DownloadCore;
 use crate::theme;
@@ -245,7 +244,9 @@ impl PydlApp {
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
             .count();
-        let draw = |ui: &mut egui::Ui, id: &str, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+        let draw = |ui: &mut egui::Ui,
+                    id: &str,
+                    add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
                 crate::app_ui::compact_button_group(ui, id, |g| add(g));
             } else {
@@ -253,35 +254,29 @@ impl PydlApp {
             }
         };
         draw(ui, "av1_batch", &mut |g| {
-            if g
-                .success(
-                    &format!("{} Start AV1 batch", ui_icons::PLAY),
-                    !self.av1_running
-                        && self.has_ffmpeg
-                        && self.has_ffprobe
-                        && ready_count > 0,
-                )
-                .clicked()
+            if g.success(
+                &format!("{} Start AV1 batch", ui_icons::PLAY),
+                !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
+            )
+            .clicked()
             {
                 self.start_av1_batch();
             }
-            if g
-                .danger(
-                    &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
-                    self.av1_running,
-                )
-                .clicked()
+            if g.danger(
+                &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
+                self.av1_running,
+            )
+            .clicked()
             {
                 self.av1_core_action(|core| core.cancel_av1_batch());
             }
         });
         draw(ui, "av1_queue", &mut |g| {
-            if g
-                .secondary(
-                    &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
-                    !self.av1_running,
-                )
-                .clicked()
+            if g.secondary(
+                &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
+                !self.av1_running,
+            )
+            .clicked()
             {
                 self.clear_av1_queue();
             }
@@ -292,103 +287,103 @@ impl PydlApp {
         constrain_content_width(ui);
 
         ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("AV1 Converter").heading());
-                    ui.label(
-                        RichText::new("Near-parity mode for local video transcoding.")
-                            .small()
-                            .color(egui::Color32::GRAY),
-                    );
-                });
-                ui.separator();
-                ui.label("Input paths (file/folder, one per line)");
-                left_button_row(ui, |ui| {
-                    button_group(ui, "av1_input", |g| {
-                        if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true).clicked() {
-                            self.browse_av1_inputs();
-                        }
-                        if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true).clicked()
-                        {
-                            self.scan_av1_input_textbox();
-                        }
-                    });
-                });
-                ui.horizontal_wrapped(|ui| {
-                    let ready = self
-                        .av1_items
-                        .iter()
-                        .filter(|item| item.status == ItemStatus::Idle)
-                        .count();
-                    if ready > 0 {
-                        status_dot_with_label(
-                            ui,
-                            format!("{ready} ready"),
-                            status_color(ItemStatus::Idle),
-                            true,
-                        );
-                    }
-                });
-                // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
-                // there on scan / exit, so no per-keystroke save is needed here.
-                ui.add_sized(
-                    [ui.available_width(), 90.0],
-                    egui::TextEdit::multiline(&mut self.av1_input_paths)
-                        .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
+            ui.label(RichText::new("AV1 Converter").heading());
+            ui.label(
+                RichText::new("Near-parity mode for local video transcoding.")
+                    .small()
+                    .color(egui::Color32::GRAY),
+            );
+        });
+        ui.separator();
+        ui.label("Input paths (file/folder, one per line)");
+        left_button_row(ui, |ui| {
+            button_group(ui, "av1_input", |g| {
+                if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true)
+                    .clicked()
+                {
+                    self.browse_av1_inputs();
+                }
+                if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true)
+                    .clicked()
+                {
+                    self.scan_av1_input_textbox();
+                }
+            });
+        });
+        ui.horizontal_wrapped(|ui| {
+            let ready = self
+                .av1_items
+                .iter()
+                .filter(|item| item.status == ItemStatus::Idle)
+                .count();
+            if ready > 0 {
+                status_dot_with_label(
+                    ui,
+                    format!("{ready} ready"),
+                    status_color(ItemStatus::Idle),
+                    true,
                 );
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Session").strong());
-                    if ui
-                        .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
-                        .changed()
-                    {
-                        self.persist_settings();
-                    }
-                    if ui
-                        .checkbox(
-                            &mut self.settings.av1_auto_start_on_add,
-                            "Start batch when paths are added",
-                        )
-                        .on_hover_text(
-                            "Automatically run Start AV1 batch after Browse, Scan inputs, \
+            }
+        });
+        // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
+        // there on scan / exit, so no per-keystroke save is needed here.
+        ui.add_sized(
+            [ui.available_width(), 90.0],
+            egui::TextEdit::multiline(&mut self.av1_input_paths)
+                .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
+        );
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Session").strong());
+            if ui
+                .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
+                .changed()
+            {
+                self.persist_settings();
+            }
+            if ui
+                .checkbox(
+                    &mut self.settings.av1_auto_start_on_add,
+                    "Start batch when paths are added",
+                )
+                .on_hover_text(
+                    "Automatically run Start AV1 batch after Browse, Scan inputs, \
                              or drag-and-drop adds new ready items.",
-                        )
-                        .changed()
-                    {
-                        self.persist_settings();
-                    }
-                });
-                self.refresh_av1_encoder_detection();
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Encode settings").small());
-                    draw_av1_encode_settings_badges(ui, &self.settings, &self.settings.theme);
-                    if let Some(enc) = &self.av1_encoder_choice {
-                        status_dot_with_label(
-                            ui,
-                            av1_transcode::encoder_indicator_label(enc),
-                            av1_transcode::encoder_indicator_color(enc),
-                            true,
-                        );
-                    } else if !self.has_ffmpeg {
-                        status_dot_with_label(
-                            ui,
-                            "Encoder: ffmpeg not found",
-                            Color32::from_rgb(255, 193, 120),
-                            true,
-                        );
-                    }
-                });
-                left_button_row(ui, |ui| {
-                    button_group(ui, "av1_settings", |g| {
-                        if g.secondary(
-                            &format!("{} Edit in Settings", ui_icons::SETTINGS),
-                            true,
-                        )
-                        .clicked()
-                        {
-                            self.settings_open = true;
-                            self.settings_tab = super::SettingsTab::Av1;
-                        }
-                    });
-                });
+                )
+                .changed()
+            {
+                self.persist_settings();
+            }
+        });
+        self.refresh_av1_encoder_detection();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(RichText::new("Encode settings").small());
+            draw_av1_encode_settings_badges(ui, &self.settings, &self.settings.theme);
+            if let Some(enc) = &self.av1_encoder_choice {
+                status_dot_with_label(
+                    ui,
+                    av1_transcode::encoder_indicator_label(enc),
+                    av1_transcode::encoder_indicator_color(enc),
+                    true,
+                );
+            } else if !self.has_ffmpeg {
+                status_dot_with_label(
+                    ui,
+                    "Encoder: ffmpeg not found",
+                    Color32::from_rgb(255, 193, 120),
+                    true,
+                );
+            }
+        });
+        left_button_row(ui, |ui| {
+            button_group(ui, "av1_settings", |g| {
+                if g.secondary(&format!("{} Edit in Settings", ui_icons::SETTINGS), true)
+                    .clicked()
+                {
+                    self.settings_open = true;
+                    self.settings_tab = super::SettingsTab::Av1;
+                }
+            });
+        });
     }
 
     pub(super) fn draw_av1_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
@@ -668,11 +663,8 @@ impl PydlApp {
             .as_ref()
             .map(|enc| enc.codec)
             .unwrap_or("av1");
-        let will_skip_av1 = av1_item_will_skip_already_av1(
-            it,
-            self.settings.av1_reencode_av1,
-            output_codec,
-        );
+        let will_skip_av1 =
+            av1_item_will_skip_already_av1(it, self.settings.av1_reencode_av1, output_codec);
         let fill = if done {
             theme::done_card_fill(theme)
         } else {
@@ -707,14 +699,11 @@ impl PydlApp {
                             Color32::WHITE,
                         );
                     } else if av1_source_path_missing(&it.source_path) {
-                        ui.allocate_new_ui(
-                            egui::UiBuilder::new().max_rect(thumb_rect),
-                            |ui| {
-                                ui.centered_and_justified(|ui| {
-                                    draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
-                                });
-                            },
-                        );
+                        ui.allocate_new_ui(egui::UiBuilder::new().max_rect(thumb_rect), |ui| {
+                            ui.centered_and_justified(|ui| {
+                                draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                            });
+                        });
                     } else {
                         let center_msg = if !self.has_ffmpeg {
                             "ffmpeg not found"

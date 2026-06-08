@@ -10,6 +10,25 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- Startup warning banner when settings, queue, profiles, or activity log JSON fails to parse (original file renamed to `.bak` when possible); same warnings in activity log, `--web-only` stderr, and LAN `/api/status`.
+- Layout QA checklist in `AGENTS.md` for docked/floating queue and log panels.
+
+### Changed
+
+- Desktop download control (Start, Pause, Resume, Retry, Redo, cancel) now goes through the shared `DownloadCore` service (same path as the LAN web UI) instead of duplicate GUI-only logic.
+- GUI↔core sync skips full queue clones when core generation is unchanged; patches queue rows in place when the generation bumps.
+- README documents LAN AV1 converter support, desktop-only web gaps, expanded Download settings (cookies, archive, proxy, speed limit), and `--download` CLI limitations.
+- Tool version labels show **unknown** when a binary is found but its version probe fails.
+- Settings → Shared shows a clearer note when LAN bind address uses `0.0.0.0`.
+
+### Fixed
+
+- Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
+
+## [0.1.3] - 2026-06-08
+
+### Added
+
 - **LAN web UI** (Settings → Shared): optional HTTP server with token auth, REST API, SSE progress stream, and embedded web pages to control the downloader queue from other devices on the local network.
 - LAN web UI: **Quit** button to gracefully shut down rustdl (cancels active jobs, saves queue/settings; closes the desktop app or stops `--web-only`).
 - AV1 Converter: undock the encode queue to a floating window (same controls as Downloader **Videos**).

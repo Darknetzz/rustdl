@@ -726,10 +726,7 @@ where
         cmd.args(["-tag:v", "hvc1"]);
     }
     append_encoder_rate_control(&mut cmd, enc.hw_type, target_bitrate_bps);
-    cmd.arg("-c:a")
-        .arg("libopus")
-        .arg("-b:a")
-        .arg("64k");
+    cmd.arg("-c:a").arg("libopus").arg("-b:a").arg("64k");
     append_container_mux_args(&mut cmd, &plan.output, enc);
     cmd.arg(&plan.output)
         .stdout(Stdio::piped())

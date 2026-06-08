@@ -45,13 +45,12 @@ use crate::app_icon;
 use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob};
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
-    alert_danger, alert_warning, button_group, centered_button_row,
-    content_panel_frame, modal_backdrop, status_color, NavbarStatusInputs,
-    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    alert_danger, alert_warning, button_group, centered_button_row, content_panel_frame,
+    modal_backdrop, status_color, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,
-    save_settings, trim_activity_log, AppSettings,
+    save_settings, trim_activity_log, AppSettings, ConfigLoadIssue,
 };
 use crate::models::Av1QueueItem;
 use crate::models::{ItemStatus, QueueItem};
@@ -224,6 +223,9 @@ pub struct PydlApp {
     win_browser_drop_target_installed: bool,
     #[cfg(windows)]
     win_browser_drop_target_setup_attempted: bool,
+    /// Startup parse failures for user JSON (settings, queue, profiles, log).
+    config_load_issues: Vec<ConfigLoadIssue>,
+    config_load_banner_dismissed: bool,
 }
 
 impl PydlApp {
@@ -239,7 +241,16 @@ impl PydlApp {
         }
         theme::apply_ui_theme(&cc.egui_ctx, &settings.theme);
         let profile_store = load_profiles();
-        let log_lines = load_activity_log(settings.log_max_chars);
+        let mut log_lines = load_activity_log(settings.log_max_chars);
+        let config_load_issues = shared_core.lock().config_load_issues.clone();
+        for issue in &config_load_issues {
+            let msg = format!(
+                "Could not load {} from {} — using defaults (original saved as .bak).",
+                issue.label,
+                issue.path.display()
+            );
+            log_lines.push_back(crate::time_format::format_log_line(&msg));
+        }
         let mut restored_items = shared_core.lock().items.clone();
         for it in &mut restored_items {
             normalize_restored_item(it);
@@ -369,6 +380,8 @@ impl PydlApp {
             win_browser_drop_target_installed: false,
             #[cfg(windows)]
             win_browser_drop_target_setup_attempted: false,
+            config_load_issues,
+            config_load_banner_dismissed: false,
         };
         app.restored_items_count = app.items.len();
         app.show_restore_banner = app.restored_items_count > 0;
@@ -497,6 +510,7 @@ impl PydlApp {
             }
         }
         self.schedule_queue_save();
+        self.mark_queue_dirty();
     }
 
     pub(super) fn sync_theme_if_needed(&mut self, ctx: &egui::Context) {
@@ -640,17 +654,20 @@ impl PydlApp {
         self.has_ffmpeg = ffm;
         self.has_ffprobe = ffp;
         self.yt_dlp_version = if yt {
-            ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path).unwrap_or_default()
+            ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
         self.ffmpeg_version = if ffm {
-            ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path).unwrap_or_default()
+            ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
         self.ffprobe_version = if ffp {
-            ytdlp::read_ffprobe_version(&self.settings.ffprobe_path).unwrap_or_default()
+            ytdlp::read_ffprobe_version(&self.settings.ffprobe_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
@@ -808,11 +825,7 @@ impl PydlApp {
             return;
         }
         let Some(space) = self.output_disk_space.as_ref() else {
-            ui.label(
-                RichText::new("Destination disk: …")
-                    .small()
-                    .color(muted),
-            );
+            ui.label(RichText::new("Destination disk: …").small().color(muted));
             return;
         };
         let level = space.level();
@@ -1484,6 +1497,29 @@ impl PydlApp {
             || self.status_active > 0
             || self.queue_running > 0
             || self.av1_running
+    }
+
+    pub(super) fn draw_config_load_banner(&mut self, ui: &mut egui::Ui) {
+        if self.config_load_banner_dismissed || self.config_load_issues.is_empty() {
+            return;
+        }
+        alert_warning(ui, |ui| {
+            ui.label(RichText::new("Some saved data could not be loaded:").strong());
+            for issue in &self.config_load_issues {
+                ui.label(format!("• {} — {}", issue.label, issue.path.display()));
+            }
+            ui.label(
+                RichText::new("Defaults are in use; originals were renamed to .bak when possible.")
+                    .small(),
+            );
+            if ui
+                .button(format!("{} Dismiss", ui_icons::DISMISS))
+                .clicked()
+            {
+                self.config_load_banner_dismissed = true;
+            }
+        });
+        ui.add_space(4.0);
     }
 
     fn open_exit_confirm(&mut self) {

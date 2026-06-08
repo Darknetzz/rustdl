@@ -102,6 +102,7 @@ impl eframe::App for PydlApp {
                 constrain_content_width(ui);
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
+                self.draw_config_load_banner(ui);
                 let (dl_nav, av1_nav) =
                     draw_mode_nav_bar(ui, &self.settings.theme, !self.av1_mode, self.av1_mode);
                 if dl_nav {
@@ -732,11 +733,7 @@ impl PydlApp {
     }
 }
 
-fn downloader_options_collapsing_label(
-    output_dir: &str,
-    profile: &str,
-    expanded: bool,
-) -> String {
+fn downloader_options_collapsing_label(output_dir: &str, profile: &str, expanded: bool) -> String {
     if expanded {
         return "Download options".to_owned();
     }

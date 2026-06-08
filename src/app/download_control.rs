@@ -1,371 +1,79 @@
-use std::fs;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use crate::models::QueueItem;
+use crate::service::core::DownloadCore;
 
-use crate::models::{ItemStatus, QueueItem};
-use crate::ytdlp;
-use crate::ytdlp_download_args::{
-    build_redownload_extra_args, output_filename_template, remove_video_ids_from_download_archive,
-};
-
-use super::background_spawn;
+use super::core_sync;
 use super::{CancelPostAction, PydlApp};
 
 impl PydlApp {
-    pub(super) fn pause_all_downloads(&mut self) {
-        if self.downloads_paused {
-            return;
+    /// Push editable GUI fields into the shared core, run an action, then mirror core state back.
+    pub(super) fn download_core_action(&mut self, f: impl FnOnce(&mut DownloadCore)) {
+        let shared = self.shared_core.clone();
+        {
+            let mut core = shared.lock();
+            core_sync::sync_app_to_core(self, &mut core);
+            f(&mut core);
         }
-        self.downloads_paused = true;
-        self.cancel_all_active(CancelPostAction::Ready);
-        self.append_log("Downloads paused (active items moved back to ready).");
-    }
-
-    pub(super) fn resume_all_downloads(&mut self) {
-        if !self.downloads_paused {
-            return;
-        }
-        self.downloads_paused = false;
-        self.session_complete_notified = false;
-        self.append_log("Downloads resumed.");
-        self.start_downloads();
-    }
-
-    fn collect_idle_download_item_ids(&self) -> Vec<u64> {
-        let mut ids: Vec<(u64, u64)> = self
-            .items
-            .iter()
-            .filter(|it| it.status == ItemStatus::Idle && it.error.is_none())
-            .map(|it| {
-                let order = if it.sort_order == 0 {
-                    it.item_id
-                } else {
-                    it.sort_order
-                };
-                (order, it.item_id)
-            })
-            .collect();
-        ids.sort_by_key(|(order, _)| *order);
-        ids.into_iter().map(|(_, id)| id).collect()
-    }
-
-    pub(super) fn spawn_download_workers(&mut self, pending_ids: Vec<u64>, force_redownload: bool) {
-        if self.downloads_paused {
-            self.append_log("Downloads are paused. Click Resume to continue.");
-            return;
-        }
-        if pending_ids.is_empty() {
-            self.append_log("Nothing to download.");
-            return;
-        }
-        self.session_complete_notified = false;
-
-        for id in &pending_ids {
-            if let Some(idx) = self.item_idx(*id) {
-                self.set_item_status_at(idx, ItemStatus::Queued);
-                self.items[idx].detail = "Queued".to_owned();
-            }
-        }
-        self.update_status();
-        self.schedule_queue_save();
-
-        let mut groups = vec![Vec::<u64>::new(); self.worker_count.max(1)];
-        let groups_len = groups.len();
-        for (idx, iid) in pending_ids.into_iter().enumerate() {
-            groups[idx % groups_len].push(iid);
-        }
-        let download_args = if force_redownload {
-            build_redownload_extra_args(&self.settings)
-        } else {
-            self.download_extra_args()
-        };
-        let yt_dlp_bin = self.yt_dlp_bin();
-        let ffmpeg_bin = self.ffmpeg_bin();
-        let output_template = output_filename_template(&self.settings);
-
-        for ids in groups.into_iter().filter(|g| !g.is_empty()) {
-            self.queue_running += 1;
-            let urls = ids
-                .iter()
-                .filter_map(|iid| {
-                    self.items.iter().find(|x| x.item_id == *iid).and_then(|x| {
-                        let target_url = crate::app_state::resolve_item_download_url(x)?;
-                        let cancel_flag = self
-                            .download_cancel_flags
-                            .entry(*iid)
-                            .or_insert_with(|| Arc::new(AtomicBool::new(false)))
-                            .clone();
-                        Some((*iid, target_url, cancel_flag))
-                    })
-                })
-                .collect::<Vec<_>>();
-            background_spawn::spawn_download_worker(
-                &self.runtime,
-                &self.ui_bus,
-                self.output_dir.clone(),
-                output_template.clone(),
-                download_args.clone(),
-                yt_dlp_bin.clone(),
-                ffmpeg_bin.clone(),
-                urls,
-            );
+        {
+            let core = shared.lock();
+            core_sync::sync_core_to_app(&core, self);
         }
     }
 
-    pub(super) fn start_downloads(&mut self) {
-        if self.downloads_paused {
-            self.append_log("Downloads are paused. Click Resume first.");
-            return;
-        }
-        if self.items.is_empty() {
-            self.append_log("Add URLs first.");
-            return;
-        }
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        self.persist_settings();
-        let pending_ids = self.collect_idle_download_item_ids();
-        self.spawn_download_workers(pending_ids, false);
-    }
-
-    pub(super) fn remove_item_by_id(&mut self, item_id: u64) -> bool {
-        let Some(idx) = self.item_idx(item_id) else {
-            return false;
-        };
-        let item = self.items[idx].clone();
-        if self.items[idx].status == ItemStatus::Resolving {
-            self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
-        }
-        self.on_item_removed(&item);
-        self.items.remove(idx);
+    fn cleanup_item_gui_state(&mut self, item_id: u64) {
         self.textures.remove(&item_id);
         self.thumbnail_attempted.remove(&item_id);
         self.thumbnail_inflight.remove(&item_id);
-        self.download_cancel_flags.remove(&item_id);
-        self.cancel_post_actions.remove(&item_id);
-        self.invalidate_queue_caches();
-        self.mark_queue_dirty();
-        true
+        self.selected_item_ids.remove(&item_id);
+    }
+
+    pub(super) fn pause_all_downloads(&mut self) {
+        self.download_core_action(|core| core.pause_all_downloads());
+    }
+
+    pub(super) fn resume_all_downloads(&mut self) {
+        self.download_core_action(|core| core.resume_all_downloads());
+    }
+
+    pub(super) fn start_downloads(&mut self) {
+        self.download_core_action(|core| core.start_downloads());
+    }
+
+    pub(super) fn remove_item_by_id(&mut self, item_id: u64) -> bool {
+        let mut removed = false;
+        self.download_core_action(|core| {
+            removed = core.remove_item_by_id(item_id);
+        });
+        if removed {
+            self.cleanup_item_gui_state(item_id);
+            self.refresh_input_line_info();
+        }
+        removed
     }
 
     pub(super) fn request_cancel_item(&mut self, item_id: u64, post_action: CancelPostAction) {
-        let Some(idx) = self.item_idx(item_id) else {
-            return;
-        };
-        match self.items[idx].status {
-            ItemStatus::Queued => {
-                self.cancel_post_actions.remove(&item_id);
-                if matches!(post_action, CancelPostAction::Remove) {
-                    let _ = self.remove_item_by_id(item_id);
-                    self.append_log(&format!(
-                        "[item {item_id}] Cancelled and removed from queue."
-                    ));
-                } else {
-                    self.set_item_status_at(idx, ItemStatus::Idle);
-                    let it = &mut self.items[idx];
-                    it.percent = 0.0;
-                    it.speed_text = "-".to_owned();
-                    it.eta_text = "-".to_owned();
-                    it.detail = "Cancelled (ready)".to_owned();
-                    self.append_log(&format!(
-                        "[item {item_id}] Cancelled and moved back to ready."
-                    ));
-                }
-                self.download_cancel_flags.remove(&item_id);
-            }
-            ItemStatus::Downloading => {
-                if let Some(flag) = self.download_cancel_flags.get(&item_id) {
-                    flag.store(true, Ordering::Relaxed);
-                } else {
-                    self.download_cancel_flags
-                        .insert(item_id, Arc::new(AtomicBool::new(true)));
-                }
-                self.cancel_post_actions.insert(item_id, post_action);
-                self.items[idx].detail = match post_action {
-                    CancelPostAction::Ready => "Cancelling… will return to ready".to_owned(),
-                    CancelPostAction::Remove => "Cancelling… will remove row".to_owned(),
-                };
-                self.append_log(&format!("[item {item_id}] Cancel requested."));
-            }
-            _ => return,
-        }
-        self.update_status();
+        self.download_core_action(|core| core.request_cancel_item(item_id, post_action));
         self.refresh_input_line_info();
-        self.schedule_queue_save();
-        self.mark_queue_dirty();
     }
 
     pub(super) fn cancel_all_active(&mut self, post_action: CancelPostAction) {
-        let ids: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|it| matches!(it.status, ItemStatus::Queued | ItemStatus::Downloading))
-            .map(|it| it.item_id)
-            .collect();
-        if ids.is_empty() {
-            self.append_log("No active queued/downloading items to cancel.");
-            return;
-        }
-        for item_id in &ids {
-            self.request_cancel_item(*item_id, post_action);
-        }
-        self.append_log(&format!("Cancel requested for {} item(s).", ids.len()));
+        self.download_core_action(|core| core.cancel_all_active(post_action));
     }
 
     pub(super) fn item_has_redownload_target(&self, item: &QueueItem) -> bool {
         crate::app_state::item_has_redownload_target(item)
     }
 
-    fn prepare_item_redownload_reset(&mut self, item_id: u64) {
-        let Some(idx) = self.item_idx(item_id) else {
-            return;
-        };
-        let item = self.items[idx].clone();
-        self.items[idx].local_path = None;
-        let path_to_remove = self
-            .find_downloaded_file_for_item(&item)
-            .or_else(|| self.done_file_index.find_path_in_index(&item))
-            .map(|(p, _)| p);
-        if let Some(path) = path_to_remove {
-            if let Err(e) = fs::remove_file(&path) {
-                self.append_log(&format!(
-                    "Could not remove old file {}: {e}",
-                    path.to_string_lossy()
-                ));
-            } else {
-                self.append_log(&format!("Removed old file: {}", path.to_string_lossy()));
-            }
-            self.done_file_index.force_refresh();
-            self.refresh_done_file_lookup();
-        }
-        let archive = self.settings.yt_download_archive.trim();
-        if !archive.is_empty() {
-            let mut ids = Vec::new();
-            if !item.video_id.trim().is_empty() {
-                ids.push(item.video_id.trim().to_owned());
-            }
-            for url in [item.webpage_url.as_str(), item.source_line.as_str()] {
-                let key = ytdlp::normalize_url_for_dedupe(url);
-                if let Some(id) = ytdlp::youtube_id_from_dedupe_key(&key) {
-                    if !ids.iter().any(|x| x == &id) {
-                        ids.push(id);
-                    }
-                }
-            }
-            match remove_video_ids_from_download_archive(archive, &ids) {
-                Ok(true) => {
-                    self.append_log("Removed video from download archive (re-download).");
-                }
-                Ok(false) => {}
-                Err(e) => {
-                    self.append_log(&format!("Could not update download archive: {e}"));
-                }
-            }
-        }
-        {
-            let it = &mut self.items[idx];
-            it.error = None;
-            it.percent = 0.0;
-            it.size_text = "-".to_owned();
-            it.speed_text = "-".to_owned();
-            it.eta_text = "-".to_owned();
-            it.detail = "Re-downloading…".to_owned();
-        }
-        self.set_item_status_at(idx, ItemStatus::Idle);
-        self.mark_queue_dirty();
-    }
-
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        let Some(idx) = self.item_idx(item_id) else {
-            return;
-        };
-        if !self.item_has_redownload_target(&self.items[idx]) {
-            self.append_log(&format!(
-                "[item {item_id}] Cannot re-download: no video URL on this row."
-            ));
-            return;
-        }
-        self.persist_settings();
-        self.refresh_done_file_lookup();
-        self.prepare_item_redownload_reset(item_id);
-        self.refresh_done_file_lookup();
-        self.update_status();
-        self.schedule_queue_save();
-        self.spawn_download_workers(vec![item_id], true);
-        self.mark_queue_dirty();
+        self.download_core_action(|core| {
+            let _ = core.redownload_item_id(item_id);
+        });
     }
 
     pub(super) fn retry_download_item_id(&mut self, item_id: u64) {
-        let Some(idx) = self.item_idx(item_id) else {
-            return;
-        };
-        if self.items[idx].status != ItemStatus::Failed {
-            return;
-        }
-        self.redownload_item_id(item_id);
+        self.download_core_action(|core| core.retry_download_item_id(item_id));
     }
 
     pub(super) fn retry_failed_items(&mut self) {
-        if !Path::new(&self.output_dir).is_dir() {
-            self.append_log("Choose a valid output folder.");
-            return;
-        }
-        let (has_yt, _, _) = ytdlp::get_external_tools_with_paths(
-            &self.settings.yt_dlp_path,
-            &self.settings.ffmpeg_path,
-            &self.settings.ffprobe_path,
-        );
-        if !has_yt {
-            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
-            self.refresh_deps();
-            return;
-        }
-        let failed_no_url = self
-            .items
-            .iter()
-            .filter(|it| it.status == ItemStatus::Failed && !self.item_has_redownload_target(it))
-            .count();
-        let ids: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|it| it.status == ItemStatus::Failed && self.item_has_redownload_target(it))
-            .map(|it| it.item_id)
-            .collect();
-        if ids.is_empty() {
-            if self.status_failed > 0 {
-                self.append_log(
-                    "No failed items have a video URL to retry. Check the row or re-add the link.",
-                );
-            } else {
-                self.append_log("No failed downloads to retry.");
-            }
-            return;
-        }
-        self.persist_settings();
-        self.refresh_done_file_lookup();
-        for id in &ids {
-            self.prepare_item_redownload_reset(*id);
-        }
-        self.refresh_done_file_lookup();
-        self.update_status();
-        self.schedule_queue_save();
-        self.append_log(&format!(
-            "Retrying {} failed download(s).{}",
-            ids.len(),
-            if failed_no_url > 0 {
-                format!(" Skipped {failed_no_url} without a URL.")
-            } else {
-                String::new()
-            }
-        ));
-        self.spawn_download_workers(ids, true);
-        self.mark_queue_dirty();
+        self.download_core_action(|core| core.retry_failed_items());
     }
 }

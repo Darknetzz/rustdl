@@ -6,7 +6,10 @@ use egui::layers::ShapeIdx;
 
 use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
-use crate::theme::{mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_AV1, MODE_DOWNLOADER};
+use crate::theme::{
+    mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_AV1,
+    MODE_DOWNLOADER,
+};
 use crate::ui_icons;
 
 /// Text color for the free-space figure (green → amber → red by [`DiskSpaceLevel`]).
@@ -52,8 +55,7 @@ pub fn draw_disk_space_progress_bar(
     let fraction = (percent_free / 100.0).clamp(0.0, 1.0) as f32;
     let height = 12.0;
     let rounding = height * 0.5;
-    let (rect, response) =
-        ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+    let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
 
     let track = disk_space_bar_track_color(ui);
     let fill_color = disk_space_bar_fill_color(level);
@@ -63,16 +65,18 @@ pub fn draw_disk_space_progress_bar(
 
     if fraction > 0.0 {
         let fill_w = (rect.width() * fraction)
-            .max(if fraction >= 1.0 { rect.width() } else { rounding * 2.0 })
+            .max(if fraction >= 1.0 {
+                rect.width()
+            } else {
+                rounding * 2.0
+            })
             .min(rect.width());
         let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_w, rect.height()));
         ui.painter().rect_filled(fill_rect, rounding, fill_color);
 
         let pct_text = format!("{:.0}%", percent_free);
         let font = egui::FontId::proportional(10.0);
-        let galley = ui
-            .painter()
-            .layout_no_wrap(pct_text, font, label_color);
+        let galley = ui.painter().layout_no_wrap(pct_text, font, label_color);
         let text_home = if fill_w >= galley.size().x + 6.0 {
             fill_rect
         } else {
@@ -141,9 +145,7 @@ pub fn status_chip_icon(status: ItemStatus) -> &'static str {
 /// Label color on status chips (matches web `.status-chip` light backgrounds).
 pub fn status_chip_text_color(status: ItemStatus) -> Color32 {
     match status {
-        ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Done => {
-            Color32::from_rgb(26, 26, 26)
-        }
+        ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Done => Color32::from_rgb(26, 26, 26),
         _ => Color32::WHITE,
     }
 }
@@ -255,15 +257,14 @@ pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
 fn navbar_status_colors(slug: NavbarStatusSlug) -> (Color32, Color32, Color32) {
     let (text, dot) = match slug {
         NavbarStatusSlug::Idle => (Color32::GRAY, Color32::GRAY),
-        NavbarStatusSlug::Adding | NavbarStatusSlug::Resolving => {
-            (Color32::from_rgb(120, 144, 156), Color32::from_rgb(120, 144, 156))
-        }
-        NavbarStatusSlug::Queued | NavbarStatusSlug::Paused | NavbarStatusSlug::Shutdown => {
-            (
-                Color32::from_rgb(255, 193, 7),
-                Color32::from_rgb(255, 193, 7),
-            )
-        }
+        NavbarStatusSlug::Adding | NavbarStatusSlug::Resolving => (
+            Color32::from_rgb(120, 144, 156),
+            Color32::from_rgb(120, 144, 156),
+        ),
+        NavbarStatusSlug::Queued | NavbarStatusSlug::Paused | NavbarStatusSlug::Shutdown => (
+            Color32::from_rgb(255, 193, 7),
+            Color32::from_rgb(255, 193, 7),
+        ),
         NavbarStatusSlug::Downloading => (
             Color32::from_rgb(66, 165, 245),
             Color32::from_rgb(66, 165, 245),
@@ -273,12 +274,7 @@ fn navbar_status_colors(slug: NavbarStatusSlug) -> (Color32, Color32, Color32) {
             Color32::from_rgb(171, 71, 188),
         ),
     };
-    let border = Color32::from_rgba_unmultiplied(
-        dot.r(),
-        dot.g(),
-        dot.b(),
-        (255.0 * 0.35) as u8,
-    );
+    let border = Color32::from_rgba_unmultiplied(dot.r(), dot.g(), dot.b(), (255.0 * 0.35) as u8);
     (text, dot, border)
 }
 
@@ -312,12 +308,7 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 5.0;
                 draw_status_dot(ui, fade_color(dot_color, dot_alpha));
-                ui.label(
-                    RichText::new(info.label)
-                        .small()
-                        .strong()
-                        .color(text_color),
-                );
+                ui.label(RichText::new(info.label).small().strong().color(text_color));
             })
         })
         .response
@@ -562,11 +553,7 @@ fn colored_button(
 ) -> Response {
     let label = label.into();
     let (fill, stroke, text) = if enabled {
-        (
-            bg_fill,
-            stroke,
-            text_color,
-        )
+        (bg_fill, stroke, text_color)
     } else {
         (
             shade(bg_fill, 0.45),
@@ -785,6 +772,26 @@ pub fn consume_remaining_ui_space(ui: &mut egui::Ui) {
     }
 }
 
+/// Returns `(width, height)` when a resizable floating window should persist a new size.
+pub fn persist_resizable_window_size(
+    pointer_down: bool,
+    size: egui::Vec2,
+    min: egui::Vec2,
+    max: egui::Vec2,
+    current: (f32, f32),
+) -> Option<(f32, f32)> {
+    if pointer_down || !size.x.is_finite() || !size.y.is_finite() {
+        return None;
+    }
+    if size.x < min.x || size.y < min.y || size.x > max.x || size.y > max.y {
+        return None;
+    }
+    if (current.0 - size.x).abs() <= 0.5 && (current.1 - size.y).abs() <= 0.5 {
+        return None;
+    }
+    Some((size.x, size.y))
+}
+
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
 pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
     let y = ui.cursor().min.y;
@@ -887,11 +894,7 @@ pub fn draw_mode_nav_bar(
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
-                        let dl_text = if dl_active {
-                            Color32::WHITE
-                        } else {
-                            muted
-                        };
+                        let dl_text = if dl_active { Color32::WHITE } else { muted };
                         let dl_label = RichText::new(format!(
                             "{} Downloader",
                             crate::ui_icons::NAV_DOWNLOADER
@@ -913,18 +916,12 @@ pub fn draw_mode_nav_bar(
                         if dl.clicked() {
                             dl_clicked = true;
                         }
-                        let av1_text = if av1_active {
-                            Color32::WHITE
-                        } else {
-                            muted
-                        };
-                        let av1_label = RichText::new(format!(
-                            "{} AV1 Converter",
-                            crate::ui_icons::NAV_AV1
-                        ))
-                        .color(av1_text)
-                        .size(14.0)
-                        .strong();
+                        let av1_text = if av1_active { Color32::WHITE } else { muted };
+                        let av1_label =
+                            RichText::new(format!("{} AV1 Converter", crate::ui_icons::NAV_AV1))
+                                .color(av1_text)
+                                .size(14.0)
+                                .strong();
                         let av1 = ui.add_sized(
                             [btn_w, 34.0],
                             egui::Button::new(av1_label)
@@ -1107,7 +1104,12 @@ fn grouped_button_label(label: &str, compact: bool) -> RichText {
     }
 }
 
-fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
+fn grouped_secondary_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    enabled: bool,
+    compact: bool,
+) -> Response {
     let bg = Color32::from_rgb(30, 136, 229);
     colored_button(
         ui,
@@ -1120,7 +1122,12 @@ fn grouped_secondary_button(ui: &mut egui::Ui, label: &str, enabled: bool, compa
     )
 }
 
-fn grouped_success_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
+fn grouped_success_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    enabled: bool,
+    compact: bool,
+) -> Response {
     let bg = Color32::from_rgb(46, 125, 50);
     colored_button(
         ui,
@@ -1146,7 +1153,12 @@ fn grouped_danger_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact:
     )
 }
 
-fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact: bool) -> Response {
+fn grouped_warning_button(
+    ui: &mut egui::Ui,
+    label: &str,
+    enabled: bool,
+    compact: bool,
+) -> Response {
     let bg = Color32::from_rgb(245, 124, 0);
     colored_button(
         ui,
@@ -1158,7 +1170,6 @@ fn grouped_warning_button(ui: &mut egui::Ui, label: &str, enabled: bool, compact
         grouped_button_stroke(),
     )
 }
-
 
 /// Bootstrap-style fused buttons (shared edges, no dividers).
 pub struct ButtonGroup<'a> {
@@ -1378,14 +1389,20 @@ mod tests {
     #[test]
     fn main_column_split_undocked_uses_full_height() {
         let split = compute_main_column_split(600.0, false, false, false, false, 120.0);
-        assert_eq!(split.controls_max_height, (500.0_f32).max(MIN_CONTROLS_SCROLL_H));
+        assert_eq!(
+            split.controls_max_height,
+            (500.0_f32).max(MIN_CONTROLS_SCROLL_H)
+        );
         assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H);
     }
 
     #[test]
     fn main_column_split_undocked_reserves_docked_log() {
         let split = compute_main_column_split(600.0, false, false, true, false, 120.0);
-        assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H + 120.0 + DOCKED_LOG_CHROME_H);
+        assert_eq!(
+            split.footer_height,
+            UNDOCKED_VIDEOS_STRIP_H + 120.0 + DOCKED_LOG_CHROME_H
+        );
         assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
     }
 

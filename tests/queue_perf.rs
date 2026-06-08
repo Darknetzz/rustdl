@@ -42,3 +42,25 @@ fn transfer_totals_empty_when_no_progress_text() {
     let totals = compute_transfer_totals(&items);
     assert_eq!(totals.with_known_total, 0);
 }
+
+#[test]
+fn synthetic_500_item_index_rebuild() {
+    let items = synthetic_queue_items(500);
+    let map = rebuild_item_index_map(&items);
+    assert_eq!(map.len(), 500);
+}
+
+#[test]
+#[ignore = "manual perf check; run with `cargo test --ignored synthetic_500_item_index_rebuild_bench`"]
+fn synthetic_500_item_index_rebuild_bench() {
+    use std::time::Instant;
+
+    let items = synthetic_queue_items(500);
+    let t0 = Instant::now();
+    for _ in 0..50 {
+        let _ = rebuild_item_index_map(&items);
+    }
+    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+    eprintln!("rustdl perf: 50x index rebuild at N=500 in {ms:.1}ms");
+    assert!(ms < 500.0, "index rebuild too slow: {ms:.1}ms");
+}

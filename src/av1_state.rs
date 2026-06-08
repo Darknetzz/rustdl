@@ -22,7 +22,10 @@ pub fn av1_source_path_missing(source_path: &str) -> bool {
 
 /// True when the input file is already AV1 (matches ffprobe / yt-dlp style names).
 pub fn is_av1_video_codec(codec: &str) -> bool {
-    let c = codec.trim().to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
+    let c = codec
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['.', '-', ' ', '_'], "");
     c == "av1" || c.contains("av01")
 }
 

@@ -624,6 +624,7 @@ impl PydlApp {
                         .id_salt(format!("rustdl_list_{label}"))
                         .max_height(max_h)
                         .auto_shrink([false, true])
+                        // show_rows virtualizes list rows for large Ready/Issues groups.
                         .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
                             for row in row_range {
                                 if let Some(item_id) = ids.get(row) {

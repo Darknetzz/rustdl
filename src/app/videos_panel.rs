@@ -5,8 +5,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, constrain_content_width, consume_remaining_ui_space, content_width,
-    draw_status_dot, fill_allocated_rect, left_button_row, remaining_ui_height, show_mode_panel,
-    status_color, with_full_width,
+    draw_status_dot, fill_allocated_rect, left_button_row, persist_resizable_window_size,
+    remaining_ui_height, show_mode_panel, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -29,6 +29,36 @@ const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     top: 6.0,
     bottom: 6.0,
 };
+
+/// Shared layout parameters for docked and floating video queue panels.
+struct VideosQueueLayout<'a> {
+    scroll_id: &'a str,
+    dock_log: bool,
+}
+
+impl VideosQueueLayout<'_> {
+    fn min_list_height(&self) -> f32 {
+        if self.scroll_id.contains("dock") {
+            DOCKED_QUEUE_LIST_MIN_H
+        } else {
+            80.0
+        }
+    }
+
+    fn bottom_reserve(&self) -> f32 {
+        let log_bar = if self.dock_log {
+            DOCKED_LOG_UNDER_VIDEOS_CHROME
+        } else {
+            0.0
+        };
+        let log_lines_reserve = if self.dock_log {
+            DOCKED_LOG_MIN_LINES_H
+        } else {
+            0.0
+        };
+        QUEUE_FOOTER_TOOLBAR_RESERVE + log_bar + log_lines_reserve + 4.0
+    }
+}
 
 fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
     (outer_h - margin.top - margin.bottom).max(80.0)
@@ -104,12 +134,11 @@ impl PydlApp {
         let mut import_queue = false;
         draw(ui, &mut |g| {
             if self.downloads_paused {
-                if g
-                    .success(
-                        &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
-                        true,
-                    )
-                    .clicked()
+                if g.success(
+                    &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                    true,
+                )
+                .clicked()
                 {
                     self.resume_all_downloads();
                 }
@@ -122,41 +151,35 @@ impl PydlApp {
             {
                 self.pause_all_downloads();
             }
-            if g
-                .secondary(
-                    &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                    true,
-                )
-                .clicked()
+            if g.secondary(
+                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                true,
+            )
+            .clicked()
             {
                 self.open_output_folder();
             }
-            g.import_export_menu(
-                !self.items.is_empty() || !self.add_in_progress,
-                |ui| {
-                    if ui
-                        .add_enabled(
-                            !self.items.is_empty(),
-                            egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
-                        )
-                        .clicked()
-                    {
-                        export_queue = true;
-                    }
-                    if ui
-                        .add_enabled(
-                            !self.add_in_progress,
-                            egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
-                        )
-                        .on_hover_text(
-                            "Load URLs from a .txt file directly into the download queue",
-                        )
-                        .clicked()
-                    {
-                        import_queue = true;
-                    }
-                },
-            );
+            g.import_export_menu(!self.items.is_empty() || !self.add_in_progress, |ui| {
+                if ui
+                    .add_enabled(
+                        !self.items.is_empty(),
+                        egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
+                    )
+                    .clicked()
+                {
+                    export_queue = true;
+                }
+                if ui
+                    .add_enabled(
+                        !self.add_in_progress,
+                        egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
+                    )
+                    .on_hover_text("Load URLs from a .txt file directly into the download queue")
+                    .clicked()
+                {
+                    import_queue = true;
+                }
+            });
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),
@@ -172,13 +195,11 @@ impl PydlApp {
             {
                 self.recheck_all_saved_downloads();
             }
-            if g
-                .danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
+            if g.danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
                 .clicked()
             {
-                self.items.retain(|x| {
-                    matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading)
-                });
+                self.items
+                    .retain(|x| matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading));
                 self.pending_resolve_ids
                     .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
                 self.update_status();
@@ -252,11 +273,7 @@ impl PydlApp {
         };
         draw(ui, &mut |g| {
             if self.settings.videos_docked {
-                if g
-                    .secondary(
-                        &format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS),
-                        true,
-                    )
+                if g.secondary(&format!("{} Undock videos", ui_icons::UNDOCK_VIDEOS), true)
                     .on_hover_text(
                         "Show the queue in a separate window so the main view stays compact.",
                     )
@@ -267,23 +284,18 @@ impl PydlApp {
                     self.persist_settings();
                 }
             } else {
-                if g
-                    .secondary(
-                        &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
-                        true,
-                    )
-                    .on_hover_text("Move the queue back into this window.")
-                    .clicked()
+                if g.secondary(
+                    &format!("{} Dock in main window", ui_icons::DOCK_VIDEOS),
+                    true,
+                )
+                .on_hover_text("Move the queue back into this window.")
+                .clicked()
                 {
                     self.settings.videos_docked = true;
                     self.persist_settings();
                 }
                 if !self.settings.videos_open {
-                    if g
-                        .secondary(
-                            &format!("{} Show {window_title}", ui_icons::VIDEOS),
-                            true,
-                        )
+                    if g.secondary(&format!("{} Show {window_title}", ui_icons::VIDEOS), true)
                         .on_hover_text("Open or focus the floating queue window")
                         .clicked()
                     {
@@ -291,10 +303,7 @@ impl PydlApp {
                         self.persist_settings();
                     }
                 } else if g
-                    .secondary(
-                        &format!("{} Hide {window_title}", ui_icons::DISMISS),
-                        true,
-                    )
+                    .secondary(&format!("{} Hide {window_title}", ui_icons::DISMISS), true)
                     .on_hover_text("Close the floating queue window")
                     .clicked()
                 {
@@ -316,11 +325,7 @@ impl PydlApp {
 
     /// Window/panel chrome (dock, hide) on its own row; queue batch actions below.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
-        let heading = if self.av1_mode {
-            "AV1 queue"
-        } else {
-            "Videos"
-        };
+        let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
         left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
@@ -358,12 +363,7 @@ impl PydlApp {
     }
 
     /// Status row, scrollable cards (top), toolbar (bottom); optional log under the toolbar when docked.
-    fn draw_videos_queue_body(
-        &mut self,
-        ui: &mut egui::Ui,
-        scroll_id: &str,
-        dock_log: bool,
-    ) {
+    fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         constrain_content_width(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
         let body_bottom = ui.max_rect().bottom();
@@ -381,30 +381,14 @@ impl PydlApp {
             self.draw_downloader_queue_status_row(ui);
         }
 
-        let log_bar = if dock_log {
-            DOCKED_LOG_UNDER_VIDEOS_CHROME
-        } else {
-            0.0
-        };
-        let log_lines_reserve = if dock_log {
-            DOCKED_LOG_MIN_LINES_H
-        } else {
-            0.0
-        };
-        let bottom_reserve =
-            QUEUE_FOOTER_TOOLBAR_RESERVE + log_bar + log_lines_reserve + 4.0;
-        let min_list = if scroll_id.contains("dock") {
-            DOCKED_QUEUE_LIST_MIN_H
-        } else {
-            80.0
-        };
-        let list_h = (body_bottom - ui.cursor().min.y - bottom_reserve).max(min_list);
-        self.draw_queue_list_body(ui, list_h, scroll_id);
+        let list_h = (body_bottom - ui.cursor().min.y - layout.bottom_reserve())
+            .max(layout.min_list_height());
+        self.draw_queue_list_body(ui, list_h, layout.scroll_id);
 
         ui.add_space(2.0);
         self.draw_videos_footer_toolbar(ui);
 
-        if dock_log {
+        if layout.dock_log {
             ui.add_space(6.0);
             ui.separator();
             ui.add_space(4.0);
@@ -432,11 +416,9 @@ impl PydlApp {
                     ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new(heading).strong());
                         ui.label(
-                            RichText::new(format!(
-                                "Showing in separate \"{window_title}\" window"
-                            ))
-                            .small()
-                            .color(TEXT_MUTED),
+                            RichText::new(format!("Showing in separate \"{window_title}\" window"))
+                                .small()
+                                .color(TEXT_MUTED),
                         );
                     });
                     left_button_row(ui, |ui| {
@@ -590,19 +572,19 @@ impl PydlApp {
         let theme = self.settings.theme.clone();
         let av1 = self.av1_mode;
 
-        Self::draw_mode_queue_panel(
-            ui,
-            &theme,
-            av1,
-            QUEUE_MODE_PANEL_MARGIN,
-            |ui| {
-                ui.set_max_height(body_h);
-                let inner_w = content_width(ui).max(1.0);
-                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
-                    self.draw_videos_queue_body(ui, "rustdl_videos_dock_scroll", dock_log);
-                });
-            },
-        );
+        Self::draw_mode_queue_panel(ui, &theme, av1, QUEUE_MODE_PANEL_MARGIN, |ui| {
+            ui.set_max_height(body_h);
+            let inner_w = content_width(ui).max(1.0);
+            allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                self.draw_videos_queue_body(
+                    ui,
+                    VideosQueueLayout {
+                        scroll_id: "rustdl_videos_dock_scroll",
+                        dock_log,
+                    },
+                );
+            });
+        });
         // egui persists panel height from content rect; claim leftover space at the panel root.
         consume_remaining_ui_space(ui);
         if !ui.ctx().input(|i| i.pointer.any_down()) {
@@ -644,33 +626,31 @@ impl PydlApp {
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             fill_allocated_rect(ui);
-            Self::draw_mode_queue_panel(
-                ui,
-                &theme,
-                av1,
-                QUEUE_MODE_PANEL_MARGIN,
-                |ui| {
-                    self.draw_videos_queue_body(ui, "rustdl_videos_float_v4", false);
-                },
-            );
+            Self::draw_mode_queue_panel(ui, &theme, av1, QUEUE_MODE_PANEL_MARGIN, |ui| {
+                self.draw_videos_queue_body(
+                    ui,
+                    VideosQueueLayout {
+                        scroll_id: "rustdl_videos_float_v4",
+                        dock_log: false,
+                    },
+                );
+            });
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
-            if !pointer_down {
-                let size = inner.response.rect.size();
-                if size.x.is_finite()
-                    && size.y.is_finite()
-                    && size.x >= 480.0
-                    && size.y >= 320.0
-                    && size.x <= 2400.0
-                    && size.y <= 1600.0
-                    && ((self.settings.video_float_width - size.x).abs() > 0.5
-                        || (self.settings.video_float_height - size.y).abs() > 0.5)
-                {
-                    self.settings.video_float_width = size.x;
-                    self.settings.video_float_height = size.y;
-                    self.persist_settings();
-                }
+            if let Some((w, h)) = persist_resizable_window_size(
+                pointer_down,
+                inner.response.rect.size(),
+                egui::vec2(480.0, 320.0),
+                egui::vec2(2400.0, 1600.0),
+                (
+                    self.settings.video_float_width,
+                    self.settings.video_float_height,
+                ),
+            ) {
+                self.settings.video_float_width = w;
+                self.settings.video_float_height = h;
+                self.persist_settings();
             }
         }
         if !open {

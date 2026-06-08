@@ -104,9 +104,7 @@ pub async fn stream_media_path(path: &Path, headers: &HeaderMap) -> Result<Respo
     let mime = mime_for_path(path);
     let mut file = File::open(path).await.map_err(|_| StatusCode::NOT_FOUND)?;
 
-    let range_header = headers
-        .get(header::RANGE)
-        .and_then(|v| v.to_str().ok());
+    let range_header = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
     let (start, end, partial) = match range_header {
         None => (0, total.saturating_sub(1), false),
         Some(spec) => match parse_range(spec, total) {

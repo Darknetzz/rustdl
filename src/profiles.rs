@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use crate::config::{profiles_path, AppSettings};
+use crate::config::{load_json_file, profiles_path, AppSettings};
 
 /// Downloader-related settings captured by a named profile.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -182,12 +182,7 @@ pub struct ProfileStore {
 }
 
 pub fn load_profiles() -> ProfileStore {
-    let path = profiles_path();
-    let raw = match fs::read_to_string(&path) {
-        Ok(v) => v,
-        Err(_) => return ProfileStore::default(),
-    };
-    serde_json::from_str(&raw).unwrap_or_default()
+    load_json_file(profiles_path(), "download profiles")
 }
 
 pub fn save_profiles(store: &ProfileStore) -> Result<()> {

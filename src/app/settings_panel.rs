@@ -264,7 +264,14 @@ impl PydlApp {
                             if self.settings.web_bind_address.trim().contains("0.0.0.0") {
                                 ui.label(
                                     RichText::new(
-                                        "On other devices on your LAN, use this PC's IP address instead of 127.0.0.1.",
+                                        "Binding to 0.0.0.0 listens on all network interfaces — use only on a trusted home LAN (plain HTTP, token auth).",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                                ui.label(
+                                    RichText::new(
+                                        "On other devices, use this PC's IP address instead of 127.0.0.1.",
                                     )
                                     .small()
                                     .color(ui.visuals().weak_text_color()),

@@ -47,6 +47,7 @@ impl PydlApp {
         self.sync_status_fields_from_counts();
     }
 
+    #[allow(dead_code)]
     pub(super) fn on_item_removed(&mut self, item: &QueueItem) {
         app_state::dec_status_count(&mut self.status_counts, item.status);
         self.sync_status_fields_from_counts();

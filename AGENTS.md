@@ -7,8 +7,8 @@ Guidance for AI agents and automation working in this repository.
 **rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues. It also includes:
 
 - **Downloader mode** — paste URLs, preview cards, queue downloads, activity log, profiles, settings.
-- **AV1 Converter mode** — local file/folder transcoding via ffmpeg (desktop only).
-- **Optional LAN web UI** — Axum HTTP server + embedded `web-assets/` for remote queue control (downloader only).
+- **AV1 Converter mode** — local file/folder transcoding via ffmpeg (desktop GUI and LAN web UI).
+- **Optional LAN web UI** — Axum HTTP server + embedded `web-assets/` for remote downloader and AV1 queue control.
 - **Headless CLI** — `--download`, `--web-only`, `--list-profiles` (see `README.md`).
 
 The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` from `src/main.rs`.
@@ -75,7 +75,18 @@ User data (not in repo): `<config_dir>/rustdl/` — `rustdl_config.json`, `rustd
 - **External tools**: Resolved via `PATH` or custom paths in settings (`src/external_tools.rs`). Requires `yt-dlp`; `ffmpeg` / `ffprobe` optional but needed for many features.
 - **Windows-only**: Browser URL drag-and-drop (`src/win_drop_target.rs`), console detach for GUI (`src/cli.rs`).
 
-When editing UI spacing or panels, check both **docked** (main window) and **floating** (`draw_videos_window`, `draw_logs_window`) code paths in `src/app/videos_panel.rs` and related modules.
+When editing UI spacing or panels, check both **docked** (main window) and **floating** (`draw_videos_window`, `draw_logs_window`) code paths in `src/app/videos_panel.rs` and related modules. Both paths should go through `VideosQueueLayout` in `videos_panel.rs` (shared scroll/footer/log reserve math).
+
+### Layout QA checklist (manual)
+
+After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `app_ui.rs`):
+
+1. **Docked Videos** — resize bottom panel; card list fills space below toolbar; footer controls stay visible.
+2. **Floating Videos** — resize window; list scrolls; dock/undock toggles work.
+3. **Docked log under Videos** — log lines fill remaining panel height after resize.
+4. **Floating Activity log** — resize window; log lines fill viewport.
+5. **Mode switch** — Downloader ↔ AV1 preserves panel sizes; mode tint/stripe visible.
+6. **Large queue** — import or restore ~200 items; list layout stays responsive (`RUSTDL_PROFILE=1` optional).
 
 ## Versioning and releases
 

@@ -60,20 +60,9 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
     }
 }
 
-pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
-    let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
+fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.output_dir = core.output_dir.clone();
     app.worker_count = core.worker_count;
-    app.status_resolving = core.status_resolving;
-    app.status_ready = core.status_ready;
-    app.status_queued = core.status_queued;
-    app.status_active = core.status_active;
-    app.status_done = core.status_done;
-    app.status_failed = core.status_failed;
-    app.status_counts = core.status_counts;
-    app.cached_dedupe_keys = core.cached_dedupe_keys.clone();
-    app.cached_transfer_totals = core.cached_transfer_totals.clone();
-    app.transfer_totals_dirty = core.transfer_totals_dirty;
     app.has_yt_dlp = core.has_yt_dlp;
     app.has_ffmpeg = core.has_ffmpeg;
     app.has_ffprobe = core.has_ffprobe;
@@ -83,7 +72,28 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     app.log_lines = core.log_lines.clone();
     app.settings = core.settings.clone();
     app.profile_store = core.profile_store.clone();
-    app.items = core.items.clone();
+    app.downloads_paused = core.downloads_paused;
+    app.session_complete_notified = core.session_complete_notified;
+    app.av1_input_paths = core.av1_input_paths.clone();
+    app.av1_items = core.av1_items.clone();
+    app.av1_running = core.av1_running;
+    app.av1_media_inflight = core.av1_media_inflight.clone();
+}
+
+fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
+    let app_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
+    let core_ids: HashSet<u64> = core.items.iter().map(|it| it.item_id).collect();
+    if app_ids == core_ids && app.items.len() == core.items.len() {
+        let core_by_id: std::collections::HashMap<u64, &crate::models::QueueItem> =
+            core.items.iter().map(|it| (it.item_id, it)).collect();
+        for app_it in app.items.iter_mut() {
+            if let Some(core_it) = core_by_id.get(&app_it.item_id) {
+                *app_it = (*core_it).clone();
+            }
+        }
+    } else {
+        app.items = core.items.clone();
+    }
     app.rebuild_item_index();
     app.pending_resolve_ids = core.pending_resolve_ids.clone();
     app.next_item_id = core.next_item_id;
@@ -98,31 +108,92 @@ pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
         .iter()
         .map(|(k, v)| (*k, *v))
         .collect();
-    app.downloads_paused = core.downloads_paused;
-    app.session_complete_notified = core.session_complete_notified;
-    // Mirror the core-owned AV1 queue (the core applies AV1 events; the GUI only displays it).
-    app.av1_input_paths = core.av1_input_paths.clone();
-    app.av1_items = core.av1_items.clone();
-    app.av1_running = core.av1_running;
-    app.av1_media_inflight = core.av1_media_inflight.clone();
-    app.core_generation = core.generation;
+    app.status_resolving = core.status_resolving;
+    app.status_ready = core.status_ready;
+    app.status_queued = core.status_queued;
+    app.status_active = core.status_active;
+    app.status_done = core.status_done;
+    app.status_failed = core.status_failed;
+    app.status_counts = core.status_counts;
+    app.cached_dedupe_keys = core.cached_dedupe_keys.clone();
+    app.cached_transfer_totals = core.cached_transfer_totals.clone();
+    app.transfer_totals_dirty = core.transfer_totals_dirty;
+    app.download_log_throttle = core.download_log_throttle.clone();
     app.queue_dirty = false;
-    let new_thumbnails: Vec<(u64, String)> = if app.settings.show_thumbnails {
-        app.items
+
+    if app.settings.show_thumbnails {
+        let new_thumbnails: Vec<(u64, String)> = app
+            .items
             .iter()
             .filter(|it| !previous_item_ids.contains(&it.item_id))
             .filter_map(|it| it.thumbnail_url.clone().map(|url| (it.item_id, url)))
-            .collect()
-    } else {
-        Vec::new()
-    };
-    for (item_id, url) in new_thumbnails {
-        app.queue_thumbnail_load(item_id, url);
+            .collect();
+        for (item_id, url) in new_thumbnails {
+            app.queue_thumbnail_load(item_id, url);
+        }
     }
     app.ensure_av1_thumbnails();
+}
+
+pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
+    let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
+    sync_shared_fields_from_core(core, app);
+    if core.generation != app.core_generation {
+        sync_queue_from_core(core, app, &previous_item_ids);
+        app.core_generation = core.generation;
+    }
 }
 
 pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {
     let mut core = shared.lock();
     sync_app_to_core(app, &mut core);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::{ItemStatus, QueueItem};
+    use std::sync::Arc;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn queue_sync_runs_when_generation_changes() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        let before = shared.lock().generation;
+        {
+            let mut core = shared.lock();
+            core.items.push(QueueItem {
+                item_id: 7,
+                status: ItemStatus::Queued,
+                ..Default::default()
+            });
+            core.update_status();
+            core.bump_generation();
+        }
+        let after = shared.lock().generation;
+        assert!(after > before);
+    }
+
+    #[test]
+    fn sync_app_to_core_pushes_dirty_queue() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        {
+            let mut core = shared.lock();
+            core.items.clear();
+            core.rebuild_item_index();
+            core.update_status();
+        }
+
+        let mut mirror = shared.lock();
+        mirror.items.push(QueueItem {
+            item_id: 99,
+            status: ItemStatus::Idle,
+            ..Default::default()
+        });
+        mirror.update_status();
+        mirror.bump_generation();
+        assert_eq!(mirror.items.len(), 1);
+    }
 }

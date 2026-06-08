@@ -31,6 +31,8 @@ cargo run -- --download -                  # batch from stdin
 cargo run -- --list-profiles
 ```
 
+`--download` runs yt-dlp directly (no shared download queue, activity log persistence, or LAN web UI). Use the GUI or `--web-only` for full queue/history behavior.
+
 Headless web UI (no GUI window; uses saved queue, settings, and profiles):
 
 ```bash
@@ -74,15 +76,15 @@ cargo test --all-targets --all-features
 
 ## LAN web UI
 
-When enabled in **Settings → Shared**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to add URLs, start/pause downloads, edit core downloader settings, and watch the activity log.
+When enabled in **Settings → Shared**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to control the **Downloader** queue (add URLs, start/pause, settings, activity log) and the **AV1 converter** queue (scan paths, start/cancel batch encode).
+
+**Still desktop-only:** drag-to-reorder Ready items, queue/settings file import-export dialogs, desktop notifications on session complete, update check (About), browser URL drag-and-drop (Windows only).
 
 **Security notes:**
 
 - Traffic is plain **HTTP** (no TLS). Anyone who can reach the bind address and knows the token can control downloads and read queue metadata.
 - Use only on a **trusted home LAN**. Do not expose the port to the public internet without a reverse proxy, TLS, and stronger authentication.
 - Generate a new token if you suspect it was leaked. Disabling the web UI stops the HTTP server on the next settings save (or when you restart the app).
-
-AV1 converter mode is not available over the web UI (desktop only).
 
 ## Modes
 
@@ -173,6 +175,12 @@ Presets update current settings immediately, and you can still tweak any individ
 | Restrict filenames | Safer ASCII-like filenames | `--restrict-filenames` |
 | Write info JSON | Save metadata as JSON file | `--write-info-json` |
 | Write auto subtitles | Download auto-generated subtitles | `--write-auto-subs` |
+| Cookies | Netscape `cookies.txt` path or browser name for `--cookies-from-browser` (e.g. `firefox`) | `--cookies` / `--cookies-from-browser` |
+| Impersonate browser | `--impersonate` target (e.g. `chrome`) for cookie-backed sites | `--impersonate` |
+| Output filename template | yt-dlp output template (default includes title and id) | `-o` template |
+| Download archive | Skip already-archived videos; file path written by `--download-archive` | `--download-archive` |
+| Proxy | HTTP/HTTPS/SOCKS proxy URL | `--proxy` |
+| Speed limit | Max download rate (e.g. `500K`, `1M`) | `--limit-rate` |
 
 ### Post-process
 

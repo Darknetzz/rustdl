@@ -7,7 +7,8 @@ use regex::Regex;
 
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space,
-    fill_allocated_rect, left_button_row, remaining_ui_height, secondary_button,
+    fill_allocated_rect, left_button_row, persist_resizable_window_size, remaining_ui_height,
+    secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -180,21 +181,19 @@ impl PydlApp {
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
-            if !pointer_down {
-                let size = inner.response.rect.size();
-                if size.x.is_finite()
-                    && size.y.is_finite()
-                    && size.x >= 400.0
-                    && size.y >= 260.0
-                    && size.x <= 2400.0
-                    && size.y <= 1600.0
-                    && ((self.settings.log_float_width - size.x).abs() > 0.5
-                        || (self.settings.log_float_height - size.y).abs() > 0.5)
-                {
-                    self.settings.log_float_width = size.x;
-                    self.settings.log_float_height = size.y;
-                    self.persist_settings();
-                }
+            if let Some((w, h)) = persist_resizable_window_size(
+                pointer_down,
+                inner.response.rect.size(),
+                egui::vec2(400.0, 260.0),
+                egui::vec2(2400.0, 1600.0),
+                (
+                    self.settings.log_float_width,
+                    self.settings.log_float_height,
+                ),
+            ) {
+                self.settings.log_float_width = w;
+                self.settings.log_float_height = h;
+                self.persist_settings();
             }
         }
         if !open {
@@ -277,7 +276,9 @@ impl PydlApp {
         };
         let mut row = |ui: &mut egui::Ui| {
             draw(ui, &mut |g| {
-                if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
+                if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true)
+                    .clicked()
+                {
                     self.clear_activity_log();
                 }
             });
@@ -301,20 +302,20 @@ impl PydlApp {
             {
                 self.persist_settings();
             }
-            let actions = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
-                if compact {
-                    compact_button_group(ui, "log_actions", |g| add(g));
-                } else {
-                    button_group(ui, "log_actions", |g| add(g));
-                }
-            };
+            let actions =
+                |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+                    if compact {
+                        compact_button_group(ui, "log_actions", |g| add(g));
+                    } else {
+                        button_group(ui, "log_actions", |g| add(g));
+                    }
+                };
             actions(ui, &mut |g| {
-                if g
-                    .secondary(
-                        &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
-                        true,
-                    )
-                    .clicked()
+                if g.secondary(
+                    &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
+                    true,
+                )
+                .clicked()
                 {
                     if let Some(last) = self
                         .log_lines
@@ -325,17 +326,17 @@ impl PydlApp {
                         g.ui().ctx().copy_text(last.clone());
                     }
                 }
-                if g.secondary(&format!("{} Open log file", ui_icons::OPEN_FILE), true).clicked()
+                if g.secondary(&format!("{} Open log file", ui_icons::OPEN_FILE), true)
+                    .clicked()
                 {
                     self.open_activity_log_file();
                 }
                 if !compact
-                    && g
-                        .secondary(
-                            &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                            true,
-                        )
-                        .clicked()
+                    && g.secondary(
+                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                        true,
+                    )
+                    .clicked()
                 {
                     self.open_config_folder();
                 }
@@ -418,15 +419,11 @@ impl PydlApp {
                                     let r = ui.add(label);
                                     r.context_menu(|ui| {
                                         button_group(ui, "log_copy_line", |g| {
-                                            if g
-                                                .secondary(
-                                                    &format!(
-                                                        "{} Copy line",
-                                                        ui_icons::COPY_CLIPBOARD
-                                                    ),
-                                                    true,
-                                                )
-                                                .clicked()
+                                            if g.secondary(
+                                                &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                                true,
+                                            )
+                                            .clicked()
                                             {
                                                 g.ui().ctx().copy_text((*line).clone());
                                                 g.ui().close_menu();
@@ -518,7 +515,9 @@ pub(crate) fn attach_paste_context_menu(
 ) {
     response.context_menu(|ui| {
         button_group(ui, "paste_ctx", |g| {
-            if g.secondary(&format!("{} Paste", ui_icons::COPY_CLIPBOARD), true).clicked() {
+            if g.secondary(&format!("{} Paste", ui_icons::COPY_CLIPBOARD), true)
+                .clicked()
+            {
                 response.request_focus();
                 let from_clipboard = arboard::Clipboard::new()
                     .ok()
@@ -527,7 +526,8 @@ pub(crate) fn attach_paste_context_menu(
                 if let Some(text) = from_clipboard {
                     *deferred_paste = Some(text);
                 } else {
-                    g.ui().ctx()
+                    g.ui()
+                        .ctx()
                         .send_viewport_cmd(egui::ViewportCommand::RequestPaste);
                 }
                 g.ui().close_menu();

@@ -74,6 +74,7 @@ struct StatusResponse {
     status: StatusCountsJson,
     tools: serde_json::Value,
     output_disk_space: Option<DiskSpaceJson>,
+    config_warnings: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -219,6 +220,17 @@ fn disk_space_json(output_dir: &str) -> Option<DiskSpaceJson> {
 async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
     let c = st.core.lock();
     let output_dir = c.effective_output_dir();
+    let config_warnings = c
+        .config_load_issues
+        .iter()
+        .map(|issue| {
+            format!(
+                "Could not load {} from {} — using defaults",
+                issue.label,
+                issue.path.display()
+            )
+        })
+        .collect();
     Json(StatusResponse {
         version: crate::pkg_version::VERSION,
         build_date: crate::pkg_version::build_date_local(),
@@ -239,6 +251,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         },
         tools: c.tools_status_json(),
         output_disk_space: disk_space_json(&output_dir),
+        config_warnings,
     })
 }
 

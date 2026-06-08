@@ -123,6 +123,8 @@ pub struct DownloadCore {
     pub download_log_throttle: HashMap<u64, f64>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
+    /// Parse failures for user JSON files at startup (settings, queue, profiles, log).
+    pub config_load_issues: Vec<crate::config::ConfigLoadIssue>,
 
     // --- AV1 converter (shared by GUI and web UI) ---
     pub av1_input_paths: String,
@@ -225,6 +227,7 @@ impl DownloadCore {
             done_lookup_truncation_logged: false,
             download_log_throttle: HashMap::new(),
             generation: 1,
+            config_load_issues: Vec::new(),
             av1_input_paths: av1_snapshot.input_paths,
             av1_items: restored_av1_items,
             av1_next_item_id,
@@ -244,6 +247,7 @@ impl DownloadCore {
         core.refresh_deps();
         core.refresh_done_file_lookup();
         core.queue_av1_restored_assets();
+        core.config_load_issues = crate::config::take_config_load_issues();
         (Arc::new(Mutex::new(core)), rx)
     }
 
@@ -401,17 +405,20 @@ impl DownloadCore {
         self.has_ffmpeg = ffm;
         self.has_ffprobe = ffp;
         self.yt_dlp_version = if yt {
-            ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path).unwrap_or_default()
+            ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
         self.ffmpeg_version = if ffm {
-            ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path).unwrap_or_default()
+            ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
         self.ffprobe_version = if ffp {
-            ytdlp::read_ffprobe_version(&self.settings.ffprobe_path).unwrap_or_default()
+            ytdlp::read_ffprobe_version(&self.settings.ffprobe_path)
+                .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
@@ -924,9 +931,79 @@ impl DownloadCore {
             .filter(|it| matches!(it.status, ItemStatus::Queued | ItemStatus::Downloading))
             .map(|it| it.item_id)
             .collect();
+        if ids.is_empty() {
+            self.append_log("No active queued/downloading items to cancel.");
+            return;
+        }
+        let count = ids.len();
         for item_id in ids {
             self.request_cancel_item(item_id, post_action);
         }
+        self.append_log(&format!("Cancel requested for {count} item(s)."));
+    }
+
+    pub fn retry_download_item_id(&mut self, item_id: u64) {
+        let Some(idx) = self.resolve_item_idx(item_id) else {
+            return;
+        };
+        if self.items[idx].status != ItemStatus::Failed {
+            return;
+        }
+        let _ = self.redownload_item_id(item_id);
+    }
+
+    pub fn retry_failed_items(&mut self) {
+        if !self.output_dir_is_valid() {
+            self.append_log("Choose a valid output folder.");
+            return;
+        }
+        if !self.has_yt_dlp {
+            self.refresh_deps();
+        }
+        if !self.has_yt_dlp {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            return;
+        }
+        let failed_no_url = self
+            .items
+            .iter()
+            .filter(|it| it.status == ItemStatus::Failed && !self.item_has_redownload_target(it))
+            .count();
+        let ids: Vec<u64> = self
+            .items
+            .iter()
+            .filter(|it| it.status == ItemStatus::Failed && self.item_has_redownload_target(it))
+            .map(|it| it.item_id)
+            .collect();
+        if ids.is_empty() {
+            if self.status_failed > 0 {
+                self.append_log(
+                    "No failed items have a video URL to retry. Check the row or re-add the link.",
+                );
+            } else {
+                self.append_log("No failed downloads to retry.");
+            }
+            return;
+        }
+        self.persist_settings();
+        self.refresh_done_file_lookup();
+        for id in &ids {
+            self.prepare_item_redownload_reset(*id);
+        }
+        self.refresh_done_file_lookup();
+        self.update_status();
+        self.schedule_queue_save();
+        self.append_log(&format!(
+            "Retrying {} failed download(s).{}",
+            ids.len(),
+            if failed_no_url > 0 {
+                format!(" Skipped {failed_no_url} without a URL.")
+            } else {
+                String::new()
+            }
+        ));
+        self.bump_generation();
+        self.spawn_download_workers(ids, true);
     }
 
     pub fn queue_urls_for_resolve(&mut self, lines: Vec<String>) -> UrlLineFilterStats {

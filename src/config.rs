@@ -1,11 +1,78 @@
 use std::collections::VecDeque;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::{Context, Result};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::models::{Av1QueueItem, QueueItem};
+
+/// A user data file that failed to parse at startup (surfaced in the GUI / web status).
+#[derive(Clone, Debug, Serialize)]
+pub struct ConfigLoadIssue {
+    pub label: &'static str,
+    pub path: PathBuf,
+}
+
+static CONFIG_LOAD_ISSUES: OnceLock<Mutex<Vec<ConfigLoadIssue>>> = OnceLock::new();
+
+fn config_issues() -> &'static Mutex<Vec<ConfigLoadIssue>> {
+    CONFIG_LOAD_ISSUES.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub fn record_config_load_failure(path: PathBuf, label: &'static str) {
+    quarantine_bad_config_file(&path);
+    let display = path.display().to_string();
+    if let Ok(mut issues) = config_issues().lock() {
+        if !issues.iter().any(|i| i.path == path && i.label == label) {
+            issues.push(ConfigLoadIssue { label, path });
+        }
+    }
+    eprintln!(
+        "rustdl: failed to load {label} from {display}; using defaults (backup: {display}.bak)"
+    );
+}
+
+pub fn take_config_load_issues() -> Vec<ConfigLoadIssue> {
+    config_issues()
+        .lock()
+        .map(|mut v| v.drain(..).collect())
+        .unwrap_or_default()
+}
+
+pub fn peek_config_load_issues() -> Vec<ConfigLoadIssue> {
+    config_issues()
+        .lock()
+        .map(|v| v.clone())
+        .unwrap_or_default()
+}
+
+fn quarantine_bad_config_file(path: &Path) {
+    if !path.is_file() {
+        return;
+    }
+    let bak = PathBuf::from(format!("{}.bak", path.display()));
+    let _ = fs::rename(path, bak);
+}
+
+pub(crate) fn load_json_file<T: DeserializeOwned + Default>(
+    path: PathBuf,
+    label: &'static str,
+) -> T {
+    let raw = match fs::read_to_string(&path) {
+        Ok(v) => v,
+        Err(_) => return T::default(),
+    };
+    match serde_json::from_str::<T>(&raw) {
+        Ok(v) => v,
+        Err(_) => {
+            record_config_load_failure(path, label);
+            T::default()
+        }
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
@@ -444,11 +511,7 @@ pub fn trim_activity_log(lines: &mut VecDeque<String>, max_chars: usize) {
 
 pub fn load_activity_log(max_chars: usize) -> VecDeque<String> {
     let path = activity_log_path();
-    let raw = match fs::read_to_string(path) {
-        Ok(v) => v,
-        Err(_) => return VecDeque::new(),
-    };
-    let mut lines: VecDeque<String> = serde_json::from_str(&raw).unwrap_or_default();
+    let mut lines: VecDeque<String> = load_json_file(path, "activity log");
     trim_activity_log(&mut lines, max_chars);
     lines
 }
@@ -483,11 +546,7 @@ pub fn default_downloads() -> PathBuf {
 
 pub fn load_settings() -> AppSettings {
     let path = config_path();
-    let raw = match fs::read_to_string(path) {
-        Ok(v) => v,
-        Err(_) => return AppSettings::default(),
-    };
-    let mut cfg = serde_json::from_str::<AppSettings>(&raw).unwrap_or_default();
+    let mut cfg: AppSettings = load_json_file(path.clone(), "settings");
     if cfg.output_dir.trim().is_empty() || !PathBuf::from(&cfg.output_dir).is_dir() {
         cfg.output_dir = default_downloads().to_string_lossy().to_string();
     }
@@ -606,12 +665,7 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
 }
 
 pub fn load_queue_items() -> Vec<QueueItem> {
-    let path = queue_path();
-    let raw = match fs::read_to_string(path) {
-        Ok(v) => v,
-        Err(_) => return Vec::new(),
-    };
-    serde_json::from_str::<Vec<QueueItem>>(&raw).unwrap_or_default()
+    load_json_file(queue_path(), "download queue")
 }
 
 /// Writes one URL per line (source line or webpage URL).
@@ -677,12 +731,7 @@ fn av1_queue_path() -> PathBuf {
 }
 
 pub fn load_av1_queue_snapshot() -> Av1QueueSnapshot {
-    let path = av1_queue_path();
-    let raw = match fs::read_to_string(path) {
-        Ok(v) => v,
-        Err(_) => return Av1QueueSnapshot::default(),
-    };
-    serde_json::from_str(&raw).unwrap_or_default()
+    load_json_file(av1_queue_path(), "AV1 queue")
 }
 
 pub fn save_av1_queue_snapshot(snapshot: &Av1QueueSnapshot) -> Result<()> {
@@ -721,5 +770,18 @@ mod tests {
         let cfg: AppSettings = serde_json::from_str(raw).expect("deserialize");
         assert_eq!(cfg.worker_count, 2);
         assert!(cfg.yt_dlp_unlimited_retries);
+    }
+
+    #[test]
+    fn load_json_file_returns_default_on_invalid_json() {
+        let dir = std::env::temp_dir().join(format!("rustdl_cfg_test_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("tmpdir");
+        let path = dir.join("bad.json");
+        fs::write(&path, "{not json").expect("write");
+        let v: AppSettings = load_json_file(path.clone(), "settings");
+        assert_eq!(v.worker_count, AppSettings::default().worker_count);
+        assert!(dir.join("bad.json.bak").exists());
+        let _ = fs::remove_dir_all(&dir);
     }
 }
