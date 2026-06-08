@@ -81,6 +81,27 @@ pub fn format_convert_saved_detail(input_bytes: u64, output_bytes: u64) -> Strin
     }
 }
 
+/// Batch summary savings/growth line (mirrors [`format_convert_saved_detail`] for totals).
+pub fn format_convert_batch_saved_line(input_bytes: u64, output_bytes: u64) -> String {
+    if input_bytes == 0 {
+        return format!("output {}", human_bytes_ui(output_bytes));
+    }
+    if output_bytes <= input_bytes {
+        let saved = input_bytes - output_bytes;
+        let pct = (saved as f64 / input_bytes as f64) * 100.0;
+        format!("saved {} ({pct:.1}%)", human_bytes_ui(saved))
+    } else {
+        let growth = output_bytes - input_bytes;
+        let grow_pct = (growth as f64 / input_bytes as f64) * 100.0;
+        format!("output +{} (+{grow_pct:.1}%)", human_bytes_ui(growth))
+    }
+}
+
+/// True when batch totals grew rather than shrank.
+pub fn convert_batch_totals_grew(input_bytes: u64, output_bytes: u64) -> bool {
+    output_bytes > input_bytes && input_bytes > 0
+}
+
 /// Aggregated counters used by the batch-summary row in both UIs.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ConvertBatchSummary {
@@ -342,6 +363,15 @@ mod tests {
     fn saved_detail_reports_shrink_and_growth() {
         assert!(format_convert_saved_detail(1000, 400).starts_with("Saved"));
         assert!(format_convert_saved_detail(1000, 1500).starts_with("Output +"));
+    }
+
+    #[test]
+    fn batch_saved_line_reports_growth_when_output_larger() {
+        let line = format_convert_batch_saved_line(5_700_000_000, 9_800_000_000);
+        assert!(line.starts_with("output +"));
+        assert!(convert_batch_totals_grew(5_700_000_000, 9_800_000_000));
+        let shrink = format_convert_batch_saved_line(9_800_000_000, 5_700_000_000);
+        assert!(shrink.starts_with("saved "));
     }
 
     #[test]

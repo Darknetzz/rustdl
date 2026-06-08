@@ -2374,11 +2374,18 @@ function renderConvertSummary(data) {
   if (sum.completed > 0) {
     const inB = sum.completed_input_bytes || 0;
     const outB = sum.completed_output_bytes || 0;
-    const saved = Math.max(0, inB - outB);
-    const pct = inB > 0 ? ((saved / inB) * 100).toFixed(1) : "0.0";
     const el = document.createElement("span");
-    el.className = "status-badge status-done";
-    el.textContent = `Saved ${formatBytes(saved)} (${pct}%) across ${sum.completed} file(s)`;
+    el.className =
+      "status-badge " + (outB > inB && inB > 0 ? "status-skipped" : "status-done");
+    if (outB > inB && inB > 0) {
+      const growth = outB - inB;
+      const pct = ((growth / inB) * 100).toFixed(1);
+      el.textContent = `Output +${formatBytes(growth)} (+${pct}%) across ${sum.completed} file(s)`;
+    } else {
+      const saved = Math.max(0, inB - outB);
+      const pct = inB > 0 ? ((saved / inB) * 100).toFixed(1) : "0.0";
+      el.textContent = `Saved ${formatBytes(saved)} (${pct}%) across ${sum.completed} file(s)`;
+    }
     root.appendChild(el);
   }
   if (sum.pending_count > 0) {

@@ -7,8 +7,9 @@ use crate::app_ui::{
     draw_status_dot, left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::convert_state::{
-    compute_convert_batch_summary, convert_item_is_skipped, convert_item_status_label,
-    convert_item_will_skip_already_target, convert_skip_hint_label, convert_source_path_missing,
+    compute_convert_batch_summary, convert_batch_totals_grew, convert_item_is_skipped,
+    convert_item_status_label, convert_item_will_skip_already_target, convert_skip_hint_label,
+    convert_source_path_missing, format_convert_batch_saved_line,
 };
 use crate::transcode;
 use crate::config::AppSettings;
@@ -630,13 +631,14 @@ impl PydlApp {
         let theme = &self.settings.theme;
         let done_color = status_color(ItemStatus::Done);
         let pending_color = status_color(ItemStatus::Idle);
-        let saved = batch
-            .completed_input_bytes
-            .saturating_sub(batch.completed_output_bytes);
-        let pct = if batch.completed_input_bytes > 0 {
-            (saved as f64 / batch.completed_input_bytes as f64) * 100.0
+        let grew = convert_batch_totals_grew(
+            batch.completed_input_bytes,
+            batch.completed_output_bytes,
+        );
+        let savings_color = if grew {
+            CONVERT_SKIPPED_COLOR
         } else {
-            0.0
+            done_color
         };
 
         ui.horizontal_wrapped(|ui| {
@@ -653,8 +655,11 @@ impl PydlApp {
                     theme,
                 );
                 ui.label(
-                    RichText::new(format!("saved {} ({pct:.1}%)", human_bytes_ui(saved),))
-                        .color(done_color),
+                    RichText::new(format_convert_batch_saved_line(
+                        batch.completed_input_bytes,
+                        batch.completed_output_bytes,
+                    ))
+                    .color(savings_color),
                 );
             }
 

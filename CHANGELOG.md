@@ -10,6 +10,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Video Converter batch summary now reports **output growth** (e.g. `output +4.1 GiB (+71.9%)`) when encoded files are larger than the sources, instead of incorrectly showing `saved 0B (0.0%)`.
 - Video Converter in-place replacement (delete original + rename to original filename) now encodes next to the source file instead of the shared downloader output folder, so the final file overwrites the original path.
 
 ### Added
