@@ -10,6 +10,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- **Show log** / **Hide log** live only in the main header; removed from the Videos panel toolbar.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
 
 ## [0.4.7] - 2026-06-08

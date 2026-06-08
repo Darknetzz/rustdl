@@ -627,9 +627,7 @@ impl PydlApp {
                                         &format!("{} Hide log", ui_icons::DISMISS),
                                         true,
                                     )
-                                    .on_hover_text(
-                                        "Close the activity log (also in the Videos panel toolbar)",
-                                    )
+                                    .on_hover_text("Close the activity log")
                                     .clicked()
                                 {
                                     self.settings.logs_open = false;

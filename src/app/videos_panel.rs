@@ -338,7 +338,6 @@ impl PydlApp {
         left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
-            self.draw_log_controls_compact(ui);
         });
         left_button_row(ui, |ui| {
             if self.convert_mode {
@@ -446,7 +445,6 @@ impl PydlApp {
                     });
                     left_button_row(ui, |ui| {
                         self.draw_video_queue_controls(ui);
-                        self.draw_log_controls_compact(ui);
                     });
                 },
             );

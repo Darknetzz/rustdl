@@ -251,7 +251,7 @@ impl PydlApp {
         button_toolbar_wrapped(ui, |ui| self.draw_log_controls_inner(ui, false));
     }
 
-    /// Dock/undock/hide log — compact row in the Videos panel footer.
+    /// Dock/undock/hide log — compact row in floating log window chrome.
     pub(super) fn draw_log_controls_compact(&mut self, ui: &mut egui::Ui) {
         self.draw_log_controls_inner(ui, true);
     }
