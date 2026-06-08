@@ -45,7 +45,7 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
     core.yt_dlp_version = app.yt_dlp_version.clone();
     core.ffmpeg_version = app.ffmpeg_version.clone();
     core.ffprobe_version = app.ffprobe_version.clone();
-    core.log_lines = app.log_lines.clone();
+    // Activity log is owned by DownloadCore; the GUI mirrors it via sync_core_to_app.
     core.settings = app.settings.clone();
     core.profile_store = app.profile_store.clone();
     core.downloads_paused = app.downloads_paused;

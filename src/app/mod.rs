@@ -51,8 +51,8 @@ use crate::app_ui::{
     modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,
-    save_settings, trim_activity_log, AppSettings, ConfigLoadIssue,
+    default_downloads, export_queue_urls, load_settings, rustdl_config_dir,
+    save_settings, AppSettings, ConfigLoadIssue,
 };
 use crate::models::ConvertQueueItem;
 use crate::models::{ItemStatus, QueueItem};
@@ -207,8 +207,6 @@ pub struct PydlApp {
     thumb_semaphore: Arc<Semaphore>,
     /// When set, queue JSON is written after this instant (debounced).
     queue_save_deadline: Option<Instant>,
-    /// When set, activity log JSON is written after this instant (debounced).
-    log_save_deadline: Option<Instant>,
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
@@ -251,16 +249,8 @@ impl PydlApp {
         }
         theme::apply_ui_theme(&cc.egui_ctx, &settings.theme);
         let profile_store = load_profiles();
-        let mut log_lines = load_activity_log(settings.log_max_chars);
+        let log_lines = shared_core.lock().log_lines.clone();
         let config_load_issues = shared_core.lock().config_load_issues.clone();
-        for issue in &config_load_issues {
-            let msg = format!(
-                "Could not load {} from {} — using defaults (original saved as .bak).",
-                issue.label,
-                issue.path.display()
-            );
-            log_lines.push_back(crate::time_format::format_log_line(&msg));
-        }
         let (
             session_restore_prompt_open,
             session_restore_downloader_count,
@@ -387,7 +377,6 @@ impl PydlApp {
             http_client,
             thumb_semaphore,
             queue_save_deadline: None,
-            log_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
@@ -408,6 +397,14 @@ impl PydlApp {
             focus_queue_search: false,
             profile_rename_buffer: None,
         };
+        let startup_config_issues = app.config_load_issues.clone();
+        for issue in &startup_config_issues {
+            app.append_log(&format!(
+                "Could not load {} from {} — using defaults (original saved as .bak).",
+                issue.label,
+                issue.path.display()
+            ));
+        }
         app.append_log(&format!(
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
@@ -449,7 +446,6 @@ impl PydlApp {
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
             || self.queue_save_deadline.is_some()
-            || self.log_save_deadline.is_some()
             || input_summary_hold_active;
         if busy {
             // Cap idle repaint rate during heavy background work to reduce full UI passes.
@@ -698,10 +694,9 @@ impl PydlApp {
     }
 
     pub(super) fn append_log(&mut self, message: &str) {
-        let line = crate::time_format::format_log_line(message);
-        self.log_lines.push_back(line);
-        trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
-        self.schedule_log_save();
+        let mut core = self.shared_core.lock();
+        core.append_log(message);
+        self.log_lines = core.log_lines.clone();
     }
 
     fn poll_done_file_lookup(&mut self) {

@@ -68,7 +68,13 @@ function renderLogView() {
   if (!log) return;
   const relative = !!(cachedSettings || {}).log_relative_time;
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
-  log.textContent = logLinesCache.map((l) => formatLogLineDisplay(l, relative)).join("\n");
+  if (!logLinesCache.length) {
+    log.textContent = "Activity from rustdl will appear here (downloads, converts, settings changes).";
+    log.classList.add("log-empty");
+  } else {
+    log.classList.remove("log-empty");
+    log.textContent = logLinesCache.map((l) => formatLogLineDisplay(l, relative)).join("\n");
+  }
   if (shouldAutoscrollLog() || atBottom) {
     log.scrollTop = log.scrollHeight;
   }
@@ -184,7 +190,19 @@ function scheduleStatusRefresh(delayMs = 300) {
   statusRefreshTimer = setTimeout(() => {
     statusRefreshTimer = null;
     refreshStatus().catch(() => {});
+    refreshLogs().catch(() => {});
   }, delayMs);
+}
+
+let statusPollIntervalId = null;
+
+function startStatusPoll() {
+  if (statusPollIntervalId != null) return;
+  statusPollIntervalId = setInterval(() => {
+    if (shuttingDown) return;
+    refreshStatus().catch(() => {});
+    refreshLogs().catch(() => {});
+  }, 5000);
 }
 /** @type {object | null} */
 let lastStatusPayload = null;
@@ -1967,6 +1985,7 @@ function saveTokenFromForm() {
       e instanceof Error ? e.message : String(e);
   });
   connectSse();
+  startStatusPoll();
 }
 
 document.getElementById("auth-form").addEventListener("submit", (e) => {
@@ -2689,5 +2708,6 @@ if (token()) {
   showApp();
   refreshAll().catch(() => {});
   connectSse();
+  startStatusPoll();
   startFallbackPolling();
 }

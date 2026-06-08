@@ -204,7 +204,9 @@ impl PydlApp {
                 | UiEvent::ConvertBatchDone => {
                     ctx.request_repaint();
                 }
-                UiEvent::LogLine { .. } => {}
+                UiEvent::LogLine { .. } => {
+                    ctx.request_repaint();
+                }
                 UiEvent::ShutdownRequested => {
                     self.exit_allowed = true;
                     self.flush_queue_to_disk();

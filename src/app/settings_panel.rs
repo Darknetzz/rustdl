@@ -1313,6 +1313,10 @@ impl PydlApp {
             self.settings.convert_min_shrink_percent =
                 self.settings.convert_min_shrink_percent.clamp(0.0, 95.0);
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
+            {
+                let mut core = self.shared_core.lock();
+                trim_activity_log(&mut core.log_lines, self.settings.log_max_chars);
+            }
             self.persist_settings();
             let shared = self.shared_core.clone();
             super::core_sync::push_app_to_core(self, &shared);

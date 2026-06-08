@@ -7,7 +7,8 @@ use regex::Regex;
 
 use crate::app_ui::{
     button_group, button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space,
-    fill_allocated_rect, left_button_row, persist_resizable_window_size, secondary_button,
+    fill_allocated_rect, left_button_row, persist_resizable_window_size, remaining_ui_height,
+    secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -60,9 +61,13 @@ impl LogFilter {
                     || lower.contains("metadata fetch failed")
                     || lower.contains("download failed")
                     || lower.contains("starting")
+                    || lower.contains("started")
                     || lower.contains("completed")
                     || lower.contains("done")
                     || lower.contains("queue")
+                    || lower.contains("convert")
+                    || lower.contains("skipped")
+                    || lower.contains("skip_reason")
             }
         }
     }
@@ -188,16 +193,15 @@ impl PydlApp {
             });
         }
         let response = window.show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 4.0;
             fill_allocated_rect(ui);
-            let body_bottom = ui.max_rect().bottom();
+            ui.spacing_mut().item_spacing.y = 4.0;
             left_button_row(ui, |ui| {
                 self.draw_log_controls_compact(ui);
             });
             ui.add_space(2.0);
             self.draw_activity_log_toolbar_inner(ui, true);
             ui.add_space(2.0);
-            let scroll_h = (body_bottom - ui.cursor().min.y - 2.0).max(80.0);
+            let scroll_h = remaining_ui_height(ui).max(80.0);
             self.draw_activity_log_lines_scroll(ui, scroll_h);
             consume_remaining_ui_space(ui);
         });
@@ -415,8 +419,24 @@ impl PydlApp {
                             .iter()
                             .filter(|line| self.log_filter.accepts(line))
                             .collect();
+                        if filtered.is_empty() {
+                            ui.label(
+                                RichText::new(format!(
+                                    "No lines match the \"{}\" filter ({} hidden). Switch to All.",
+                                    self.log_filter.as_str(),
+                                    self.log_lines.len()
+                                ))
+                                .small()
+                                .color(text_hint(&self.settings.theme)),
+                            );
+                            ui.add_space(4.0);
+                        }
                         let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
-                        let window = &filtered[start..];
+                        let window = if filtered.is_empty() {
+                            &filtered[..]
+                        } else {
+                            &filtered[start..]
+                        };
                         let inner_h = ui.available_height().max(40.0);
                         egui::ScrollArea::vertical()
                             .max_height(inner_h)

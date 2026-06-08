@@ -27,22 +27,22 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn schedule_log_save(&mut self) {
-        self.log_save_deadline = Some(Instant::now() + QUEUE_SAVE_DEBOUNCE);
-    }
-
     pub(super) fn maybe_flush_log_save(&mut self) {
-        if let Some(deadline) = self.log_save_deadline {
+        let mut core = self.shared_core.lock();
+        if let Some(deadline) = core.log_save_deadline {
             if Instant::now() >= deadline {
-                self.log_save_deadline = None;
-                self.flush_log_to_disk();
+                core.log_save_deadline = None;
+                if let Err(err) = save_activity_log(&core.log_lines) {
+                    eprintln!("rustdl: failed to save activity log: {err}");
+                }
             }
         }
     }
 
     pub(super) fn flush_log_to_disk(&mut self) {
-        self.log_save_deadline = None;
-        if let Err(err) = save_activity_log(&self.log_lines) {
+        let mut core = self.shared_core.lock();
+        core.log_save_deadline = None;
+        if let Err(err) = save_activity_log(&core.log_lines) {
             eprintln!("rustdl: failed to save activity log: {err}");
         }
     }
@@ -56,8 +56,9 @@ impl PydlApp {
     }
 
     pub(super) fn clear_activity_log(&mut self) {
-        self.log_lines.clear();
-        self.flush_log_to_disk();
+        let mut core = self.shared_core.lock();
+        core.clear_activity_log();
+        self.log_lines = core.log_lines.clone();
     }
 
     pub(super) fn open_activity_log_file(&mut self) {
