@@ -632,7 +632,8 @@ impl DownloadCore {
                 return Some((entry.bytes.clone(), entry.content_type.clone()));
             }
         }
-        if let Some(found) = crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key) {
+        if let Some(found) = crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key)
+        {
             return Some(found);
         }
         if self

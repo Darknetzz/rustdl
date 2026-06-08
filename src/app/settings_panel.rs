@@ -14,7 +14,11 @@ use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
 const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
 
-fn settings_form_grid<R>(ui: &mut egui::Ui, id_salt: &str, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+fn settings_form_grid<R>(
+    ui: &mut egui::Ui,
+    id_salt: &str,
+    f: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
     egui::Grid::new(ui.id().with(id_salt))
         .num_columns(2)
         .min_col_width(SETTINGS_FORM_LABEL_WIDTH)

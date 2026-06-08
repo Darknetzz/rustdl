@@ -91,7 +91,10 @@ pub struct ModePanelColors<'a> {
 
 impl<'a> ModePanelColors<'a> {
     pub fn new(downloader: &'a str, convert: &'a str) -> Self {
-        Self { downloader, convert }
+        Self {
+            downloader,
+            convert,
+        }
     }
 }
 

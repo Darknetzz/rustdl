@@ -91,16 +91,7 @@ impl PydlApp {
         inner_margin: egui::Margin,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
     ) -> R {
-        show_mode_panel(
-            ui,
-            theme,
-            av1,
-            colors,
-            inner_margin,
-            8.0,
-            add_contents,
-        )
-        .inner
+        show_mode_panel(ui, theme, av1, colors, inner_margin, 8.0, add_contents).inner
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).

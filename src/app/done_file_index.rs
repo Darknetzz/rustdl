@@ -409,7 +409,8 @@ mod tests {
     #[test]
     #[cfg(windows)]
     fn resolve_path_under_output_accepts_extended_length_prefix() {
-        let saved = r"\\?\D:\Kriss\Downloads\Last two Afghan Jews fighting each other [b4fx6BjWEqk].mkv";
+        let saved =
+            r"\\?\D:\Kriss\Downloads\Last two Afghan Jews fighting each other [b4fx6BjWEqk].mkv";
         if Path::new(saved).is_file() {
             assert!(super::resolve_path_under_output(r"D:\Kriss\Downloads", saved).is_some());
         }

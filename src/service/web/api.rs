@@ -692,16 +692,7 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<Response, StatusCode> {
-    let (
-        candidates,
-        client,
-        local_thumb,
-        ffmpeg_path,
-        has_ffmpeg,
-        source_key,
-        cached,
-        core_ref,
-    ) = {
+    let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg, source_key, cached, core_ref) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
         if !c.has_ffmpeg {
