@@ -1279,6 +1279,41 @@ impl<'a> ButtonGroup<'a> {
                 .response
         })
     }
+
+    /// Cancel every active/queued download: return to Ready or remove from queue.
+    pub fn cancel_all_menu(
+        &mut self,
+        enabled: bool,
+        ready_clicked: &mut bool,
+        remove_clicked: &mut bool,
+    ) -> Response {
+        let compact = self.compact;
+        let label = format!("{} Cancel all...", ui_icons::CANCEL_TO_READY);
+        self.add(|ui| {
+            if !enabled {
+                return grouped_warning_button(ui, &label, false, compact)
+                    .on_disabled_hover_text("No active or queued downloads to cancel");
+            }
+            ui.menu_button(grouped_button_label(&label, compact), |ui| {
+                if ui
+                    .button(format!("{} Cancel all -> Ready", ui_icons::CANCEL_TO_READY))
+                    .on_hover_text("Stop active downloads and return items to Ready")
+                    .clicked()
+                {
+                    *ready_clicked = true;
+                }
+                if ui
+                    .button(format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE))
+                    .on_hover_text("Stop active downloads and remove items from the queue")
+                    .clicked()
+                {
+                    *remove_clicked = true;
+                }
+            })
+            .response
+            .on_hover_text("Cancel all active or queued downloads")
+        })
+    }
 }
 
 pub fn button_group<R>(

@@ -50,13 +50,14 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Main header **Settings** and **Exit** buttons align to the far right again (header row uses full content width).
 - Settings → Shared: **Copy** API token button briefly shows **Copied!** after a successful clipboard copy.
 - Main window and docked queue panels keep the right-side content inset again (scroll-area width no longer bleeds to the window edge).
 - LAN web UI: queue thumbnails load from a shared cache populated by the desktop app and fixed proxy fetch order (metadata URL before local ffmpeg); thumbnail retries no longer stick after transient failures.
 - Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
 - Removed duplicate **Effective command preview** block in Settings → Downloader.
-- **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating).
+- **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating), grouped under a **Cancel all…** dropdown.
 
 ## [0.1.3] - 2026-06-08
 

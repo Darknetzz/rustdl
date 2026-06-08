@@ -603,7 +603,8 @@ impl PydlApp {
     /// Logo, title, status, tool checks, and disk on the left; log / Settings / Exit on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         self.constrain_content(ui);
-        ui.horizontal(|ui| {
+        with_full_width(ui, |ui| {
+            ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 12.0;
             let sz = egui::vec2(40.0, 40.0);
             let img = ui.add(
@@ -699,6 +700,7 @@ impl PydlApp {
                     },
                 );
             }
+            });
         });
     }
 }

@@ -132,6 +132,9 @@ impl PydlApp {
         };
         let mut export_queue = false;
         let mut import_queue = false;
+        let mut cancel_all_ready = false;
+        let mut cancel_all_remove = false;
+        let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
         draw(ui, &mut |g| {
             if self.downloads_paused {
                 if g.success(
@@ -151,26 +154,7 @@ impl PydlApp {
             {
                 self.pause_all_downloads();
             }
-            if self.status_queued > 0 || self.status_active > 0 {
-                if g
-                    .warning(
-                        &format!("{} Cancel all -> Ready", ui_icons::CANCEL_TO_READY),
-                        true,
-                    )
-                    .clicked()
-                {
-                    self.cancel_all_active(super::CancelPostAction::Ready);
-                }
-                if g
-                    .danger(
-                        &format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE),
-                        true,
-                    )
-                    .clicked()
-                {
-                    self.cancel_all_active(super::CancelPostAction::Remove);
-                }
-            }
+            g.cancel_all_menu(can_cancel_all, &mut cancel_all_ready, &mut cancel_all_remove);
             if g.secondary(
                 &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
                 true,
@@ -233,6 +217,12 @@ impl PydlApp {
         }
         if import_queue {
             self.import_queue_from_file();
+        }
+        if cancel_all_ready {
+            self.cancel_all_active(super::CancelPostAction::Ready);
+        }
+        if cancel_all_remove {
+            self.cancel_all_active(super::CancelPostAction::Remove);
         }
     }
 
