@@ -167,6 +167,27 @@
           <label class="check"><input type="checkbox" id="set-log-relative" /> Relative timestamps in activity log</label>
           <label>Max log chars <input type="number" id="set-log-max" min="2000" max="200000" step="1000" /></label>
 
+          <h3>Mode panel colors</h3>
+          <p class="hint">Panel tint and accent stripe for Downloader and Video Converter. Leave default or pick a custom color.</p>
+          <div class="mode-color-row">
+            <label>Downloader
+              <span class="mode-color-inputs">
+                <input type="color" id="set-mode-downloader-color" value="#42a5f5" />
+                <input type="text" id="set-mode-downloader-hex" class="mode-color-hex" placeholder="#42a5f5" maxlength="7" spellcheck="false" />
+                <button type="button" id="btn-mode-downloader-default" class="secondary mode-color-default">Default</button>
+              </span>
+            </label>
+          </div>
+          <div class="mode-color-row">
+            <label>Video Converter
+              <span class="mode-color-inputs">
+                <input type="color" id="set-mode-convert-color" value="#ab47bc" />
+                <input type="text" id="set-mode-convert-hex" class="mode-color-hex" placeholder="#ab47bc" maxlength="7" spellcheck="false" />
+                <button type="button" id="btn-mode-convert-default" class="secondary mode-color-default">Default</button>
+              </span>
+            </label>
+          </div>
+
           <h3>Layout presets</h3>
           <p class="hint">One-click display bundles (does not change download options).</p>
           <div class="btn-group layout-preset-row" role="group" aria-label="Layout presets">

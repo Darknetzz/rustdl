@@ -7,8 +7,8 @@ use egui::layers::ShapeIdx;
 use crate::disk_space::{DiskSpace, DiskSpaceLevel};
 use crate::models::ItemStatus;
 use crate::theme::{
-    mode_accent_for, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_CONVERT,
-    MODE_DOWNLOADER,
+    mode_accent_for, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted,
+    MODE_CONVERT, MODE_DOWNLOADER,
 };
 use crate::ui_icons;
 
@@ -342,7 +342,12 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 5.0;
                 draw_status_dot(ui, fade_color(dot_color, dot_alpha));
-                ui.label(RichText::new(info.label).size(HEADER_STATUS_FONT_SIZE).strong().color(text_color));
+                ui.label(
+                    RichText::new(info.label)
+                        .size(HEADER_STATUS_FONT_SIZE)
+                        .strong()
+                        .color(text_color),
+                );
             })
         })
         .response
@@ -1343,7 +1348,10 @@ impl<'a> ButtonGroup<'a> {
                     *ready_clicked = true;
                 }
                 if ui
-                    .button(format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE))
+                    .button(format!(
+                        "{} Cancel all -> Remove",
+                        ui_icons::CANCEL_TO_REMOVE
+                    ))
                     .on_hover_text("Stop active downloads and remove items from the queue")
                     .clicked()
                 {

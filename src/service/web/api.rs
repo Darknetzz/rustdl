@@ -670,7 +670,9 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
         UiEvent::ConvertDuration {
             item_id,
             duration_ms,
-        } => serde_json::json!({"type":"convert_duration","item_id":item_id,"duration_ms":duration_ms}),
+        } => {
+            serde_json::json!({"type":"convert_duration","item_id":item_id,"duration_ms":duration_ms})
+        }
         UiEvent::ConvertMediaProbed { item_id, .. } => {
             serde_json::json!({"type":"convert_media_probed","item_id":item_id})
         }

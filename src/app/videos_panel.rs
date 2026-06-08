@@ -6,10 +6,9 @@ use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, content_width,
-    draw_batch_progress_bar, draw_status_dot, fill_allocated_rect, left_button_row,
-    persist_resizable_window_size, remaining_ui_height, show_mode_panel, status_color,
-    with_full_width,
+    compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
+    draw_status_dot, fill_allocated_rect, left_button_row, persist_resizable_window_size,
+    remaining_ui_height, show_mode_panel, status_color, with_full_width,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -88,10 +87,22 @@ impl PydlApp {
         ui: &mut egui::Ui,
         theme: &str,
         av1: bool,
+        mode_downloader_color: &str,
+        mode_convert_color: &str,
         inner_margin: egui::Margin,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
     ) -> R {
-        show_mode_panel(ui, theme, av1, inner_margin, 8.0, add_contents).inner
+        show_mode_panel(
+            ui,
+            theme,
+            av1,
+            mode_downloader_color,
+            mode_convert_color,
+            inner_margin,
+            8.0,
+            add_contents,
+        )
+        .inner
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
@@ -145,7 +156,11 @@ impl PydlApp {
             {
                 self.pause_all_downloads();
             }
-            g.cancel_all_menu(can_cancel_all, &mut cancel_all_ready, &mut cancel_all_remove);
+            g.cancel_all_menu(
+                can_cancel_all,
+                &mut cancel_all_ready,
+                &mut cancel_all_remove,
+            );
             if g.secondary(
                 &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
                 true,
@@ -326,7 +341,11 @@ impl PydlApp {
 
     /// Window/panel chrome (dock, hide) on its own row; queue batch actions below.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
-        let heading = if self.convert_mode { "Convert queue" } else { "Videos" };
+        let heading = if self.convert_mode {
+            "Convert queue"
+        } else {
+            "Videos"
+        };
         left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
@@ -408,7 +427,11 @@ impl PydlApp {
 
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
-        let heading = if self.convert_mode { "Convert queue" } else { "Videos" };
+        let heading = if self.convert_mode {
+            "Convert queue"
+        } else {
+            "Videos"
+        };
         let window_title = self.videos_window_title();
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -417,6 +440,8 @@ impl PydlApp {
                 ui,
                 &theme,
                 av1,
+                &self.settings.mode_downloader_color,
+                &self.settings.mode_convert_color,
                 egui::Margin::symmetric(12.0, 10.0),
                 |ui| {
                     self.constrain_content(ui);
@@ -523,8 +548,7 @@ impl PydlApp {
         if progress.is_empty() {
             return;
         }
-        let busy =
-            self.status_active > 0 || self.queue_running > 0 || self.add_in_progress;
+        let busy = self.status_active > 0 || self.queue_running > 0 || self.add_in_progress;
         let mut caption = format!(
             "Batch progress: {:.1}% · {}/{} done",
             progress.percent(),
@@ -550,8 +574,7 @@ impl PydlApp {
 
         let totals = self.transfer_totals();
         if totals.with_known_total > 0 && totals.known_total_bytes > 0 {
-            let frac =
-                totals.downloaded_bytes as f32 / totals.known_total_bytes.max(1) as f32;
+            let frac = totals.downloaded_bytes as f32 / totals.known_total_bytes.max(1) as f32;
             let pct = (frac * 100.0).clamp(0.0, 100.0);
             draw_batch_progress_bar(
                 ui,
@@ -658,20 +681,28 @@ impl PydlApp {
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
 
-        Self::draw_mode_queue_panel(ui, &theme, av1, QUEUE_MODE_PANEL_MARGIN, |ui| {
-            ui.set_max_height(body_h);
-            let inner_w = content_width(ui).max(1.0);
-            allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
-                self.draw_videos_queue_body(
-                    ui,
-                    VideosQueueLayout {
-                        scroll_id: "rustdl_videos_dock_scroll",
-                        dock_log,
-                        log_dock_height: self.settings.log_dock_height,
-                    },
-                );
-            });
-        });
+        Self::draw_mode_queue_panel(
+            ui,
+            &theme,
+            av1,
+            &self.settings.mode_downloader_color,
+            &self.settings.mode_convert_color,
+            QUEUE_MODE_PANEL_MARGIN,
+            |ui| {
+                ui.set_max_height(body_h);
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                    self.draw_videos_queue_body(
+                        ui,
+                        VideosQueueLayout {
+                            scroll_id: "rustdl_videos_dock_scroll",
+                            dock_log,
+                            log_dock_height: self.settings.log_dock_height,
+                        },
+                    );
+                });
+            },
+        );
         // egui persists panel height from content rect; claim leftover space at the panel root.
         consume_remaining_ui_space(ui);
         if !ui.ctx().input(|i| i.pointer.any_down()) {
@@ -713,16 +744,24 @@ impl PydlApp {
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             fill_allocated_rect(ui);
-            Self::draw_mode_queue_panel(ui, &theme, av1, QUEUE_MODE_PANEL_MARGIN, |ui| {
-                self.draw_videos_queue_body(
-                    ui,
-                    VideosQueueLayout {
-                        scroll_id: "rustdl_videos_float_v4",
-                        dock_log: false,
-                        log_dock_height: self.settings.log_dock_height,
-                    },
-                );
-            });
+            Self::draw_mode_queue_panel(
+                ui,
+                &theme,
+                av1,
+                &self.settings.mode_downloader_color,
+                &self.settings.mode_convert_color,
+                QUEUE_MODE_PANEL_MARGIN,
+                |ui| {
+                    self.draw_videos_queue_body(
+                        ui,
+                        VideosQueueLayout {
+                            scroll_id: "rustdl_videos_float_v4",
+                            dock_log: false,
+                            log_dock_height: self.settings.log_dock_height,
+                        },
+                    );
+                },
+            );
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {

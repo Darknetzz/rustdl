@@ -1,9 +1,8 @@
 use super::*;
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped,
-    content_width, dock_panel_horizontal_frame, draw_mode_nav_bar,
-    draw_navbar_status_badge, left_button_row, show_mode_panel, with_full_width,
-    UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
+    bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
+    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row,
+    show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -64,7 +63,8 @@ impl eframe::App for PydlApp {
         }
         let trigger_add = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
-        let trigger_settings = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Comma));
+        let trigger_settings =
+            ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Comma));
         let trigger_focus_search =
             ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F));
         let trigger_toggle_log = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::L));
@@ -127,8 +127,14 @@ impl eframe::App for PydlApp {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 self.draw_config_load_banner(ui);
-                let (dl_nav, av1_nav) =
-                    draw_mode_nav_bar(ui, &self.settings.theme, !self.convert_mode, self.convert_mode);
+                let (dl_nav, av1_nav) = draw_mode_nav_bar(
+                    ui,
+                    &self.settings.theme,
+                    !self.convert_mode,
+                    self.convert_mode,
+                    &self.settings.mode_downloader_color,
+                    &self.settings.mode_convert_color,
+                );
                 if dl_nav {
                     self.set_app_mode(false);
                 }
@@ -204,6 +210,8 @@ impl eframe::App for PydlApp {
                         ui,
                         &theme,
                         true,
+                        &self.settings.mode_downloader_color,
+                        &self.settings.mode_convert_color,
                         egui::Margin::same(12.0),
                         10.0,
                         |ui| {
@@ -215,6 +223,8 @@ impl eframe::App for PydlApp {
                     ui,
                     &theme,
                     false,
+                    &self.settings.mode_downloader_color,
+                    &self.settings.mode_convert_color,
                     egui::Margin::same(12.0),
                     10.0,
                     |ui| {

@@ -88,6 +88,113 @@ function applyWebTheme(theme) {
   if (btn) btn.textContent = t === "light" ? "Dark theme" : "Light theme";
 }
 
+const DEFAULT_MODE_DOWNLOADER = "#42a5f5";
+const DEFAULT_MODE_CONVERT = "#ab47bc";
+
+function normalizeModeHex(raw, fallback) {
+  let s = String(raw || "").trim().toLowerCase();
+  if (!s) return fallback;
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (/^#[0-9a-f]{6}$/.test(s)) return s;
+  if (/^#[0-9a-f]{3}$/.test(s)) {
+    return `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`;
+  }
+  return fallback;
+}
+
+function hexToRgb(hex) {
+  const h = normalizeModeHex(hex, "#000000").slice(1);
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+
+function applyModeColors(settings) {
+  const dl = normalizeModeHex(settings?.mode_downloader_color, DEFAULT_MODE_DOWNLOADER);
+  const cv = normalizeModeHex(settings?.mode_convert_color, DEFAULT_MODE_CONVERT);
+  const dlRgb = hexToRgb(dl);
+  const cvRgb = hexToRgb(cv);
+  const root = document.documentElement;
+  root.style.setProperty("--mode-downloader", dl);
+  root.style.setProperty(
+    "--mode-downloader-soft",
+    `rgba(${dlRgb.r}, ${dlRgb.g}, ${dlRgb.b}, 0.1)`,
+  );
+  root.style.setProperty(
+    "--mode-downloader-border",
+    `rgba(${dlRgb.r}, ${dlRgb.g}, ${dlRgb.b}, 0.32)`,
+  );
+  root.style.setProperty("--mode-convert", cv);
+  root.style.setProperty(
+    "--mode-convert-soft",
+    `rgba(${cvRgb.r}, ${cvRgb.g}, ${cvRgb.b}, 0.1)`,
+  );
+  root.style.setProperty(
+    "--mode-convert-border",
+    `rgba(${cvRgb.r}, ${cvRgb.g}, ${cvRgb.b}, 0.32)`,
+  );
+}
+
+function readModeColorField(pickerId, hexId) {
+  const hexEl = document.getElementById(hexId);
+  const pickerEl = document.getElementById(pickerId);
+  const typed = hexEl?.value?.trim() || "";
+  if (typed) return typed;
+  return pickerEl?.value || "";
+}
+
+function syncModeColorControls(pickerId, hexId, storedHex, fallback) {
+  const picker = document.getElementById(pickerId);
+  const hex = document.getElementById(hexId);
+  if (!picker || !hex) return;
+  const effective = normalizeModeHex(storedHex, fallback);
+  picker.value = effective;
+  hex.value = storedHex?.trim() || "";
+}
+
+function wireModeColorRow(pickerId, hexId, defaultBtnId, fallback) {
+  const picker = document.getElementById(pickerId);
+  const hex = document.getElementById(hexId);
+  const reset = document.getElementById(defaultBtnId);
+  if (!picker || !hex) return;
+  picker.addEventListener("input", () => {
+    hex.value = picker.value;
+    applyModeColors({
+      mode_downloader_color: readModeColorField(
+        "set-mode-downloader-color",
+        "set-mode-downloader-hex",
+      ),
+      mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
+    });
+  });
+  hex.addEventListener("input", () => {
+    const normalized = normalizeModeHex(hex.value, fallback);
+    if (/^#[0-9a-f]{6}$/.test(normalized)) {
+      picker.value = normalized;
+    }
+    applyModeColors({
+      mode_downloader_color: readModeColorField(
+        "set-mode-downloader-color",
+        "set-mode-downloader-hex",
+      ),
+      mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
+    });
+  });
+  reset?.addEventListener("click", () => {
+    hex.value = "";
+    picker.value = fallback;
+    applyModeColors({
+      mode_downloader_color: readModeColorField(
+        "set-mode-downloader-color",
+        "set-mode-downloader-hex",
+      ),
+      mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
+    });
+  });
+}
+
 function initWebTheme() {
   const stored = localStorage.getItem(WEB_THEME_KEY);
   if (stored === "light" || stored === "dark") {
@@ -1680,6 +1787,7 @@ async function refreshSettingsCache() {
     const res = await api("/api/settings");
     const data = await res.json();
     cachedSettings = data.settings;
+    applyModeColors(cachedSettings);
   } catch {
     /* settings optional until connected */
   }
@@ -1830,6 +1938,18 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-autoscroll-log", s.autoscroll_log);
   setCheck("set-log-relative", s.log_relative_time);
   setVal("set-log-max", s.log_max_chars);
+  syncModeColorControls(
+    "set-mode-downloader-color",
+    "set-mode-downloader-hex",
+    s.mode_downloader_color,
+    DEFAULT_MODE_DOWNLOADER,
+  );
+  syncModeColorControls(
+    "set-mode-convert-color",
+    "set-mode-convert-hex",
+    s.mode_convert_color,
+    DEFAULT_MODE_CONVERT,
+  );
   setVal("set-ffmpeg-path", s.ffmpeg_path);
   setVal("set-ffprobe-path", s.ffprobe_path);
   const qs = document.getElementById("queue-search");
@@ -1902,6 +2022,11 @@ function collectSettingsForm(base) {
   s.autoscroll_log = document.getElementById("set-autoscroll-log").checked;
   s.log_relative_time = document.getElementById("set-log-relative").checked;
   s.log_max_chars = parseInt(document.getElementById("set-log-max").value, 10) || 28000;
+  s.mode_downloader_color = readModeColorField(
+    "set-mode-downloader-color",
+    "set-mode-downloader-hex",
+  );
+  s.mode_convert_color = readModeColorField("set-mode-convert-color", "set-mode-convert-hex");
   s.ffmpeg_path = document.getElementById("set-ffmpeg-path").value;
   s.ffprobe_path = document.getElementById("set-ffprobe-path").value;
 
@@ -2687,6 +2812,20 @@ document.getElementById("btn-convert-settings").onclick = () =>
 applyStaticButtonIcons();
 
 initWebTheme();
+
+wireModeColorRow(
+  "set-mode-downloader-color",
+  "set-mode-downloader-hex",
+  "btn-mode-downloader-default",
+  DEFAULT_MODE_DOWNLOADER,
+);
+wireModeColorRow(
+  "set-mode-convert-color",
+  "set-mode-convert-hex",
+  "btn-mode-convert-default",
+  DEFAULT_MODE_CONVERT,
+);
+applyModeColors(cachedSettings);
 
 document.getElementById("btn-theme-toggle")?.addEventListener("click", () => {
   const next = document.body.classList.contains("theme-light") ? "dark" : "light";

@@ -48,7 +48,10 @@ pub struct DownloaderThumbnailSave<'a> {
     pub bytes: &'a [u8],
 }
 
-pub fn save_downloader_thumbnail(item_id: u64, save: DownloaderThumbnailSave<'_>) -> Result<String> {
+pub fn save_downloader_thumbnail(
+    item_id: u64,
+    save: DownloaderThumbnailSave<'_>,
+) -> Result<String> {
     save_downloader_thumbnail_at(&downloader_thumbnail_dir(), item_id, save)
 }
 
@@ -70,7 +73,8 @@ pub fn save_downloader_thumbnail_at(
     };
     fs::write(image_file(base, item_id), save.bytes)
         .with_context(|| format!("failed to write thumbnail image for item {item_id}"))?;
-    let raw = serde_json::to_string_pretty(&record).context("failed to serialize thumbnail meta")?;
+    let raw =
+        serde_json::to_string_pretty(&record).context("failed to serialize thumbnail meta")?;
     fs::write(meta_path(base, item_id), raw)
         .with_context(|| format!("failed to write thumbnail meta for item {item_id}"))?;
     Ok(rel)

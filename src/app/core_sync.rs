@@ -122,14 +122,14 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
     app.queue_dirty = false;
 
     if app.settings.show_thumbnails {
-        let new_thumbnails: Vec<(u64, String)> = app
+        let new_item_ids: Vec<u64> = app
             .items
             .iter()
             .filter(|it| !previous_item_ids.contains(&it.item_id))
-            .filter_map(|it| it.thumbnail_url.clone().map(|url| (it.item_id, url)))
+            .map(|it| it.item_id)
             .collect();
-        for (item_id, url) in new_thumbnails {
-            app.queue_thumbnail_load(item_id, url);
+        for item_id in new_item_ids {
+            app.queue_thumbnail_load(item_id);
         }
     }
     app.ensure_convert_thumbnails();

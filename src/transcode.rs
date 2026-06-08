@@ -886,7 +886,10 @@ where
     }
     append_encoder_rate_control(&mut cmd, enc, target_bitrate_bps);
     let (audio_codec, audio_bitrate) = default_audio_for_output(&plan.output, target);
-    cmd.arg("-c:a").arg(audio_codec).arg("-b:a").arg(audio_bitrate);
+    cmd.arg("-c:a")
+        .arg(audio_codec)
+        .arg("-b:a")
+        .arg(audio_bitrate);
     append_container_mux_args(&mut cmd, &plan.output, enc);
     cmd.arg(&plan.output)
         .stdout(Stdio::piped())

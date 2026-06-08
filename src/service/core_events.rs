@@ -141,7 +141,10 @@ impl super::core::DownloadCore {
             return;
         }
 
-        let state = self.convert_progress_state.remove(&item_id).unwrap_or_default();
+        let state = self
+            .convert_progress_state
+            .remove(&item_id)
+            .unwrap_or_default();
         let current_secs = state
             .get("out_time")
             .and_then(|v| crate::transcode::parse_ffmpeg_out_time_secs(v));

@@ -1,9 +1,10 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use image::imageops::FilterType;
 
 use crate::convert_state::convert_source_path_missing;
+use crate::models::ItemStatus;
 
 use super::queue_cache::{THUMBNAIL_DECODE_MAX_WIDTH, THUMBNAIL_QUEUE_SOFT_CAP};
 use super::{background_spawn, events::try_send_ui, PydlApp, UiEvent};
@@ -44,22 +45,37 @@ impl PydlApp {
         })
     }
 
-    pub(super) fn queue_thumbnail_load(&mut self, item_id: u64, url: String) {
+    pub(super) fn queue_thumbnail_load(&mut self, item_id: u64) {
         if !self.thumbnails_allowed_for_queue(item_id) {
             return;
         }
         if self.textures.contains_key(&item_id) || self.thumbnail_inflight.contains(&item_id) {
             return;
         }
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let item = self.items[idx].clone();
+        let urls = crate::ytdlp::thumbnail_url_candidates(&item);
+        let local_media = if matches!(item.status, ItemStatus::Done | ItemStatus::Failed) {
+            self.find_downloaded_file_for_item(&item)
+                .map(|(path, _)| path)
+                .filter(|path| queue_local_thumbnail_supported(path))
+        } else {
+            None
+        };
+        if urls.is_empty() && local_media.is_none() {
+            return;
+        }
         self.thumbnail_inflight.insert(item_id);
-        let source_key = self.item_idx(item_id).map(|idx| {
-            crate::service::core::DownloadCore::queue_thumbnail_source_key(&self.items[idx])
-        });
+        let source_key = crate::service::core::DownloadCore::queue_thumbnail_source_key(&item);
         let bus = self.ui_bus.clone();
         let rt = self.runtime.clone();
         let client = self.http_client.clone();
         let sem = self.thumb_semaphore.clone();
         let shared_core = self.shared_core.clone();
+        let has_ffmpeg = self.has_ffmpeg;
+        let ffmpeg_path = self.settings.ffmpeg_path.clone();
         rt.spawn(async move {
             let permit = sem.acquire_owned().await;
             let Ok(_permit) = permit else {
@@ -72,30 +88,30 @@ impl PydlApp {
                 );
                 return;
             };
-            let bytes = if let Some(key) = source_key.as_ref() {
-                shared_core
-                    .lock()
-                    .cached_thumbnail_bytes(item_id, key)
-                    .map(|(b, _)| b)
-            } else {
-                None
-            };
+            let bytes = shared_core
+                .lock()
+                .cached_thumbnail_bytes(item_id, &source_key)
+                .map(|(b, _)| b);
             let bytes = if bytes.is_some() {
                 bytes
             } else {
-                crate::ytdlp::fetch_thumbnail_bytes(&client, &url)
-                    .await
-                    .map(|(b, content_type)| {
-                        if let Some(key) = source_key.as_ref() {
-                            shared_core.lock().cache_thumbnail_bytes(
-                                item_id,
-                                key.clone(),
-                                b.clone(),
-                                content_type,
-                            );
-                        }
-                        b
-                    })
+                fetch_queue_thumbnail_bytes(
+                    &client,
+                    &urls,
+                    local_media.as_deref(),
+                    has_ffmpeg,
+                    &ffmpeg_path,
+                )
+                .await
+                .map(|(b, content_type)| {
+                    shared_core.lock().cache_thumbnail_bytes(
+                        item_id,
+                        source_key.clone(),
+                        b.clone(),
+                        content_type,
+                    );
+                    b
+                })
             };
             let image = match bytes {
                 None => None,
@@ -155,6 +171,43 @@ impl PydlApp {
             self.queue_convert_local_thumbnail(item_id, path, ffmpeg_path.clone());
         }
     }
+}
+
+fn queue_local_thumbnail_supported(path: &Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("mp4" | "webm" | "mkv" | "mov" | "m4v" | "avi")
+    )
+}
+
+async fn fetch_queue_thumbnail_bytes(
+    client: &reqwest::Client,
+    urls: &[String],
+    local_media: Option<&Path>,
+    has_ffmpeg: bool,
+    ffmpeg_path: &str,
+) -> Option<(Vec<u8>, String)> {
+    for url in urls {
+        if let Some(found) = crate::ytdlp::fetch_thumbnail_bytes(client, url).await {
+            return Some(found);
+        }
+    }
+    let path = local_media?;
+    if !has_ffmpeg {
+        return None;
+    }
+    let ffmpeg_path = ffmpeg_path.to_owned();
+    let path = path.to_path_buf();
+    let png = tokio::task::spawn_blocking(move || {
+        crate::transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
+    })
+    .await
+    .ok()
+    .flatten()?;
+    Some((png, "image/png".to_owned()))
 }
 
 #[cfg(test)]

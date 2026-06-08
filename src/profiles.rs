@@ -271,7 +271,11 @@ pub fn rename_user_profile(store: &mut ProfileStore, old_name: &str, new_name: &
     let Some(idx) = store.user_profiles.iter().position(|p| p.name == old_name) else {
         anyhow::bail!("profile not found");
     };
-    if store.user_profiles.iter().any(|p| p.name == new_name && p.name != old_name) {
+    if store
+        .user_profiles
+        .iter()
+        .any(|p| p.name == new_name && p.name != old_name)
+    {
         anyhow::bail!("a profile with that name already exists");
     }
     store.user_profiles[idx].name = new_name.to_owned();

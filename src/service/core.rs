@@ -12,7 +12,6 @@ use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
 use crate::app::events::{UiEvent, UiEventBus};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
-use crate::transcode::EncoderChoice;
 use crate::config::{
     load_activity_log, load_convert_queue_snapshot, load_queue_items, load_settings,
     save_activity_log, save_queue_items, save_settings, trim_activity_log, AppSettings,
@@ -20,6 +19,7 @@ use crate::config::{
 };
 use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
+use crate::transcode::EncoderChoice;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
     build_download_extra_args, build_redownload_extra_args, metadata_extra_args,
@@ -111,7 +111,10 @@ fn compute_next_item_id(items: &[QueueItem]) -> u64 {
         .saturating_add(1)
 }
 
-fn compute_convert_next_item_id(snapshot: &ConvertQueueSnapshot, items: &[ConvertQueueItem]) -> u64 {
+fn compute_convert_next_item_id(
+    snapshot: &ConvertQueueSnapshot,
+    items: &[ConvertQueueItem],
+) -> u64 {
     if items.is_empty() {
         1_000_000
     } else {
@@ -253,19 +256,21 @@ impl DownloadCore {
             None
         };
 
-        let (items, next_item_id, convert_input_paths, convert_items, convert_next_item_id) = if defer_restore {
-            (Vec::new(), 1, String::new(), Vec::new(), 1_000_000)
-        } else {
-            let next_item_id = compute_next_item_id(&restored_items);
-            let convert_next_item_id = compute_convert_next_item_id(&convert_snapshot, &restored_convert_items);
-            (
-                restored_items,
-                next_item_id,
-                convert_snapshot.input_paths.clone(),
-                restored_convert_items,
-                convert_next_item_id,
-            )
-        };
+        let (items, next_item_id, convert_input_paths, convert_items, convert_next_item_id) =
+            if defer_restore {
+                (Vec::new(), 1, String::new(), Vec::new(), 1_000_000)
+            } else {
+                let next_item_id = compute_next_item_id(&restored_items);
+                let convert_next_item_id =
+                    compute_convert_next_item_id(&convert_snapshot, &restored_convert_items);
+                (
+                    restored_items,
+                    next_item_id,
+                    convert_snapshot.input_paths.clone(),
+                    restored_convert_items,
+                    convert_next_item_id,
+                )
+            };
 
         let mut core = Self {
             runtime,
@@ -345,7 +350,8 @@ impl DownloadCore {
             return false;
         };
         let convert_snapshot = pending.convert_snapshot;
-        let convert_next_item_id = compute_convert_next_item_id(&convert_snapshot, &convert_snapshot.items);
+        let convert_next_item_id =
+            compute_convert_next_item_id(&convert_snapshot, &convert_snapshot.items);
         let input_paths = convert_snapshot.input_paths;
         let mut convert_items = convert_snapshot.items;
         let mut items = pending.downloader_items;

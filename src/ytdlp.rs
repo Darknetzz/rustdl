@@ -357,8 +357,7 @@ fn thumbnail_bytes_look_valid(bytes: &[u8], mime: Option<&str>) -> bool {
     if bytes.len() < 32 {
         return false;
     }
-    let mime_is_image = mime
-        .is_some_and(|m| m.to_ascii_lowercase().starts_with("image/"));
+    let mime_is_image = mime.is_some_and(|m| m.to_ascii_lowercase().starts_with("image/"));
     mime_is_image || thumbnail_bytes_have_image_magic(bytes)
 }
 

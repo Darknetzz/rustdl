@@ -210,6 +210,26 @@ impl PydlApp {
                                         .changed();
                                 });
                         });
+                        ui.label(RichText::new("Mode panel colors").strong());
+                        ui.label(
+                            RichText::new(
+                                "Tint and accent stripe for Downloader and Video Converter panels.",
+                            )
+                            .small()
+                            .color(crate::theme::text_hint(&self.settings.theme)),
+                        );
+                        changed |= crate::theme::draw_mode_color_row(
+                            ui,
+                            "Downloader",
+                            &mut self.settings.mode_downloader_color,
+                            crate::theme::MODE_DOWNLOADER,
+                        );
+                        changed |= crate::theme::draw_mode_color_row(
+                            ui,
+                            "Video Converter",
+                            &mut self.settings.mode_convert_color,
+                            crate::theme::MODE_CONVERT,
+                        );
                         ui.horizontal(|ui| {
                             ui.label("Max log chars");
                             changed |= ui

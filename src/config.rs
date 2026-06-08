@@ -177,7 +177,10 @@ pub struct AppSettings {
     #[serde(default, alias = "av1_reencode_av1")]
     pub convert_reencode_target: bool,
     /// Write outputs using a recommended container for the target codec.
-    #[serde(default = "default_convert_use_recommended_container", alias = "av1_use_recommended_container")]
+    #[serde(
+        default = "default_convert_use_recommended_container",
+        alias = "av1_use_recommended_container"
+    )]
     pub convert_use_recommended_container: bool,
     /// Target video codec: `av1`, `hevc`, or `h264`.
     #[serde(default = "default_convert_target_codec", alias = "av1_target_codec")]
@@ -195,7 +198,10 @@ pub struct AppSettings {
     #[serde(default, alias = "av1_min_shrink_percent")]
     pub convert_min_shrink_percent: f32,
     /// Keep converter queue items across app restarts until manually cleared.
-    #[serde(default = "default_convert_remember_queue", alias = "av1_remember_queue")]
+    #[serde(
+        default = "default_convert_remember_queue",
+        alias = "av1_remember_queue"
+    )]
     pub convert_remember_queue: bool,
     /// Last top-level mode: `downloader` or `convert`.
     #[serde(default = "default_last_mode")]

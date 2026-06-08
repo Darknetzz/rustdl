@@ -170,6 +170,10 @@ impl PydlApp {
                     if completed {
                         self.probe_done_item_resolution_if_missing(item_id);
                         // Auto-enqueue to AV1 is applied on DownloadCore (works headless too).
+                        if self.settings.show_thumbnails && !self.textures.contains_key(&item_id) {
+                            self.thumbnail_attempted.remove(&item_id);
+                            self.queue_thumbnail_load(item_id);
+                        }
                     }
                     self.mark_transfer_totals_dirty();
                     self.schedule_queue_save();
@@ -243,7 +247,6 @@ impl PydlApp {
             ctx.request_repaint();
         }
     }
-
 }
 
 #[cfg(test)]

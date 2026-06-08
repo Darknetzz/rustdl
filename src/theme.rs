@@ -130,13 +130,11 @@ pub fn draw_mode_color_row(
         ui.label(label);
         let mut color = parse_mode_color(hex, default);
         let mut srgba = color.to_srgba_unmultiplied();
-        if ui.color_edit_button_srgba_unmultiplied(&mut srgba).changed() {
-            color = Color32::from_rgba_unmultiplied(
-                srgba.r,
-                srgba.g,
-                srgba.b,
-                srgba.a,
-            );
+        if ui
+            .color_edit_button_srgba_unmultiplied(&mut srgba)
+            .changed()
+        {
+            color = Color32::from_rgba_unmultiplied(srgba.r, srgba.g, srgba.b, srgba.a);
             *hex = format_mode_color_hex(color);
             changed = true;
         }

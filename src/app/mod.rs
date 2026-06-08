@@ -14,9 +14,10 @@ use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
 mod about;
-mod convert_panel;
 pub(crate) mod background_spawn;
 mod cards;
+mod command_palette;
+mod convert_panel;
 pub(crate) mod core_sync;
 pub(crate) mod done_file_index;
 mod download_control;
@@ -26,7 +27,6 @@ mod input_lines;
 pub(crate) mod log_panel;
 mod queue_cache;
 mod queue_persist;
-mod command_palette;
 mod settings_panel;
 mod thumbnails;
 mod update_check;
@@ -51,8 +51,8 @@ use crate::app_ui::{
     modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
-    default_downloads, export_queue_urls, load_settings, rustdl_config_dir,
-    save_settings, AppSettings, ConfigLoadIssue,
+    default_downloads, export_queue_urls, load_settings, rustdl_config_dir, save_settings,
+    AppSettings, ConfigLoadIssue,
 };
 use crate::models::ConvertQueueItem;
 use crate::models::{ItemStatus, QueueItem};
@@ -260,8 +260,9 @@ impl PydlApp {
             next_item_id,
         ) = {
             let mut core = shared_core.lock();
-            if crate::config::session_restore_discard_on_startup(&settings.session_restore_preference)
-                && core.pending_session_restore.is_some()
+            if crate::config::session_restore_discard_on_startup(
+                &settings.session_restore_preference,
+            ) && core.pending_session_restore.is_some()
             {
                 core.discard_pending_session_restore();
             }
@@ -848,7 +849,9 @@ impl PydlApp {
 
     pub(super) fn draw_output_disk_space(&self, ui: &mut egui::Ui) {
         use crate::app_parsing::human_bytes_ui;
-        use crate::app_ui::{disk_space_free_color, draw_disk_space_progress_bar, header_status_rich};
+        use crate::app_ui::{
+            disk_space_free_color, draw_disk_space_progress_bar, header_status_rich,
+        };
 
         let theme = &self.settings.theme;
         let muted = crate::theme::text_muted(theme);

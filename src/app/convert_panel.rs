@@ -3,20 +3,20 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, draw_labeled_meta_badge, draw_meta_badge,
-    draw_status_dot, left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
+    button_group, draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row,
+    status_color, status_dot_with_label, MetaBadgeKind,
 };
+use crate::config::AppSettings;
 use crate::convert_state::{
     compute_convert_batch_summary, convert_batch_totals_grew, convert_item_is_skipped,
     convert_item_status_label, convert_item_will_skip_already_target, convert_skip_hint_label,
     convert_source_path_missing, format_convert_batch_saved_line,
 };
-use crate::transcode;
-use crate::config::AppSettings;
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::service::DownloadCore;
 use crate::theme;
 use crate::theme::text_muted;
+use crate::transcode;
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -38,7 +38,13 @@ fn ellipsize_str(input: &str, max_chars: usize) -> String {
     out
 }
 
-fn draw_convert_bytes_arrow(ui: &mut egui::Ui, from: &str, to: &str, text_color: Color32, theme: &str) {
+fn draw_convert_bytes_arrow(
+    ui: &mut egui::Ui,
+    from: &str,
+    to: &str,
+    text_color: Color32,
+    theme: &str,
+) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(RichText::new(from).small().color(text_color));
@@ -153,7 +159,12 @@ fn draw_convert_will_skip_notice(ui: &mut egui::Ui, target_codec: &str) {
     );
 }
 
-fn draw_convert_media_badges(ui: &mut egui::Ui, item: &ConvertQueueItem, probing: bool, theme: &str) {
+fn draw_convert_media_badges(
+    ui: &mut egui::Ui,
+    item: &ConvertQueueItem,
+    probing: bool,
+    theme: &str,
+) {
     if probing {
         ui.label(
             RichText::new("Probing metadata...")
@@ -248,7 +259,11 @@ impl PydlApp {
     }
 
     /// Start/cancel/clear — lives in the Convert queue panel footer (docked or floating window).
-    pub(super) fn draw_convert_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+    pub(super) fn draw_convert_queue_action_toolbar_inner(
+        &mut self,
+        ui: &mut egui::Ui,
+        compact: bool,
+    ) {
         let ready_count = self
             .convert_items
             .iter()
@@ -511,7 +526,12 @@ impl PydlApp {
                 default_open,
             )
             .show_header(ui, |ui| {
-                status_dot_with_label(ui, &header_text, Self::convert_queue_group_color(label), true);
+                status_dot_with_label(
+                    ui,
+                    &header_text,
+                    Self::convert_queue_group_color(label),
+                    true,
+                );
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
@@ -631,10 +651,8 @@ impl PydlApp {
         let theme = &self.settings.theme;
         let done_color = status_color(ItemStatus::Done);
         let pending_color = status_color(ItemStatus::Idle);
-        let grew = convert_batch_totals_grew(
-            batch.completed_input_bytes,
-            batch.completed_output_bytes,
-        );
+        let grew =
+            convert_batch_totals_grew(batch.completed_input_bytes, batch.completed_output_bytes);
         let savings_color = if grew {
             CONVERT_SKIPPED_COLOR
         } else {
@@ -685,8 +703,7 @@ impl PydlApp {
         let theme = &self.settings.theme;
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
         let item_color = convert_item_status_color(it);
-        let output_codec =
-            transcode::normalize_target_codec(&self.settings.convert_target_codec);
+        let output_codec = transcode::normalize_target_codec(&self.settings.convert_target_codec);
         let will_skip_target = convert_item_will_skip_already_target(
             it,
             self.settings.convert_reencode_target,
@@ -757,7 +774,12 @@ impl PydlApp {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            status_dot_with_label(ui, convert_item_status_label(it), item_color, false);
+                            status_dot_with_label(
+                                ui,
+                                convert_item_status_label(it),
+                                item_color,
+                                false,
+                            );
                         });
 
                         if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {

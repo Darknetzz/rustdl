@@ -230,10 +230,7 @@ mod tests {
 
     #[test]
     fn bar_level_from_used_thresholds() {
-        assert_eq!(
-            DiskSpace::bar_level_from_used(80.0),
-            DiskSpaceLevel::Low
-        );
+        assert_eq!(DiskSpace::bar_level_from_used(80.0), DiskSpaceLevel::Low);
         assert_eq!(DiskSpace::bar_level_from_used(50.0), DiskSpaceLevel::Ok);
         assert_eq!(
             DiskSpace::bar_level_from_used(95.0),

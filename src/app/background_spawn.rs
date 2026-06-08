@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use crate::app::events::{try_send_ui, UiEvent, UiEventBus};
-use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::models::VideoPreview;
 use crate::pkg_version;
+use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
 
 fn remove_embed_thumbnail_arg(args: &[String]) -> Vec<String> {
@@ -135,8 +135,7 @@ pub(crate) fn spawn_queue_thumbnail_prefetch(core: crate::service::core::SharedC
     };
     rt.spawn(async move {
         for url in urls {
-            if let Some((bytes, content_type)) = ytdlp::fetch_thumbnail_bytes(&client, &url).await
-            {
+            if let Some((bytes, content_type)) = ytdlp::fetch_thumbnail_bytes(&client, &url).await {
                 let mut c = core.lock();
                 let Some(idx) = c.item_idx(item_id) else {
                     return;

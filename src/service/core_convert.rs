@@ -126,7 +126,9 @@ impl DownloadCore {
 
         let added = self.push_convert_plan_items(plan);
         if added > 0 {
-            self.append_log(&format!("Convert: added {added} video(s) to queue as ready."));
+            self.append_log(&format!(
+                "Convert: added {added} video(s) to queue as ready."
+            ));
             self.maybe_auto_start_convert_batch();
         } else {
             self.append_log("Convert: all video(s) from path(s) are already in the queue.");
@@ -275,7 +277,11 @@ impl DownloadCore {
         let cfg = self.convert_config();
 
         for (item_id, _, _) in &jobs {
-            if let Some(item) = self.convert_items.iter_mut().find(|x| x.item_id == *item_id) {
+            if let Some(item) = self
+                .convert_items
+                .iter_mut()
+                .find(|x| x.item_id == *item_id)
+            {
                 item.status = ItemStatus::Queued;
                 item.detail = "Queued".to_owned();
             }
@@ -305,7 +311,9 @@ impl DownloadCore {
 
     pub fn retry_skipped_convert_items(&mut self) {
         if self.convert_running {
-            self.append_log("Convert: wait for the running batch to finish before retrying skipped items.");
+            self.append_log(
+                "Convert: wait for the running batch to finish before retrying skipped items.",
+            );
             return;
         }
         let count = reset_skipped_convert_items(&mut self.convert_items);

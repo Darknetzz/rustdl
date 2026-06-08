@@ -97,15 +97,18 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
             item: item.clone(),
         })
         .collect();
-    let encoder = c.convert_encoder_choice.as_ref().map(|enc| ConvertEncoderJson {
-        label: encoder_indicator_label(enc),
-        kind: if encoder_uses_hardware(enc) {
-            "gpu"
-        } else {
-            "cpu"
-        },
-        encoder: enc.encoder.to_owned(),
-    });
+    let encoder = c
+        .convert_encoder_choice
+        .as_ref()
+        .map(|enc| ConvertEncoderJson {
+            label: encoder_indicator_label(enc),
+            kind: if encoder_uses_hardware(enc) {
+                "gpu"
+            } else {
+                "cpu"
+            },
+            encoder: enc.encoder.to_owned(),
+        });
     Json(ConvertQueueResponse {
         items,
         running: c.convert_running,

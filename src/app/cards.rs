@@ -98,8 +98,11 @@ impl PydlApp {
                     && !self.thumbnail_attempted.contains(&id)
                     && !self.thumbnail_inflight.contains(&id)
                 {
-                    if let Some(url) = &thumbnail_url {
-                        self.queue_thumbnail_load(id, url.clone());
+                    let can_try = has_thumbnail_url
+                        || !self.items[idx].video_id.trim().is_empty()
+                        || done_file.is_some();
+                    if can_try {
+                        self.queue_thumbnail_load(id);
                     }
                 }
                 // Fixed max cell; image keeps aspect ratio and never exceeds thumb (no upscale).
@@ -134,7 +137,14 @@ impl PydlApp {
                 } else {
                     let center_msg = if !self.settings.show_thumbnails {
                         "Thumbnails off"
-                    } else if has_thumbnail_url {
+                    } else if self.thumbnail_inflight.contains(&id) {
+                        "Fetching thumbnail..."
+                    } else if self.thumbnail_attempted.contains(&id) {
+                        "Thumbnail unavailable"
+                    } else if has_thumbnail_url
+                        || !self.items[idx].video_id.trim().is_empty()
+                        || done_file.is_some()
+                    {
                         "Fetching thumbnail..."
                     } else {
                         "No preview available"

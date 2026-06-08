@@ -15,6 +15,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Downloader queue card thumbnails load again when YouTube CDN URLs fail: the desktop UI now tries all preview URL candidates (not only the metadata URL) and falls back to an ffmpeg frame grab from the downloaded file, matching the LAN web UI. Cards show **Thumbnail unavailable** after all sources fail instead of staying on **Fetching thumbnail...** forever; thumbnails retry automatically when a download finishes.
+
 - Activity log under the docked Videos panel no longer renders blank: the queue list reserves the configured log height instead of squeezing it away, and a height slider adjusts `log_dock_height` there too.
 - Download progress lines are recorded on the shared core (not only when the GUI event loop handles them), so the activity log fills during batch downloads and survives restarts from `rustdl_activity_log.json`.
 - Activity log open/docked state, dock height, undocked footer height, and floating window size are persisted across sessions (`logs_open` now defaults to open when missing from older configs).
