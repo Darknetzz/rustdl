@@ -202,10 +202,11 @@ impl eframe::App for PydlApp {
                     .color(crate::theme::TEXT_MUTED),
                 );
                 ui.separator();
+                let theme = self.settings.theme.clone();
                 if self.av1_mode {
                     show_mode_panel(
                         ui,
-                        &self.settings.theme,
+                        &theme,
                         true,
                         egui::Margin::same(12.0),
                         10.0,
@@ -216,7 +217,7 @@ impl eframe::App for PydlApp {
                 } else {
                 show_mode_panel(
                     ui,
-                    &self.settings.theme,
+                    &theme,
                     false,
                     egui::Margin::same(12.0),
                     10.0,

@@ -1,7 +1,8 @@
 use std::hash::Hash;
 
 use eframe::egui;
-use eframe::egui::{Color32, InnerResponse, Response, RichText, Shape, ShapeIdx, Stroke};
+use eframe::egui::{Color32, InnerResponse, Response, RichText, Shape, Stroke};
+use egui::layers::ShapeIdx;
 
 use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
@@ -654,28 +655,26 @@ pub fn show_mode_panel<R>(
     let rounding = egui::Rounding::same(rounding);
     let stroke = Stroke::new(1.0, border);
 
-    let mut prepared = egui::Frame::none()
-        .fill(panel)
-        .stroke(stroke)
+    egui::Frame::none()
         .inner_margin(inner_margin)
-        .rounding(rounding)
-        .begin(ui);
-    let ret = add_contents(&mut prepared.content_ui);
-    let paint_rect = prepared.content_ui.min_rect() + prepared.frame.inner_margin;
-    if ui.is_rect_visible(paint_rect) {
-        paint_mode_panel_background(
-            ui.painter(),
-            prepared.where_to_put_background,
-            paint_rect,
-            accent,
-            panel,
-            soft,
-            rounding,
-            stroke,
-        );
-    }
-    let response = prepared.end(ui);
-    InnerResponse::new(ret, response)
+        .show(ui, |ui| {
+            let bg_idx = ui.painter().add(Shape::Noop);
+            let ret = add_contents(ui);
+            let paint_rect = ui.min_rect() + inner_margin;
+            if ui.is_rect_visible(paint_rect) {
+                paint_mode_panel_background(
+                    ui.painter(),
+                    bg_idx,
+                    paint_rect,
+                    accent,
+                    panel,
+                    soft,
+                    rounding,
+                    stroke,
+                );
+            }
+            ret
+        })
 }
 
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;

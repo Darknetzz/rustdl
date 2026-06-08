@@ -52,20 +52,13 @@ impl PydlApp {
     }
 
     fn draw_mode_queue_panel<R>(
-        &self,
         ui: &mut egui::Ui,
+        theme: &str,
+        av1: bool,
         inner_margin: egui::Margin,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
     ) -> R {
-        show_mode_panel(
-            ui,
-            &self.settings.theme,
-            self.av1_mode,
-            inner_margin,
-            8.0,
-            add_contents,
-        )
-        .inner
+        show_mode_panel(ui, theme, av1, inner_margin, 8.0, add_contents).inner
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
@@ -397,9 +390,13 @@ impl PydlApp {
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
         let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
         let window_title = self.videos_window_title();
+        let theme = self.settings.theme.clone();
+        let av1 = self.av1_mode;
         with_full_width(ui, |ui| {
-            self.draw_mode_queue_panel(
+            Self::draw_mode_queue_panel(
                 ui,
+                &theme,
+                av1,
                 egui::Margin::symmetric(12.0, 10.0),
                 |ui| {
                     constrain_content_width(ui);
@@ -570,8 +567,10 @@ impl PydlApp {
         // egui persists panel height from the content rect; fill the panel so resize sticks.
         ui.set_min_size(egui::vec2(panel_w, panel_h));
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
+        let theme = self.settings.theme.clone();
+        let av1 = self.av1_mode;
 
-        self.draw_mode_queue_panel(ui, egui::Margin::symmetric(10.0, 8.0), |ui| {
+        Self::draw_mode_queue_panel(ui, &theme, av1, egui::Margin::symmetric(10.0, 8.0), |ui| {
             let inner_h = remaining_ui_height(ui).max(180.0);
             let inner_w = content_width(ui).max(1.0);
             allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
@@ -599,6 +598,8 @@ impl PydlApp {
             self.settings.video_float_height,
         );
         let title = self.videos_window_title().to_owned();
+        let theme = self.settings.theme.clone();
+        let av1 = self.av1_mode;
         let response = egui::Window::new(title)
             .id(egui::Id::new("rustdl_videos_float_v4"))
             .open(&mut open)
@@ -612,7 +613,12 @@ impl PydlApp {
                 let panel_w = content_width(ui).max(480.0);
                 // Fill the window body so the resize grip changes the window (not just shrink-wrapped content).
                 ui.set_min_size(egui::vec2(panel_w, panel_h));
-                self.draw_mode_queue_panel(ui, egui::Margin::symmetric(10.0, 8.0), |ui| {
+                Self::draw_mode_queue_panel(
+                    ui,
+                    &theme,
+                    av1,
+                    egui::Margin::symmetric(10.0, 8.0),
+                    |ui| {
                     let inner_h = remaining_ui_height(ui).max(120.0);
                     let inner_w = content_width(ui).max(480.0);
                     allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
