@@ -12,6 +12,10 @@ pub const TEXT_MUTED: Color32 = Color32::from_rgb(168, 170, 178);
 pub const TEXT_HINT: Color32 = Color32::from_rgb(150, 152, 160);
 pub const THUMB_PLACEHOLDER: Color32 = Color32::from_gray(32);
 
+/// Downloader / AV1 section accents (aligned with web `--mode-downloader` / `--mode-av1`).
+pub const MODE_DOWNLOADER: Color32 = Color32::from_rgb(66, 165, 245);
+pub const MODE_AV1: Color32 = Color32::from_rgb(171, 71, 188);
+
 pub const BG_CANVAS_LIGHT: Color32 = Color32::from_rgb(245, 246, 248);
 pub const BG_LOG_LIGHT: Color32 = Color32::from_rgb(236, 238, 242);
 pub const BG_INPUT_LIGHT: Color32 = Color32::from_rgb(255, 255, 255);
@@ -52,6 +56,32 @@ pub fn panel_border(theme: &str) -> Color32 {
     } else {
         BORDER_PANEL
     }
+}
+
+/// Raised panel surface (`--panel` in the web UI).
+pub fn panel_fill(theme: &str) -> Color32 {
+    if theme == "light" {
+        BG_LOG_LIGHT
+    } else {
+        BG_LOG
+    }
+}
+
+pub fn mode_accent(av1: bool) -> Color32 {
+    if av1 {
+        MODE_AV1
+    } else {
+        MODE_DOWNLOADER
+    }
+}
+
+pub fn mode_border(accent: Color32) -> Color32 {
+    Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 82)
+}
+
+pub fn mode_soft_tint(accent: Color32, theme: &str) -> Color32 {
+    let alpha = if theme == "light" { 36 } else { 26 };
+    Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), alpha)
 }
 
 pub fn text_muted(theme: &str) -> Color32 {

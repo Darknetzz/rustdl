@@ -1,10 +1,11 @@
 use std::hash::Hash;
 
 use eframe::egui;
-use eframe::egui::{Color32, Response, RichText};
+use eframe::egui::{Color32, InnerResponse, Response, RichText, Shape, ShapeIdx, Stroke};
 
 use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
+use crate::theme::{mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_AV1, MODE_DOWNLOADER};
 use crate::ui_icons;
 
 /// Text color for the free-space figure (green → amber → red by [`DiskSpaceLevel`]).
@@ -585,6 +586,98 @@ pub fn content_panel_frame() -> egui::Frame {
     })
 }
 
+fn mode_panel_gradient_shape(rect: egui::Rect, left: Color32, right: Color32) -> Shape {
+    let mut mesh = egui::Mesh::default();
+    let base = mesh.vertices.len() as u32;
+    mesh.colored_vertex(rect.left_top(), left);
+    mesh.colored_vertex(rect.right_top(), right);
+    mesh.colored_vertex(rect.right_bottom(), right);
+    mesh.colored_vertex(rect.left_bottom(), left);
+    mesh.add_triangle(base, base + 1, base + 2);
+    mesh.add_triangle(base, base + 2, base + 3);
+    Shape::mesh(mesh)
+}
+
+fn paint_mode_panel_background(
+    painter: &egui::Painter,
+    shape_idx: ShapeIdx,
+    rect: egui::Rect,
+    accent: Color32,
+    panel: Color32,
+    soft: Color32,
+    rounding: egui::Rounding,
+    stroke: Stroke,
+) {
+    let mut shapes = vec![Shape::rect_filled(rect, rounding, panel)];
+    let fade_w = rect.width() * 0.28;
+    if fade_w > 1.0 {
+        let grad_rect = egui::Rect::from_min_max(
+            rect.left_top(),
+            egui::pos2(rect.left() + fade_w, rect.bottom()),
+        );
+        shapes.push(mode_panel_gradient_shape(grad_rect, soft, panel));
+    }
+    let stripe_w = 3.0f32.min(rect.width());
+    if stripe_w > 0.0 {
+        let stripe = egui::Rect::from_min_max(
+            rect.left_top(),
+            egui::pos2(rect.left() + stripe_w, rect.bottom()),
+        );
+        shapes.push(Shape::rect_filled(
+            stripe,
+            egui::Rounding {
+                nw: rounding.nw,
+                ne: 0.0,
+                sw: rounding.sw,
+                se: 0.0,
+            },
+            accent,
+        ));
+    }
+    shapes.push(Shape::rect_stroke(rect, rounding, stroke));
+    painter.set(shape_idx, Shape::Vec(shapes));
+}
+
+/// Panel chrome for Downloader / AV1 sections (muted tint + left accent; matches web `.panel`).
+pub fn show_mode_panel<R>(
+    ui: &mut egui::Ui,
+    theme: &str,
+    av1: bool,
+    inner_margin: egui::Margin,
+    rounding: f32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> InnerResponse<R> {
+    let accent = mode_accent(av1);
+    let border = mode_border(accent);
+    let panel = panel_fill(theme);
+    let soft = mode_soft_tint(accent, theme);
+    let rounding = egui::Rounding::same(rounding);
+    let stroke = Stroke::new(1.0, border);
+
+    let mut prepared = egui::Frame::none()
+        .fill(panel)
+        .stroke(stroke)
+        .inner_margin(inner_margin)
+        .rounding(rounding)
+        .begin(ui);
+    let ret = add_contents(&mut prepared.content_ui);
+    let paint_rect = prepared.content_ui.min_rect() + prepared.frame.inner_margin;
+    if ui.is_rect_visible(paint_rect) {
+        paint_mode_panel_background(
+            ui.painter(),
+            prepared.where_to_put_background,
+            paint_rect,
+            accent,
+            panel,
+            soft,
+            rounding,
+            stroke,
+        );
+    }
+    let response = prepared.end(ui);
+    InnerResponse::new(ret, response)
+}
+
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
@@ -661,69 +754,89 @@ pub fn compute_main_column_split(
 }
 
 /// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
-pub fn draw_mode_nav_bar(ui: &mut egui::Ui, dl_active: bool, av1_active: bool) -> (bool, bool) {
+pub fn draw_mode_nav_bar(
+    ui: &mut egui::Ui,
+    theme: &str,
+    dl_active: bool,
+    av1_active: bool,
+) -> (bool, bool) {
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     let row_w = content_width(ui).max(1.0);
+    let muted = text_muted(theme);
+    let group_border = panel_border(theme);
+    let group_fill = if theme == "light" {
+        Color32::from_rgba_unmultiplied(0, 0, 0, 10)
+    } else {
+        Color32::from_rgba_unmultiplied(255, 255, 255, 8)
+    };
     ui.allocate_ui_with_layout(
         egui::vec2(row_w, 38.0),
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             ui.set_width(row_w);
             let btn_w = row_w * 0.5;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                let dl_text = if dl_active {
-                    Color32::from_rgb(10, 32, 10)
-                } else {
-                    Color32::from_rgb(210, 220, 235)
-                };
-                let dl_label = RichText::new(format!(
-                    "{} Downloader",
-                    crate::ui_icons::NAV_DOWNLOADER
-                ))
-                .color(dl_text)
-                .size(14.0);
-                let dl = ui.add_sized(
-                    [btn_w, 36.0],
-                    egui::Button::new(dl_label)
-                        .fill(if dl_active {
-                            Color32::from_rgb(152, 255, 152)
+            egui::Frame::none()
+                .fill(group_fill)
+                .stroke(Stroke::new(1.0, group_border))
+                .rounding(egui::Rounding::same(6.0))
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        let dl_text = if dl_active {
+                            Color32::WHITE
                         } else {
-                            Color32::from_rgb(44, 52, 64)
-                        })
-                        .stroke(egui::Stroke::NONE)
-                        .rounding(egui::Rounding::same(6.0)),
-                );
-                if dl.clicked() {
-                    dl_clicked = true;
-                }
-                let av1_text = if av1_active {
-                    Color32::from_rgb(45, 27, 0)
-                } else {
-                    Color32::from_rgb(210, 220, 235)
-                };
-                let av1_label = RichText::new(format!(
-                    "{} AV1 Converter",
-                    crate::ui_icons::NAV_AV1
-                ))
-                .color(av1_text)
-                .size(14.0);
-                let av1 = ui.add_sized(
-                    [btn_w, 36.0],
-                    egui::Button::new(av1_label)
-                        .fill(if av1_active {
-                            Color32::from_rgb(255, 190, 90)
+                            muted
+                        };
+                        let dl_label = RichText::new(format!(
+                            "{} Downloader",
+                            crate::ui_icons::NAV_DOWNLOADER
+                        ))
+                        .color(dl_text)
+                        .size(14.0)
+                        .strong();
+                        let dl = ui.add_sized(
+                            [btn_w, 34.0],
+                            egui::Button::new(dl_label)
+                                .fill(if dl_active {
+                                    MODE_DOWNLOADER
+                                } else {
+                                    Color32::TRANSPARENT
+                                })
+                                .stroke(Stroke::NONE)
+                                .rounding(egui::Rounding::same(6.0)),
+                        );
+                        if dl.clicked() {
+                            dl_clicked = true;
+                        }
+                        let av1_text = if av1_active {
+                            Color32::WHITE
                         } else {
-                            Color32::from_rgb(44, 52, 64)
-                        })
-                        .stroke(egui::Stroke::NONE)
-                        .rounding(egui::Rounding::same(6.0)),
-                );
-                if av1.clicked() {
-                    av1_clicked = true;
-                }
-            });
+                            muted
+                        };
+                        let av1_label = RichText::new(format!(
+                            "{} AV1 Converter",
+                            crate::ui_icons::NAV_AV1
+                        ))
+                        .color(av1_text)
+                        .size(14.0)
+                        .strong();
+                        let av1 = ui.add_sized(
+                            [btn_w, 34.0],
+                            egui::Button::new(av1_label)
+                                .fill(if av1_active {
+                                    MODE_AV1
+                                } else {
+                                    Color32::TRANSPARENT
+                                })
+                                .stroke(Stroke::NONE)
+                                .rounding(egui::Rounding::same(6.0)),
+                        );
+                        if av1.clicked() {
+                            av1_clicked = true;
+                        }
+                    });
+                });
         },
     );
     (dl_clicked, av1_clicked)

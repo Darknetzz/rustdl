@@ -2,7 +2,7 @@ use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
     constrain_content_width, content_width, draw_mode_nav_bar, draw_navbar_status_badge,
-    left_button_row, with_full_width,
+    left_button_row, show_mode_panel, with_full_width,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -101,7 +101,8 @@ impl eframe::App for PydlApp {
                 constrain_content_width(ui);
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
-                let (dl_nav, av1_nav) = draw_mode_nav_bar(ui, !self.av1_mode, self.av1_mode);
+                let (dl_nav, av1_nav) =
+                    draw_mode_nav_bar(ui, &self.settings.theme, !self.av1_mode, self.av1_mode);
                 if dl_nav {
                     self.set_app_mode(false);
                 }
@@ -202,8 +203,24 @@ impl eframe::App for PydlApp {
                 );
                 ui.separator();
                 if self.av1_mode {
-                    self.draw_av1_panel(ui);
+                    show_mode_panel(
+                        ui,
+                        &self.settings.theme,
+                        true,
+                        egui::Margin::same(12.0),
+                        10.0,
+                        |ui| {
+                            self.draw_av1_panel(ui);
+                        },
+                    );
                 } else {
+                show_mode_panel(
+                    ui,
+                    &self.settings.theme,
+                    false,
+                    egui::Margin::same(12.0),
+                    10.0,
+                    |ui| {
                 with_full_width(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.label(RichText::new("Downloader").heading());
@@ -596,6 +613,7 @@ impl eframe::App for PydlApp {
                 if trigger_download && has_idle_items {
                     self.start_downloads();
                 }
+                }); // mode panel
                 } // downloader mode
         });
                     }); // central panel

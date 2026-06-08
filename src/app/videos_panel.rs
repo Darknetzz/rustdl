@@ -51,20 +51,21 @@ impl PydlApp {
         }
     }
 
-    fn videos_panel_fill(&self) -> Color32 {
-        if self.av1_mode {
-            canvas_bg(&self.settings.theme)
-        } else {
-            BG_CANVAS
-        }
-    }
-
-    fn videos_panel_border(&self) -> Color32 {
-        if self.av1_mode {
-            panel_border(&self.settings.theme)
-        } else {
-            BORDER_PANEL
-        }
+    fn draw_mode_queue_panel<R>(
+        &self,
+        ui: &mut egui::Ui,
+        inner_margin: egui::Margin,
+        add_contents: impl FnOnce(&mut egui::Ui) -> R,
+    ) -> R {
+        show_mode_panel(
+            ui,
+            &self.settings.theme,
+            self.av1_mode,
+            inner_margin,
+            8.0,
+            add_contents,
+        )
+        .inner
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
@@ -398,22 +399,10 @@ impl PydlApp {
         let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
         let window_title = self.videos_window_title();
         with_full_width(ui, |ui| {
-            let fill = if self.av1_mode {
-                canvas_bg(&theme)
-            } else {
-                BG_CANVAS
-            };
-            let border = if self.av1_mode {
-                panel_border(&theme)
-            } else {
-                BORDER_PANEL
-            };
-            egui::Frame::none()
-                .fill(fill)
-                .stroke(egui::Stroke::new(1.0, border))
-                .inner_margin(egui::Margin::symmetric(12.0, 10.0))
-                .rounding(egui::Rounding::same(8.0))
-                .show(ui, |ui| {
+            self.draw_mode_queue_panel(
+                ui,
+                egui::Margin::symmetric(12.0, 10.0),
+                |ui| {
                     constrain_content_width(ui);
                     ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new(heading).strong());
@@ -441,7 +430,8 @@ impl PydlApp {
                             self.draw_downloader_queue_status_row(ui);
                         }
                     }
-                });
+                },
+            );
         });
     }
 
