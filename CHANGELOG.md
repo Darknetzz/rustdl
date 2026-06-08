@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- The video / convert queue **auto-undocks** when the main window is resized to the minimum inner size (920×760); it **re-docks** when the window grows again. Manual dock/undock (toolbar or Settings) is remembered until you change it.
+
 ### Fixed
 
 - Floating **Activity log** window shows log lines again (scroll area fills the window; toolbar controls stay in a single row at the top).
