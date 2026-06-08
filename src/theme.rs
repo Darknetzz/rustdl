@@ -75,6 +75,85 @@ pub fn mode_accent(av1: bool) -> Color32 {
     }
 }
 
+pub fn mode_accent_for(av1: bool, downloader_hex: &str, convert_hex: &str) -> Color32 {
+    if av1 {
+        parse_mode_color(convert_hex, MODE_CONVERT)
+    } else {
+        parse_mode_color(downloader_hex, MODE_DOWNLOADER)
+    }
+}
+
+/// Parses `#rgb` or `#rrggbb` (optional `#`); returns `default` when empty or invalid.
+pub fn parse_mode_color(hex: &str, default: Color32) -> Color32 {
+    let s = hex.trim();
+    if s.is_empty() {
+        return default;
+    }
+    let digits = s.strip_prefix('#').unwrap_or(s);
+    let (r, g, b) = match digits.len() {
+        6 => {
+            let r = u8::from_str_radix(&digits[0..2], 16).ok();
+            let g = u8::from_str_radix(&digits[2..4], 16).ok();
+            let b = u8::from_str_radix(&digits[4..6], 16).ok();
+            match (r, g, b) {
+                (Some(r), Some(g), Some(b)) => (r, g, b),
+                _ => return default,
+            }
+        }
+        3 => {
+            let r = u8::from_str_radix(&digits[0..1], 16).ok();
+            let g = u8::from_str_radix(&digits[1..2], 16).ok();
+            let b = u8::from_str_radix(&digits[2..3], 16).ok();
+            match (r, g, b) {
+                (Some(r), Some(g), Some(b)) => (r * 17, g * 17, b * 17),
+                _ => return default,
+            }
+        }
+        _ => return default,
+    };
+    Color32::from_rgb(r, g, b)
+}
+
+pub fn format_mode_color_hex(color: Color32) -> String {
+    format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
+}
+
+/// Shared settings row: color swatch + hex preview + reset to built-in default.
+pub fn draw_mode_color_row(
+    ui: &mut eframe::egui::Ui,
+    label: &str,
+    hex: &mut String,
+    default: Color32,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        let mut color = parse_mode_color(hex, default);
+        let mut srgba = color.to_srgba_unmultiplied();
+        if ui.color_edit_button_srgba_unmultiplied(&mut srgba).changed() {
+            color = Color32::from_rgba_unmultiplied(
+                srgba.r,
+                srgba.g,
+                srgba.b,
+                srgba.a,
+            );
+            *hex = format_mode_color_hex(color);
+            changed = true;
+        }
+        let preview = if hex.trim().is_empty() {
+            format!("{} (default)", format_mode_color_hex(default))
+        } else {
+            hex.trim().to_owned()
+        };
+        ui.monospace(preview);
+        if ui.small_button("Default").clicked() {
+            hex.clear();
+            changed = true;
+        }
+    });
+    changed
+}
+
 pub fn mode_border(accent: Color32) -> Color32 {
     Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 82)
 }
@@ -193,4 +272,22 @@ pub fn apply_ui_theme(ctx: &eframe::egui::Context, theme: &str) {
         style.visuals.widgets.active.rounding = r;
         style.visuals.window_rounding = eframe::egui::Rounding::same(10.0);
     });
+}
+
+#[cfg(test)]
+mod mode_color_tests {
+    use super::*;
+
+    #[test]
+    fn parse_mode_color_accepts_six_digit_hex() {
+        assert_eq!(
+            parse_mode_color("#42a5f5", MODE_DOWNLOADER),
+            Color32::from_rgb(66, 165, 245)
+        );
+    }
+
+    #[test]
+    fn parse_mode_color_empty_uses_default() {
+        assert_eq!(parse_mode_color("", MODE_CONVERT), MODE_CONVERT);
+    }
 }

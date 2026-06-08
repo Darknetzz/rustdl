@@ -266,6 +266,12 @@ pub struct AppSettings {
     /// Max content column width in pixels; `0` = use full panel width.
     #[serde(default)]
     pub max_content_width: f32,
+    /// Downloader mode panel tint / accent (`#rrggbb`); empty = default blue.
+    #[serde(default, alias = "mode_downloader_bg")]
+    pub mode_downloader_color: String,
+    /// Video Converter mode panel tint / accent (`#rrggbb`); empty = default purple.
+    #[serde(default, alias = "mode_convert_bg", alias = "mode_av1_color")]
+    pub mode_convert_color: String,
 }
 
 fn default_web_bind_address() -> String {
@@ -496,6 +502,8 @@ impl Default for AppSettings {
             log_filter: default_log_filter(),
             session_restore_preference: default_session_restore_preference(),
             max_content_width: 0.0,
+            mode_downloader_color: String::new(),
+            mode_convert_color: String::new(),
         }
     }
 }

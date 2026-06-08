@@ -7,7 +7,7 @@ use egui::layers::ShapeIdx;
 use crate::disk_space::{DiskSpace, DiskSpaceLevel};
 use crate::models::ItemStatus;
 use crate::theme::{
-    mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_CONVERT,
+    mode_accent_for, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_CONVERT,
     MODE_DOWNLOADER,
 };
 use crate::ui_icons;
@@ -753,11 +753,13 @@ pub fn show_mode_panel<R>(
     ui: &mut egui::Ui,
     theme: &str,
     av1: bool,
+    mode_downloader_color: &str,
+    mode_convert_color: &str,
     inner_margin: egui::Margin,
     rounding: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
-    let accent = mode_accent(av1);
+    let accent = mode_accent_for(av1, mode_downloader_color, mode_convert_color);
     let border = mode_border(accent);
     let panel = panel_fill(theme);
     let soft = mode_soft_tint(accent, theme);
@@ -914,7 +916,11 @@ pub fn draw_mode_nav_bar(
     theme: &str,
     dl_active: bool,
     av1_active: bool,
+    mode_downloader_color: &str,
+    mode_convert_color: &str,
 ) -> (bool, bool) {
+    let dl_accent = mode_accent_for(false, mode_downloader_color, mode_convert_color);
+    let convert_accent = mode_accent_for(true, mode_downloader_color, mode_convert_color);
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     let row_w = content_width(ui).max(1.0);
@@ -950,7 +956,7 @@ pub fn draw_mode_nav_bar(
                             [btn_w, 34.0],
                             egui::Button::new(dl_label)
                                 .fill(if dl_active {
-                                    MODE_DOWNLOADER
+                                    dl_accent
                                 } else {
                                     Color32::TRANSPARENT
                                 })
@@ -970,7 +976,7 @@ pub fn draw_mode_nav_bar(
                             [btn_w, 34.0],
                             egui::Button::new(av1_label)
                                 .fill(if av1_active {
-                                    MODE_CONVERT
+                                    convert_accent
                                 } else {
                                     Color32::TRANSPARENT
                                 })
