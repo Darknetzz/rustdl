@@ -8,6 +8,8 @@ use crate::ui_icons;
 
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
+const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
+
 fn draw_effective_command_preview(ui: &mut egui::Ui, command_preview: &str) {
     let text_color = if ui.visuals().dark_mode {
         Color32::from_rgb(150, 215, 255)
@@ -225,16 +227,39 @@ impl PydlApp {
                                 }
                             });
                             left_button_row(ui, |ui| {
+                                let feedback_id = ui.id().with("web_token_copy_feedback");
+                                let now = ui.input(|i| i.time);
+                                let copied = ui.ctx().data(|d| {
+                                    d.get_temp::<f64>(feedback_id)
+                                        .is_some_and(|until| now < until)
+                                });
+                                if copied {
+                                    ui.ctx().request_repaint();
+                                }
                                 button_group(ui, "web_token", |g| {
                                     let can_copy = !self.settings.web_auth_token.trim().is_empty();
-                                    if g.secondary(
-                                        &format!("{} Copy", ui_icons::COPY_CLIPBOARD),
-                                        can_copy,
-                                    )
-                                    .on_hover_text("Copy API token to clipboard")
-                                    .clicked()
+                                    if copied {
+                                        g.success(
+                                            &format!("{} Copied!", ui_icons::STATUS_DONE),
+                                            can_copy,
+                                        )
+                                        .on_hover_text("API token copied to clipboard");
+                                    } else if g
+                                        .secondary(
+                                            &format!("{} Copy", ui_icons::COPY_CLIPBOARD),
+                                            can_copy,
+                                        )
+                                        .on_hover_text("Copy API token to clipboard")
+                                        .clicked()
                                     {
                                         g.ui().ctx().copy_text(self.settings.web_auth_token.clone());
+                                        g.ui().ctx().data_mut(|d| {
+                                            d.insert_temp(
+                                                feedback_id,
+                                                now + WEB_TOKEN_COPY_FEEDBACK_SECS,
+                                            );
+                                        });
+                                        g.ui().ctx().request_repaint();
                                         self.append_log("Web API token copied to clipboard.");
                                     }
                                     if g.secondary(
