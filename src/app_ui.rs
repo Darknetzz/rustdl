@@ -12,6 +12,13 @@ use crate::theme::{
 };
 use crate::ui_icons;
 
+pub const HEADER_STATUS_FONT_SIZE: f32 = 13.0;
+
+/// Slightly larger than `.small()` for the main header status row (tools, disk, activity).
+pub fn header_status_rich(text: impl Into<String>) -> RichText {
+    RichText::new(text.into()).size(HEADER_STATUS_FONT_SIZE)
+}
+
 /// Text color for the free-space figure (green → amber → red by [`DiskSpaceLevel`]).
 pub fn disk_space_free_color(level: DiskSpaceLevel) -> Color32 {
     match level {
@@ -77,7 +84,7 @@ pub fn draw_disk_space_progress_bar(
         ui.painter().rect_filled(fill_rect, rounding, fill_color);
 
         let pct_text = format!("{:.0}%", percent_used);
-        let font = egui::FontId::proportional(10.0);
+        let font = egui::FontId::proportional(12.0);
         let galley = ui.painter().layout_no_wrap(pct_text, font, label_color);
         let text_home = if fraction > 0.0 && fill_w >= galley.size().x + 6.0 {
             fill_rect
@@ -88,7 +95,7 @@ pub fn draw_disk_space_progress_bar(
         ui.painter().galley(pos, galley, label_color);
     } else {
         let pct_text = format!("{:.0}%", percent_used);
-        let font = egui::FontId::proportional(10.0);
+        let font = egui::FontId::proportional(12.0);
         let galley = ui.painter().layout_no_wrap(pct_text, font, label_color);
         let pos = rect.center() - galley.size() * 0.5;
         ui.painter().galley(pos, galley, label_color);
@@ -319,7 +326,7 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 5.0;
                 draw_status_dot(ui, fade_color(dot_color, dot_alpha));
-                ui.label(RichText::new(info.label).small().strong().color(text_color));
+                ui.label(RichText::new(info.label).size(HEADER_STATUS_FONT_SIZE).strong().color(text_color));
             })
         })
         .response

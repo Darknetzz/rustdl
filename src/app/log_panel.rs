@@ -640,9 +640,13 @@ pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool,
         format!("{icon} {tool_name}: {text}")
     };
     let response = ui.add(
-        egui::Label::new(RichText::new(body).small().color(fg).strong())
-            .sense(egui::Sense::hover())
-            .selectable(false),
+        egui::Label::new(
+            crate::app_ui::header_status_rich(body)
+                .color(fg)
+                .strong(),
+        )
+        .sense(egui::Sense::hover())
+        .selectable(false),
     );
     if ok && !v.is_empty() {
         response.on_hover_text(v);

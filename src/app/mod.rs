@@ -853,22 +853,20 @@ impl PydlApp {
 
     pub(super) fn draw_output_disk_space(&self, ui: &mut egui::Ui) {
         use crate::app_parsing::human_bytes_ui;
-        use crate::app_ui::{disk_space_free_color, draw_disk_space_progress_bar};
-        use eframe::egui::RichText;
+        use crate::app_ui::{disk_space_free_color, draw_disk_space_progress_bar, header_status_rich};
 
         let theme = &self.settings.theme;
         let muted = crate::theme::text_muted(theme);
         let trimmed = self.output_dir.trim();
         if trimmed.is_empty() {
             ui.label(
-                RichText::new("Destination disk: set an output folder to see free space.")
-                    .small()
+                header_status_rich("Destination disk: set an output folder to see free space.")
                     .color(muted),
             );
             return;
         }
         let Some(space) = self.output_disk_space.as_ref() else {
-            ui.label(RichText::new("Destination disk: …").small().color(muted));
+            ui.label(header_status_rich("Destination disk: …").color(muted));
             return;
         };
         let level = space.level();
@@ -883,14 +881,13 @@ impl PydlApp {
         let tail = format!(" / {}{}", human_bytes_ui(space.total_bytes), vol);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label(RichText::new("Destination disk: ").small().color(muted));
+            ui.label(header_status_rich("Destination disk: ").color(muted));
             ui.label(
-                RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
-                    .small()
+                header_status_rich(format!("{} free", human_bytes_ui(space.available_bytes)))
                     .strong()
                     .color(free_color),
             );
-            ui.label(RichText::new(tail).small().color(muted));
+            ui.label(header_status_rich(tail).color(muted));
             ui.add_space(6.0);
             draw_disk_space_progress_bar(ui, pct, level, 100.0);
         });
