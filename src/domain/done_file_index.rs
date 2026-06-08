@@ -298,11 +298,6 @@ fn windows_path_compare_string(p: &Path) -> String {
     s
 }
 
-#[cfg(not(windows))]
-fn windows_path_compare_string(p: &Path) -> String {
-    p.to_string_lossy().replace('/', "\\").to_ascii_lowercase()
-}
-
 fn find_unique_by_title_hint(index: &DoneFileIndex, title: &str) -> Option<(PathBuf, SystemTime)> {
     let hint = title_hint_fragment(title);
     if hint.len() < 6 {
