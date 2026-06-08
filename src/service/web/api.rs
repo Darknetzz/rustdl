@@ -19,9 +19,9 @@ use crate::app::UiEvent;
 use crate::config::AppSettings;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, find_profile};
+use crate::service::core::DownloadCore;
 use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
 use crate::service::web::media;
-use crate::service::core::DownloadCore;
 use crate::ytdlp::{self, thumbnail_proxy_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
@@ -579,16 +579,7 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<Response, StatusCode> {
-    let (
-        candidates,
-        client,
-        local_thumb,
-        ffmpeg_path,
-        has_ffmpeg,
-        source_key,
-        cached,
-        core_ref,
-    ) = {
+    let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg, source_key, cached, core_ref) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
         if !c.has_ffmpeg {

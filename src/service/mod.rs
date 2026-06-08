@@ -18,7 +18,20 @@ impl RustdlService {
     pub fn new(
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
-        let (core, rx) = DownloadCore::new_shared(runtime.clone());
+        Self::new_with_restore_policy(runtime, true)
+    }
+
+    pub fn new_gui(
+        runtime: Arc<tokio::runtime::Runtime>,
+    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+        Self::new_with_restore_policy(runtime, false)
+    }
+
+    fn new_with_restore_policy(
+        runtime: Arc<tokio::runtime::Runtime>,
+        auto_restore: bool,
+    ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
+        let (core, rx) = DownloadCore::new_shared(runtime.clone(), auto_restore);
         core_events::spawn_core_event_loop(runtime, core.clone());
         (Self { core: core.clone() }, rx)
     }

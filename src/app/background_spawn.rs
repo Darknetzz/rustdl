@@ -269,9 +269,12 @@ pub(crate) fn spawn_av1_local_thumbnail(
         .ok()
         .flatten();
         if let Some((png, _)) = &outcome {
-            shared_core
-                .lock()
-                .cache_thumbnail_bytes(item_id, source_key.clone(), png.clone(), "image/png");
+            shared_core.lock().cache_thumbnail_bytes(
+                item_id,
+                source_key.clone(),
+                png.clone(),
+                "image/png",
+            );
         }
         let image = outcome.and_then(|(_, image)| image);
         let _ = try_send_ui(&bus, UiEvent::ThumbnailFetched { item_id, image });

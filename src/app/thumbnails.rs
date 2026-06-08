@@ -85,9 +85,12 @@ impl PydlApp {
             };
             if let (Some(ref raw), Some(key)) = (&bytes, &source_key) {
                 let content_type = crate::ytdlp::guess_image_content_type(raw).to_owned();
-                shared_core
-                    .lock()
-                    .cache_thumbnail_bytes(item_id, key.clone(), raw.clone(), content_type);
+                shared_core.lock().cache_thumbnail_bytes(
+                    item_id,
+                    key.clone(),
+                    raw.clone(),
+                    content_type,
+                );
             }
             let image = match bytes {
                 None => None,

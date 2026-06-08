@@ -69,6 +69,63 @@ pub struct CachedThumbnail {
     pub content_type: String,
 }
 
+/// Saved downloader + AV1 queue state awaiting user confirmation (GUI startup).
+#[derive(Clone, Debug, Default)]
+pub struct PendingSessionRestore {
+    pub downloader_items: Vec<QueueItem>,
+    pub av1_snapshot: Av1QueueSnapshot,
+}
+
+impl PendingSessionRestore {
+    pub fn downloader_count(&self) -> usize {
+        self.downloader_items.len()
+    }
+
+    pub fn av1_count(&self) -> usize {
+        self.av1_snapshot.items.len()
+    }
+}
+
+fn session_has_restorable_data(
+    downloader_items: &[QueueItem],
+    av1_snapshot: &Av1QueueSnapshot,
+    av1_remember_queue: bool,
+) -> bool {
+    if !downloader_items.is_empty() {
+        return true;
+    }
+    if av1_remember_queue
+        && (!av1_snapshot.items.is_empty() || !av1_snapshot.input_paths.trim().is_empty())
+    {
+        return true;
+    }
+    false
+}
+
+fn compute_next_item_id(items: &[QueueItem]) -> u64 {
+    items
+        .iter()
+        .map(|x| x.item_id)
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1)
+}
+
+fn compute_av1_next_item_id(snapshot: &Av1QueueSnapshot, items: &[Av1QueueItem]) -> u64 {
+    if items.is_empty() {
+        1_000_000
+    } else {
+        snapshot.next_item_id.max(
+            items
+                .iter()
+                .map(|x| x.item_id)
+                .max()
+                .unwrap_or(999_999)
+                .saturating_add(1),
+        )
+    }
+}
+
 /// Bulk queue cleanup modes (web UI and API).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueueClearFilter {
@@ -151,10 +208,16 @@ pub struct DownloadCore {
     /// Graceful quit requested from the LAN web UI (or completing after cancel).
     pub shutdown_pending: bool,
     shutdown_notify: Option<tokio::sync::oneshot::Sender<()>>,
+
+    /// GUI startup: saved queues read from disk but not applied until the user confirms.
+    pub pending_session_restore: Option<PendingSessionRestore>,
 }
 
 impl DownloadCore {
-    pub fn new_shared(runtime: Arc<Runtime>) -> (SharedCore, Receiver<UiEvent>) {
+    pub fn new_shared(
+        runtime: Arc<Runtime>,
+        auto_restore: bool,
+    ) -> (SharedCore, Receiver<UiEvent>) {
         let (tx, rx) = unbounded();
         let (event_broadcast, _) = broadcast::channel(512);
         let settings = load_settings();
@@ -164,34 +227,46 @@ impl DownloadCore {
         for it in &mut restored_items {
             normalize_restored_item(it);
         }
-        let next_item_id = restored_items
-            .iter()
-            .map(|x| x.item_id)
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1);
         let http_client = crate::http_client::build_http_client(&settings);
         let av1_snapshot = if settings.av1_remember_queue {
             load_av1_queue_snapshot()
         } else {
             Av1QueueSnapshot::default()
         };
-        let mut restored_av1_items = av1_snapshot.items;
+        let mut restored_av1_items = av1_snapshot.items.clone();
         for it in &mut restored_av1_items {
             crate::app_parsing::normalize_restored_av1_item(it);
         }
-        let av1_next_item_id = if restored_av1_items.is_empty() {
-            1_000_000
+
+        let has_restorable = session_has_restorable_data(
+            &restored_items,
+            &av1_snapshot,
+            settings.av1_remember_queue,
+        );
+        let defer_restore = !auto_restore && has_restorable;
+        let pending_session_restore = if defer_restore {
+            Some(PendingSessionRestore {
+                downloader_items: restored_items.clone(),
+                av1_snapshot: av1_snapshot.clone(),
+            })
         } else {
-            av1_snapshot.next_item_id.max(
-                restored_av1_items
-                    .iter()
-                    .map(|x| x.item_id)
-                    .max()
-                    .unwrap_or(999_999)
-                    + 1,
+            None
+        };
+
+        let (items, next_item_id, av1_input_paths, av1_items, av1_next_item_id) = if defer_restore {
+            (Vec::new(), 1, String::new(), Vec::new(), 1_000_000)
+        } else {
+            let next_item_id = compute_next_item_id(&restored_items);
+            let av1_next_item_id = compute_av1_next_item_id(&av1_snapshot, &restored_av1_items);
+            (
+                restored_items,
+                next_item_id,
+                av1_snapshot.input_paths.clone(),
+                restored_av1_items,
+                av1_next_item_id,
             )
         };
+
         let mut core = Self {
             runtime,
             tx,
@@ -218,7 +293,7 @@ impl DownloadCore {
             log_lines,
             settings,
             profile_store,
-            items: restored_items,
+            items,
             pending_resolve_ids: HashMap::new(),
             next_item_id,
             add_in_progress: false,
@@ -239,8 +314,8 @@ impl DownloadCore {
             thumbnail_cache: HashMap::new(),
             generation: 1,
             config_load_issues: Vec::new(),
-            av1_input_paths: av1_snapshot.input_paths,
-            av1_items: restored_av1_items,
+            av1_input_paths,
+            av1_items,
             av1_next_item_id,
             av1_running: false,
             av1_cancel_flag: Arc::new(AtomicBool::new(false)),
@@ -251,15 +326,61 @@ impl DownloadCore {
             av1_encoder_detect_key: String::new(),
             shutdown_pending: false,
             shutdown_notify: None,
+            pending_session_restore,
         };
         core.rebuild_item_index();
         core.update_status();
         core.invalidate_queue_caches();
         core.refresh_deps();
         core.refresh_done_file_lookup();
-        core.queue_av1_restored_assets();
+        if !defer_restore {
+            core.queue_av1_restored_assets();
+        }
         core.config_load_issues = crate::config::take_config_load_issues();
         (Arc::new(Mutex::new(core)), rx)
+    }
+
+    pub fn apply_pending_session_restore(&mut self) -> bool {
+        let Some(pending) = self.pending_session_restore.take() else {
+            return false;
+        };
+        let av1_snapshot = pending.av1_snapshot;
+        let av1_next_item_id = compute_av1_next_item_id(&av1_snapshot, &av1_snapshot.items);
+        let input_paths = av1_snapshot.input_paths;
+        let mut av1_items = av1_snapshot.items;
+        let mut items = pending.downloader_items;
+        for it in &mut items {
+            normalize_restored_item(it);
+        }
+        for it in &mut av1_items {
+            crate::app_parsing::normalize_restored_av1_item(it);
+        }
+        self.items = items;
+        self.next_item_id = compute_next_item_id(&self.items);
+        self.av1_input_paths = input_paths;
+        self.av1_items = av1_items;
+        self.av1_next_item_id = av1_next_item_id;
+        self.rebuild_item_index();
+        self.update_status();
+        self.invalidate_queue_caches();
+        self.refresh_done_file_lookup();
+        self.queue_av1_restored_assets();
+        self.bump_generation();
+        true
+    }
+
+    pub fn discard_pending_session_restore(&mut self) -> bool {
+        if self.pending_session_restore.is_none() {
+            return false;
+        }
+        self.pending_session_restore = None;
+        if let Err(err) = save_queue_items(&[]) {
+            self.append_log(&format!("Failed to clear saved queue state: {err}"));
+        }
+        if self.settings.av1_remember_queue {
+            self.clear_av1_queue_persistence();
+        }
+        true
     }
 
     pub fn ui_event_bus(&self) -> UiEventBus {
@@ -1189,11 +1310,32 @@ fn tool_json(name: &str, ok: bool, version: &str, configured_path: &str) -> serd
 #[cfg(test)]
 mod thumbnail_cache_tests {
     use super::*;
+    use crate::models::{ItemStatus, QueueItem};
+
+    #[test]
+    fn session_has_restorable_data_detects_downloader_and_av1() {
+        let item = QueueItem {
+            item_id: 1,
+            status: ItemStatus::Idle,
+            ..Default::default()
+        };
+        assert!(session_has_restorable_data(
+            &[item],
+            &Av1QueueSnapshot::default(),
+            false
+        ));
+        let av1_only = Av1QueueSnapshot {
+            input_paths: "C:\\videos".to_owned(),
+            ..Default::default()
+        };
+        assert!(!session_has_restorable_data(&[], &av1_only, false));
+        assert!(session_has_restorable_data(&[], &av1_only, true));
+    }
 
     #[test]
     fn cached_thumbnail_requires_matching_source_key() {
         let runtime = Arc::new(Runtime::new().expect("runtime"));
-        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
         let mut core = shared.lock();
         core.cache_thumbnail_bytes(1, "a".to_owned(), vec![0u8; 64], "image/png");
         assert!(core.cached_thumbnail_bytes(1, "a").is_some());

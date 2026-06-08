@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn queue_sync_runs_when_generation_changes() {
         let runtime = Arc::new(Runtime::new().expect("runtime"));
-        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
         let before = shared.lock().generation;
         {
             let mut core = shared.lock();
@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn sync_app_to_core_pushes_dirty_queue() {
         let runtime = Arc::new(Runtime::new().expect("runtime"));
-        let (shared, _rx) = DownloadCore::new_shared(runtime);
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
         {
             let mut core = shared.lock();
             core.items.clear();

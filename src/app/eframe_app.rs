@@ -121,36 +121,6 @@ impl eframe::App for PydlApp {
                 ui.label(
                     "Add URLs to load previews; start downloads to see progress on each card.",
                 );
-                if self.show_restore_banner && self.restored_items_count > 0 {
-                    alert_warning(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!(
-                                    "Restored {} item(s) from previous session.",
-                                    self.restored_items_count
-                                ))
-                                .color(ALERT_WARNING_TEXT),
-                            );
-                            let tail_w = ui.available_width();
-                            ui.allocate_ui_with_layout(
-                                egui::vec2(tail_w.max(0.0), 0.0),
-                                egui::Layout::right_to_left(egui::Align::Center),
-                                |ui| {
-                                    button_group(ui, "restore_dismiss", |g| {
-                                        if g.warning(
-                                            &format!("{} Dismiss", ui_icons::DISMISS),
-                                            true,
-                                        )
-                                        .clicked()
-                                        {
-                                            self.show_restore_banner = false;
-                                        }
-                                    });
-                                },
-                            );
-                        });
-                    });
-                }
                 if self.settings.show_first_run_hint {
                     alert_warning(ui, |ui| {
                         ui.vertical(|ui| {
@@ -595,6 +565,7 @@ impl eframe::App for PydlApp {
         self.maybe_notify_session_complete();
 
         self.input_urls_snapshot = self.input_urls.clone();
+        self.draw_session_restore_dialog(ctx);
         self.draw_exit_confirm_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
         {

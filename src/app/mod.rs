@@ -42,7 +42,7 @@ pub(crate) use log_panel::{
 
 use crate::app_actions;
 use crate::app_icon;
-use crate::app_parsing::{human_bytes_ui, normalize_restored_item, parse_urls_from_text_blob};
+use crate::app_parsing::{human_bytes_ui, parse_urls_from_text_blob};
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, content_panel_frame,
@@ -158,8 +158,9 @@ pub struct PydlApp {
     input_urls_snapshot: String,
     auto_add_after: Option<f64>,
     settings_tab: SettingsTab,
-    restored_items_count: usize,
-    show_restore_banner: bool,
+    session_restore_prompt_open: bool,
+    session_restore_downloader_count: usize,
+    session_restore_av1_count: usize,
     about_open: bool,
     exit_confirm_open: bool,
     /// After the user confirms quit, allow the next viewport close through.
@@ -230,7 +231,7 @@ pub struct PydlApp {
 impl PydlApp {
     pub fn new(cc: &eframe::CreationContext<'_>, runtime: Arc<Runtime>) -> Self {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
-        let (rustdl_service, rx) = crate::service::RustdlService::new(runtime.clone());
+        let (rustdl_service, rx) = crate::service::RustdlService::new_gui(runtime.clone());
         let shared_core = rustdl_service.shared_core();
         let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
@@ -250,22 +251,30 @@ impl PydlApp {
             );
             log_lines.push_back(crate::time_format::format_log_line(&msg));
         }
-        let mut restored_items = shared_core.lock().items.clone();
-        for it in &mut restored_items {
-            normalize_restored_item(it);
-        }
-        // AV1 queue state is owned by DownloadCore (so it also works in --web-only mode); the GUI
-        // mirrors it via sync_core_to_app. The core already restored the snapshot in new_shared.
-        let (restored_av1_count, restored_av1_input) = {
+        let (
+            session_restore_prompt_open,
+            session_restore_downloader_count,
+            session_restore_av1_count,
+            restored_items,
+            restored_av1_input,
+            next_item_id,
+        ) = {
             let core = shared_core.lock();
-            (core.av1_items.len(), core.av1_input_paths.clone())
+            let (prompt_open, dl_count, av1_count) =
+                if let Some(pending) = &core.pending_session_restore {
+                    (true, pending.downloader_count(), pending.av1_count())
+                } else {
+                    (false, 0, 0)
+                };
+            (
+                prompt_open,
+                dl_count,
+                av1_count,
+                core.items.clone(),
+                core.av1_input_paths.clone(),
+                core.next_item_id,
+            )
         };
-        let next_item_id = restored_items
-            .iter()
-            .map(|x| x.item_id)
-            .max()
-            .unwrap_or(0)
-            .saturating_add(1);
         let http_client = crate::http_client::build_http_client(&settings);
         let thumb_semaphore = Arc::new(Semaphore::new(8));
         let av1_mode = settings.last_mode == "av1";
@@ -331,8 +340,9 @@ impl PydlApp {
             input_urls_snapshot: String::new(),
             auto_add_after: None,
             settings_tab,
-            restored_items_count: 0,
-            show_restore_banner: false,
+            session_restore_prompt_open,
+            session_restore_downloader_count,
+            session_restore_av1_count,
             about_open: false,
             exit_confirm_open: false,
             exit_allowed: false,
@@ -377,17 +387,10 @@ impl PydlApp {
             config_load_issues,
             config_load_banner_dismissed: false,
         };
-        app.restored_items_count = app.items.len();
-        app.show_restore_banner = app.restored_items_count > 0;
         app.append_log(&format!(
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         ));
-        if app.settings.av1_remember_queue && restored_av1_count > 0 {
-            app.append_log(&format!(
-                "AV1: restored {restored_av1_count} item(s) from previous session."
-            ));
-        }
         app.refresh_deps();
         app.invalidate_queue_caches();
         app.queue_dirty = true;
@@ -1519,6 +1522,131 @@ impl PydlApp {
             }
         });
         ui.add_space(4.0);
+    }
+
+    fn session_restore_prompt_body(&self) -> String {
+        let mut parts = Vec::new();
+        if self.session_restore_downloader_count > 0 {
+            parts.push(format!(
+                "{} download item(s)",
+                self.session_restore_downloader_count
+            ));
+        }
+        if self.settings.av1_remember_queue && self.session_restore_av1_count > 0 {
+            parts.push(format!("{} AV1 item(s)", self.session_restore_av1_count));
+        }
+        if parts.is_empty() {
+            "Saved queue data from your last session.".to_owned()
+        } else {
+            format!("{} from your last session.", parts.join(" and "))
+        }
+    }
+
+    fn apply_session_restore(&mut self) {
+        self.session_restore_prompt_open = false;
+        let dl = self.session_restore_downloader_count;
+        let av1 = self.session_restore_av1_count;
+        let applied = {
+            let mut core = self.shared_core.lock();
+            core.apply_pending_session_restore()
+        };
+        if !applied {
+            return;
+        }
+        let shared = self.shared_core.clone();
+        {
+            let core = shared.lock();
+            core_sync::sync_core_to_app(&core, self);
+        }
+        self.invalidate_queue_caches();
+        self.queue_dirty = true;
+        self.ensure_av1_thumbnails();
+        let mut parts = Vec::new();
+        if dl > 0 {
+            parts.push(format!("{dl} download item(s)"));
+        }
+        if self.settings.av1_remember_queue && av1 > 0 {
+            parts.push(format!("{av1} AV1 item(s)"));
+        }
+        if parts.is_empty() {
+            self.append_log("Restored previous session.");
+        } else {
+            self.append_log(&format!(
+                "Restored {} from previous session.",
+                parts.join(" and ")
+            ));
+        }
+    }
+
+    fn decline_session_restore(&mut self) {
+        self.session_restore_prompt_open = false;
+        {
+            let mut core = self.shared_core.lock();
+            core.discard_pending_session_restore();
+        }
+        self.append_log("Started with an empty queue (previous session not restored).");
+    }
+
+    fn draw_session_restore_dialog(&mut self, ctx: &egui::Context) {
+        if !self.session_restore_prompt_open {
+            return;
+        }
+        let _ = modal_backdrop(ctx, egui::Id::new("session_restore_backdrop"));
+        let body = self.session_restore_prompt_body();
+        let mut modal_frame = egui::Frame::window(&ctx.style());
+        modal_frame.fill = BG_LOG;
+        modal_frame.stroke = egui::Stroke::new(1.0, BORDER_PANEL);
+        modal_frame.inner_margin = egui::Margin::same(20.0);
+        modal_frame.rounding = egui::Rounding::same(8.0);
+        let mut open = true;
+        egui::Window::new("Restore previous session?")
+            .open(&mut open)
+            .frame(modal_frame)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(420.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.set_width(ui.available_width());
+                ui.vertical_centered(|ui| {
+                    ui.set_max_width(360.0);
+                    alert_warning(ui, |ui| {
+                        ui.vertical_centered(|ui| {
+                            ui.label(
+                                RichText::new(ui_icons::RESET)
+                                    .size(40.0)
+                                    .color(ALERT_WARNING_TEXT),
+                            );
+                            ui.add_space(12.0);
+                            ui.label(
+                                RichText::new("Restore your saved queues?")
+                                    .strong()
+                                    .color(ALERT_WARNING_TEXT),
+                            );
+                            ui.add_space(6.0);
+                            ui.label(RichText::new(body).color(ALERT_WARNING_TEXT));
+                        });
+                    });
+                });
+                ui.add_space(16.0);
+                centered_button_row(ui, "session_restore", |ui| {
+                    button_group(ui, "session_restore", |g| {
+                        if g.secondary(&format!("{} Start fresh", ui_icons::DISMISS), true)
+                            .clicked()
+                        {
+                            self.decline_session_restore();
+                        }
+                        if g.success(&format!("{} Restore", ui_icons::RESET), true)
+                            .clicked()
+                        {
+                            self.apply_session_restore();
+                        }
+                    });
+                });
+            });
+        if !open {
+            self.session_restore_prompt_open = false;
+        }
     }
 
     fn open_exit_confirm(&mut self) {
