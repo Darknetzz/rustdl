@@ -446,27 +446,12 @@ impl PydlApp {
                         self.draw_video_queue_controls(ui);
                         self.draw_log_controls_compact(ui);
                     });
-                    let show_status = if self.convert_mode {
-                        !self.convert_items.is_empty()
-                    } else {
-                        !self.items.is_empty()
-                    };
-                    if show_status {
-                        ui.add_space(4.0);
-                        if self.convert_mode {
-                            self.draw_convert_queue_status_row(ui);
-                            self.draw_convert_batch_progress_row(ui);
-                        } else {
-                            self.draw_downloader_queue_status_row(ui);
-                            self.draw_download_batch_progress_row(ui);
-                        }
-                    }
                 },
             );
         });
     }
 
-    /// Colored per-status counts for the downloader queue (main panel, undocked strip, videos panel).
+    /// Colored per-status counts for the downloader queue (videos panel / floating window).
     pub(super) fn draw_downloader_queue_status_row(&mut self, ui: &mut egui::Ui) {
         let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
         if self.status_resolving > 0 {

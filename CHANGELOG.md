@@ -31,6 +31,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Download and converter batch progress (status counts and progress bars) now appear only in the Videos panel or floating window, not duplicated in the main downloader column or undocked footer strip.
 - **Breaking:** AV1 mode rebranded to **Video Converter**; `last_mode` `av1` → `convert`; settings keys `av1_*` → `convert_*` (legacy aliases still load); queue file `rustdl_av1_queue.json` → `rustdl_convert_queue.json` (legacy still read); LAN API `/api/av1/*` → `/api/convert/*`; SSE events `av1_*` → `convert_*`.
 - Output filenames use `-AV1`, `-H265`, or `-H264` suffix per target codec.
 - Audio defaults: Opus for AV1/MKV/WebM; AAC for H.264/H.265 MP4.

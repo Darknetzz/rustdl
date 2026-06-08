@@ -359,9 +359,6 @@ impl eframe::App for PydlApp {
 
                 self.constrain_content(ui);
 
-                self.draw_downloader_queue_status_row(ui);
-                self.draw_download_batch_progress_row(ui);
-
                 ui.separator();
                 let has_idle_items = self
                     .items
