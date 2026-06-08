@@ -8,6 +8,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- Queue card **URL…** and **Remove…** dropdowns no longer clip inside the card (desktop popups render above the scroll area; LAN web UI menus are no longer cut off by card overflow).
+
 ### Changed
 
 - **Destination disk** labels (desktop header, LAN web UI header and settings hint) show a storage/hard-drive icon before the text.

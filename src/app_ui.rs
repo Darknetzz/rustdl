@@ -1,8 +1,10 @@
 use std::hash::Hash;
 
 use eframe::egui;
-use eframe::egui::{Color32, InnerResponse, Response, RichText, Shape, Stroke};
+use eframe::egui::{Color32, Id, InnerResponse, Response, RichText, Shape, Stroke};
 use egui::layers::ShapeIdx;
+use egui::popup::{popup_above_or_below_widget, PopupCloseBehavior};
+use egui::{AboveOrBelow, Frame, TextWrapMode};
 
 use crate::disk_space::{DiskSpace, DiskSpaceLevel};
 use crate::models::ItemStatus;
@@ -1227,6 +1229,73 @@ fn grouped_warning_button(
     )
 }
 
+fn show_menu_popup<R>(
+    ui: &mut egui::Ui,
+    popup_id: Id,
+    button: &Response,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) {
+    popup_above_or_below_widget(
+        ui,
+        popup_id,
+        button,
+        AboveOrBelow::Above,
+        PopupCloseBehavior::CloseOnClickOutside,
+        |ui| {
+            ui.style_mut().wrap_mode = Some(TextWrapMode::Extend);
+            Frame::menu(ui.style())
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.ctx().style().spacing.menu_width);
+                    add_contents(ui)
+                })
+                .inner
+        },
+    );
+}
+
+fn grouped_popup_menu<R>(
+    ui: &mut egui::Ui,
+    popup_id: Id,
+    label: &str,
+    enabled: bool,
+    compact: bool,
+    danger: bool,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> Response {
+    let button = if danger {
+        grouped_danger_button(ui, label, enabled, compact)
+    } else {
+        grouped_secondary_button(ui, label, enabled, compact)
+    };
+    if !enabled {
+        return button;
+    }
+    if button.clicked() {
+        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+    }
+    if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+        show_menu_popup(ui, popup_id, &button, add_contents);
+    }
+    button
+}
+
+/// Popup menu for a plain button (e.g. compact list rows).
+pub(crate) fn popup_menu_above<R>(
+    ui: &mut egui::Ui,
+    popup_id: Id,
+    button_label: impl Into<egui::WidgetText>,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> Response {
+    let button = ui.button(button_label);
+    if button.clicked() {
+        ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+    }
+    if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+        show_menu_popup(ui, popup_id, &button, add_contents);
+    }
+    button
+}
+
 /// Bootstrap-style fused buttons (shared edges, no dividers).
 pub struct ButtonGroup<'a> {
     ui: &'a mut egui::Ui,
@@ -1275,7 +1344,8 @@ impl<'a> ButtonGroup<'a> {
         let compact = self.compact;
         let label = format!("{} URL...", crate::ui_icons::PAGE_URL);
         self.add(|ui| {
-            ui.menu_button(grouped_button_label(&label, compact), |ui| {
+            let popup_id = ui.make_persistent_id("url_menu");
+            grouped_popup_menu(ui, popup_id, &label, true, compact, false, |ui| {
                 if ui
                     .button(format!("{} Copy URL", crate::ui_icons::COPY_CLIPBOARD))
                     .on_hover_text(url)
@@ -1291,7 +1361,6 @@ impl<'a> ButtonGroup<'a> {
                     *open_clicked = true;
                 }
             })
-            .response
             .on_hover_text(url)
         })
     }
@@ -1309,10 +1378,11 @@ impl<'a> ButtonGroup<'a> {
         let label = format!("{} Remove...", crate::ui_icons::REMOVE);
         self.add(|ui| {
             if !enabled {
-                return grouped_secondary_button(ui, &label, false, compact)
+                return grouped_danger_button(ui, &label, false, compact)
                     .on_disabled_hover_text("Nothing to remove for this row");
             }
-            ui.menu_button(grouped_button_label(&label, compact), |ui| {
+            let popup_id = ui.make_persistent_id("remove_menu");
+            grouped_popup_menu(ui, popup_id, &label, true, compact, true, |ui| {
                 if ui
                     .add_enabled(removable, egui::Button::new("Remove from queue"))
                     .on_hover_text(
@@ -1333,7 +1403,6 @@ impl<'a> ButtonGroup<'a> {
                     *delete_clicked = true;
                 }
             })
-            .response
             .on_hover_text("Remove from queue or delete the saved file")
         })
     }
@@ -1416,26 +1485,28 @@ fn button_group_sized<R>(
     compact: bool,
     add: impl FnOnce(&mut ButtonGroup<'_>) -> R,
 ) -> R {
-    let _ = ui.id().with(id_salt);
-    let pad = ui.style().spacing.button_padding;
-    if compact {
-        ui.style_mut().spacing.button_padding = egui::vec2(8.0, 4.0);
-    }
-    let inner = egui::Frame::none()
-        .rounding(egui::Rounding::same(6.0))
-        .show(ui, |ui| {
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                let mut group = ButtonGroup { ui, compact };
-                add(&mut group)
+    ui.push_id(id_salt, |ui| {
+        let pad = ui.style().spacing.button_padding;
+        if compact {
+            ui.style_mut().spacing.button_padding = egui::vec2(8.0, 4.0);
+        }
+        let inner = egui::Frame::none()
+            .rounding(egui::Rounding::same(6.0))
+            .show(ui, |ui| {
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    let mut group = ButtonGroup { ui, compact };
+                    add(&mut group)
+                })
+                .inner
             })
-            .inner
-        })
-        .inner;
-    if compact {
-        ui.style_mut().spacing.button_padding = pad;
-    }
-    inner
+            .inner;
+        if compact {
+            ui.style_mut().spacing.button_padding = pad;
+        }
+        inner
+    })
+    .inner
 }
 
 /// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).

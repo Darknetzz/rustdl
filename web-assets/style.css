@@ -626,7 +626,7 @@ button.danger:disabled,
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .card.compact { max-width: 320px; }
@@ -635,6 +635,7 @@ button.danger:disabled,
   background: var(--done-fill);
   border-color: var(--done);
   box-shadow: 0 0 0 1px rgba(129, 199, 132, 0.25);
+  overflow: visible;
 }
 
 .card-thumb {
@@ -918,6 +919,18 @@ button.danger:disabled,
   display: flex;
   padding: 0.3rem 0.5rem 0.4rem;
   border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 0;
+}
+
+.card-actions .btn-menu[open] {
+  z-index: 30;
+}
+
+.card-actions .btn-menu-panel {
+  left: 0;
+  right: auto;
+  min-width: max-content;
 }
 
 .card-actions .btn-group {

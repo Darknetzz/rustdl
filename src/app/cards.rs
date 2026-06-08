@@ -5,8 +5,8 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{
-    compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, status_color,
-    status_dot_with_label, MetaBadgeKind,
+    compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, popup_menu_above,
+    status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -543,24 +543,31 @@ impl PydlApp {
                 let ctx = ui.ctx().clone();
                 let mut copy_url = false;
                 let mut open_url = false;
-                ui.menu_button(format!("{} URL...", ui_icons::PAGE_URL), |ui| {
-                    if ui
-                        .button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
-                        .on_hover_text(&url)
-                        .clicked()
-                    {
-                        copy_url = true;
-                    }
-                    if ui
-                        .button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
-                        .on_hover_text("Open in your default browser")
-                        .clicked()
-                    {
-                        open_url = true;
-                    }
-                })
-                .response
-                .on_hover_text(&url);
+                ui.push_id(("list_url_menu", id), |ui| {
+                    let popup_id = ui.make_persistent_id("popup");
+                    popup_menu_above(
+                        ui,
+                        popup_id,
+                        format!("{} URL...", ui_icons::PAGE_URL),
+                        |ui| {
+                            if ui
+                                .button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
+                                .on_hover_text(&url)
+                                .clicked()
+                            {
+                                copy_url = true;
+                            }
+                            if ui
+                                .button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
+                                .on_hover_text("Open in your default browser")
+                                .clicked()
+                            {
+                                open_url = true;
+                            }
+                        },
+                    )
+                    .on_hover_text(&url);
+                });
                 if copy_url {
                     ctx.copy_text(url.clone());
                 }
