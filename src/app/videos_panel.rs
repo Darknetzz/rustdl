@@ -87,8 +87,7 @@ impl PydlApp {
         ui: &mut egui::Ui,
         theme: &str,
         av1: bool,
-        mode_downloader_color: &str,
-        mode_convert_color: &str,
+        colors: crate::theme::ModePanelColors<'_>,
         inner_margin: egui::Margin,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
     ) -> R {
@@ -96,8 +95,7 @@ impl PydlApp {
             ui,
             theme,
             av1,
-            mode_downloader_color,
-            mode_convert_color,
+            colors,
             inner_margin,
             8.0,
             add_contents,
@@ -435,13 +433,15 @@ impl PydlApp {
         let window_title = self.videos_window_title();
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
+        let dl_color = self.settings.mode_downloader_color.clone();
+        let convert_color = self.settings.mode_convert_color.clone();
+        let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
         with_full_width(ui, |ui| {
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
                 av1,
-                &self.settings.mode_downloader_color,
-                &self.settings.mode_convert_color,
+                mode_colors,
                 egui::Margin::symmetric(12.0, 10.0),
                 |ui| {
                     self.constrain_content(ui);
@@ -680,13 +680,15 @@ impl PydlApp {
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
+        let dl_color = self.settings.mode_downloader_color.clone();
+        let convert_color = self.settings.mode_convert_color.clone();
+        let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
 
         Self::draw_mode_queue_panel(
             ui,
             &theme,
             av1,
-            &self.settings.mode_downloader_color,
-            &self.settings.mode_convert_color,
+            mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
                 ui.set_max_height(body_h);
@@ -725,6 +727,9 @@ impl PydlApp {
         let title = self.videos_window_title().to_owned();
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
+        let dl_color = self.settings.mode_downloader_color.clone();
+        let convert_color = self.settings.mode_convert_color.clone();
+        let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
         let mut window = egui::Window::new(title)
             .id(window_id)
             .open(&mut open)
@@ -748,8 +753,7 @@ impl PydlApp {
                 ui,
                 &theme,
                 av1,
-                &self.settings.mode_downloader_color,
-                &self.settings.mode_convert_color,
+                mode_colors,
                 QUEUE_MODE_PANEL_MARGIN,
                 |ui| {
                     self.draw_videos_queue_body(

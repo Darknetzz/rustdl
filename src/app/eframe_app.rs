@@ -132,8 +132,10 @@ impl eframe::App for PydlApp {
                     &self.settings.theme,
                     !self.convert_mode,
                     self.convert_mode,
-                    &self.settings.mode_downloader_color,
-                    &self.settings.mode_convert_color,
+                    crate::theme::ModePanelColors::new(
+                        &self.settings.mode_downloader_color,
+                        &self.settings.mode_convert_color,
+                    ),
                 );
                 if dl_nav {
                     self.set_app_mode(false);
@@ -205,13 +207,16 @@ impl eframe::App for PydlApp {
                 );
                 ui.separator();
                 let theme = self.settings.theme.clone();
+                let dl_color = self.settings.mode_downloader_color.clone();
+                let convert_color = self.settings.mode_convert_color.clone();
+                let mode_colors =
+                    crate::theme::ModePanelColors::new(&dl_color, &convert_color);
                 if self.convert_mode {
                     show_mode_panel(
                         ui,
                         &theme,
                         true,
-                        &self.settings.mode_downloader_color,
-                        &self.settings.mode_convert_color,
+                        mode_colors,
                         egui::Margin::same(12.0),
                         10.0,
                         |ui| {
@@ -223,8 +228,7 @@ impl eframe::App for PydlApp {
                     ui,
                     &theme,
                     false,
-                    &self.settings.mode_downloader_color,
-                    &self.settings.mode_convert_color,
+                    mode_colors,
                     egui::Margin::same(12.0),
                     10.0,
                     |ui| {

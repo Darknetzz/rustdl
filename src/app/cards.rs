@@ -95,14 +95,21 @@ impl PydlApp {
                 });
                 if self.settings.show_thumbnails
                     && !self.textures.contains_key(&id)
-                    && !self.thumbnail_attempted.contains(&id)
                     && !self.thumbnail_inflight.contains(&id)
                 {
-                    let can_try = has_thumbnail_url
-                        || !self.items[idx].video_id.trim().is_empty()
-                        || done_file.is_some();
-                    if can_try {
-                        self.queue_thumbnail_load(id);
+                    if self.thumbnail_attempted.contains(&id)
+                        && done_file.is_some()
+                        && self.has_ffmpeg
+                    {
+                        self.thumbnail_attempted.remove(&id);
+                    }
+                    if !self.thumbnail_attempted.contains(&id) {
+                        let can_try = has_thumbnail_url
+                            || !self.items[idx].video_id.trim().is_empty()
+                            || done_file.is_some();
+                        if can_try {
+                            self.queue_thumbnail_load(id);
+                        }
                     }
                 }
                 // Fixed max cell; image keeps aspect ratio and never exceeds thumb (no upscale).

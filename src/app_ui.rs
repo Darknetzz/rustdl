@@ -8,7 +8,7 @@ use crate::disk_space::{DiskSpace, DiskSpaceLevel};
 use crate::models::ItemStatus;
 use crate::theme::{
     mode_accent_for, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted,
-    MODE_CONVERT, MODE_DOWNLOADER,
+    ModePanelColors,
 };
 use crate::ui_icons;
 
@@ -758,13 +758,12 @@ pub fn show_mode_panel<R>(
     ui: &mut egui::Ui,
     theme: &str,
     av1: bool,
-    mode_downloader_color: &str,
-    mode_convert_color: &str,
+    colors: ModePanelColors<'_>,
     inner_margin: egui::Margin,
     rounding: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
-    let accent = mode_accent_for(av1, mode_downloader_color, mode_convert_color);
+    let accent = mode_accent_for(av1, colors);
     let border = mode_border(accent);
     let panel = panel_fill(theme);
     let soft = mode_soft_tint(accent, theme);
@@ -921,11 +920,10 @@ pub fn draw_mode_nav_bar(
     theme: &str,
     dl_active: bool,
     av1_active: bool,
-    mode_downloader_color: &str,
-    mode_convert_color: &str,
+    colors: ModePanelColors<'_>,
 ) -> (bool, bool) {
-    let dl_accent = mode_accent_for(false, mode_downloader_color, mode_convert_color);
-    let convert_accent = mode_accent_for(true, mode_downloader_color, mode_convert_color);
+    let dl_accent = mode_accent_for(false, colors);
+    let convert_accent = mode_accent_for(true, colors);
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     let row_w = content_width(ui).max(1.0);

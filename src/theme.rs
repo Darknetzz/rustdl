@@ -75,11 +75,23 @@ pub fn mode_accent(av1: bool) -> Color32 {
     }
 }
 
-pub fn mode_accent_for(av1: bool, downloader_hex: &str, convert_hex: &str) -> Color32 {
+pub fn mode_accent_for(av1: bool, colors: ModePanelColors<'_>) -> Color32 {
     if av1 {
-        parse_mode_color(convert_hex, MODE_CONVERT)
+        parse_mode_color(colors.convert, MODE_CONVERT)
     } else {
-        parse_mode_color(downloader_hex, MODE_DOWNLOADER)
+        parse_mode_color(colors.downloader, MODE_DOWNLOADER)
+    }
+}
+
+/// User-configurable Downloader / Video Converter panel accent colors (hex strings).
+pub struct ModePanelColors<'a> {
+    pub downloader: &'a str,
+    pub convert: &'a str,
+}
+
+impl<'a> ModePanelColors<'a> {
+    pub fn new(downloader: &'a str, convert: &'a str) -> Self {
+        Self { downloader, convert }
     }
 }
 
@@ -129,12 +141,7 @@ pub fn draw_mode_color_row(
     ui.horizontal(|ui| {
         ui.label(label);
         let mut color = parse_mode_color(hex, default);
-        let mut srgba = color.to_srgba_unmultiplied();
-        if ui
-            .color_edit_button_srgba_unmultiplied(&mut srgba)
-            .changed()
-        {
-            color = Color32::from_rgba_unmultiplied(srgba.r, srgba.g, srgba.b, srgba.a);
+        if ui.color_edit_button_srgba(&mut color).changed() {
             *hex = format_mode_color_hex(color);
             changed = true;
         }

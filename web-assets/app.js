@@ -154,13 +154,22 @@ function syncModeColorControls(pickerId, hexId, storedHex, fallback) {
   hex.value = storedHex?.trim() || "";
 }
 
-function wireModeColorRow(pickerId, hexId, defaultBtnId, fallback) {
-  const picker = document.getElementById(pickerId);
-  const hex = document.getElementById(hexId);
-  const reset = document.getElementById(defaultBtnId);
-  if (!picker || !hex) return;
-  picker.addEventListener("input", () => {
-    hex.value = picker.value;
+function wireModeColorControls() {
+  const rows = [
+    [
+      "set-mode-downloader-color",
+      "set-mode-downloader-hex",
+      "btn-mode-downloader-default",
+      DEFAULT_MODE_DOWNLOADER,
+    ],
+    [
+      "set-mode-convert-color",
+      "set-mode-convert-hex",
+      "btn-mode-convert-default",
+      DEFAULT_MODE_CONVERT,
+    ],
+  ];
+  const previewFromForm = () =>
     applyModeColors({
       mode_downloader_color: readModeColorField(
         "set-mode-downloader-color",
@@ -168,31 +177,28 @@ function wireModeColorRow(pickerId, hexId, defaultBtnId, fallback) {
       ),
       mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
     });
-  });
-  hex.addEventListener("input", () => {
-    const normalized = normalizeModeHex(hex.value, fallback);
-    if (/^#[0-9a-f]{6}$/.test(normalized)) {
-      picker.value = normalized;
-    }
-    applyModeColors({
-      mode_downloader_color: readModeColorField(
-        "set-mode-downloader-color",
-        "set-mode-downloader-hex",
-      ),
-      mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
+  for (const [pickerId, hexId, resetId, fallback] of rows) {
+    const picker = document.getElementById(pickerId);
+    const hex = document.getElementById(hexId);
+    const reset = document.getElementById(resetId);
+    if (!picker || !hex) continue;
+    picker.addEventListener("input", () => {
+      hex.value = picker.value;
+      previewFromForm();
     });
-  });
-  reset?.addEventListener("click", () => {
-    hex.value = "";
-    picker.value = fallback;
-    applyModeColors({
-      mode_downloader_color: readModeColorField(
-        "set-mode-downloader-color",
-        "set-mode-downloader-hex",
-      ),
-      mode_convert_color: readModeColorField("set-mode-convert-color", "set-mode-convert-hex"),
+    hex.addEventListener("input", () => {
+      const normalized = normalizeModeHex(hex.value, fallback);
+      if (/^#[0-9a-f]{6}$/.test(normalized)) {
+        picker.value = normalized;
+      }
+      previewFromForm();
     });
-  });
+    reset?.addEventListener("click", () => {
+      hex.value = "";
+      picker.value = fallback;
+      previewFromForm();
+    });
+  }
 }
 
 function initWebTheme() {
@@ -2813,18 +2819,7 @@ applyStaticButtonIcons();
 
 initWebTheme();
 
-wireModeColorRow(
-  "set-mode-downloader-color",
-  "set-mode-downloader-hex",
-  "btn-mode-downloader-default",
-  DEFAULT_MODE_DOWNLOADER,
-);
-wireModeColorRow(
-  "set-mode-convert-color",
-  "set-mode-convert-hex",
-  "btn-mode-convert-default",
-  DEFAULT_MODE_CONVERT,
-);
+wireModeColorControls();
 applyModeColors(cachedSettings);
 
 document.getElementById("btn-theme-toggle")?.addEventListener("click", () => {

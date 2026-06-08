@@ -1166,6 +1166,38 @@ dialog::backdrop {
 
 .settings-panel h3:first-child { margin-top: 0; }
 
+.mode-color-row label {
+  display: block;
+}
+
+.mode-color-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.mode-color-hex {
+  width: 6.5rem;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.mode-color-default {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.mode-color-inputs input[type="color"] {
+  width: 2.75rem;
+  height: 2rem;
+  padding: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
