@@ -5,9 +5,8 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, constrain_content_width, consume_remaining_ui_space, content_width,
-    draw_status_dot, fill_allocated_rect, left_button_row, note_resizable_panel_height,
-    remaining_ui_height, show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
-    VIDEOS_DOCK_PANEL_ID,
+    draw_status_dot, fill_allocated_rect, left_button_row, remaining_ui_height, show_mode_panel,
+    status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -30,6 +29,10 @@ const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     top: 6.0,
     bottom: 6.0,
 };
+
+fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
+    (outer_h - margin.top - margin.bottom).max(80.0)
+}
 
 impl PydlApp {
     fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
@@ -575,13 +578,12 @@ impl PydlApp {
         if self.settings.logs_open && self.settings.logs_docked {
             self.draw_docked_log_only_section(ui);
         }
-        consume_remaining_ui_space(ui);
-        note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, ui.max_rect().height());
     }
 
-    /// Pinned footer when the queue is undocked (`TopBottomPanel` body).
+    /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        fill_allocated_rect(ui);
+        let panel_h = ui.clip_rect().height().max(180.0);
+        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.av1_mode;
@@ -592,13 +594,17 @@ impl PydlApp {
             av1,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                self.draw_videos_queue_body(ui, "rustdl_videos_dock_scroll", dock_log);
+                ui.set_max_height(body_h);
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                    self.draw_videos_queue_body(ui, "rustdl_videos_dock_scroll", dock_log);
+                });
             },
         );
+        // egui persists panel height from content rect; claim leftover space at the panel root.
         consume_remaining_ui_space(ui);
-        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, ui.max_rect().height());
         if !ui.ctx().input(|i| i.pointer.any_down()) {
-            let saved_h = ui.max_rect().height();
+            let saved_h = ui.clip_rect().height();
             if (saved_h - self.settings.videos_dock_height).abs() > 1.0 {
                 self.settings.videos_dock_height = saved_h.clamp(180.0, 800.0);
                 self.persist_settings();

@@ -742,10 +742,8 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
-            fill_allocated_rect(ui);
             let bg_idx = ui.painter().add(Shape::Noop);
             let ret = add_contents(ui);
-            consume_remaining_ui_space(ui);
             let paint_rect = ui.min_rect() + inner_margin;
             if ui.is_rect_visible(paint_rect) {
                 paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
@@ -784,35 +782,6 @@ pub fn consume_remaining_ui_space(ui: &mut egui::Ui) {
     }
     if size.x > 0.5 || size.y > 0.5 {
         ui.allocate_space(size);
-    }
-}
-
-/// Remember the panel's allocated height for [`patch_resizable_panel_state_height`].
-pub fn note_resizable_panel_height(ctx: &egui::Context, panel_id: &str, height: f32) {
-    if height.is_finite() && height >= 1.0 {
-        ctx.data_mut(|d| {
-            d.insert_temp(egui::Id::new(panel_id).with("allocated_h"), height);
-        });
-    }
-}
-
-/// egui stores [`egui::panel::PanelState`] height from shrink-wrapped content; patch it after show.
-pub fn patch_resizable_panel_state_height(ctx: &egui::Context, panel_id: &str) {
-    let id = egui::Id::new(panel_id);
-    let Some(height) = ctx.data(|d| d.get_temp::<f32>(id.with("allocated_h"))) else {
-        return;
-    };
-    if !height.is_finite() || height < 1.0 {
-        return;
-    }
-    if let Some(mut state) = egui::panel::PanelState::load(ctx, id) {
-        if (state.rect.height() - height).abs() > 0.5 {
-            state.rect = egui::Rect::from_min_size(
-                state.rect.min,
-                egui::vec2(state.rect.width().max(1.0), height),
-            );
-            ctx.data_mut(|d| d.insert_persisted(id, state));
-        }
     }
 }
 
