@@ -634,7 +634,7 @@ impl PydlApp {
                         egui::vec2(tail_w.max(0.0), 0.0),
                         egui::Layout::right_to_left(egui::Align::Center),
                         |ui| {
-                            self.draw_log_controls(ui);
+                            self.draw_log_dock_controls(ui);
                         },
                     );
                 });

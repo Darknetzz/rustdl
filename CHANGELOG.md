@@ -10,7 +10,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
-- **Show log** / **Hide log** live only in the main header; removed from the Videos panel toolbar.
+- **Show log** / **Hide log** live only in the main header (also removed from the floating/docked log chrome); **Dock log** / **Undock log** stay on the log panel. Hiding the log no longer resets dock preference, so **Show log** restores the log where you left it.
+- Floating activity log window: filter/actions toolbar and log lines use a horizontal layout again so the scroll area fills the window.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
 
 ## [0.4.7] - 2026-06-08

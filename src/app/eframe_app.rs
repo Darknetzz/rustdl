@@ -631,7 +631,6 @@ impl PydlApp {
                                     .clicked()
                                 {
                                     self.settings.logs_open = false;
-                                    self.settings.logs_docked = false;
                                     self.persist_settings();
                                 }
                             } else if g

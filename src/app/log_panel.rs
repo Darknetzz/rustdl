@@ -7,8 +7,8 @@ use regex::Regex;
 
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, fill_allocated_rect, height_to_bottom,
-    left_button_row, persist_resizable_window_size, secondary_button,
+    compact_button_group, consume_remaining_ui_space, fill_allocated_rect,
+    left_button_row, persist_resizable_window_size, remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -209,14 +209,13 @@ impl PydlApp {
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
             fill_allocated_rect(ui);
-            let body_bottom = ui.max_rect().bottom();
             left_button_row(ui, |ui| {
-                self.draw_log_controls_compact(ui);
+                self.draw_log_dock_controls_compact(ui);
             });
             ui.add_space(2.0);
             self.draw_activity_log_toolbar_inner(ui, true);
             ui.add_space(2.0);
-            let scroll_h = height_to_bottom(ui, body_bottom).max(80.0);
+            let scroll_h = remaining_ui_height(ui).max(80.0);
             self.draw_activity_log_lines_scroll(ui, scroll_h);
             consume_remaining_ui_space(ui);
         });
@@ -247,16 +246,19 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn draw_log_controls(&mut self, ui: &mut egui::Ui) {
-        button_toolbar_wrapped(ui, |ui| self.draw_log_controls_inner(ui, false));
+    pub(super) fn draw_log_dock_controls(&mut self, ui: &mut egui::Ui) {
+        button_toolbar_wrapped(ui, |ui| self.draw_log_dock_controls_inner(ui, false));
     }
 
-    /// Dock/undock/hide log — compact row in floating log window chrome.
-    pub(super) fn draw_log_controls_compact(&mut self, ui: &mut egui::Ui) {
-        self.draw_log_controls_inner(ui, true);
+    /// Dock/undock only — show/hide is in the main header.
+    pub(super) fn draw_log_dock_controls_compact(&mut self, ui: &mut egui::Ui) {
+        self.draw_log_dock_controls_inner(ui, true);
     }
 
-    fn draw_log_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn draw_log_dock_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+        if !self.settings.logs_open {
+            return;
+        }
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
                 compact_button_group(ui, "queue_logs_controls", |g| add(g));
@@ -265,39 +267,19 @@ impl PydlApp {
             }
         };
         draw(ui, &mut |g| {
-            if !self.settings.logs_open {
-                if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
-                    .on_hover_text(
-                        "Open the activity log (dock under the queue or in its own window)",
-                    )
-                    .clicked()
-                {
-                    self.settings.logs_open = true;
-                    self.persist_settings();
-                }
+            let log_dock_label = if self.settings.logs_docked {
+                format!("{} Undock log", ui_icons::UNDOCK_LOG)
             } else {
-                let log_dock_label = if self.settings.logs_docked {
-                    format!("{} Undock log", ui_icons::UNDOCK_LOG)
-                } else {
-                    format!("{} Dock log", ui_icons::DOCK_LOG)
-                };
-                if g.secondary(&log_dock_label, true)
-                    .on_hover_text(
-                        "Dock the log under the queue in the main window, or show it in a separate window",
-                    )
-                    .clicked()
-                {
-                    self.settings.logs_docked = !self.settings.logs_docked;
-                    self.persist_settings();
-                }
-                if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
-                    .on_hover_text("Close the activity log")
-                    .clicked()
-                {
-                    self.settings.logs_open = false;
-                    self.settings.logs_docked = false;
-                    self.persist_settings();
-                }
+                format!("{} Dock log", ui_icons::DOCK_LOG)
+            };
+            if g.secondary(&log_dock_label, true)
+                .on_hover_text(
+                    "Dock the log under the queue in the main window, or show it in a separate window",
+                )
+                .clicked()
+            {
+                self.settings.logs_docked = !self.settings.logs_docked;
+                self.persist_settings();
             }
         });
     }
@@ -314,7 +296,7 @@ impl PydlApp {
                 button_group(ui, "log_clear", |g| add(g));
             }
         };
-        let mut row = |ui: &mut egui::Ui| {
+        let row = |ui: &mut egui::Ui| {
             draw(ui, &mut |g| {
                 if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true)
                     .clicked()
@@ -386,18 +368,14 @@ impl PydlApp {
                 }
             });
         };
-        if compact {
-            row(ui);
-        } else {
-            button_toolbar_wrapped(ui, row);
-        }
+        button_toolbar_wrapped(ui, row);
     }
 
     /// Docked under the video queue: placement row, height slider, filter/actions, then lines.
     pub(super) fn draw_docked_log_under_videos(&mut self, ui: &mut egui::Ui, max_log_h: f32) {
         left_button_row(ui, |ui| {
             ui.label(RichText::new("Activity log").small().strong());
-            self.draw_log_controls_inner(ui, true);
+            self.draw_log_dock_controls_inner(ui, true);
         });
         let max_log = max_log_h.clamp(80.0, 480.0);
         self.draw_log_height_slider(ui, max_log);
