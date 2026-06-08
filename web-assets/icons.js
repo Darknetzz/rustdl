@@ -28,6 +28,8 @@ const ICON = {
   tune: "tune",
   upload: "upload",
   check: "check",
+  contentCopy: "content_copy",
+  openInNew: "open_in_new",
   schedule: "schedule",
   hourglassEmpty: "hourglass_empty",
   block: "block",

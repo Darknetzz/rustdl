@@ -842,6 +842,52 @@ function itemHasThumbnailSource(item) {
   return /youtu\.be\/|youtube\.com\/watch|youtube\.com\/shorts/i.test(line);
 }
 
+function isQueueableHttpUrl(line) {
+  const s = String(line || "").trim();
+  if (!s) return false;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    return Boolean(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+/** Page URL for copy/open (matches desktop `resolve_item_download_url`). */
+function resolveItemPageUrl(item) {
+  const web = String(item.webpage_url || "").trim();
+  if (isQueueableHttpUrl(web)) return web;
+  const src = String(item.source_line || "").trim();
+  if (isQueueableHttpUrl(src)) return src;
+  const vid = String(item.video_id || "").trim();
+  if (vid) return `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`;
+  return null;
+}
+
+function appendUrlActionButtons(actions, item) {
+  const url = resolveItemPageUrl(item);
+  if (!url) return;
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.className = "secondary";
+  setButtonLabel(copy, ICON.contentCopy, "Copy URL");
+  copy.title = url;
+  copy.onclick = () => {
+    navigator.clipboard.writeText(url).catch(() => {
+      window.prompt("Copy URL:", url);
+    });
+  };
+  actions.appendChild(copy);
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "secondary";
+  setButtonLabel(open, ICON.openInNew, "Open URL");
+  open.title = url;
+  open.onclick = () => window.open(url, "_blank", "noopener,noreferrer");
+  actions.appendChild(open);
+}
+
 function thumbCacheKey(item) {
   return [
     item.item_id,
@@ -1328,6 +1374,7 @@ function renderQueueCard(item, settings) {
 
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
+  appendUrlActionButtons(group, item);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
@@ -1386,6 +1433,7 @@ function renderQueueCardListRow(item, settings) {
 
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
+  appendUrlActionButtons(group, item);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";

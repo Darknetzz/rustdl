@@ -10,6 +10,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- Downloader queue cards (desktop and LAN web UI) include **Copy URL** and **Open URL** on every row that has a saved page link (paste URL, resolved `webpage_url`, or YouTube id).
 - Downloader queue thumbnails and URLs are saved when metadata resolves: preview images go to `thumbnails/downloader/` under the rustdl config folder (with a JSON sidecar for `webpage_url`, `thumbnail_url`, and `source_line`), the queue JSON records `thumbnail_path`, and URLs are stored from the moment a link is added.
 
 ### Fixed

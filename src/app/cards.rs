@@ -260,6 +260,34 @@ impl PydlApp {
                     );
                 }
 
+                if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
+                    let ctx = ui.ctx().clone();
+                    left_button_row(ui, |ui| {
+                        compact_button_group(ui, ("card_url", id), |g| {
+                            if g.secondary(
+                                &format!("{} Copy URL", ui_icons::COPY_CLIPBOARD),
+                                true,
+                            )
+                            .on_hover_text(&url)
+                            .clicked()
+                            {
+                                ctx.copy_text(url.clone());
+                            }
+                            if g.secondary(
+                                &format!("{} Open URL", ui_icons::UPDATE_OPEN),
+                                true,
+                            )
+                            .on_hover_text("Open in your default browser")
+                            .clicked()
+                            {
+                                if let Err(e) = crate::app_actions::open_browser(&url) {
+                                    self.append_log(&format!("Failed to open URL: {e}"));
+                                }
+                            }
+                        });
+                    });
+                }
+
                 let can_retry_download = status == ItemStatus::Failed
                     && output_ready
                     && self.has_yt_dlp
@@ -502,6 +530,25 @@ impl PydlApp {
             ui.label(RichText::new(title).strong());
             if status == ItemStatus::Downloading || status == ItemStatus::Queued {
                 ui.add(egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage());
+            }
+            if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
+                let ctx = ui.ctx().clone();
+                if ui
+                    .small_button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
+                    .on_hover_text(&url)
+                    .clicked()
+                {
+                    ctx.copy_text(url.clone());
+                }
+                if ui
+                    .small_button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
+                    .on_hover_text("Open in your default browser")
+                    .clicked()
+                {
+                    if let Err(e) = crate::app_actions::open_browser(&url) {
+                        self.append_log(&format!("Failed to open URL: {e}"));
+                    }
+                }
             }
         });
         if allow_reorder && status == ItemStatus::Idle {
