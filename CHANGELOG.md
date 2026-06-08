@@ -23,6 +23,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
 
 ## [0.1.3] - 2026-06-08
