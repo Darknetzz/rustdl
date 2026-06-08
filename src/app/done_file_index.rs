@@ -382,4 +382,22 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    #[cfg(windows)]
+    fn resolve_path_under_output_accepts_extended_length_prefix() {
+        let dir = std::env::temp_dir().join("rustdl_extended_path_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("clip [abc123].mkv");
+        std::fs::write(&file, b"x").unwrap();
+        let dir_s = dir.to_string_lossy().to_string();
+        let canon = file.canonicalize().unwrap_or_else(|_| file.clone());
+        let extended = format!(r"\\?\{}", canon.display());
+        assert_eq!(
+            super::resolve_path_under_output(&dir_s, &extended),
+            Some(canon)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

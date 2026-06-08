@@ -1381,4 +1381,36 @@ mod thumbnail_cache_tests {
         core.evict_thumbnail(1);
         assert!(core.cached_thumbnail_bytes(1, "a").is_none());
     }
+
+    /// Loads a real on-disk downloader thumbnail when present (dev machine fixture).
+    #[test]
+    fn cached_thumbnail_loads_saved_downloader_image_when_key_matches() {
+        let dir = crate::thumbnail_store::downloader_thumbnail_dir();
+        if !dir.join("316.json").is_file() {
+            return;
+        }
+        let item = QueueItem {
+            item_id: 316,
+            source_line: "https://www.youtube.com/watch?v=b4fx6BjWEqk".to_owned(),
+            video_id: "b4fx6BjWEqk".to_owned(),
+            webpage_url: "https://www.youtube.com/watch?v=b4fx6BjWEqk".to_owned(),
+            thumbnail_url: Some(
+                "https://i.ytimg.com/vi_webp/b4fx6BjWEqk/maxresdefault.webp".to_owned(),
+            ),
+            local_path: Some(
+                r"\\?\D:\Kriss\Downloads\Last two Afghan Jews fighting each other [b4fx6BjWEqk].mkv"
+                    .to_owned(),
+            ),
+            status: ItemStatus::Done,
+            ..Default::default()
+        };
+        let key = DownloadCore::queue_thumbnail_source_key(&item);
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let core = shared.lock();
+        assert!(
+            core.cached_thumbnail_bytes(316, &key).is_some(),
+            "expected saved thumbnail for item 316 (key={key})"
+        );
+    }
 }
