@@ -131,6 +131,7 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
         for item_id in new_item_ids {
             app.queue_thumbnail_load(item_id);
         }
+        app.ensure_downloader_thumbnails();
     }
     app.ensure_convert_thumbnails();
 }

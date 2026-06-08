@@ -169,6 +169,19 @@ impl PydlApp {
                     }
                     if completed {
                         self.probe_done_item_resolution_if_missing(item_id);
+                        if let Some(core_item) = self
+                            .shared_core
+                            .lock()
+                            .items
+                            .iter()
+                            .find(|it| it.item_id == item_id)
+                        {
+                            if let Some(idx) = self.item_idx(item_id) {
+                                if core_item.local_path.is_some() {
+                                    self.items[idx].local_path = core_item.local_path.clone();
+                                }
+                            }
+                        }
                         // Auto-enqueue to AV1 is applied on DownloadCore (works headless too).
                         if self.settings.show_thumbnails && !self.textures.contains_key(&item_id) {
                             self.thumbnail_attempted.remove(&item_id);

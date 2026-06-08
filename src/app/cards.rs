@@ -98,8 +98,8 @@ impl PydlApp {
                     && !self.thumbnail_inflight.contains(&id)
                 {
                     if self.thumbnail_attempted.contains(&id)
-                        && done_file.is_some()
-                        && self.has_ffmpeg
+                        && (self.items[idx].thumbnail_path.is_some()
+                            || (done_file.is_some() && self.has_ffmpeg))
                     {
                         self.thumbnail_attempted.remove(&id);
                     }

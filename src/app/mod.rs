@@ -425,6 +425,7 @@ impl PydlApp {
             core_sync::sync_core_to_app(&core, &mut app);
         }
         app.ensure_convert_thumbnails();
+        app.ensure_downloader_thumbnails();
         app.refresh_input_line_info();
         app
     }

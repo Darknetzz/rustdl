@@ -130,16 +130,14 @@ pub fn format_mode_color_hex(color: Color32) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
 }
 
-/// Shared settings row: color swatch + hex preview + reset to built-in default.
-pub fn draw_mode_color_row(
+/// Color swatch + hex preview + reset (no label; use in settings form grids).
+pub fn draw_mode_color_controls(
     ui: &mut eframe::egui::Ui,
-    label: &str,
     hex: &mut String,
     default: Color32,
 ) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
-        ui.label(label);
         let mut color = parse_mode_color(hex, default);
         if ui.color_edit_button_srgba(&mut color).changed() {
             *hex = format_mode_color_hex(color);
@@ -155,6 +153,21 @@ pub fn draw_mode_color_row(
             hex.clear();
             changed = true;
         }
+    });
+    changed
+}
+
+/// Shared settings row: color swatch + hex preview + reset to built-in default.
+pub fn draw_mode_color_row(
+    ui: &mut eframe::egui::Ui,
+    label: &str,
+    hex: &mut String,
+    default: Color32,
+) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        ui.label(label);
+        changed |= draw_mode_color_controls(ui, hex, default);
     });
     changed
 }

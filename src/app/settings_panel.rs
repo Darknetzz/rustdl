@@ -12,6 +12,22 @@ use crate::ui_icons;
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
+const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
+
+fn settings_form_grid<R>(ui: &mut egui::Ui, id_salt: &str, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    egui::Grid::new(ui.id().with(id_salt))
+        .num_columns(2)
+        .min_col_width(SETTINGS_FORM_LABEL_WIDTH)
+        .spacing([16.0, 6.0])
+        .show(ui, f)
+}
+
+fn settings_checkbox(ui: &mut egui::Ui, label: &str, value: &mut bool) -> bool {
+    ui.label(label);
+    let changed = ui.checkbox(value, "").changed();
+    ui.end_row();
+    changed
+}
 
 fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
     match preset {
@@ -126,54 +142,45 @@ impl PydlApp {
                         match self.settings_tab {
                     SettingsTab::Shared => {
                         ui.label(RichText::new("Global settings").strong());
-                        let show_thumbnails_changed = ui
-                            .checkbox(&mut self.settings.show_thumbnails, "Show thumbnails in cards")
-                            .changed();
-                        changed |= show_thumbnails_changed;
-                        if show_thumbnails_changed && self.settings.show_thumbnails {
-                            // Allow lazy loading for already-fetched items after re-enabling thumbnails.
-                            self.thumbnail_attempted.clear();
-                        }
-                        changed |= ui
-                            .checkbox(&mut self.settings.compact_cards, "Use compact cards")
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.hide_card_subtitle,
+                        settings_form_grid(ui, "shared_global", |ui| {
+                            let show_thumbnails_changed =
+                                settings_checkbox(ui, "Show thumbnails in cards", &mut self.settings.show_thumbnails);
+                            changed |= show_thumbnails_changed;
+                            if show_thumbnails_changed && self.settings.show_thumbnails {
+                                // Allow lazy loading for already-fetched items after re-enabling thumbnails.
+                                self.thumbnail_attempted.clear();
+                            }
+                            changed |= settings_checkbox(ui, "Use compact cards", &mut self.settings.compact_cards);
+                            changed |= settings_checkbox(
+                                ui,
                                 "Hide card subtitle/uploader",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.card_list_layout,
+                                &mut self.settings.hide_card_subtitle,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "List layout for queue cards (denser)",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.autoscroll_log,
+                                &mut self.settings.card_list_layout,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Autoscroll log to latest line",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.videos_docked,
+                                &mut self.settings.autoscroll_log,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Dock video / Convert queue in main window",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.logs_docked,
+                                &mut self.settings.videos_docked,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Dock activity log under video queue (when queue is docked)",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.log_relative_time,
+                                &mut self.settings.logs_docked,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Relative timestamps in activity log",
-                            )
-                            .changed();
-                        ui.horizontal(|ui| {
+                                &mut self.settings.log_relative_time,
+                            );
                             ui.label("UI scale");
                             changed |= ui
                                 .add(
@@ -181,8 +188,7 @@ impl PydlApp {
                                         .fixed_decimals(2),
                                 )
                                 .changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Theme");
                             egui::ComboBox::from_id_salt("settings_theme")
                                 .selected_text(self.settings.theme.clone())
@@ -209,6 +215,7 @@ impl PydlApp {
                                         )
                                         .changed();
                                 });
+                            ui.end_row();
                         });
                         ui.label(RichText::new("Mode panel colors").strong());
                         ui.label(
@@ -218,19 +225,21 @@ impl PydlApp {
                             .small()
                             .color(crate::theme::text_hint(&self.settings.theme)),
                         );
-                        changed |= crate::theme::draw_mode_color_row(
-                            ui,
-                            "Downloader",
-                            &mut self.settings.mode_downloader_color,
-                            crate::theme::MODE_DOWNLOADER,
-                        );
-                        changed |= crate::theme::draw_mode_color_row(
-                            ui,
-                            "Video Converter",
-                            &mut self.settings.mode_convert_color,
-                            crate::theme::MODE_CONVERT,
-                        );
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "shared_mode_colors", |ui| {
+                            ui.label("Downloader");
+                            changed |= crate::theme::draw_mode_color_controls(
+                                ui,
+                                &mut self.settings.mode_downloader_color,
+                                crate::theme::MODE_DOWNLOADER,
+                            );
+                            ui.end_row();
+                            ui.label("Video Converter");
+                            changed |= crate::theme::draw_mode_color_controls(
+                                ui,
+                                &mut self.settings.mode_convert_color,
+                                crate::theme::MODE_CONVERT,
+                            );
+                            ui.end_row();
                             ui.label("Max log chars");
                             changed |= ui
                                 .add(
@@ -241,8 +250,7 @@ impl PydlApp {
                                     .integer(),
                                 )
                                 .changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Max content width");
                             changed |= ui
                                 .add(
@@ -259,6 +267,7 @@ impl PydlApp {
                                     "Limits how wide controls stretch on ultrawide monitors (0 = full panel width).",
                                 )
                                 .changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(RichText::new("Layout presets").strong());
@@ -299,39 +308,43 @@ impl PydlApp {
                         });
                         ui.separator();
                         ui.label(RichText::new("Session restore").strong());
-                        egui::ComboBox::from_id_salt("settings_session_restore")
-                            .selected_text(match self.settings.session_restore_preference.as_str() {
-                                "always" => "Always restore saved queues",
-                                "never" => "Never restore (start fresh)",
-                                _ => "Ask each startup",
-                            })
-                            .show_ui(ui, |ui| {
-                                changed |= ui
-                                    .selectable_value(
-                                        &mut self.settings.session_restore_preference,
-                                        "ask".to_owned(),
-                                        "Ask each startup",
-                                    )
-                                    .changed();
-                                changed |= ui
-                                    .selectable_value(
-                                        &mut self.settings.session_restore_preference,
-                                        "always".to_owned(),
-                                        "Always restore saved queues",
-                                    )
-                                    .changed();
-                                changed |= ui
-                                    .selectable_value(
-                                        &mut self.settings.session_restore_preference,
-                                        "never".to_owned(),
-                                        "Never restore (start fresh)",
-                                    )
-                                    .changed();
-                            });
+                        settings_form_grid(ui, "shared_session_restore", |ui| {
+                            ui.label("On startup");
+                            egui::ComboBox::from_id_salt("settings_session_restore")
+                                .selected_text(match self.settings.session_restore_preference.as_str() {
+                                    "always" => "Always restore saved queues",
+                                    "never" => "Never restore (start fresh)",
+                                    _ => "Ask each startup",
+                                })
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.session_restore_preference,
+                                            "ask".to_owned(),
+                                            "Ask each startup",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.session_restore_preference,
+                                            "always".to_owned(),
+                                            "Always restore saved queues",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.session_restore_preference,
+                                            "never".to_owned(),
+                                            "Never restore (start fresh)",
+                                        )
+                                        .changed();
+                                });
+                            ui.end_row();
+                        });
                         ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
                         ui.label("Used by the downloader and Video Converter.");
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "shared_executables", |ui| {
                             ui.label("ffmpeg");
                             let resp = ui.add(
                                 egui::TextEdit::singleline(&mut self.settings.ffmpeg_path)
@@ -339,8 +352,7 @@ impl PydlApp {
                             );
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("ffprobe");
                             let resp = ui.add(
                                 egui::TextEdit::singleline(&mut self.settings.ffprobe_path)
@@ -348,6 +360,7 @@ impl PydlApp {
                             );
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(RichText::new("Settings portability").strong());
@@ -435,34 +448,32 @@ impl PydlApp {
                     }
                     SettingsTab::Downloader => {
                         ui.label(RichText::new("Downloader behavior").strong());
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.auto_add_pasted_urls,
+                        settings_form_grid(ui, "dl_behavior", |ui| {
+                            changed |= settings_checkbox(
+                                ui,
                                 "Auto-add pasted URLs after a short delay",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.auto_start_downloads,
+                                &mut self.settings.auto_add_pasted_urls,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Auto-start downloads when new items become ready",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.enqueue_downloads_to_convert,
+                                &mut self.settings.auto_start_downloads,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Enqueue completed downloads in Video Converter queue",
-                            )
-                            .changed();
-                        ui.horizontal(|ui| {
+                                &mut self.settings.enqueue_downloads_to_convert,
+                            );
                             ui.label("Parallel downloads");
                             changed |= ui
                                 .add(egui::Slider::new(&mut self.worker_count, 1..=6).integer())
                                 .changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(RichText::new("Downloader executables").strong());
                         ui.label("Leave empty to use PATH lookup.");
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "dl_executables", |ui| {
                             ui.label("yt-dlp");
                             let resp = ui.add(
                                 egui::TextEdit::singleline(&mut self.settings.yt_dlp_path)
@@ -470,14 +481,17 @@ impl PydlApp {
                             );
                             changed |= resp.changed();
                             executable_paths_changed |= resp.changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(RichText::new("Download profile").strong());
                         let profiles = all_profiles(&self.profile_store);
                         let active = self.settings.active_profile.clone();
-                        egui::ComboBox::from_id_salt("settings_active_profile")
-                            .selected_text(active.clone())
-                            .show_ui(ui, |ui| {
+                        settings_form_grid(ui, "dl_active_profile", |ui| {
+                            ui.label("Active profile");
+                            egui::ComboBox::from_id_salt("settings_active_profile")
+                                .selected_text(active.clone())
+                                .show_ui(ui, |ui| {
                                 for p in &profiles {
                                     if ui
                                         .selectable_value(
@@ -496,6 +510,8 @@ impl PydlApp {
                                     }
                                 }
                             });
+                            ui.end_row();
+                        });
                         left_button_row(ui, |ui| {
                             button_group(ui, "profile_save_as", |g| {
                                 if g.secondary(
@@ -514,16 +530,19 @@ impl PydlApp {
                                 .take()
                                 .unwrap_or_default();
                             let mut save_clicked = false;
-                            ui.horizontal(|ui| {
+                            settings_form_grid(ui, "dl_profile_name", |ui| {
                                 ui.label("Profile name");
-                                ui.text_edit_singleline(&mut name_buf);
-                                button_group(ui, "profile_name_save", |g| {
-                                    save_clicked = g.secondary(
-                                        &format!("{} Save", ui_icons::SAVE),
-                                        !name_buf.trim().is_empty(),
-                                    )
-                                    .clicked();
+                                ui.horizontal(|ui| {
+                                    ui.text_edit_singleline(&mut name_buf);
+                                    button_group(ui, "profile_name_save", |g| {
+                                        save_clicked = g.secondary(
+                                            &format!("{} Save", ui_icons::SAVE),
+                                            !name_buf.trim().is_empty(),
+                                        )
+                                        .clicked();
+                                    });
                                 });
+                                ui.end_row();
                             });
                             if save_clicked {
                                 let name = name_buf.trim().to_owned();
@@ -588,20 +607,23 @@ impl PydlApp {
                         }
                         if let Some((old_name, mut new_name)) = self.profile_rename_buffer.take() {
                             let mut save_rename = false;
-                            ui.horizontal(|ui| {
+                            settings_form_grid(ui, "dl_profile_rename", |ui| {
                                 ui.label("Rename to");
-                                ui.text_edit_singleline(&mut new_name);
-                                button_group(ui, "profile_rename_actions", |g| {
-                                    save_rename = g
-                                        .secondary(&format!("{} Save", ui_icons::SAVE), true)
-                                        .clicked();
-                                    if g
-                                        .secondary(&format!("{} Cancel", ui_icons::DISMISS), true)
-                                        .clicked()
-                                    {
-                                        new_name.clear();
-                                    }
+                                ui.horizontal(|ui| {
+                                    ui.text_edit_singleline(&mut new_name);
+                                    button_group(ui, "profile_rename_actions", |g| {
+                                        save_rename = g
+                                            .secondary(&format!("{} Save", ui_icons::SAVE), true)
+                                            .clicked();
+                                        if g
+                                            .secondary(&format!("{} Cancel", ui_icons::DISMISS), true)
+                                            .clicked()
+                                        {
+                                            new_name.clear();
+                                        }
+                                    });
                                 });
+                                ui.end_row();
                             });
                             if save_rename && !new_name.trim().is_empty() {
                                 match rename_user_profile(
@@ -698,16 +720,17 @@ impl PydlApp {
                         });
                         ui.separator();
                         ui.label(RichText::new("Output and quality").strong());
-                        ui.label("Output filename template (-o)");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(
-                                    &mut self.settings.output_filename_template,
+                        settings_form_grid(ui, "dl_output_quality", |ui| {
+                            ui.label("Output filename template (-o)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.output_filename_template,
+                                    )
+                                    .hint_text(crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE),
                                 )
-                                .hint_text(crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE),
-                            )
-                            .changed();
-                        ui.horizontal(|ui| {
+                                .changed();
+                            ui.end_row();
                             ui.label("Quality preset");
                             egui::ComboBox::from_id_salt("settings_quality_preset")
                                 .selected_text(self.settings.quality_preset.clone())
@@ -728,18 +751,19 @@ impl PydlApp {
                                             .changed();
                                     }
                                 });
-                        });
-                        if self.settings.quality_preset == "custom" {
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(
-                                        &mut self.settings.quality_format_custom,
+                            ui.end_row();
+                            if self.settings.quality_preset == "custom" {
+                                ui.label("Custom format (-f)");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.quality_format_custom,
+                                        )
+                                        .hint_text("bestvideo+bestaudio/best"),
                                     )
-                                    .hint_text("bestvideo+bestaudio/best"),
-                                )
-                                .changed();
-                        }
-                        ui.horizontal(|ui| {
+                                    .changed();
+                                ui.end_row();
+                            }
                             ui.label("Merge container");
                             egui::ComboBox::from_id_salt("settings_merge_container")
                                 .selected_text(self.settings.merge_container.clone())
@@ -759,8 +783,7 @@ impl PydlApp {
                                             .changed();
                                     }
                                 });
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Playlist preview limit");
                             changed |= ui
                                 .add(
@@ -768,43 +791,49 @@ impl PydlApp {
                                         .range(1_usize..=500_usize),
                                 )
                                 .changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(RichText::new("Network and archive").strong());
-                        ui.label("Download archive file (--download-archive)");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_download_archive)
-                                    .hint_text("optional path"),
-                            )
-                            .changed();
-                        ui.label("Proxy URL (--proxy)");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_proxy)
-                                    .hint_text("http://127.0.0.1:8080"),
-                            )
-                            .changed();
-                        ui.label("Download speed limit (--limit-rate)");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_limit_rate)
-                                    .hint_text("50K, 4M, or empty for unlimited"),
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.yt_sponsorblock_remove,
+                        settings_form_grid(ui, "dl_network_archive", |ui| {
+                            ui.label("Download archive file (--download-archive)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_download_archive)
+                                        .hint_text("optional path"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            ui.label("Proxy URL (--proxy)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_proxy)
+                                        .hint_text("http://127.0.0.1:8080"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            ui.label("Download speed limit (--limit-rate)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_limit_rate)
+                                        .hint_text("50K, 4M, or empty for unlimited"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
                                 "Remove SponsorBlock segments",
-                            )
-                            .changed();
-                        ui.label("SponsorBlock mark categories (--sponsorblock-mark)");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_sponsorblock_mark)
-                                    .hint_text("sponsor,intro (leave empty to disable)"),
-                            )
-                            .changed();
+                                &mut self.settings.yt_sponsorblock_remove,
+                            );
+                            ui.label("SponsorBlock mark categories (--sponsorblock-mark)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_sponsorblock_mark)
+                                        .hint_text("sponsor,intro (leave empty to disable)"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
                         ui.separator();
                         ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
@@ -854,16 +883,15 @@ impl PydlApp {
                         );
                         ui.separator();
                         ui.label(RichText::new("Retries").strong());
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.yt_dlp_unlimited_retries,
-                                "Unlimited HTTP and fragment retries",
-                            )
-                            .on_hover_text(
-                                "Maps to yt-dlp --retries and --fragment-retries (infinite or a fixed count).",
-                            )
-                            .changed();
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "dl_retries", |ui| {
+                            ui.label("Unlimited HTTP and fragment retries");
+                            changed |= ui
+                                .checkbox(&mut self.settings.yt_dlp_unlimited_retries, "")
+                                .on_hover_text(
+                                    "Maps to yt-dlp --retries and --fragment-retries (infinite or a fixed count).",
+                                )
+                                .changed();
+                            ui.end_row();
                             ui.label("Retry count (when not unlimited)");
                             changed |= ui
                                 .add_enabled(
@@ -873,6 +901,7 @@ impl PydlApp {
                                         .speed(1),
                                 )
                                 .changed();
+                            ui.end_row();
                         });
                         ui.label(
                             RichText::new(
@@ -892,12 +921,16 @@ impl PydlApp {
                             .small()
                             .color(Color32::GRAY),
                         );
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_dlp_cookies)
-                                    .hint_text(r"C:\Users\you\cookies.txt"),
-                            )
-                            .changed();
+                        settings_form_grid(ui, "dl_cookies", |ui| {
+                            ui.label("Cookies path or browser");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_dlp_cookies)
+                                        .hint_text(r"C:\Users\you\cookies.txt"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
                         ui.label("Impersonate (optional)");
                         ui.label(
                             RichText::new(
@@ -907,12 +940,16 @@ impl PydlApp {
                             .small()
                             .color(Color32::GRAY),
                         );
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.yt_dlp_impersonate)
-                                    .hint_text("chrome"),
-                            )
-                            .changed();
+                        settings_form_grid(ui, "dl_impersonate", |ui| {
+                            ui.label("Impersonate target");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.yt_dlp_impersonate)
+                                        .hint_text("chrome"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
                         ui.separator();
                         ui.label("Extra args (space-separated) added to each download command");
                         ui.label(
@@ -922,34 +959,35 @@ impl PydlApp {
                             .small()
                             .color(Color32::GRAY),
                         );
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::multiline(&mut self.settings.yt_dlp_extra_args)
-                                    .desired_rows(2)
-                                    .hint_text("--concurrent-fragments 4"),
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.embed_thumbnail, "Embed thumbnail")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.yt_embed_metadata, "Embed metadata")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.yt_ignore_errors, "Ignore errors")
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.yt_restrict_filenames,
+                        settings_form_grid(ui, "dl_extra_args", |ui| {
+                            ui.label("Extra args");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::multiline(&mut self.settings.yt_dlp_extra_args)
+                                        .desired_rows(2)
+                                        .hint_text("--concurrent-fragments 4"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(ui, "Embed thumbnail", &mut self.settings.embed_thumbnail);
+                            changed |= settings_checkbox(ui, "Embed metadata", &mut self.settings.yt_embed_metadata);
+                            changed |= settings_checkbox(ui, "Ignore errors", &mut self.settings.yt_ignore_errors);
+                            changed |= settings_checkbox(
+                                ui,
                                 "Restrict filenames",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.yt_write_info_json, "Write info JSON")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.yt_write_auto_subs, "Write auto subtitles")
-                            .changed();
+                                &mut self.settings.yt_restrict_filenames,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
+                                "Write info JSON",
+                                &mut self.settings.yt_write_info_json,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
+                                "Write auto subtitles",
+                                &mut self.settings.yt_write_auto_subs,
+                            );
+                        });
                         ui.separator();
                         ui.label(
                             RichText::new("Effective command preview")
@@ -959,42 +997,44 @@ impl PydlApp {
                         draw_effective_command_preview(ui, &command_preview);
                         ui.separator();
                         ui.label(RichText::new("Downloader post-process").strong());
-                        ui.label("Post-processor args passed as --postprocessor-args");
-                        changed |= ui
-                            .add(
-                                egui::TextEdit::singleline(&mut self.settings.ffmpeg_post_args)
-                                    .hint_text("-movflags +faststart"),
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.ffmpeg_faststart,
+                        settings_form_grid(ui, "dl_post_process", |ui| {
+                            ui.label("Post-processor args (--postprocessor-args)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.ffmpeg_post_args)
+                                        .hint_text("-movflags +faststart"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
                                 "Enable faststart (-movflags +faststart)",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.ffmpeg_remux_mp4, "Remux video to mp4")
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.ffmpeg_extract_audio_mp3,
+                                &mut self.settings.ffmpeg_faststart,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
+                                "Remux video to mp4",
+                                &mut self.settings.ffmpeg_remux_mp4,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Extract audio as mp3",
-                            )
-                            .changed();
+                                &mut self.settings.ffmpeg_extract_audio_mp3,
+                            );
+                            ui.label("Verify output has video and audio (ffprobe)");
+                            ui.add_enabled_ui(!self.settings.ffmpeg_extract_audio_mp3, |ui| {
+                                changed |= ui
+                                    .checkbox(&mut self.settings.verify_output_video_audio, "")
+                                    .changed();
+                            });
+                            ui.end_row();
+                        });
                         if self.settings.ffmpeg_extract_audio_mp3 {
                             ui.colored_label(
                                 LOG_COLOR_WARN,
                                 "MP3 extraction is enabled, so remux-to-mp4 is ignored for downloads.",
                             );
                         }
-                        ui.add_enabled_ui(!self.settings.ffmpeg_extract_audio_mp3, |ui| {
-                            changed |= ui
-                                .checkbox(
-                                    &mut self.settings.verify_output_video_audio,
-                                    "Verify output has video and audio (ffprobe)",
-                                )
-                                .changed();
-                        });
                         if !self.settings.ffmpeg_extract_audio_mp3 {
                             ui.label(
                                 RichText::new(
@@ -1015,7 +1055,7 @@ impl PydlApp {
                             .color(Color32::GRAY),
                         );
                         ui.separator();
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "convert_settings", |ui| {
                             ui.label("Target codec");
                             egui::ComboBox::from_id_salt("settings_convert_target_codec")
                                 .selected_text(crate::transcode::target_codec_label(
@@ -1034,69 +1074,68 @@ impl PydlApp {
                                             .changed();
                                     }
                                 });
-                        });
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_remember_queue,
-                                "Remember Convert queue between sessions",
-                            )
-                            .on_hover_text(
-                                "When enabled, queue items stay until you click Clear. \
-                                 When off, the Convert queue is cleared each time you start the app.",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.convert_recursive, "Recursive folder scan")
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.convert_dry_run, "Dry run by default")
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_auto_start_on_add,
-                                "Automatically start batch when paths are added",
-                            )
-                            .on_hover_text(
-                                "After Browse, Scan inputs, drag-and-drop, or paste paths, \
-                                 start encoding when new ready items are added to the queue.",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_delete_original,
+                            ui.end_row();
+                            ui.label("Remember Convert queue between sessions");
+                            changed |= ui
+                                .checkbox(&mut self.settings.convert_remember_queue, "")
+                                .on_hover_text(
+                                    "When enabled, queue items stay until you click Clear. \
+                                     When off, the Convert queue is cleared each time you start the app.",
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
+                                "Recursive folder scan",
+                                &mut self.settings.convert_recursive,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
+                                "Dry run by default",
+                                &mut self.settings.convert_dry_run,
+                            );
+                            ui.label("Automatically start batch when paths are added");
+                            changed |= ui
+                                .checkbox(&mut self.settings.convert_auto_start_on_add, "")
+                                .on_hover_text(
+                                    "After Browse, Scan inputs, drag-and-drop, or paste paths, \
+                                     start encoding when new ready items are added to the queue.",
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
                                 "Delete original after success",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_rename_original,
-                                "Rename output to original filename",
-                            )
-                            .on_hover_text(
-                                "After success, rename the encoded file back to the source \
-                                 filename when it shares the output folder. Typically used with \
-                                 delete original for in-place replacement.",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(&mut self.settings.convert_overwrite, "Overwrite output files")
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_reencode_target,
+                                &mut self.settings.convert_delete_original,
+                            );
+                            ui.label("Rename output to original filename");
+                            changed |= ui
+                                .checkbox(&mut self.settings.convert_rename_original, "")
+                                .on_hover_text(
+                                    "After success, rename the encoded file back to the source \
+                                     filename when it shares the output folder. Typically used with \
+                                     delete original for in-place replacement.",
+                                )
+                                .changed();
+                            ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
+                                "Overwrite output files",
+                                &mut self.settings.convert_overwrite,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
                                 "Re-encode files already in the target codec",
-                            )
-                            .changed();
-                        changed |= ui
-                            .checkbox(
-                                &mut self.settings.convert_use_recommended_container,
-                                "Use recommended container for target codec",
-                            )
-                            .on_hover_text(
-                                "AV1 → MKV; H.264/H.265 → MP4. When off, outputs keep the source extension.",
-                            )
-                            .changed();
-                        ui.horizontal(|ui| {
+                                &mut self.settings.convert_reencode_target,
+                            );
+                            ui.label("Use recommended container for target codec");
+                            changed |= ui
+                                .checkbox(&mut self.settings.convert_use_recommended_container, "")
+                                .on_hover_text(
+                                    "AV1 → MKV; H.264/H.265 → MP4. When off, outputs keep the source extension.",
+                                )
+                                .changed();
+                            ui.end_row();
                             ui.label("Target bitrate");
                             changed |= ui
                                 .add(
@@ -1104,8 +1143,7 @@ impl PydlApp {
                                         .hint_text("auto"),
                                 )
                                 .changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Max width");
                             changed |= ui
                                 .add(
@@ -1114,8 +1152,7 @@ impl PydlApp {
                                         .speed(10),
                                 )
                                 .changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Min shrink %");
                             changed |= ui
                                 .add(
@@ -1124,8 +1161,7 @@ impl PydlApp {
                                         .speed(0.5),
                                 )
                                 .changed();
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Size preset");
                             egui::ComboBox::from_id_salt("settings_av1_preset")
                                 .selected_text(self.settings.convert_size_preset.clone())
@@ -1152,8 +1188,7 @@ impl PydlApp {
                                         )
                                         .changed();
                                 });
-                        });
-                        ui.horizontal(|ui| {
+                            ui.end_row();
                             ui.label("Encoder override");
                             egui::ComboBox::from_id_salt("settings_convert_encoder")
                                 .selected_text(if self.settings.convert_encoder_override.is_empty() {
@@ -1181,6 +1216,7 @@ impl PydlApp {
                                             .changed();
                                     }
                                 });
+                            ui.end_row();
                         });
                     }
                     SettingsTab::WebUi => {
@@ -1191,10 +1227,8 @@ impl PydlApp {
                             )
                             .color(crate::app_ui::ALERT_WARNING_TEXT),
                         );
-                        changed |= ui
-                            .checkbox(&mut self.settings.web_ui_enabled, "Enable web UI")
-                            .changed();
-                        ui.horizontal(|ui| {
+                        settings_form_grid(ui, "web_ui_settings", |ui| {
+                            changed |= settings_checkbox(ui, "Enable web UI", &mut self.settings.web_ui_enabled);
                             ui.label("Bind address");
                             changed |= ui
                                 .add(
@@ -1202,27 +1236,31 @@ impl PydlApp {
                                         .hint_text("0.0.0.0:8765"),
                                 )
                                 .changed();
+                            ui.end_row();
                         });
                         {
                             let show_token_id = ui.id().with("web_token_visible");
                             let mut show_token = ui.ctx().data_mut(|d| {
                                 *d.get_temp_mut_or(show_token_id, false)
                             });
-                            ui.horizontal(|ui| {
+                            settings_form_grid(ui, "web_ui_token", |ui| {
                                 ui.label("API token");
-                                changed |= ui
-                                    .add(
-                                        egui::TextEdit::singleline(
-                                            &mut self.settings.web_auth_token,
+                                ui.horizontal(|ui| {
+                                    changed |= ui
+                                        .add(
+                                            egui::TextEdit::singleline(
+                                                &mut self.settings.web_auth_token,
+                                            )
+                                            .password(!show_token),
                                         )
-                                        .password(!show_token),
-                                    )
-                                    .changed();
-                                if ui.checkbox(&mut show_token, "Show").changed() {
-                                    ui.ctx().data_mut(|d| {
-                                        *d.get_temp_mut_or(show_token_id, false) = show_token;
-                                    });
-                                }
+                                        .changed();
+                                    if ui.checkbox(&mut show_token, "Show").changed() {
+                                        ui.ctx().data_mut(|d| {
+                                            *d.get_temp_mut_or(show_token_id, false) = show_token;
+                                        });
+                                    }
+                                });
+                                ui.end_row();
                             });
                             left_button_row(ui, |ui| {
                                 let feedback_id = ui.id().with("web_token_copy_feedback");

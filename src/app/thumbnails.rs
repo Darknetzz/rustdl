@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 use image::imageops::FilterType;
 
+use crate::app::done_file_index::resolve_path_under_output;
 use crate::convert_state::convert_source_path_missing;
 use crate::models::ItemStatus;
 
@@ -31,18 +32,64 @@ impl PydlApp {
         if !self.settings.show_thumbnails {
             return false;
         }
+        let Some(idx) = self.item_idx(item_id) else {
+            return false;
+        };
+        let status = self.items[idx].status;
+        // Finished rows still need previews (ffmpeg frame grab / saved disk cache).
+        if matches!(status, ItemStatus::Done | ItemStatus::Failed) {
+            return true;
+        }
         if self.items.len() <= THUMBNAIL_QUEUE_SOFT_CAP {
             return true;
         }
-        self.item_idx(item_id).is_some_and(|idx| {
-            matches!(
-                self.items[idx].status,
-                crate::models::ItemStatus::Idle
-                    | crate::models::ItemStatus::Queued
-                    | crate::models::ItemStatus::Downloading
-                    | crate::models::ItemStatus::Resolving
-            )
-        })
+        matches!(
+            status,
+            ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
+        )
+    }
+
+    fn resolve_queue_local_media_path(&self, item: &crate::models::QueueItem) -> Option<PathBuf> {
+        if !matches!(item.status, ItemStatus::Done | ItemStatus::Failed) {
+            return None;
+        }
+        item.local_path
+            .as_ref()
+            .and_then(|rel| resolve_path_under_output(&self.output_dir, rel))
+            .or_else(|| {
+                self.find_downloaded_file_for_item(item)
+                    .map(|(path, _)| path)
+            })
+            .filter(|path| queue_local_thumbnail_supported(path))
+    }
+
+    /// Loads missing downloader card textures (disk cache, remote URLs, ffmpeg frame grab).
+    pub(super) fn ensure_downloader_thumbnails(&mut self) {
+        if !self.settings.show_thumbnails {
+            return;
+        }
+        let mut pending: Vec<(u8, u64)> = self
+            .items
+            .iter()
+            .filter(|it| {
+                !self.textures.contains_key(&it.item_id)
+                    && !self.thumbnail_inflight.contains(&it.item_id)
+                    && !self.thumbnail_attempted.contains(&it.item_id)
+                    && self.thumbnails_allowed_for_queue(it.item_id)
+            })
+            .map(|it| {
+                let pri = match it.status {
+                    ItemStatus::Done | ItemStatus::Failed => 0,
+                    ItemStatus::Downloading | ItemStatus::Queued | ItemStatus::Resolving => 1,
+                    _ => 2,
+                };
+                (pri, it.item_id)
+            })
+            .collect();
+        pending.sort_by_key(|(p, id)| (*p, *id));
+        for (_, item_id) in pending.into_iter().take(THUMBNAIL_QUEUE_SOFT_CAP) {
+            self.queue_thumbnail_load(item_id);
+        }
     }
 
     pub(super) fn queue_thumbnail_load(&mut self, item_id: u64) {
@@ -57,13 +104,7 @@ impl PydlApp {
         };
         let item = self.items[idx].clone();
         let urls = crate::ytdlp::thumbnail_url_candidates(&item);
-        let local_media = if matches!(item.status, ItemStatus::Done | ItemStatus::Failed) {
-            self.find_downloaded_file_for_item(&item)
-                .map(|(path, _)| path)
-                .filter(|path| queue_local_thumbnail_supported(path))
-        } else {
-            None
-        };
+        let local_media = self.resolve_queue_local_media_path(&item);
         if urls.is_empty() && local_media.is_none() {
             return;
         }
@@ -190,24 +231,27 @@ async fn fetch_queue_thumbnail_bytes(
     has_ffmpeg: bool,
     ffmpeg_path: &str,
 ) -> Option<(Vec<u8>, String)> {
+    if let Some(path) = local_media {
+        if has_ffmpeg {
+            let ffmpeg_path = ffmpeg_path.to_owned();
+            let path = path.to_path_buf();
+            if let Some(png) = tokio::task::spawn_blocking(move || {
+                crate::transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
+            })
+            .await
+            .ok()
+            .flatten()
+            {
+                return Some((png, "image/png".to_owned()));
+            }
+        }
+    }
     for url in urls {
         if let Some(found) = crate::ytdlp::fetch_thumbnail_bytes(client, url).await {
             return Some(found);
         }
     }
-    let path = local_media?;
-    if !has_ffmpeg {
-        return None;
-    }
-    let ffmpeg_path = ffmpeg_path.to_owned();
-    let path = path.to_path_buf();
-    let png = tokio::task::spawn_blocking(move || {
-        crate::transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
-    })
-    .await
-    .ok()
-    .flatten()?;
-    Some((png, "image/png".to_owned()))
+    None
 }
 
 #[cfg(test)]

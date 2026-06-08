@@ -724,6 +724,15 @@ async fn thumbnail_proxy(
     if let Some((bytes, content_type)) = cached {
         return Ok(thumbnail_response_owned(bytes, content_type));
     }
+    if let Some(path) = local_thumb {
+        if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
+            {
+                let mut c = core_ref.lock();
+                c.cache_thumbnail_bytes(id, source_key.clone(), bytes.clone(), "image/png");
+            }
+            return Ok(thumbnail_response(bytes, "image/png"));
+        }
+    }
     for url in &candidates {
         if let Some((bytes, content_type)) = ytdlp::fetch_thumbnail_bytes(&client, url).await {
             {
@@ -736,15 +745,6 @@ async fn thumbnail_proxy(
                 );
             }
             return Ok(thumbnail_response_owned(bytes, content_type));
-        }
-    }
-    if let Some(path) = local_thumb {
-        if let Some(bytes) = extract_local_video_thumbnail(&path, &ffmpeg_path, has_ffmpeg).await {
-            {
-                let mut c = core_ref.lock();
-                c.cache_thumbnail_bytes(id, source_key, bytes.clone(), "image/png");
-            }
-            return Ok(thumbnail_response(bytes, "image/png"));
         }
     }
     Err(StatusCode::NOT_FOUND)
