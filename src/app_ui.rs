@@ -4,7 +4,7 @@ use eframe::egui;
 use eframe::egui::{Color32, InnerResponse, Response, RichText, Shape, Stroke};
 use egui::layers::ShapeIdx;
 
-use crate::disk_space::DiskSpaceLevel;
+use crate::disk_space::{DiskSpace, DiskSpaceLevel};
 use crate::models::ItemStatus;
 use crate::theme::{
     mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_CONVERT,
@@ -45,22 +45,23 @@ fn disk_space_bar_track_color(ui: &egui::Ui) -> Color32 {
     }
 }
 
-/// Thin progress bar showing used disk percentage; fill color reflects free-space [`DiskSpaceLevel`].
+/// Thin progress bar showing used disk percentage; fill color reflects used-space level.
 pub fn draw_disk_space_progress_bar(
     ui: &mut egui::Ui,
     percent_free: f64,
-    level: DiskSpaceLevel,
+    _level: DiskSpaceLevel,
     width: f32,
 ) -> Response {
     let percent_used = (100.0 - percent_free).clamp(0.0, 100.0);
     let fraction = (percent_used / 100.0).clamp(0.0, 1.0) as f32;
+    let bar_level = DiskSpace::bar_level_from_used(percent_used);
     let height = 12.0;
     let rounding = height * 0.5;
     let (rect, response) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
 
     let track = disk_space_bar_track_color(ui);
-    let fill_color = disk_space_bar_fill_color(level);
-    let label_color = disk_space_bar_label_color(level);
+    let fill_color = disk_space_bar_fill_color(bar_level);
+    let label_color = disk_space_bar_label_color(bar_level);
 
     ui.painter().rect_filled(rect, rounding, track);
 

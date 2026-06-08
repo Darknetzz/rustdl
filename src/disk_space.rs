@@ -31,6 +31,21 @@ impl DiskSpace {
         (100.0 - self.percent_free()).clamp(0.0, 100.0)
     }
 
+    /// Progress bar color when showing used-space percentage (independent of free-byte thresholds).
+    pub fn bar_level_from_used(percent_used: f64) -> DiskSpaceLevel {
+        if percent_used >= 90.0 {
+            DiskSpaceLevel::Critical
+        } else if percent_used >= 75.0 {
+            DiskSpaceLevel::Low
+        } else {
+            DiskSpaceLevel::Ok
+        }
+    }
+
+    pub fn bar_level(&self) -> DiskSpaceLevel {
+        Self::bar_level_from_used(self.percent_used())
+    }
+
     pub fn level(&self) -> DiskSpaceLevel {
         const TWO_GIB: u64 = 2 * 1024 * 1024 * 1024;
         const TEN_GIB: u64 = 10 * 1024 * 1024 * 1024;
@@ -211,6 +226,19 @@ mod tests {
         let line = space.format_available_total();
         assert!(line.contains("free /"));
         assert!(line.contains("(D:)"));
+    }
+
+    #[test]
+    fn bar_level_from_used_thresholds() {
+        assert_eq!(
+            DiskSpace::bar_level_from_used(80.0),
+            DiskSpaceLevel::Low
+        );
+        assert_eq!(DiskSpace::bar_level_from_used(50.0), DiskSpaceLevel::Ok);
+        assert_eq!(
+            DiskSpace::bar_level_from_used(95.0),
+            DiskSpaceLevel::Critical
+        );
     }
 
     #[test]

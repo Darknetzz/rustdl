@@ -605,69 +605,60 @@ impl PydlApp {
         self.constrain_content(ui);
         with_full_width(ui, |ui| {
             ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 12.0;
-            let sz = egui::vec2(40.0, 40.0);
-            let img = ui.add(
-                egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                    .sense(egui::Sense::click()),
-            );
-            let title = ui.add(
-                egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()),
-            );
-            let header = img
-                .union(title)
-                .on_hover_text("About rustdl — click to open");
-            if header.clicked() {
-                self.about_open = true;
-            }
+                const ACTIONS_MIN_W: f32 = 320.0;
+                let total_w = ui.available_width();
+                let actions_w = ACTIONS_MIN_W.min(total_w * 0.45);
+                let left_w = (total_w - actions_w).max(80.0);
 
-            ui.add_space(4.0);
-            if self.settings.web_ui_enabled {
-                let url =
-                    crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
-                let running = self.web_server.is_some();
-                if draw_web_ui_header_button(ui, running, &url) {
-                    self.open_web_ui_in_browser();
-                }
-            }
-            let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
-            draw_navbar_status_badge(ui, &navbar);
-
-            ui.add_space(6.0);
-            ui.spacing_mut().item_spacing.x = 10.0;
-            draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
-            draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
-            draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
-            self.draw_output_disk_space(ui);
-
-            let tail_w = ui.available_width();
-            if tail_w > 0.0 {
                 ui.allocate_ui_with_layout(
-                    egui::vec2(tail_w, 0.0),
+                    egui::vec2(left_w, 0.0),
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = 12.0;
+                        let sz = egui::vec2(40.0, 40.0);
+                        let img = ui.add(
+                            egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                                .sense(egui::Sense::click()),
+                        );
+                        let title = ui.add(
+                            egui::Label::new(RichText::new("rustdl").heading())
+                                .sense(egui::Sense::click()),
+                        );
+                        let header = img
+                            .union(title)
+                            .on_hover_text("About rustdl — click to open");
+                        if header.clicked() {
+                            self.about_open = true;
+                        }
+
+                        ui.add_space(4.0);
+                        if self.settings.web_ui_enabled {
+                            let url = crate::service::web::web_ui_browser_url(
+                                &self.settings.web_bind_address,
+                            );
+                            let running = self.web_server.is_some();
+                            if draw_web_ui_header_button(ui, running, &url) {
+                                self.open_web_ui_in_browser();
+                            }
+                        }
+                        let navbar =
+                            crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
+                        draw_navbar_status_badge(ui, &navbar);
+
+                        ui.add_space(6.0);
+                        ui.spacing_mut().item_spacing.x = 10.0;
+                        draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
+                        draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
+                        draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
+                        self.draw_output_disk_space(ui);
+                    },
+                );
+                ui.allocate_ui_with_layout(
+                    egui::vec2(actions_w, 0.0),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
-                        button_group(ui, "hdr_nav", |g| {
-                            if g
-                                .secondary(
-                                    &format!("{} Settings", ui_icons::SETTINGS),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
-                                )
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                            }
-                            if g
-                                .danger(&format!("{} Exit", ui_icons::EXIT), true)
-                                .clicked()
-                            {
-                                self.open_exit_confirm();
-                            }
-                        });
-                        button_group(ui, "hdr_log", |g| {
+                        button_group(ui, "hdr_actions", |g| {
                             if self.settings.logs_open {
                                 if g
                                     .secondary(
@@ -696,10 +687,27 @@ impl PydlApp {
                                 self.settings.logs_open = true;
                                 self.persist_settings();
                             }
+                            if g
+                                .secondary(
+                                    &format!("{} Settings", ui_icons::SETTINGS),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
+                                )
+                                .clicked()
+                            {
+                                self.settings_open = true;
+                            }
+                            if g
+                                .danger(&format!("{} Exit", ui_icons::EXIT), true)
+                                .clicked()
+                            {
+                                self.open_exit_confirm();
+                            }
                         });
                     },
                 );
-            }
             });
         });
     }

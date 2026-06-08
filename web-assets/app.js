@@ -565,6 +565,14 @@ function diskSpaceLevel(disk) {
   return disk?.level || "ok";
 }
 
+function diskSpaceBarLevel(disk) {
+  const used = diskSpacePercentUsed(disk);
+  if (used == null) return "ok";
+  if (used >= 90) return "critical";
+  if (used >= 75) return "low";
+  return "ok";
+}
+
 function diskSpaceFreeHtml(disk) {
   const level = diskSpaceLevel(disk);
   const free = formatBytes(disk.available_bytes);
@@ -579,7 +587,7 @@ function diskSpacePercentUsed(disk) {
 function diskSpaceBarHtml(disk) {
   const pct = diskSpacePercentUsed(disk);
   if (pct == null) return "";
-  const level = diskSpaceLevel(disk);
+  const level = diskSpaceBarLevel(disk);
   return `<div class="disk-space-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Used disk space">
     <div class="disk-space-bar-fill disk-space-bar-fill-${level}" style="width:${pct}%">${pct}%</div>
   </div>`;
