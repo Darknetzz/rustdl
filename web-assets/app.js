@@ -1364,7 +1364,7 @@ function appendRemoveMenuButton(group, item) {
   const removeBtn = document.createElement("button");
   removeBtn.type = "button";
   removeBtn.className = "btn-menu-item";
-  removeBtn.textContent = "Remove from queue";
+  setButtonLabel(removeBtn, ICON.removeCircleOutline, "Remove from queue");
   removeBtn.title =
     "Remove this row from the queue (does not delete the file on disk).";
   removeBtn.onclick = (e) => {
@@ -1380,7 +1380,7 @@ function appendRemoveMenuButton(group, item) {
     const deleteBtn = document.createElement("button");
     deleteBtn.type = "button";
     deleteBtn.className = "btn-menu-item danger";
-    deleteBtn.textContent = "Delete file";
+    setButtonLabel(deleteBtn, ICON.deleteForever, "Delete file");
     deleteBtn.title =
       "Delete the downloaded file on disk. The queue row stays until you remove it.";
     deleteBtn.onclick = (e) => {

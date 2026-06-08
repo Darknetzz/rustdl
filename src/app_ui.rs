@@ -1415,7 +1415,13 @@ impl<'a> ButtonGroup<'a> {
             let popup_id = ui.make_persistent_id("remove_menu");
             grouped_popup_menu(ui, popup_id, &label, true, compact, true, |ui| {
                 if ui
-                    .add_enabled(removable, egui::Button::new("Remove from queue"))
+                    .add_enabled(
+                        removable,
+                        egui::Button::new(format!(
+                            "{} Remove from queue",
+                            crate::ui_icons::REMOVE_FROM_QUEUE
+                        )),
+                    )
                     .on_hover_text(
                         "Remove this row from the list (does not delete the file on disk).",
                     )
@@ -1425,7 +1431,10 @@ impl<'a> ButtonGroup<'a> {
                 }
                 if show_delete_file
                     && ui
-                        .button("Delete file")
+                        .button(format!(
+                            "{} Delete file",
+                            crate::ui_icons::DELETE_FILE
+                        ))
                         .on_hover_text(
                             "Delete only this file; the queue row stays until you remove it.",
                         )

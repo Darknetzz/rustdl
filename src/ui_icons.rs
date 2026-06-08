@@ -29,6 +29,10 @@ pub const CLOSE: &str = m::ICON_CLOSE;
 pub const EXIT: &str = m::ICON_EXIT_TO_APP;
 pub const ADD: &str = m::ICON_ADD;
 pub const REMOVE: &str = m::ICON_DELETE;
+/// Remove a queue row without deleting the file on disk.
+pub const REMOVE_FROM_QUEUE: &str = m::ICON_REMOVE_CIRCLE_OUTLINE;
+/// Delete the saved file on disk (queue row may remain).
+pub const DELETE_FILE: &str = m::ICON_DELETE_FOREVER;
 pub const TOKEN: &str = m::ICON_VPN_KEY;
 pub const RESET: &str = m::ICON_RESTART_ALT;
 

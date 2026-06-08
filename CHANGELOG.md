@@ -24,6 +24,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Destination disk** labels (desktop header, LAN web UI header and settings hint) show a storage/hard-drive icon before the text.
 - **Show log** / **Hide log** live only in the main header (also removed from the floating/docked log chrome); **Dock log** / **Undock log** stay on the log panel. Hiding the log no longer resets dock preference, so **Show log** restores the log where you left it.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
+- **Remove…** menu items (**Remove from queue**, **Delete file**) show icons on desktop and in the LAN web UI.
 
 ## [0.4.7] - 2026-06-08
 
