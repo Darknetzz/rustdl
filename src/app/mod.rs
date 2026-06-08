@@ -250,8 +250,11 @@ pub struct PydlApp {
 
 impl PydlApp {
     pub fn new(cc: &eframe::CreationContext<'_>, runtime: Arc<Runtime>) -> Self {
+        eprintln!("rustdl startup: PydlApp::new begin");
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
+        eprintln!("rustdl startup: logo loaded");
         let (rustdl_service, rx) = crate::service::RustdlService::new_gui(runtime.clone());
+        eprintln!("rustdl startup: RustdlService ready");
         let shared_core = rustdl_service.shared_core();
         let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
@@ -301,16 +304,23 @@ impl PydlApp {
         let queue_search = settings.queue_search.clone();
         let applied_theme = settings.theme.clone();
 
+        eprintln!("rustdl startup: spawning initial web server");
         let web_server =
             crate::service::web::spawn_web_server(runtime.clone(), shared_core.clone(), &settings);
+        eprintln!("rustdl startup: building app struct");
+        eprintln!("rustdl startup: locking core for generation");
+        let core_generation = shared_core.lock().generation;
+        eprintln!("rustdl startup: core generation={core_generation}");
+        let synced_settings_generation = shared_core.lock().settings_generation;
+        eprintln!("rustdl startup: settings generation={synced_settings_generation}");
 
         let mut app = Self {
             shared_core: shared_core.clone(),
-            core_generation: shared_core.lock().generation,
+            core_generation,
             queue_dirty: false,
             settings_dirty: false,
             synced_log_len: log_lines.len(),
-            synced_settings_generation: shared_core.lock().settings_generation,
+            synced_settings_generation,
             web_server,
             runtime,
             ui_bus,
@@ -416,6 +426,7 @@ impl PydlApp {
             videos_auto_undocked_for_size: false,
             videos_dock_user_prefers_docked: false,
         };
+        eprintln!("rustdl startup: app struct built");
         let startup_config_issues = app.config_load_issues.clone();
         for issue in &startup_config_issues {
             app.append_log(&format!(
@@ -428,23 +439,31 @@ impl PydlApp {
             "--- Session started {} ---",
             chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
         ));
+        eprintln!("rustdl startup: refresh_deps");
         app.refresh_deps();
+        eprintln!("rustdl startup: invalidate_queue_caches");
         app.invalidate_queue_caches();
         app.queue_dirty = true;
         let shared = app.shared_core.clone();
+        eprintln!("rustdl startup: push_app_to_core");
         core_sync::push_app_to_core(&mut app, &shared);
         if app.settings.web_ui_enabled {
+            eprintln!("rustdl startup: restart_web_server");
             app.restart_web_server();
         }
         // Pull the core-owned Convert queue into the GUI mirror and kick off thumbnail loads.
         {
             let shared = app.shared_core.clone();
             let core = shared.lock();
+            eprintln!("rustdl startup: sync_core_to_app");
             core_sync::sync_core_to_app(&core, &mut app);
         }
+        eprintln!("rustdl startup: ensure thumbnails");
         app.ensure_convert_thumbnails();
         app.ensure_downloader_thumbnails();
+        eprintln!("rustdl startup: refresh_input_line_info");
         app.refresh_input_line_info();
+        eprintln!("rustdl startup: PydlApp::new done");
         app
     }
 
