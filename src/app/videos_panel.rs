@@ -119,6 +119,15 @@ impl PydlApp {
             {
                 self.pause_all_downloads();
             }
+            if g
+                .secondary(
+                    &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                    true,
+                )
+                .clicked()
+            {
+                self.open_output_folder();
+            }
             g.import_export_menu(
                 !self.items.is_empty() || !self.add_in_progress,
                 |ui| {

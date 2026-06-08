@@ -377,24 +377,10 @@ impl eframe::App for PydlApp {
                         && self.status_resolving == 0
                         && total_finished > 0
                     {
-                        ui.horizontal(|ui| {
-                            ui.colored_label(
-                                status_color(ItemStatus::Done),
-                                "All downloads finished for this session.",
-                            );
-                            left_button_row(ui, |ui| {
-                                button_group(ui, "session_open_folder", |g| {
-                                    if g.secondary(
-                                        &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                                        true,
-                                    )
-                                    .clicked()
-                                    {
-                                        self.open_output_folder();
-                                    }
-                                });
-                            });
-                        });
+                        ui.colored_label(
+                            status_color(ItemStatus::Done),
+                            "All downloads finished for this session.",
+                        );
                     }
                     let totals = self.transfer_totals();
                     if totals.with_known_total > 0 && totals.known_total_bytes > 0 {
@@ -467,14 +453,6 @@ impl eframe::App for PydlApp {
                                     self.persist_settings();
                                     self.last_done_lookup_poll = None;
                                     self.invalidate_output_disk_space();
-                                }
-                                if g.secondary(
-                                    &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    self.open_output_folder();
                                 }
                             });
                         });
