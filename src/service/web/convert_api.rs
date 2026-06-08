@@ -68,6 +68,7 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/start", post(convert_start))
         .route("/api/convert/cancel", post(convert_cancel))
         .route("/api/convert/clear", post(convert_clear))
+        .route("/api/convert/retry-skipped", post(convert_retry_skipped))
         .route("/api/convert/thumbnail/{id}", get(convert_thumbnail))
 }
 
@@ -159,6 +160,12 @@ async fn convert_cancel(State(st): State<ApiState>) -> StatusCode {
 async fn convert_clear(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.clear_convert_queue();
+    StatusCode::OK
+}
+
+async fn convert_retry_skipped(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.retry_skipped_convert_items();
     StatusCode::OK
 }
 

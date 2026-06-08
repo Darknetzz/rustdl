@@ -253,6 +253,11 @@ impl PydlApp {
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
             .count();
+        let skipped_count = self
+            .convert_items
+            .iter()
+            .filter(|item| convert_item_is_skipped(item))
+            .count();
         let draw = |ui: &mut egui::Ui,
                     id: &str,
                     add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
@@ -278,6 +283,14 @@ impl PydlApp {
             .clicked()
             {
                 self.convert_core_action(|core| core.cancel_convert_batch());
+            }
+            if g.secondary(
+                &format!("{} Retry skipped", ui_icons::RETRY),
+                !self.convert_running && skipped_count > 0,
+            )
+            .clicked()
+            {
+                self.convert_core_action(|core| core.retry_skipped_convert_items());
             }
         });
         draw(ui, "av1_queue", &mut |g| {

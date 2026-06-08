@@ -6,13 +6,25 @@
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::app_parsing::human_bytes_ui;
+use crate::app_parsing::{human_bytes_ui, reset_convert_item_to_ready};
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{codec_matches_target, normalize_target_codec, target_codec_label};
 
 /// A finished item that was intentionally skipped (already target codec, would not shrink, etc.).
 pub fn convert_item_is_skipped(item: &ConvertQueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
+}
+
+/// Move skipped rows back to Ready so they can be encoded again (e.g. after lowering min shrink %).
+pub fn reset_skipped_convert_items(items: &mut [ConvertQueueItem]) -> usize {
+    let mut count = 0usize;
+    for item in items.iter_mut() {
+        if convert_item_is_skipped(item) {
+            reset_convert_item_to_ready(item);
+            count += 1;
+        }
+    }
+    count
 }
 
 /// True when the queue row points at a path that is not an existing file on disk.
@@ -235,6 +247,29 @@ mod tests {
         };
         assert!(convert_item_is_skipped(&item));
         assert_eq!(convert_item_status_label(&item), "Skipped");
+    }
+
+    #[test]
+    fn reset_skipped_moves_rows_to_ready() {
+        let mut items = vec![
+            ConvertQueueItem {
+                item_id: 1,
+                status: ItemStatus::Done,
+                detail: "Skipped: estimated output would not shrink by at least 50%".to_owned(),
+                input_bytes: 1_000_000,
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 2,
+                status: ItemStatus::Done,
+                detail: "Saved 500 KiB (50.0%)".to_owned(),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(reset_skipped_convert_items(&mut items), 1);
+        assert_eq!(items[0].status, ItemStatus::Idle);
+        assert!(items[0].detail.starts_with("Ready"));
+        assert_eq!(items[1].status, ItemStatus::Done);
     }
 
     #[test]

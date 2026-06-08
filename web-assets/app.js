@@ -2414,13 +2414,22 @@ async function refreshConvert() {
 
   const startBtn = document.getElementById("btn-convert-start");
   const cancelBtn = document.getElementById("btn-convert-cancel");
+  const retrySkippedBtn = document.getElementById("btn-convert-retry-skipped");
   const readyCount = data.items.filter((it) => it.status === "Idle").length;
+  const skippedCount = data.items.filter((it) => it.skipped).length;
   if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
   if (cancelBtn) {
     cancelBtn.disabled = !data.running;
     cancelBtn.title = data.running
       ? "Cancel the running Convert batch"
       : "No Convert batch is running";
+  }
+  if (retrySkippedBtn) {
+    retrySkippedBtn.disabled = data.running || skippedCount === 0;
+    retrySkippedBtn.title =
+      skippedCount > 0
+        ? `Reset ${skippedCount} skipped item(s) to ready (adjust Min shrink % first if needed)`
+        : "No skipped items";
   }
 
   const root = document.getElementById("convert-queue");
@@ -2475,6 +2484,11 @@ async function convertClear() {
   await refreshConvert();
 }
 
+async function convertRetrySkipped() {
+  await api("/api/convert/retry-skipped", { method: "POST" });
+  await refreshConvert();
+}
+
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.onclick = () => setView(btn.dataset.view);
 });
@@ -2482,6 +2496,8 @@ document.getElementById("btn-convert-scan").onclick = () => convertScan().catch(
 document.getElementById("btn-convert-start").onclick = () => convertStart().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-cancel").onclick = () => convertCancel().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-clear").onclick = () => convertClear().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-retry-skipped").onclick = () =>
+  convertRetrySkipped().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-settings").onclick = () =>
   openSettingsDialog().then(() => switchSettingsTab("convert")).catch(console.error);
 

@@ -11,7 +11,9 @@ use std::sync::atomic::Ordering;
 use crate::app::background_spawn;
 use crate::app_parsing::human_bytes_ui;
 use crate::config::{save_convert_queue_snapshot, ConvertQueueSnapshot};
-use crate::convert_state::{normalize_convert_source_key, remove_scanned_convert_input_lines};
+use crate::convert_state::{
+    normalize_convert_source_key, remove_scanned_convert_input_lines, reset_skipped_convert_items,
+};
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 
@@ -298,6 +300,23 @@ impl DownloadCore {
         }
         self.convert_cancel_flag.store(true, Ordering::Relaxed);
         self.append_log("Convert: cancel requested.");
+        self.bump_generation();
+    }
+
+    pub fn retry_skipped_convert_items(&mut self) {
+        if self.convert_running {
+            self.append_log("Convert: wait for the running batch to finish before retrying skipped items.");
+            return;
+        }
+        let count = reset_skipped_convert_items(&mut self.convert_items);
+        if count == 0 {
+            self.append_log("Convert: no skipped items to retry.");
+            return;
+        }
+        self.schedule_convert_queue_save();
+        self.append_log(&format!(
+            "Convert: reset {count} skipped item(s) to ready. Adjust settings if needed, then start the batch."
+        ));
         self.bump_generation();
     }
 
