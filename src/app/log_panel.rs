@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compact_button_group, content_width,
+    button_group, button_toolbar_wrapped, compact_button_group, fill_allocated_rect,
     left_button_row, remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
@@ -152,40 +152,48 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let default_size = egui::vec2(
-            self.settings.log_float_width,
-            self.settings.log_float_height,
-        );
-        let response = egui::Window::new("Activity log")
-            .id(egui::Id::new("rustdl_log_float_v1"))
+        let window_id = egui::Id::new("rustdl_log_float_v1");
+        let init_id = window_id.with("size_init");
+        let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
+        let pointer_down = ctx.input(|i| i.pointer.any_down());
+        let mut window = egui::Window::new("Activity log")
+            .id(window_id)
             .open(&mut open)
-            .default_size(default_size)
             .min_width(400.0)
             .min_height(260.0)
-            .resizable(true)
-            .show(ctx, |ui| {
-                let panel_h = remaining_ui_height(ui).max(260.0);
-                let panel_w = content_width(ui).max(400.0);
-                ui.set_min_size(egui::vec2(panel_w, panel_h));
-                left_button_row(ui, |ui| {
-                    self.draw_log_controls(ui);
-                });
-                self.draw_activity_log_panel(ui);
+            .resizable(true);
+        if needs_default {
+            window = window.default_size(egui::vec2(
+                self.settings.log_float_width,
+                self.settings.log_float_height,
+            ));
+            ctx.data_mut(|d| {
+                d.insert_temp(init_id, egui::vec2(1.0, 1.0));
             });
+        }
+        let response = window.show(ctx, |ui| {
+            fill_allocated_rect(ui);
+            left_button_row(ui, |ui| {
+                self.draw_log_controls(ui);
+            });
+            self.draw_activity_log_panel(ui);
+        });
         if let Some(inner) = &response {
-            let size = inner.response.rect.size();
-            if size.x.is_finite()
-                && size.y.is_finite()
-                && size.x >= 400.0
-                && size.y >= 260.0
-                && size.x <= 2400.0
-                && size.y <= 1600.0
-                && ((self.settings.log_float_width - size.x).abs() > 0.5
-                    || (self.settings.log_float_height - size.y).abs() > 0.5)
-            {
-                self.settings.log_float_width = size.x;
-                self.settings.log_float_height = size.y;
-                self.persist_settings();
+            if !pointer_down {
+                let size = inner.response.rect.size();
+                if size.x.is_finite()
+                    && size.y.is_finite()
+                    && size.x >= 400.0
+                    && size.y >= 260.0
+                    && size.x <= 2400.0
+                    && size.y <= 1600.0
+                    && ((self.settings.log_float_width - size.x).abs() > 0.5
+                        || (self.settings.log_float_height - size.y).abs() > 0.5)
+                {
+                    self.settings.log_float_width = size.x;
+                    self.settings.log_float_height = size.y;
+                    self.persist_settings();
+                }
             }
         }
         if !open {

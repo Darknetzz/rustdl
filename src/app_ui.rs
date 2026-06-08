@@ -755,6 +755,22 @@ pub fn show_mode_panel<R>(
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
+/// Expand the current UI node to the parent's allocated rect.
+///
+/// Required for resizable [`egui::TopBottomPanel`]s and floating [`egui::Window`]s: egui
+/// persists height from the content rect; shrink-wrapped children make resizes snap back.
+pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
+    let mut size = ui.available_size();
+    if !size.x.is_finite() || size.x < 1.0 {
+        size.x = ui.max_rect().width().max(1.0);
+    }
+    if !size.y.is_finite() || size.y < 1.0 {
+        size.y = ui.max_rect().height().max(1.0);
+    }
+    ui.set_min_size(size);
+    size
+}
+
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
 pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
     let y = ui.cursor().min.y;
