@@ -78,6 +78,10 @@ pub struct AppSettings {
     pub logs_open: bool,
     #[serde(default = "default_log_dock_height")]
     pub log_dock_height: f32,
+    #[serde(default = "default_log_float_width")]
+    pub log_float_width: f32,
+    #[serde(default = "default_log_float_height")]
+    pub log_float_height: f32,
     /// Activity log timestamps as relative age instead of full local time.
     #[serde(default)]
     pub log_relative_time: bool,
@@ -259,6 +263,14 @@ fn default_log_dock_height() -> f32 {
     180.0
 }
 
+fn default_log_float_width() -> f32 {
+    640.0
+}
+
+fn default_log_float_height() -> f32 {
+    440.0
+}
+
 fn default_av1_recursive() -> bool {
     true
 }
@@ -330,6 +342,8 @@ impl Default for AppSettings {
             logs_docked: true,
             logs_open: false,
             log_dock_height: 180.0,
+            log_float_width: default_log_float_width(),
+            log_float_height: default_log_float_height(),
             log_relative_time: false,
             av1_recursive: true,
             av1_dry_run: false,
@@ -482,6 +496,8 @@ pub fn load_settings() -> AppSettings {
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
+    cfg.log_float_width = cfg.log_float_width.clamp(400.0, 2400.0);
+    cfg.log_float_height = cfg.log_float_height.clamp(260.0, 1600.0);
     cfg.videos_dock_height = cfg.videos_dock_height.clamp(180.0, 800.0);
     cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
     cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);

@@ -630,13 +630,17 @@ impl PydlApp {
                 ui.spacing_mut().item_spacing.y = 6.0;
                 let panel_h = remaining_ui_height(ui).max(320.0);
                 let panel_w = content_width(ui).max(480.0);
+                // Fill the window body so the resize grip changes the window (not just shrink-wrapped content).
+                ui.set_min_size(egui::vec2(panel_w, panel_h));
                 egui::Frame::dark_canvas(ui.style())
                     .fill(fill)
                     .stroke(egui::Stroke::new(1.0, border))
                     .inner_margin(egui::Margin::symmetric(10.0, 8.0))
                     .rounding(egui::Rounding::same(8.0))
                     .show(ui, |ui| {
-                        allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
+                        let inner_h = remaining_ui_height(ui).max(120.0);
+                        let inner_w = content_width(ui).max(480.0);
+                        allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
                             self.draw_videos_queue_body(
                                 ui,
                                 ui.max_rect().bottom(),
@@ -652,10 +656,14 @@ impl PydlApp {
                 && size.y.is_finite()
                 && size.x >= 480.0
                 && size.y >= 320.0
+                && size.x <= 2400.0
                 && size.y <= 1600.0
+                && ((self.settings.video_float_width - size.x).abs() > 0.5
+                    || (self.settings.video_float_height - size.y).abs() > 0.5)
             {
                 self.settings.video_float_width = size.x;
                 self.settings.video_float_height = size.y;
+                self.persist_settings();
             }
         }
         if !open {

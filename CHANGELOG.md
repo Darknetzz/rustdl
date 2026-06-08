@@ -25,6 +25,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Floating **Videos** window can be resized again (queue content now fills the window instead of shrink-wrapping).
+- Floating **Activity log** window: resizable again, log lines fill the viewport (no empty black area above the toolbar).
 - LAN web UI: AV1 **Cancel** is disabled and greyed out when the converter is idle (nothing to cancel).
 - LAN web UI: clearing finished downloader queue items (or any action that refreshed status) no longer throws “Cannot access 'shuttingDown' before initialization”.
 - **Videos** queue uses a resizable bottom panel in the main window (egui `TopBottomPanel`) with a fixed-height scroll region (fixes infinite layout from unbounded `available_height()`); floating **Videos** window uses the same pattern.

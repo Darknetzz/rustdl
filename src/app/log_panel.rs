@@ -6,8 +6,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, left_button_row,
-    remaining_ui_height, secondary_button,
+    button_group, button_toolbar_wrapped, content_width, left_button_row, remaining_ui_height,
+    secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -152,17 +152,42 @@ impl PydlApp {
             return;
         }
         let mut open = true;
+        let default_size = egui::vec2(
+            self.settings.log_float_width,
+            self.settings.log_float_height,
+        );
         let response = egui::Window::new("Activity log")
+            .id(egui::Id::new("rustdl_log_float_v1"))
             .open(&mut open)
-            .default_size([640.0, 440.0])
+            .default_size(default_size)
             .min_width(400.0)
             .min_height(260.0)
+            .resizable(true)
             .show(ctx, |ui| {
+                let panel_h = remaining_ui_height(ui).max(260.0);
+                let panel_w = content_width(ui).max(400.0);
+                ui.set_min_size(egui::vec2(panel_w, panel_h));
                 left_button_row(ui, |ui| {
                     self.draw_log_controls(ui);
                 });
                 self.draw_activity_log_panel(ui);
             });
+        if let Some(inner) = &response {
+            let size = inner.response.rect.size();
+            if size.x.is_finite()
+                && size.y.is_finite()
+                && size.x >= 400.0
+                && size.y >= 260.0
+                && size.x <= 2400.0
+                && size.y <= 1600.0
+                && ((self.settings.log_float_width - size.x).abs() > 0.5
+                    || (self.settings.log_float_height - size.y).abs() > 0.5)
+            {
+                self.settings.log_float_width = size.x;
+                self.settings.log_float_height = size.y;
+                self.persist_settings();
+            }
+        }
         if !open {
             self.settings.logs_open = false;
             self.persist_settings();
@@ -262,7 +287,8 @@ impl PydlApp {
                             .collect();
                         let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
                         let window = &filtered[start..];
-                        let inner_h = remaining_ui_height(ui).max(40.0);
+                        // Use the allocated viewport height (nested `remaining_ui_height` is often wrong).
+                        let inner_h = (scroll_h - 20.0).max(40.0);
                         egui::ScrollArea::vertical()
                             .max_height(inner_h)
                             .animated(true)
@@ -312,7 +338,7 @@ impl PydlApp {
 
     pub(super) fn draw_activity_log_panel(&mut self, ui: &mut egui::Ui) {
         self.draw_activity_log_toolbar(ui);
-        let scroll_h = bounded_ui_height(ui, 80.0);
+        let scroll_h = remaining_ui_height(ui).max(80.0);
         self.draw_activity_log_lines_scroll(ui, scroll_h);
     }
 }
