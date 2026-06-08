@@ -974,8 +974,11 @@ pub fn content_width(ui: &egui::Ui) -> f32 {
 }
 
 /// Cap layout width without forcing horizontal expansion (preserves panel margins).
-pub fn constrain_content_width(ui: &mut egui::Ui) -> f32 {
-    let w = content_width(ui);
+pub fn constrain_content_width(ui: &mut egui::Ui, max_content_width: f32) -> f32 {
+    let mut w = content_width(ui);
+    if max_content_width > 0.0 {
+        w = w.min(max_content_width);
+    }
     ui.set_max_width(w);
     w
 }
@@ -1339,7 +1342,7 @@ pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.scope(|ui| {
-        let w = constrain_content_width(ui);
+        let w = constrain_content_width(ui, 0.0);
         ui.with_layout(
             egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
             |ui| {

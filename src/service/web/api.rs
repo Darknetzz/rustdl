@@ -18,7 +18,7 @@ use tokio_stream::StreamExt;
 use crate::app::UiEvent;
 use crate::config::AppSettings;
 use crate::models::QueueItem;
-use crate::profiles::{all_profiles, find_profile};
+use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
 use crate::service::core::DownloadCore;
 use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
 use crate::service::web::media;
@@ -165,6 +165,17 @@ struct ApplyProfileBody {
     name: String,
 }
 
+#[derive(Deserialize)]
+struct ProfileDeleteBody {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct ProfileRenameBody {
+    old_name: String,
+    new_name: String,
+}
+
 pub fn api_router(state: ApiState) -> Router {
     let protected = Router::new()
         .route("/api/status", get(status))
@@ -186,6 +197,8 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/settings", post(settings_patch))
         .route("/api/profiles", get(profiles_list))
         .route("/api/profiles/apply", post(profiles_apply))
+        .route("/api/profiles/delete", post(profiles_delete))
+        .route("/api/profiles/rename", post(profiles_rename))
         .route("/api/tools/refresh", post(tools_refresh))
         .route("/api/logs", get(logs_get))
         .route("/api/shutdown", post(app_shutdown))
@@ -283,6 +296,81 @@ async fn profiles_apply(
     c.persist_settings();
     c.refresh_deps();
     c.bump_generation();
+    Ok(StatusCode::OK)
+}
+
+async fn profiles_delete(
+    State(st): State<ApiState>,
+    Json(body): Json<ProfileDeleteBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let name = body.name.trim();
+    if name.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "name required".into(),
+            }),
+        ));
+    }
+    let mut c = st.core.lock();
+    if find_profile(&c.profile_store, name).is_some_and(|p| p.builtin) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "cannot delete built-in profile".into(),
+            }),
+        ));
+    }
+    delete_user_profile(&mut c.profile_store, name).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiErrorBody {
+                error: format!("{e:#}"),
+            }),
+        )
+    })?;
+    if c.settings.active_profile == name {
+        c.settings.active_profile = "Best quality".to_owned();
+        c.persist_settings();
+    }
+    Ok(StatusCode::OK)
+}
+
+async fn profiles_rename(
+    State(st): State<ApiState>,
+    Json(body): Json<ProfileRenameBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let old_name = body.old_name.trim();
+    let new_name = body.new_name.trim();
+    if old_name.is_empty() || new_name.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "old_name and new_name required".into(),
+            }),
+        ));
+    }
+    let mut c = st.core.lock();
+    if find_profile(&c.profile_store, old_name).is_some_and(|p| p.builtin) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "cannot rename built-in profile".into(),
+            }),
+        ));
+    }
+    rename_user_profile(&mut c.profile_store, old_name, new_name).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("{e:#}"),
+            }),
+        )
+    })?;
+    if c.settings.active_profile == old_name {
+        c.settings.active_profile = new_name.to_owned();
+        c.persist_settings();
+    }
     Ok(StatusCode::OK)
 }
 

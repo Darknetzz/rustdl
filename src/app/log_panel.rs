@@ -33,6 +33,22 @@ impl LogFilter {
         }
     }
 
+    pub(crate) fn slug(self) -> &'static str {
+        match self {
+            LogFilter::All => "all",
+            LogFilter::Important => "important",
+            LogFilter::Errors => "errors",
+        }
+    }
+
+    pub(crate) fn from_slug(s: &str) -> Self {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "important" => LogFilter::Important,
+            "errors" => LogFilter::Errors,
+            _ => LogFilter::All,
+        }
+    }
+
     pub(crate) fn accepts(self, line: &str) -> bool {
         let body = log_message_body(line);
         match self {
@@ -296,9 +312,13 @@ impl PydlApp {
             .selected_text(self.log_filter.as_str())
             .width(if compact { 88.0 } else { 120.0 })
             .show_ui(ui, |ui| {
+                let prev = self.log_filter;
                 ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
                 ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
                 ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
+                if self.log_filter != prev {
+                    self.persist_ui_prefs();
+                }
             });
             if !compact
                 && ui

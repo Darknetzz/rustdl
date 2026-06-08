@@ -26,10 +26,12 @@ mod input_lines;
 pub(crate) mod log_panel;
 mod queue_cache;
 mod queue_persist;
+mod command_palette;
 mod settings_panel;
 mod thumbnails;
 mod update_check;
 mod videos_panel;
+mod web_qr;
 
 pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
 pub(crate) use events::UiEvent;
@@ -226,6 +228,11 @@ pub struct PydlApp {
     /// Startup parse failures for user JSON (settings, queue, profiles, log).
     config_load_issues: Vec<ConfigLoadIssue>,
     config_load_banner_dismissed: bool,
+    command_palette_open: bool,
+    command_palette_query: String,
+    /// Set by keyboard shortcut; consumed by queue search field.
+    focus_queue_search: bool,
+    profile_rename_buffer: Option<(String, String)>,
 }
 
 impl PydlApp {
@@ -259,7 +266,13 @@ impl PydlApp {
             restored_av1_input,
             next_item_id,
         ) = {
-            let core = shared_core.lock();
+            let mut core = shared_core.lock();
+            if crate::config::session_restore_discard_on_startup(&settings.session_restore_preference)
+            {
+                if core.pending_session_restore.is_some() {
+                    core.discard_pending_session_restore();
+                }
+            }
             let (prompt_open, dl_count, av1_count) =
                 if let Some(pending) = &core.pending_session_restore {
                     (true, pending.downloader_count(), pending.av1_count())
@@ -279,6 +292,8 @@ impl PydlApp {
         let thumb_semaphore = Arc::new(Semaphore::new(8));
         let av1_mode = settings.last_mode == "av1";
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
+        let log_filter = LogFilter::from_slug(&settings.log_filter);
+        let queue_search = settings.queue_search.clone();
         let applied_theme = settings.theme.clone();
 
         let web_server =
@@ -333,7 +348,7 @@ impl PydlApp {
             queue_running: 0,
             download_cancel_flags: HashMap::new(),
             cancel_post_actions: HashMap::new(),
-            log_filter: LogFilter::All,
+            log_filter,
             input_line_info: Vec::new(),
             input_line_info_hold: Vec::new(),
             input_line_info_hold_until: None,
@@ -349,7 +364,7 @@ impl PydlApp {
             exit_pending_after_cancel: false,
             queue_group_focus: None,
             scroll_to_queue_group: None,
-            queue_search: String::new(),
+            queue_search,
             selected_item_ids: HashSet::new(),
             downloads_paused: false,
             session_complete_notified: false,
@@ -386,6 +401,10 @@ impl PydlApp {
             win_browser_drop_target_setup_attempted: false,
             config_load_issues,
             config_load_banner_dismissed: false,
+            command_palette_open: false,
+            command_palette_query: String::new(),
+            focus_queue_search: false,
+            profile_rename_buffer: None,
         };
         app.append_log(&format!(
             "--- Session started {} ---",
@@ -722,6 +741,8 @@ impl PydlApp {
         self.settings.output_dir = self.output_dir.clone();
         self.settings.worker_count = self.worker_count.clamp(1, 6);
         self.settings.settings_tab = settings_tab_to_str(self.settings_tab).to_owned();
+        self.settings.queue_search = self.queue_search.clone();
+        self.settings.log_filter = self.log_filter.slug().to_owned();
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
@@ -735,6 +756,24 @@ impl PydlApp {
                 core.clear_av1_queue_persistence();
             }
         }
+    }
+
+    pub(super) fn sync_settings_tab_to_disk(&mut self) {
+        let tab = settings_tab_to_str(self.settings_tab);
+        if self.settings.settings_tab != tab {
+            self.settings.settings_tab = tab.to_owned();
+            self.persist_settings();
+        }
+    }
+
+    pub(super) fn persist_ui_prefs(&mut self) {
+        self.settings.queue_search = self.queue_search.clone();
+        self.settings.log_filter = self.log_filter.slug().to_owned();
+        self.persist_settings();
+    }
+
+    pub(super) fn constrain_content(&self, ui: &mut egui::Ui) -> f32 {
+        crate::app_ui::constrain_content_width(ui, self.settings.max_content_width)
     }
 
     pub(super) fn restart_web_server(&mut self) {
@@ -1100,7 +1139,7 @@ impl PydlApp {
         self.refresh_input_line_info();
     }
 
-    fn add_urls(&mut self, now: f64) {
+    pub(super) fn add_urls(&mut self, now: f64) {
         let lines = self.collect_valid_new_lines();
         self.queue_urls_for_resolve(lines);
         self.clear_input_urls_with_summary_hold(now);

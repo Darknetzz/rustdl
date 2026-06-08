@@ -34,16 +34,17 @@ impl PydlApp {
                 });
                 ui.separator();
                 ui.label(RichText::new("Keyboard shortcuts").strong());
-                ui.label(
-                    RichText::new("Ctrl+Enter (Cmd+Enter on macOS): Add URLs from input")
-                        .small()
-                        .color(Color32::GRAY),
-                );
-                ui.label(
-                    RichText::new("Ctrl+D (Cmd+D on macOS): Start downloads for ready items")
-                        .small()
-                        .color(Color32::GRAY),
-                );
+                for line in [
+                    "Ctrl+Enter (Cmd+Enter): Add URLs from input",
+                    "Ctrl+D (Cmd+D): Start downloads for ready items",
+                    "Ctrl+, (Cmd+,): Open Settings",
+                    "Ctrl+F (Cmd+F): Focus queue search",
+                    "Ctrl+L (Cmd+L): Show or hide activity log",
+                    "Ctrl+K (Cmd+K): Command palette",
+                    "Escape: Close dialogs and floating panels",
+                ] {
+                    ui.label(RichText::new(line).small().color(Color32::GRAY));
+                }
                 ui.separator();
                 left_button_row(ui, |ui| {
                     button_group(ui, "about_paths", |g| {

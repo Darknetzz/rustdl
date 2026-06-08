@@ -3,7 +3,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, constrain_content_width, draw_labeled_meta_badge, draw_meta_badge,
+    button_group, draw_labeled_meta_badge, draw_meta_badge,
     draw_status_dot, left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::av1_state::{
@@ -284,7 +284,7 @@ impl PydlApp {
     }
 
     pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
-        constrain_content_width(ui);
+        self.constrain_content(ui);
 
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("AV1 Converter").heading());

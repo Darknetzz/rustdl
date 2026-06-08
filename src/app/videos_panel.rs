@@ -4,7 +4,7 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, constrain_content_width, consume_remaining_ui_space, content_width,
+    compact_button_group, consume_remaining_ui_space, content_width,
     draw_status_dot, fill_allocated_rect, left_button_row, persist_resizable_window_size,
     remaining_ui_height, show_mode_panel, status_color, with_full_width,
 };
@@ -111,7 +111,7 @@ impl PydlApp {
         }
         let w = content_width(ui).max(1.0);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
-            constrain_content_width(ui);
+            self.constrain_content(ui);
             let inner_h = ui.max_rect().height();
             if self.av1_mode {
                 self.draw_av1_queue_list_scroll(ui, inner_h);
@@ -348,8 +348,13 @@ impl PydlApp {
                     .hint_text("Title, URL, uploader…")
                     .desired_width(220.0),
             );
+            if self.focus_queue_search {
+                search.request_focus();
+                self.focus_queue_search = false;
+            }
             if search.changed() {
                 self.queue_group_focus = None;
+                self.persist_ui_prefs();
             }
             if !self.queue_search.is_empty()
                 && ui
@@ -364,7 +369,7 @@ impl PydlApp {
 
     /// Status row, scrollable cards (top), toolbar (bottom); optional log under the toolbar when docked.
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
-        constrain_content_width(ui);
+        self.constrain_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
         let body_bottom = ui.max_rect().bottom();
 
@@ -412,7 +417,7 @@ impl PydlApp {
                 av1,
                 egui::Margin::symmetric(12.0, 10.0),
                 |ui| {
-                    constrain_content_width(ui);
+                    self.constrain_content(ui);
                     ui.horizontal_wrapped(|ui| {
                         ui.label(RichText::new(heading).strong());
                         ui.label(
@@ -534,7 +539,7 @@ impl PydlApp {
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {
                 fill_allocated_rect(ui);
-                constrain_content_width(ui);
+                self.constrain_content(ui);
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Activity log").small().strong());
                     let tail_w = ui.available_width();

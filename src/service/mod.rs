@@ -24,7 +24,9 @@ impl RustdlService {
     pub fn new_gui(
         runtime: Arc<tokio::runtime::Runtime>,
     ) -> (Self, crossbeam_channel::Receiver<crate::app::UiEvent>) {
-        Self::new_with_restore_policy(runtime, false)
+        let settings = crate::config::load_settings();
+        let auto = crate::config::session_restore_auto_load(&settings.session_restore_preference);
+        Self::new_with_restore_policy(runtime, auto)
     }
 
     fn new_with_restore_policy(

@@ -31,6 +31,18 @@ pub struct DownloadProfileFields {
     pub yt_proxy: String,
     pub yt_sponsorblock_remove: bool,
     pub yt_sponsorblock_mark: String,
+    #[serde(default)]
+    pub yt_dlp_cookies: String,
+    #[serde(default)]
+    pub yt_dlp_impersonate: String,
+    #[serde(default)]
+    pub yt_limit_rate: String,
+    #[serde(default = "default_profile_verify_output")]
+    pub verify_output_video_audio: bool,
+}
+
+fn default_profile_verify_output() -> bool {
+    true
 }
 
 impl Default for DownloadProfileFields {
@@ -57,6 +69,10 @@ impl Default for DownloadProfileFields {
             yt_proxy: String::new(),
             yt_sponsorblock_remove: false,
             yt_sponsorblock_mark: String::new(),
+            yt_dlp_cookies: String::new(),
+            yt_dlp_impersonate: String::new(),
+            yt_limit_rate: String::new(),
+            verify_output_video_audio: true,
         }
     }
 }
@@ -94,6 +110,10 @@ impl DownloadProfile {
         settings.yt_proxy = f.yt_proxy.clone();
         settings.yt_sponsorblock_remove = f.yt_sponsorblock_remove;
         settings.yt_sponsorblock_mark = f.yt_sponsorblock_mark.clone();
+        settings.yt_dlp_cookies = f.yt_dlp_cookies.clone();
+        settings.yt_dlp_impersonate = f.yt_dlp_impersonate.clone();
+        settings.yt_limit_rate = f.yt_limit_rate.clone();
+        settings.verify_output_video_audio = f.verify_output_video_audio;
         settings.active_profile = self.name.clone();
     }
 
@@ -123,6 +143,10 @@ impl DownloadProfile {
                 yt_proxy: settings.yt_proxy.clone(),
                 yt_sponsorblock_remove: settings.yt_sponsorblock_remove,
                 yt_sponsorblock_mark: settings.yt_sponsorblock_mark.clone(),
+                yt_dlp_cookies: settings.yt_dlp_cookies.clone(),
+                yt_dlp_impersonate: settings.yt_dlp_impersonate.clone(),
+                yt_limit_rate: settings.yt_limit_rate.clone(),
+                verify_output_video_audio: settings.verify_output_video_audio,
             },
         }
     }
@@ -233,6 +257,24 @@ pub fn save_user_profile(store: &mut ProfileStore, profile: DownloadProfile) -> 
 #[allow(dead_code)]
 pub fn delete_user_profile(store: &mut ProfileStore, name: &str) -> Result<()> {
     store.user_profiles.retain(|p| p.name != name);
+    save_profiles(store)
+}
+
+pub fn rename_user_profile(store: &mut ProfileStore, old_name: &str, new_name: &str) -> Result<()> {
+    let new_name = new_name.trim();
+    if new_name.is_empty() {
+        anyhow::bail!("profile name cannot be empty");
+    }
+    if builtin_profiles().iter().any(|p| p.name == new_name) {
+        anyhow::bail!("cannot use a built-in profile name");
+    }
+    let Some(idx) = store.user_profiles.iter().position(|p| p.name == old_name) else {
+        anyhow::bail!("profile not found");
+    };
+    if store.user_profiles.iter().any(|p| p.name == new_name && p.name != old_name) {
+        anyhow::bail!("a profile with that name already exists");
+    }
+    store.user_profiles[idx].name = new_name.to_owned();
     save_profiles(store)
 }
 

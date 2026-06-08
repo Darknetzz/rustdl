@@ -12,6 +12,14 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Startup warning banner when settings, queue, profiles, or activity log JSON fails to parse (original file renamed to `.bak` when possible); same warnings in activity log, `--web-only` stderr, and LAN `/api/status`.
 - Layout QA checklist in `AGENTS.md` for docked/floating queue and log panels.
+- **Command palette** (Ctrl/Cmd+K): fuzzy search for Settings tabs, Start/Pause/Resume, log toggle, mode switch, and more.
+- **Layout presets** in Settings → Shared: Compact queue, Review mode, and Minimal one-click display bundles (desktop and LAN web UI).
+- **Session restore preference** in Settings → Shared: always restore, never restore, or ask each startup (desktop).
+- **Max content width** slider in Settings → Shared for ultrawide monitors.
+- Desktop **profile rename and delete** for user-defined download profiles; profiles now include cookies, impersonate, speed limit, and verify settings.
+- LAN web UI: **queue search**, clickable **status filter chips**, **config warning banner**, **light/dark theme** toggle, **expand log** control, layout presets, and keyboard shortcuts (Ctrl/Cmd+, F, L, Enter, D).
+- Settings → Shared: **QR code** for LAN web UI URL + token (scan on this PC; use LAN IP on phone).
+- Expanded keyboard shortcuts on desktop: Ctrl/Cmd+, (Settings), F (focus queue search), L (toggle log), K (command palette), Escape (close dialogs).
 
 ### Changed
 
@@ -23,6 +31,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - README documents LAN AV1 converter support, desktop-only web gaps, expanded Download settings (cookies, archive, proxy, speed limit), and `--download` CLI limitations.
 - Tool version labels show **unknown** when a binary is found but its version probe fails.
 - Settings → Shared shows a clearer note when LAN bind address uses `0.0.0.0`.
+- Queue search and activity log filter persist across restarts (Settings / shared config).
+- Settings tab choice persists when switching tabs without changing other settings.
+- LAN web UI honors **relative log timestamps** and **autoscroll log** settings; activity log uses the same formatting rules as the desktop app.
 
 ### Fixed
 
@@ -31,6 +42,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - LAN web UI: queue thumbnails load from a shared cache populated by the desktop app and fixed proxy fetch order (metadata URL before local ffmpeg); thumbnail retries no longer stick after transient failures.
 - Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
+- Removed duplicate **Effective command preview** block in Settings → Downloader.
 
 ## [0.1.3] - 2026-06-08
 

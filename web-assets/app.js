@@ -1,6 +1,168 @@
 const TOKEN_KEY = "rustdl_web_token";
+const WEB_THEME_KEY = "rustdl_web_theme";
 
 let cachedSettings = null;
+let logLinesCache = [];
+/** @type {string | null} */
+let queueStatusFilter = null;
+let queueSearchSaveTimer = null;
+let logExpanded = false;
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function splitLogLine(line) {
+  if (!line.startsWith("[")) return { ts: "", body: line };
+  const rest = line.slice(1);
+  const sep = rest.indexOf("] ");
+  if (sep !== 19) return { ts: "", body: line };
+  const ts = rest.slice(0, 19);
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(ts)) return { ts: "", body: line };
+  return { ts, body: rest.slice(sep + 2) };
+}
+
+function formatRelativeAgo(date) {
+  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (sec < 10) return "just now";
+  if (sec < 60) return `${sec} sec ago`;
+  if (sec < 3600) {
+    const m = Math.floor(sec / 60);
+    return m === 1 ? "1 min ago" : `${m} min ago`;
+  }
+  if (sec < 86400) {
+    const h = Math.floor(sec / 3600);
+    return h === 1 ? "1 hr ago" : `${h} hr ago`;
+  }
+  if (sec < 604800) {
+    const d = Math.floor(sec / 86400);
+    return d === 1 ? "1 day ago" : `${d} days ago`;
+  }
+  const y = date.getFullYear();
+  const nowY = new Date().getFullYear();
+  if (y === nowY) {
+    return date.toLocaleString(undefined, { month: "short", day: "numeric" });
+  }
+  return date.toLocaleDateString();
+}
+
+function formatLogLineDisplay(line, relative) {
+  const { ts, body } = splitLogLine(line);
+  if (!ts) return line;
+  if (!relative) return `[${ts}] ${body}`;
+  const parsed = new Date(ts.replace(" ", "T"));
+  if (Number.isNaN(parsed.getTime())) return `[${ts}] ${body}`;
+  return `[${formatRelativeAgo(parsed)}] ${body}`;
+}
+
+function shouldAutoscrollLog() {
+  return (cachedSettings || {}).autoscroll_log !== false;
+}
+
+function renderLogView() {
+  const log = document.getElementById("log-view");
+  if (!log) return;
+  const relative = !!(cachedSettings || {}).log_relative_time;
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+  log.textContent = logLinesCache.map((l) => formatLogLineDisplay(l, relative)).join("\n");
+  if (shouldAutoscrollLog() || atBottom) {
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+function applyWebTheme(theme) {
+  const t = theme === "light" ? "light" : "dark";
+  document.body.classList.toggle("theme-light", t === "light");
+  localStorage.setItem(WEB_THEME_KEY, t);
+  const btn = document.getElementById("btn-theme-toggle");
+  if (btn) btn.textContent = t === "light" ? "Dark theme" : "Light theme";
+}
+
+function initWebTheme() {
+  const stored = localStorage.getItem(WEB_THEME_KEY);
+  if (stored === "light" || stored === "dark") {
+    applyWebTheme(stored);
+    return;
+  }
+  if (cachedSettings?.theme === "light") applyWebTheme("light");
+  else applyWebTheme("dark");
+}
+
+function applyLayoutPreset(settings, preset) {
+  if (preset === "compact") {
+    settings.card_list_layout = true;
+    settings.compact_cards = true;
+    settings.hide_card_subtitle = true;
+    settings.show_thumbnails = true;
+  } else if (preset === "review") {
+    settings.card_list_layout = false;
+    settings.compact_cards = false;
+    settings.hide_card_subtitle = false;
+    settings.show_thumbnails = true;
+  } else if (preset === "minimal") {
+    settings.card_list_layout = true;
+    settings.compact_cards = true;
+    settings.hide_card_subtitle = true;
+    settings.show_thumbnails = false;
+  }
+}
+
+function itemMatchesSearch(item, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const hay = [
+    item.title,
+    item.source_line,
+    item.webpage_url,
+    item.uploader,
+    item.video_id,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+function itemMatchesStatusFilter(item, slug) {
+  if (!slug) return true;
+  const st = statusSlug(item.status);
+  if (slug === "ready") return st === "idle";
+  if (slug === "active") return st === "downloading";
+  return st === slug;
+}
+
+function renderConfigWarnings(warnings) {
+  const el = document.getElementById("config-warnings");
+  if (!el) return;
+  if (!warnings?.length) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  el.classList.remove("hidden");
+  el.innerHTML = warnings.map((w) => `<p>${escapeHtml(w)}</p>`).join("");
+}
+
+async function saveQueueSearchSetting(value) {
+  if (!cachedSettings) return;
+  const patch = { ...cachedSettings, queue_search: value };
+  try {
+    const res = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ settings: patch }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cachedSettings = data.settings;
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 const AUTO_ADD_MS = 700;
 let autoAddTimer = null;
@@ -126,6 +288,7 @@ async function refreshStatus() {
   updateSettingsOutputDiskHint(data.output_disk_space);
   updateQuitButtonState();
   renderTools(data.tools);
+  renderConfigWarnings(data.config_warnings);
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
   updateDownloadControlButtons(data);
   if (typeof data.generation === "number") {
@@ -379,11 +542,23 @@ function renderStatusSummary(data) {
   ];
   for (const [slug, count, label] of parts) {
     const el = document.createElement("span");
-    el.className = `status-badge status-${slug}`;
+    el.className = `status-badge status-${slug} status-chip-filter`;
+    if (count > 0) {
+      el.title = `Filter queue to ${label}`;
+    }
+    if (queueStatusFilter === slug) {
+      el.classList.add("active");
+    }
     el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>${count} ${label}`;
+    if (count > 0) {
+      el.onclick = () => {
+        queueStatusFilter = queueStatusFilter === slug ? null : slug;
+        refreshQueue(true).catch(console.error);
+        renderStatusSummary(data);
+      };
+    }
     root.appendChild(el);
   }
-
 }
 
 function diskSpaceLevel(disk) {
@@ -1113,11 +1288,16 @@ function patchQueueCardDownloadLine(itemId, line) {
 }
 
 function appendLogLine(line) {
-  const log = document.getElementById("log-view");
-  if (!log || !line) return;
-  const text = log.textContent;
-  log.textContent = text ? `${text}\n${line}` : line;
-  log.scrollTop = log.scrollHeight;
+  if (!line) return;
+  logLinesCache.push(line);
+  renderLogView();
+}
+
+async function refreshLogs() {
+  const res = await api("/api/logs");
+  const data = await res.json();
+  logLinesCache = data.lines || [];
+  renderLogView();
 }
 
 async function refreshQueue(force = false) {
@@ -1135,20 +1315,26 @@ async function refreshQueue(force = false) {
   stopActiveMedia();
   root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
   root.innerHTML = "";
-  for (const item of data.items) {
+  const searchInput = document.getElementById("queue-search");
+  const searchQuery = searchInput ? searchInput.value : settings.queue_search || "";
+  const items = (data.items || []).filter(
+    (item) => itemMatchesSearch(item, searchQuery) && itemMatchesStatusFilter(item, queueStatusFilter)
+  );
+  if (!items.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint";
+    empty.textContent = searchQuery || queueStatusFilter
+      ? "No queue items match the current search or filter."
+      : "Queue is empty. Add URLs above.";
+    root.appendChild(empty);
+    return;
+  }
+  for (const item of items) {
     const card = settings.card_list_layout
       ? renderQueueCardListRow(item, settings)
       : renderQueueCard(item, settings);
     root.appendChild(card);
   }
-}
-
-async function refreshLogs() {
-  const res = await api("/api/logs");
-  const data = await res.json();
-  const log = document.getElementById("log-view");
-  log.textContent = data.lines.join("\n");
-  log.scrollTop = log.scrollHeight;
 }
 
 async function cancelItem(id) {
@@ -1463,6 +1649,10 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-log-max", s.log_max_chars);
   setVal("set-ffmpeg-path", s.ffmpeg_path);
   setVal("set-ffprobe-path", s.ffprobe_path);
+  const qs = document.getElementById("queue-search");
+  if (qs && document.activeElement !== qs) {
+    qs.value = s.queue_search || "";
+  }
 
   setCheck("set-auto-add", s.auto_add_pasted_urls);
   setCheck("set-auto-start", s.auto_start_downloads);
@@ -1720,12 +1910,18 @@ document.getElementById("settings-form").onsubmit = async (e) => {
   if (!cachedSettings) return;
   const wasThumbnails = cachedSettings.show_thumbnails !== false;
   const patch = collectSettingsForm(cachedSettings);
-  await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
-  cachedSettings = patch;
-  statusFlags.auto_add_pasted_urls = !!patch.auto_add_pasted_urls;
-  if (patch.show_thumbnails && !wasThumbnails) {
+  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
+  if (res.ok) {
+    const data = await res.json();
+    cachedSettings = data.settings;
+  } else {
+    cachedSettings = patch;
+  }
+  statusFlags.auto_add_pasted_urls = !!cachedSettings.auto_add_pasted_urls;
+  if (cachedSettings.show_thumbnails && !wasThumbnails) {
     clearThumbnailCaches();
   }
+  renderLogView();
   document.getElementById("settings-dialog").close();
   await refreshAll();
 };
@@ -2277,6 +2473,69 @@ document.getElementById("btn-av1-settings").onclick = () =>
   openSettingsDialog().then(() => switchSettingsTab("av1")).catch(console.error);
 
 applyStaticButtonIcons();
+
+initWebTheme();
+
+document.getElementById("btn-theme-toggle")?.addEventListener("click", () => {
+  const next = document.body.classList.contains("theme-light") ? "dark" : "light";
+  applyWebTheme(next);
+});
+
+document.getElementById("queue-search")?.addEventListener("input", (e) => {
+  refreshQueue(true).catch(console.error);
+  clearTimeout(queueSearchSaveTimer);
+  queueSearchSaveTimer = setTimeout(() => saveQueueSearchSetting(e.target.value), 400);
+});
+
+document.getElementById("btn-expand-log")?.addEventListener("click", () => {
+  logExpanded = !logExpanded;
+  document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
+  const btn = document.getElementById("btn-expand-log");
+  if (btn) btn.textContent = logExpanded ? "Collapse log" : "Expand log";
+});
+
+document.querySelectorAll(".layout-preset-btn").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    if (!cachedSettings) return;
+    const patch = { ...cachedSettings };
+    applyLayoutPreset(patch, btn.dataset.preset);
+    const res = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ settings: patch }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      cachedSettings = data.settings;
+      await refreshAll();
+    }
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (document.getElementById("app-main")?.classList.contains("hidden")) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key === ",") {
+    e.preventDefault();
+    openSettingsDialog().catch(console.error);
+  } else if (mod && e.key === "Enter") {
+    e.preventDefault();
+    clearTimeout(autoAddTimer);
+    flushAutoAddFromInput().catch(console.error);
+  } else if (mod && e.key === "d") {
+    e.preventDefault();
+    api("/api/downloads/start", { method: "POST" }).then(refreshAll).catch(console.error);
+  } else if (mod && e.key === "f") {
+    e.preventDefault();
+    document.getElementById("queue-search")?.focus();
+  } else if (mod && e.key === "l") {
+    e.preventDefault();
+    logExpanded = !logExpanded;
+    document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
+  } else if (e.key === "Escape") {
+    document.getElementById("settings-dialog")?.close();
+    document.getElementById("about-dialog")?.close();
+  }
+});
 
 document.body.classList.add("view-downloader");
 

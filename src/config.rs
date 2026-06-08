@@ -248,10 +248,38 @@ pub struct AppSettings {
     /// Bearer / `X-Rustdl-Token` value required for API access.
     #[serde(default)]
     pub web_auth_token: String,
+    /// Last queue search filter text (Downloader queue panel / web UI).
+    #[serde(default)]
+    pub queue_search: String,
+    /// Activity log filter: `all`, `important`, or `errors`.
+    #[serde(default = "default_log_filter")]
+    pub log_filter: String,
+    /// Session queue restore: `ask`, `always`, or `never`.
+    #[serde(default = "default_session_restore_preference")]
+    pub session_restore_preference: String,
+    /// Max content column width in pixels; `0` = use full panel width.
+    #[serde(default)]
+    pub max_content_width: f32,
 }
 
 fn default_web_bind_address() -> String {
     "0.0.0.0:8765".to_owned()
+}
+
+fn default_log_filter() -> String {
+    "all".to_owned()
+}
+
+fn default_session_restore_preference() -> String {
+    "ask".to_owned()
+}
+
+pub fn session_restore_auto_load(preference: &str) -> bool {
+    preference.trim().eq_ignore_ascii_case("always")
+}
+
+pub fn session_restore_discard_on_startup(preference: &str) -> bool {
+    preference.trim().eq_ignore_ascii_case("never")
 }
 
 /// Generates a random token when enabling the web UI for the first time.
@@ -444,6 +472,10 @@ impl Default for AppSettings {
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
+            queue_search: String::new(),
+            log_filter: default_log_filter(),
+            session_restore_preference: default_session_restore_preference(),
+            max_content_width: 0.0,
         }
     }
 }

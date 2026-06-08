@@ -2,13 +2,40 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{button_group, left_button_row};
-use crate::config::{export_settings_json, import_settings_json, trim_activity_log};
-use crate::profiles::{all_profiles, find_profile, save_user_profile, DownloadProfile};
+use crate::config::{export_settings_json, import_settings_json, trim_activity_log, AppSettings};
+use crate::profiles::{
+    all_profiles, delete_user_profile, find_profile, rename_user_profile, save_user_profile,
+    DownloadProfile,
+};
 use crate::ui_icons;
 
 use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
+
+fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
+    match preset {
+        "compact" => {
+            settings.card_list_layout = true;
+            settings.compact_cards = true;
+            settings.hide_card_subtitle = true;
+            settings.show_thumbnails = true;
+        }
+        "review" => {
+            settings.card_list_layout = false;
+            settings.compact_cards = false;
+            settings.hide_card_subtitle = false;
+            settings.show_thumbnails = true;
+        }
+        "minimal" => {
+            settings.card_list_layout = true;
+            settings.compact_cards = true;
+            settings.hide_card_subtitle = true;
+            settings.show_thumbnails = false;
+        }
+        _ => {}
+    }
+}
 
 fn draw_effective_command_preview(ui: &mut egui::Ui, command_preview: &str) {
     let text_color = if ui.visuals().dark_mode {
@@ -50,6 +77,7 @@ impl PydlApp {
             .default_width(620.0)
             .default_height(560.0)
             .show(ctx, |ui| {
+                let prev_settings_tab = self.settings_tab;
                 left_button_row(ui, |ui| {
                     button_group(ui, "settings_tabs", |g| {
                     g.add(|ui| {
@@ -75,6 +103,9 @@ impl PydlApp {
                     });
                     });
                 });
+                if self.settings_tab != prev_settings_tab {
+                    self.sync_settings_tab_to_disk();
+                }
                 ui.separator();
                 let scroll_h = ui.available_height().max(240.0);
                 egui::ScrollArea::vertical()
@@ -184,6 +215,92 @@ impl PydlApp {
                                 )
                                 .changed();
                         });
+                        ui.horizontal(|ui| {
+                            ui.label("Max content width");
+                            changed |= ui
+                                .add(
+                                    egui::Slider::new(&mut self.settings.max_content_width, 0.0..=1600.0)
+                                        .custom_formatter(|v, _| {
+                                            if v <= 0.0 {
+                                                "Full width".to_owned()
+                                            } else {
+                                                format!("{:.0} px", v)
+                                            }
+                                        }),
+                                )
+                                .on_hover_text(
+                                    "Limits how wide controls stretch on ultrawide monitors (0 = full panel width).",
+                                )
+                                .changed();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Layout presets").strong());
+                        ui.label(
+                            RichText::new(
+                                "One-click display bundles (does not change download or AV1 options).",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "layout_presets", |g| {
+                                if g
+                                    .secondary("Compact queue", true)
+                                    .on_hover_text("List layout, compact cards, hide subtitle")
+                                    .clicked()
+                                {
+                                    apply_layout_preset(&mut self.settings, "compact");
+                                    changed = true;
+                                }
+                                if g
+                                    .secondary("Review mode", true)
+                                    .on_hover_text("Horizontal cards with thumbnails")
+                                    .clicked()
+                                {
+                                    apply_layout_preset(&mut self.settings, "review");
+                                    changed = true;
+                                }
+                                if g
+                                    .secondary("Minimal", true)
+                                    .on_hover_text("Compact list without thumbnails")
+                                    .clicked()
+                                {
+                                    apply_layout_preset(&mut self.settings, "minimal");
+                                    changed = true;
+                                }
+                            });
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Session restore").strong());
+                        egui::ComboBox::from_id_salt("settings_session_restore")
+                            .selected_text(match self.settings.session_restore_preference.as_str() {
+                                "always" => "Always restore saved queues",
+                                "never" => "Never restore (start fresh)",
+                                _ => "Ask each startup",
+                            })
+                            .show_ui(ui, |ui| {
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut self.settings.session_restore_preference,
+                                        "ask".to_owned(),
+                                        "Ask each startup",
+                                    )
+                                    .changed();
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut self.settings.session_restore_preference,
+                                        "always".to_owned(),
+                                        "Always restore saved queues",
+                                    )
+                                    .changed();
+                                changed |= ui
+                                    .selectable_value(
+                                        &mut self.settings.session_restore_preference,
+                                        "never".to_owned(),
+                                        "Never restore (start fresh)",
+                                    )
+                                    .changed();
+                            });
                         ui.separator();
                         ui.label(RichText::new("LAN web UI").strong());
                         ui.label(
@@ -301,6 +418,21 @@ impl PydlApp {
                                     .small()
                                     .color(ui.visuals().weak_text_color()),
                                 );
+                            }
+                            if !self.settings.web_auth_token.trim().is_empty() {
+                                let qr_target = format!(
+                                    "{}?token={}",
+                                    url.trim_end_matches('/'),
+                                    self.settings.web_auth_token.trim()
+                                );
+                                ui.label(
+                                    RichText::new(
+                                        "Scan to open the web UI on this PC (on a phone, swap 127.0.0.1 for this PC's LAN IP):",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                                super::web_qr::draw_qr_code(ui, &qr_target, 128.0);
                             }
                         }
                         ui.separator();
@@ -516,6 +648,92 @@ impl PydlApp {
                                 }
                             } else {
                                 self.new_profile_name_buffer = Some(name_buf);
+                            }
+                        }
+                        if let Some(active) = find_profile(&self.profile_store, &self.settings.active_profile) {
+                            if !active.builtin {
+                                left_button_row(ui, |ui| {
+                                    button_group(ui, "profile_manage", |g| {
+                                        if g
+                                            .secondary(
+                                                &format!("{} Rename profile…", ui_icons::SAVE),
+                                                true,
+                                            )
+                                            .clicked()
+                                        {
+                                            self.profile_rename_buffer = Some((
+                                                active.name.clone(),
+                                                active.name.clone(),
+                                            ));
+                                        }
+                                        if g
+                                            .danger(
+                                                &format!("{} Delete profile", ui_icons::REMOVE),
+                                                true,
+                                            )
+                                            .clicked()
+                                        {
+                                            let name = active.name.clone();
+                                            if let Err(e) =
+                                                delete_user_profile(&mut self.profile_store, &name)
+                                            {
+                                                self.append_log(&format!(
+                                                    "Delete profile failed: {e:#}"
+                                                ));
+                                            } else {
+                                                if self.settings.active_profile == name {
+                                                    self.settings.active_profile =
+                                                        "Best quality".to_owned();
+                                                }
+                                                self.append_log(&format!("Deleted profile: {name}"));
+                                                changed = true;
+                                            }
+                                        }
+                                    });
+                                });
+                            }
+                        }
+                        if let Some((old_name, mut new_name)) = self.profile_rename_buffer.take() {
+                            let mut save_rename = false;
+                            ui.horizontal(|ui| {
+                                ui.label("Rename to");
+                                ui.text_edit_singleline(&mut new_name);
+                                button_group(ui, "profile_rename_actions", |g| {
+                                    save_rename = g
+                                        .secondary(&format!("{} Save", ui_icons::SAVE), true)
+                                        .clicked();
+                                    if g
+                                        .secondary(&format!("{} Cancel", ui_icons::DISMISS), true)
+                                        .clicked()
+                                    {
+                                        new_name.clear();
+                                    }
+                                });
+                            });
+                            if save_rename && !new_name.trim().is_empty() {
+                                match rename_user_profile(
+                                    &mut self.profile_store,
+                                    &old_name,
+                                    new_name.trim(),
+                                ) {
+                                    Ok(()) => {
+                                        if self.settings.active_profile == old_name {
+                                            self.settings.active_profile = new_name.trim().to_owned();
+                                        }
+                                        self.append_log(&format!(
+                                            "Renamed profile \"{old_name}\" to \"{}\"",
+                                            new_name.trim()
+                                        ));
+                                        changed = true;
+                                    }
+                                    Err(e) => {
+                                        self.append_log(&format!("Rename profile failed: {e:#}"));
+                                        self.profile_rename_buffer =
+                                            Some((old_name, new_name));
+                                    }
+                                }
+                            } else if !new_name.is_empty() || save_rename {
+                                self.profile_rename_buffer = Some((old_name, new_name));
                             }
                         }
                         ui.separator();
@@ -893,12 +1111,6 @@ impl PydlApp {
                                 .color(Color32::GRAY),
                             );
                         }
-                        ui.label(
-                            RichText::new("Effective command preview")
-                                .small()
-                                .color(Color32::GRAY),
-                        );
-                        draw_effective_command_preview(ui, &command_preview);
                     }
                     SettingsTab::Av1 => {
                         ui.label(RichText::new("AV1 converter settings").strong());

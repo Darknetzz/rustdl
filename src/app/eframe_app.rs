@@ -1,7 +1,7 @@
 use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
-    constrain_content_width, content_width, dock_panel_horizontal_frame, draw_mode_nav_bar,
+    content_width, dock_panel_horizontal_frame, draw_mode_nav_bar,
     draw_navbar_status_badge, left_button_row, show_mode_panel, with_full_width,
     UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
@@ -64,6 +64,40 @@ impl eframe::App for PydlApp {
         }
         let trigger_add = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Enter));
         let trigger_download = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::D));
+        let trigger_settings = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Comma));
+        let trigger_focus_search =
+            ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F));
+        let trigger_toggle_log = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::L));
+        let trigger_palette = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K));
+        let trigger_escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        if trigger_settings {
+            self.settings_open = true;
+        }
+        if trigger_focus_search && !self.av1_mode {
+            self.focus_queue_search = true;
+        }
+        if trigger_toggle_log {
+            self.settings.logs_open = !self.settings.logs_open;
+            self.persist_settings();
+        }
+        if trigger_palette {
+            self.command_palette_open = true;
+            self.command_palette_query.clear();
+        }
+        if trigger_escape {
+            if self.command_palette_open {
+                self.command_palette_open = false;
+            } else {
+                self.settings_open = false;
+                self.about_open = false;
+                if !self.settings.videos_docked {
+                    self.settings.videos_open = false;
+                }
+                if !self.settings.logs_docked {
+                    self.settings.logs_open = false;
+                }
+            }
+        }
 
         let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
         if self.settings.videos_docked {
@@ -101,7 +135,7 @@ impl eframe::App for PydlApp {
         egui::CentralPanel::default()
             .frame(content_panel_frame())
             .show(ctx, |ui| {
-                constrain_content_width(ui);
+                self.constrain_content(ui);
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 self.draw_config_load_banner(ui);
@@ -323,7 +357,7 @@ impl eframe::App for PydlApp {
                 });
                 }); // pinned URL block
 
-                constrain_content_width(ui);
+                self.constrain_content(ui);
 
                 self.draw_downloader_queue_status_row(ui);
                 let total_finished = self.status_done + self.status_failed;
@@ -393,7 +427,7 @@ impl eframe::App for PydlApp {
                     .id_salt("downloader_options")
                     .default_open(self.settings.downloader_options_expanded)
                     .show(ui, |ui| {
-                        constrain_content_width(ui);
+                        self.constrain_content(ui);
                         ui.horizontal(|ui| {
                             ui.label("Output folder");
                             let path_w = content_width(ui).max(120.0);
@@ -558,6 +592,7 @@ impl eframe::App for PydlApp {
 
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
+        self.draw_command_palette(ctx);
         if !self.settings.videos_docked {
             self.draw_videos_window(ctx);
         }
@@ -587,7 +622,7 @@ impl eframe::App for PydlApp {
 impl PydlApp {
     /// Logo and tool status on the left; status badge, Web UI, then Settings + Exit on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
-        constrain_content_width(ui);
+        self.constrain_content(ui);
         ui.vertical(|ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             ui.horizontal(|ui| {
@@ -663,7 +698,7 @@ impl PydlApp {
                                         true,
                                     )
                                     .on_hover_text(
-                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts downloads",
+                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
                                     )
                                     .clicked()
                                 {

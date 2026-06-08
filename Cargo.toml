@@ -1,6 +1,6 @@
 [package]
 name = "rustdl"
-version = "0.2.2"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.76"
 description = "Desktop GUI for yt-dlp (egui)"
@@ -45,6 +45,7 @@ rust-embed = "8"
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
+qrcode = "0.14"
 
 [target.'cfg(windows)'.dependencies]
 raw-window-handle = "0.6"

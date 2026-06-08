@@ -31,6 +31,7 @@
     <div id="navbar-disk-space" class="navbar-disk-space" aria-label="Output disk space"></div>
     <div class="topbar-actions btn-toolbar">
       <button type="button" id="btn-refresh-tools" class="secondary" data-icon="sync" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
+      <button type="button" id="btn-theme-toggle" class="secondary" title="Toggle light/dark theme">Theme</button>
       <div id="downloader-only-actions" class="btn-group" role="group" aria-label="Download controls">
         <button type="button" id="btn-pause" class="secondary" data-icon="pause">Pause</button>
         <button type="button" id="btn-resume" class="secondary" data-icon="play_arrow">Resume</button>
@@ -42,6 +43,8 @@
       </div>
     </div>
   </header>
+
+  <div id="config-warnings" class="config-warnings hidden" role="alert" aria-live="polite"></div>
 
   <section id="auth-panel" class="panel">
     <h2>Connect</h2>
@@ -70,6 +73,9 @@
     <section class="panel">
       <div class="summary" id="status-summary"></div>
       <div class="queue-toolbar btn-toolbar">
+        <label class="queue-search-label">Search
+          <input type="search" id="queue-search" class="queue-search-input" placeholder="Title, URL, uploader…" autocomplete="off" />
+        </label>
         <span class="hint">Queue:</span>
         <div class="btn-group" role="group" aria-label="Clear queue" id="queue-clear-menu"></div>
       </div>
@@ -79,7 +85,10 @@
     <section class="panel">
       <div class="row log-header">
         <h2>Activity log</h2>
-        <button type="button" id="btn-clear-log" class="secondary" data-icon="clear_all">Clear log</button>
+        <div class="btn-group" role="group" aria-label="Log controls">
+          <button type="button" id="btn-expand-log" class="secondary" title="Expand or collapse log panel">Expand log</button>
+          <button type="button" id="btn-clear-log" class="secondary" data-icon="clear_all">Clear log</button>
+        </div>
       </div>
       <pre id="log-view" class="log-view"></pre>
     </section>
@@ -154,6 +163,14 @@
           <label class="check"><input type="checkbox" id="set-autoscroll-log" /> Autoscroll log to latest line</label>
           <label class="check"><input type="checkbox" id="set-log-relative" /> Relative timestamps in activity log</label>
           <label>Max log chars <input type="number" id="set-log-max" min="2000" max="200000" step="1000" /></label>
+
+          <h3>Layout presets</h3>
+          <p class="hint">One-click display bundles (does not change download options).</p>
+          <div class="btn-group layout-preset-row" role="group" aria-label="Layout presets">
+            <button type="button" class="secondary layout-preset-btn" data-preset="compact">Compact queue</button>
+            <button type="button" class="secondary layout-preset-btn" data-preset="review">Review mode</button>
+            <button type="button" class="secondary layout-preset-btn" data-preset="minimal">Minimal</button>
+          </div>
 
           <h3>Shared executables</h3>
           <p class="hint">Used by the downloader and AV1 converter. Leave empty to use PATH.</p>
