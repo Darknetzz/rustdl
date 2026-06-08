@@ -168,6 +168,20 @@ fn is_success_line(line: &str) -> bool {
 }
 
 impl PydlApp {
+    pub(super) fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
+        let max_log = max_log.max(80.0).round();
+        let mut px = self.settings.log_dock_height.round().clamp(80.0, max_log) as i32;
+        let max_i = max_log as i32;
+        let changed = ui
+            .add(egui::Slider::new(&mut px, 80..=max_i.max(80)).text("px"))
+            .changed();
+        if changed {
+            self.settings.log_dock_height = px as f32;
+            self.persist_settings();
+        }
+        changed
+    }
+
     pub(super) fn draw_logs_window(&mut self, ctx: &egui::Context) {
         if !self.settings.logs_open {
             return;
@@ -378,14 +392,17 @@ impl PydlApp {
         }
     }
 
-    /// Docked under the video queue: placement row, then filter/actions, then lines.
-    pub(super) fn draw_docked_log_under_videos(&mut self, ui: &mut egui::Ui, log_lines_h: f32) {
+    /// Docked under the video queue: placement row, height slider, filter/actions, then lines.
+    pub(super) fn draw_docked_log_under_videos(&mut self, ui: &mut egui::Ui, max_log_h: f32) {
         left_button_row(ui, |ui| {
             ui.label(RichText::new("Activity log").small().strong());
             self.draw_log_controls_inner(ui, true);
         });
+        let max_log = max_log_h.clamp(80.0, 480.0);
+        self.draw_log_height_slider(ui, max_log);
         self.draw_activity_log_toolbar_inner(ui, true);
-        self.draw_activity_log_lines_scroll(ui, log_lines_h);
+        let log_h = self.settings.log_dock_height.clamp(80.0, max_log);
+        self.draw_activity_log_lines_scroll(ui, log_h);
     }
 
     /// Scrollable log lines only (toolbar is separate).

@@ -105,7 +105,7 @@ pub(crate) enum UiEvent {
 }
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
-fn is_throttled_download_log_line(line: &str) -> bool {
+pub(crate) fn is_throttled_download_log_line(line: &str) -> bool {
     let l = line.to_ascii_lowercase();
     (l.contains("[download]") && (l.contains('%') || l.contains("frag"))) || l.contains("[merger]")
 }
@@ -135,8 +135,8 @@ impl PydlApp {
                 // Queue resolve/progress and download state are applied on DownloadCore
                 // (see service/core_events.rs); the GUI syncs from core each frame.
                 UiEvent::AddResolved { .. } | UiEvent::AddProgress { .. } | UiEvent::AddDone => {}
-                UiEvent::DownloadLine { item_id, line } => {
-                    self.maybe_append_download_log(ctx, item_id, &line);
+                UiEvent::DownloadLine { .. } => {
+                    ctx.request_repaint();
                 }
                 UiEvent::DownloadDone {
                     item_id,
@@ -244,21 +244,6 @@ impl PydlApp {
         }
     }
 
-    fn maybe_append_download_log(&mut self, ctx: &egui::Context, item_id: u64, line: &str) {
-        if is_throttled_download_log_line(line) {
-            let now = ctx.input(|i| i.time);
-            let last = self
-                .download_log_throttle
-                .get(&item_id)
-                .copied()
-                .unwrap_or(-1_000.0);
-            if now - last < 0.25 {
-                return;
-            }
-            self.download_log_throttle.insert(item_id, now);
-        }
-        self.append_log(&format!("[item {item_id}] {line}"));
-    }
 }
 
 #[cfg(test)]

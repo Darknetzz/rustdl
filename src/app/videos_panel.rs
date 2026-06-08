@@ -38,6 +38,7 @@ const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
 struct VideosQueueLayout<'a> {
     scroll_id: &'a str,
     dock_log: bool,
+    log_dock_height: f32,
 }
 
 impl VideosQueueLayout<'_> {
@@ -56,7 +57,7 @@ impl VideosQueueLayout<'_> {
             0.0
         };
         let log_lines_reserve = if self.dock_log {
-            DOCKED_LOG_MIN_LINES_H
+            self.log_dock_height.clamp(80.0, 480.0)
         } else {
             0.0
         };
@@ -69,20 +70,6 @@ fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
 }
 
 impl PydlApp {
-    fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
-        let max_log = max_log.max(80.0).round();
-        let mut px = self.settings.log_dock_height.round().clamp(80.0, max_log) as i32;
-        let max_i = max_log as i32;
-        let changed = ui
-            .add(egui::Slider::new(&mut px, 80..=max_i.max(80)).text("px"))
-            .changed();
-        if changed {
-            self.settings.log_dock_height = px as f32;
-            self.persist_settings();
-        }
-        changed
-    }
-
     pub(super) fn ensure_videos_window_open(&mut self) {
         if !self.settings.videos_docked {
             self.settings.videos_open = true;
@@ -413,10 +400,9 @@ impl PydlApp {
             ui.add_space(6.0);
             ui.separator();
             ui.add_space(4.0);
-            let log_lines_h = (body_bottom - ui.cursor().min.y - 2.0)
-                .max(DOCKED_LOG_MIN_LINES_H)
-                .min(body_bottom - ui.cursor().min.y);
-            self.draw_docked_log_under_videos(ui, log_lines_h);
+            let max_log = (body_bottom - ui.cursor().min.y - DOCKED_LOG_UNDER_VIDEOS_CHROME)
+                .max(DOCKED_LOG_MIN_LINES_H);
+            self.draw_docked_log_under_videos(ui, max_log);
         }
     }
 
@@ -655,6 +641,13 @@ impl PydlApp {
         if self.settings.logs_open && self.settings.logs_docked {
             self.draw_docked_log_only_section(ui);
         }
+        if !ui.ctx().input(|i| i.pointer.any_down()) {
+            let saved_h = ui.clip_rect().height();
+            if (saved_h - self.settings.undocked_footer_height).abs() > 1.0 {
+                self.settings.undocked_footer_height = saved_h.clamp(100.0, 600.0);
+                self.persist_settings();
+            }
+        }
     }
 
     /// Pinned bottom panel when the video queue is docked.
@@ -674,6 +667,7 @@ impl PydlApp {
                     VideosQueueLayout {
                         scroll_id: "rustdl_videos_dock_scroll",
                         dock_log,
+                        log_dock_height: self.settings.log_dock_height,
                     },
                 );
             });
@@ -725,6 +719,7 @@ impl PydlApp {
                     VideosQueueLayout {
                         scroll_id: "rustdl_videos_float_v4",
                         dock_log: false,
+                        log_dock_height: self.settings.log_dock_height,
                     },
                 );
             });

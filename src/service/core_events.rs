@@ -1,10 +1,12 @@
 //! Applies download-queue `UiEvent`s to [`DownloadCore`] so web API and GUI stay in sync.
 
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
 
+use crate::app::events::is_throttled_download_log_line;
 use crate::app::UiEvent;
 use crate::app_parsing::{
     convert_detail_is_user_cancellation, parse_speed_eta, reset_convert_item_to_ready,
@@ -345,7 +347,27 @@ impl super::core::DownloadCore {
             }
         }
         self.transfer_totals_dirty = true;
+        self.maybe_append_download_line_log(item_id, line);
         self.bump_generation();
+    }
+
+    fn maybe_append_download_line_log(&mut self, item_id: u64, line: &str) {
+        if is_throttled_download_log_line(line) {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0);
+            let last = self
+                .download_log_throttle
+                .get(&item_id)
+                .copied()
+                .unwrap_or(-1_000.0);
+            if now - last < 0.25 {
+                return;
+            }
+            self.download_log_throttle.insert(item_id, now);
+        }
+        self.append_log(&format!("[item {item_id}] {line}"));
     }
 
     fn handle_download_done(&mut self, item_id: u64, ok: bool, detail: &str) {

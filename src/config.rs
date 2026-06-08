@@ -141,10 +141,13 @@ pub struct AppSettings {
     /// Show activity log docked under the video queue (vs floating window).
     #[serde(default = "default_logs_docked")]
     pub logs_docked: bool,
-    #[serde(default)]
+    #[serde(default = "default_logs_open")]
     pub logs_open: bool,
     #[serde(default = "default_log_dock_height")]
     pub log_dock_height: f32,
+    /// Pinned footer height when the video queue is undocked (strip + optional docked log).
+    #[serde(default = "default_undocked_footer_height")]
+    pub undocked_footer_height: f32,
     #[serde(default = "default_log_float_width")]
     pub log_float_width: f32,
     #[serde(default = "default_log_float_height")]
@@ -361,6 +364,14 @@ fn default_logs_docked() -> bool {
     true
 }
 
+fn default_logs_open() -> bool {
+    true
+}
+
+fn default_undocked_footer_height() -> f32 {
+    380.0
+}
+
 fn default_log_dock_height() -> f32 {
     180.0
 }
@@ -444,6 +455,7 @@ impl Default for AppSettings {
             logs_docked: true,
             logs_open: true,
             log_dock_height: 180.0,
+            undocked_footer_height: default_undocked_footer_height(),
             log_float_width: default_log_float_width(),
             log_float_height: default_log_float_height(),
             log_relative_time: false,
@@ -595,6 +607,7 @@ pub fn load_settings() -> AppSettings {
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
+    cfg.undocked_footer_height = cfg.undocked_footer_height.clamp(100.0, 600.0);
     cfg.log_float_width = cfg.log_float_width.clamp(400.0, 2400.0);
     cfg.log_float_height = cfg.log_float_height.clamp(260.0, 1600.0);
     cfg.videos_dock_height = cfg.videos_dock_height.clamp(180.0, 800.0);

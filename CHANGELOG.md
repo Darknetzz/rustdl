@@ -14,6 +14,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Activity log under the docked Videos panel no longer renders blank: the queue list reserves the configured log height instead of squeezing it away, and a height slider adjusts `log_dock_height` there too.
+- Download progress lines are recorded on the shared core (not only when the GUI event loop handles them), so the activity log fills during batch downloads and survives restarts from `rustdl_activity_log.json`.
+- Activity log open/docked state, dock height, undocked footer height, and floating window size are persisted across sessions (`logs_open` now defaults to open when missing from older configs).
 - Activity log no longer appears blank after downloads or converts: GUI log lines go through the shared core, the GUI no longer overwrites core logs each frame (which dropped convert/download messages from background work), **Important** filter includes convert/skip messages, and a hint appears when the filter hides all lines.
 - Floating activity log window layout uses remaining height correctly so log lines fill the resizable window.
 - LAN web UI **Convert** tab no longer fails silently (typo in view switch threw a JavaScript error before the page could open).

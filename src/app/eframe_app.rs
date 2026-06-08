@@ -1,6 +1,6 @@
 use super::*;
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
+    bounded_ui_height, button_group, button_toolbar_wrapped,
     content_width, dock_panel_horizontal_frame, draw_mode_nav_bar,
     draw_navbar_status_badge, left_button_row, show_mode_panel, with_full_width,
     UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
@@ -99,7 +99,6 @@ impl eframe::App for PydlApp {
             }
         }
 
-        let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
         if self.settings.videos_docked {
             egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                 .resizable(true)
@@ -111,20 +110,9 @@ impl eframe::App for PydlApp {
                 });
         } else {
             let log_docked = self.settings.logs_open && self.settings.logs_docked;
-            let footer_h = compute_main_column_split(
-                body_est.max(200.0),
-                false,
-                self.settings.compact_cards,
-                log_docked,
-                false,
-                self.settings.log_dock_height,
-            )
-            .footer_height
-            .min(body_est * 0.42)
-            .max(100.0);
             egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
                 .resizable(log_docked)
-                .default_height(footer_h)
+                .default_height(self.settings.undocked_footer_height)
                 .height_range(100.0..=600.0)
                 .frame(dock_panel_horizontal_frame())
                 .show(ctx, |ui| {
