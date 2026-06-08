@@ -47,12 +47,12 @@ impl PydlApp {
         }
     }
 
-    /// AV1 queue persistence lives on `DownloadCore`; this mirrors the GUI textarea buffer
+    /// Convert queue persistence lives on `DownloadCore`; this mirrors the GUI textarea buffer
     /// into the core and flushes (used on exit and when toggling the remember setting).
-    pub(super) fn flush_av1_queue_to_disk(&mut self) {
+    pub(super) fn flush_convert_queue_to_disk(&mut self) {
         let mut core = self.shared_core.lock();
-        core.av1_input_paths = self.av1_input_paths.clone();
-        core.flush_av1_queue_to_disk();
+        core.convert_input_paths = self.convert_input_paths.clone();
+        core.flush_convert_queue_to_disk();
     }
 
     pub(super) fn clear_activity_log(&mut self) {

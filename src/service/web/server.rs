@@ -60,7 +60,7 @@ impl WebServerStartError {
             Self::EmptyBind => "web bind address is empty".to_owned(),
             Self::InvalidBind(detail) => format!("invalid web bind address: {detail}"),
             Self::EmptyToken => {
-                "web UI requires a non-empty auth token (see Settings → Shared)".to_owned()
+                "web UI requires a non-empty auth token (see Settings → Web UI)".to_owned()
             }
             Self::BindFailed(detail) => {
                 format!(

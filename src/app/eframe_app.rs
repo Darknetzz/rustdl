@@ -31,8 +31,8 @@ impl eframe::App for PydlApp {
             self.maybe_install_win_browser_drop_target(frame);
             self.drain_win_browser_url_drops(ctx);
         }
-        if self.av1_mode {
-            self.apply_dropped_av1_paths(ctx);
+        if self.convert_mode {
+            self.apply_dropped_convert_paths(ctx);
         } else {
             self.apply_dropped_shortcut_files(ctx);
         }
@@ -41,7 +41,7 @@ impl eframe::App for PydlApp {
             self.exit_pending_after_cancel = false;
             self.exit_allowed = true;
             self.flush_queue_to_disk();
-            self.flush_av1_queue_to_disk();
+            self.flush_convert_queue_to_disk();
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         self.poll_done_file_lookup();
@@ -73,7 +73,7 @@ impl eframe::App for PydlApp {
         if trigger_settings {
             self.settings_open = true;
         }
-        if trigger_focus_search && !self.av1_mode {
+        if trigger_focus_search && !self.convert_mode {
             self.focus_queue_search = true;
         }
         if trigger_toggle_log {
@@ -140,7 +140,7 @@ impl eframe::App for PydlApp {
                 self.draw_main_header(ui);
                 self.draw_config_load_banner(ui);
                 let (dl_nav, av1_nav) =
-                    draw_mode_nav_bar(ui, &self.settings.theme, !self.av1_mode, self.av1_mode);
+                    draw_mode_nav_bar(ui, &self.settings.theme, !self.convert_mode, self.convert_mode);
                 if dl_nav {
                     self.set_app_mode(false);
                 }
@@ -211,7 +211,7 @@ impl eframe::App for PydlApp {
                 );
                 ui.separator();
                 let theme = self.settings.theme.clone();
-                if self.av1_mode {
+                if self.convert_mode {
                     show_mode_panel(
                         ui,
                         &theme,
@@ -219,7 +219,7 @@ impl eframe::App for PydlApp {
                         egui::Margin::same(12.0),
                         10.0,
                         |ui| {
-                            self.draw_av1_panel(ui);
+                            self.draw_convert_panel(ui);
                         },
                     );
                 } else {
@@ -558,26 +558,6 @@ impl eframe::App for PydlApp {
                             }
                         });
                     }
-                    if self.status_queued > 0 || self.status_active > 0 {
-                        button_group(ui, "dl_cancel_all", |g| {
-                            if g.warning(
-                                &format!("{} Cancel all -> Ready", ui_icons::CANCEL_TO_READY),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.cancel_all_active(CancelPostAction::Ready);
-                            }
-                            if g.danger(
-                                &format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.cancel_all_active(CancelPostAction::Remove);
-                            }
-                        });
-                    }
                 });
                 if trigger_add && !self.add_in_progress {
                     self.add_urls(ctx.input(|i| i.time));
@@ -613,130 +593,112 @@ impl eframe::App for PydlApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self.flush_queue_to_disk();
-        self.flush_av1_queue_to_disk();
+        self.flush_convert_queue_to_disk();
         self.flush_log_to_disk();
         let _ = save_settings(&self.settings);
     }
 }
 
 impl PydlApp {
-    /// Logo and tool status on the left; status badge, Web UI, then Settings + Exit on the right.
+    /// Logo, title, status, tool checks, and disk on the left; log / Settings / Exit on the right.
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         self.constrain_content(ui);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 12.0;
-                let sz = egui::vec2(40.0, 40.0);
-                let img = ui.add(
-                    egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                        .sense(egui::Sense::click()),
-                );
-                let title = ui.add(
-                    egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()),
-                );
-                let header = img
-                    .union(title)
-                    .on_hover_text("About rustdl — click to open");
-                if header.clicked() {
-                    self.about_open = true;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 12.0;
+            let sz = egui::vec2(40.0, 40.0);
+            let img = ui.add(
+                egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                    .sense(egui::Sense::click()),
+            );
+            let title = ui.add(
+                egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()),
+            );
+            let header = img
+                .union(title)
+                .on_hover_text("About rustdl — click to open");
+            if header.clicked() {
+                self.about_open = true;
+            }
+
+            ui.add_space(4.0);
+            if self.settings.web_ui_enabled {
+                let url =
+                    crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+                let running = self.web_server.is_some();
+                if draw_web_ui_header_button(ui, running, &url) {
+                    self.open_web_ui_in_browser();
                 }
-                let tail_w = ui.available_width();
-                if tail_w > 0.0 {
-                    ui.allocate_ui_with_layout(
-                        egui::vec2(tail_w, 0.0),
-                        egui::Layout::right_to_left(egui::Align::Center),
-                        |ui| {
-                            ui.spacing_mut().item_spacing.x = 6.0;
-                            let navbar = crate::app_ui::derive_navbar_status(
-                                self.navbar_status_inputs(),
-                            );
-                            draw_navbar_status_badge(ui, &navbar);
-                            if self.settings.web_ui_enabled {
-                                let url = crate::service::web::web_ui_browser_url(
-                                    &self.settings.web_bind_address,
-                                );
-                                let running = self.web_server.is_some();
-                                if draw_web_ui_header_button(ui, running, &url) {
-                                    self.open_web_ui_in_browser();
-                                }
+            }
+            let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
+            draw_navbar_status_badge(ui, &navbar);
+
+            ui.add_space(6.0);
+            ui.spacing_mut().item_spacing.x = 10.0;
+            draw_precheck_status(ui, "ffprobe", self.has_ffprobe, &self.ffprobe_version);
+            draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
+            draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
+            self.draw_output_disk_space(ui);
+
+            let tail_w = ui.available_width();
+            if tail_w > 0.0 {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(tail_w, 0.0),
+                    egui::Layout::right_to_left(egui::Align::Center),
+                    |ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        button_group(ui, "hdr_nav", |g| {
+                            if g
+                                .secondary(
+                                    &format!("{} Settings", ui_icons::SETTINGS),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
+                                )
+                                .clicked()
+                            {
+                                self.settings_open = true;
                             }
-                            button_group(ui, "hdr_log", |g| {
-                                if self.settings.logs_open {
-                                    if g
-                                        .secondary(
-                                            &format!("{} Hide log", ui_icons::DISMISS),
-                                            true,
-                                        )
-                                        .on_hover_text(
-                                            "Close the activity log (also in the Videos panel toolbar)",
-                                        )
-                                        .clicked()
-                                    {
-                                        self.settings.logs_open = false;
-                                        self.settings.logs_docked = false;
-                                        self.persist_settings();
-                                    }
-                                } else if g
+                            if g
+                                .danger(&format!("{} Exit", ui_icons::EXIT), true)
+                                .clicked()
+                            {
+                                self.open_exit_confirm();
+                            }
+                        });
+                        button_group(ui, "hdr_log", |g| {
+                            if self.settings.logs_open {
+                                if g
                                     .secondary(
-                                        &format!("{} Show log", ui_icons::LOGS),
+                                        &format!("{} Hide log", ui_icons::DISMISS),
                                         true,
                                     )
                                     .on_hover_text(
-                                        "Open the activity log (dock under the queue or in its own window)",
+                                        "Close the activity log (also in the Videos panel toolbar)",
                                     )
                                     .clicked()
                                 {
-                                    self.settings.logs_open = true;
+                                    self.settings.logs_open = false;
+                                    self.settings.logs_docked = false;
                                     self.persist_settings();
                                 }
-                            });
-                            button_group(ui, "hdr_nav", |g| {
-                                if g
-                                    .secondary(
-                                        &format!("{} Settings", ui_icons::SETTINGS),
-                                        true,
-                                    )
-                                    .on_hover_text(
-                                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
-                                    )
-                                    .clicked()
-                                {
-                                    self.settings_open = true;
-                                }
-                                if g
-                                    .danger(&format!("{} Exit", ui_icons::EXIT), true)
-                                    .clicked()
-                                {
-                                    self.open_exit_confirm();
-                                }
-                            });
-                        },
-                    );
-                }
-            });
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = 10.0;
-                draw_precheck_status(
-                    ui,
-                    "ffprobe",
-                    self.has_ffprobe,
-                    &self.ffprobe_version,
+                            } else if g
+                                .secondary(
+                                    &format!("{} Show log", ui_icons::LOGS),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Open the activity log (dock under the queue or in its own window)",
+                                )
+                                .clicked()
+                            {
+                                self.settings.logs_open = true;
+                                self.persist_settings();
+                            }
+                        });
+                    },
                 );
-                draw_precheck_status(
-                    ui,
-                    "ffmpeg",
-                    self.has_ffmpeg,
-                    &self.ffmpeg_version,
-                );
-                draw_precheck_status(
-                    ui,
-                    "yt-dlp",
-                    self.has_yt_dlp,
-                    &self.yt_dlp_version,
-                );
-                self.draw_output_disk_space(ui);
-            });
+            }
         });
     }
 }

@@ -10,6 +10,17 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- **Video Converter** mode (formerly AV1 Converter): session-wide target codec **AV1** (default), **H.265**, or **H.264** with per-codec encoder auto-detect and recommended containers (MKV for AV1, MP4 for H.264/H.265).
+- Target codec selector in Settings → Converter (desktop and LAN web UI).
+
+### Changed
+
+- **Breaking:** AV1 mode rebranded to **Video Converter**; `last_mode` `av1` → `convert`; settings keys `av1_*` → `convert_*` (legacy aliases still load); queue file `rustdl_av1_queue.json` → `rustdl_convert_queue.json` (legacy still read); LAN API `/api/av1/*` → `/api/convert/*`; SSE events `av1_*` → `convert_*`.
+- Output filenames use `-AV1`, `-H265`, or `-H264` suffix per target codec.
+- Audio defaults: Opus for AV1/MKV/WebM; AAC for H.264/H.265 MP4.
+
+### Added
+
 - Startup warning banner when settings, queue, profiles, or activity log JSON fails to parse (original file renamed to `.bak` when possible); same warnings in activity log, `--web-only` stderr, and LAN `/api/status`.
 - Layout QA checklist in `AGENTS.md` for docked/floating queue and log panels.
 - **Command palette** (Ctrl/Cmd+K): fuzzy search for Settings tabs, Start/Pause/Resume, log toggle, mode switch, and more.
@@ -18,7 +29,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Max content width** slider in Settings → Shared for ultrawide monitors.
 - Desktop **profile rename and delete** for user-defined download profiles; profiles now include cookies, impersonate, speed limit, and verify settings.
 - LAN web UI: **queue search**, clickable **status filter chips**, **config warning banner**, **light/dark theme** toggle, **expand log** control, layout presets, and keyboard shortcuts (Ctrl/Cmd+, F, L, Enter, D).
-- Settings → Shared: **QR code** for LAN web UI URL + token (scan on this PC; use LAN IP on phone).
+- Settings → **Web UI**: **QR code** for LAN URL + token (scan on this PC; use LAN IP on phone).
 - Expanded keyboard shortcuts on desktop: Ctrl/Cmd+, (Settings), F (focus queue search), L (toggle log), K (command palette), Escape (close dialogs).
 
 ### Changed
@@ -34,6 +45,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Queue search and activity log filter persist across restarts (Settings / shared config).
 - Settings tab choice persists when switching tabs without changing other settings.
 - LAN web UI honors **relative log timestamps** and **autoscroll log** settings; activity log uses the same formatting rules as the desktop app.
+- LAN web UI settings (enable, bind address, API token, QR connect helper) moved to their own **Web UI** tab in Settings (was under Shared).
+- Main header: Web UI / activity status and PATH tool checks with destination disk space sit on one row next to the title; **Settings** and **Exit** stay on the right.
 
 ### Fixed
 
@@ -43,6 +56,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
 - Removed duplicate **Effective command preview** block in Settings → Downloader.
+- **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating).
 
 ## [0.1.3] - 2026-06-08
 

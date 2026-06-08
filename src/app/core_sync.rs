@@ -52,7 +52,7 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
     core.session_complete_notified = app.session_complete_notified;
     // The AV1 input textarea is GUI-editable; mirror it like output_dir. The rest of the AV1
     // queue state is owned by the core and flows back via sync_core_to_app.
-    core.av1_input_paths = app.av1_input_paths.clone();
+    core.convert_input_paths = app.convert_input_paths.clone();
 
     if app.queue_dirty || core.items.is_empty() {
         sync_queue_fields(app, core);
@@ -74,10 +74,10 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.profile_store = core.profile_store.clone();
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
-    app.av1_input_paths = core.av1_input_paths.clone();
-    app.av1_items = core.av1_items.clone();
-    app.av1_running = core.av1_running;
-    app.av1_media_inflight = core.av1_media_inflight.clone();
+    app.convert_input_paths = core.convert_input_paths.clone();
+    app.convert_items = core.convert_items.clone();
+    app.convert_running = core.convert_running;
+    app.convert_media_inflight = core.convert_media_inflight.clone();
 }
 
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
@@ -132,7 +132,7 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
             app.queue_thumbnail_load(item_id, url);
         }
     }
-    app.ensure_av1_thumbnails();
+    app.ensure_convert_thumbnails();
 }
 
 pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use eframe::egui;
 use image::imageops::FilterType;
 
-use crate::av1_state::av1_source_path_missing;
+use crate::convert_state::convert_source_path_missing;
 
 use super::queue_cache::{THUMBNAIL_DECODE_MAX_WIDTH, THUMBNAIL_QUEUE_SOFT_CAP};
 use super::{background_spawn, events::try_send_ui, PydlApp, UiEvent};
@@ -103,7 +103,7 @@ impl PydlApp {
         });
     }
 
-    pub(super) fn queue_av1_local_thumbnail(
+    pub(super) fn queue_convert_local_thumbnail(
         &mut self,
         item_id: u64,
         file_path: PathBuf,
@@ -116,7 +116,7 @@ impl PydlApp {
             return;
         }
         self.thumbnail_inflight.insert(item_id);
-        background_spawn::spawn_av1_local_thumbnail(
+        background_spawn::spawn_convert_local_thumbnail(
             &self.runtime,
             &self.ui_bus,
             &self.shared_core,
@@ -127,14 +127,14 @@ impl PydlApp {
     }
 
     /// Loads local-video thumbnails (egui textures) for any mirrored AV1 rows that lack one.
-    /// AV1 queue state itself is owned by `DownloadCore`; only the textures are GUI-local.
-    pub(super) fn ensure_av1_thumbnails(&mut self) {
-        if !self.settings.show_thumbnails || !self.has_ffmpeg || self.av1_items.is_empty() {
+    /// Convert queue state itself is owned by `DownloadCore`; only the textures are GUI-local.
+    pub(super) fn ensure_convert_thumbnails(&mut self) {
+        if !self.settings.show_thumbnails || !self.has_ffmpeg || self.convert_items.is_empty() {
             return;
         }
         let ffmpeg_path = self.settings.ffmpeg_path.clone();
         let pending: Vec<(u64, PathBuf)> = self
-            .av1_items
+            .convert_items
             .iter()
             .filter(|it| {
                 !self.textures.contains_key(&it.item_id)
@@ -143,11 +143,11 @@ impl PydlApp {
             .map(|it| (it.item_id, PathBuf::from(&it.source_path)))
             .collect();
         for (item_id, path) in pending {
-            if av1_source_path_missing(path.to_string_lossy().as_ref()) {
+            if convert_source_path_missing(path.to_string_lossy().as_ref()) {
                 self.thumbnail_attempted.insert(item_id);
                 continue;
             }
-            self.queue_av1_local_thumbnail(item_id, path, ffmpeg_path.clone());
+            self.queue_convert_local_thumbnail(item_id, path, ffmpeg_path.clone());
         }
     }
 }

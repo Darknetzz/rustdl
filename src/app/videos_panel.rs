@@ -86,8 +86,8 @@ impl PydlApp {
     }
 
     fn videos_window_title(&self) -> &'static str {
-        if self.av1_mode {
-            "AV1 queue"
+        if self.convert_mode {
+            "Convert queue"
         } else {
             "Videos"
         }
@@ -113,8 +113,8 @@ impl PydlApp {
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             self.constrain_content(ui);
             let inner_h = ui.max_rect().height();
-            if self.av1_mode {
-                self.draw_av1_queue_list_scroll(ui, inner_h);
+            if self.convert_mode {
+                self.draw_convert_queue_list_scroll(ui, inner_h);
             } else {
                 self.draw_downloader_queue_list_scroll(ui, inner_h, scroll_id);
             }
@@ -150,6 +150,26 @@ impl PydlApp {
                 .clicked()
             {
                 self.pause_all_downloads();
+            }
+            if self.status_queued > 0 || self.status_active > 0 {
+                if g
+                    .warning(
+                        &format!("{} Cancel all -> Ready", ui_icons::CANCEL_TO_READY),
+                        true,
+                    )
+                    .clicked()
+                {
+                    self.cancel_all_active(super::CancelPostAction::Ready);
+                }
+                if g
+                    .danger(
+                        &format!("{} Cancel all -> Remove", ui_icons::CANCEL_TO_REMOVE),
+                        true,
+                    )
+                    .clicked()
+                {
+                    self.cancel_all_active(super::CancelPostAction::Remove);
+                }
             }
             if g.secondary(
                 &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
@@ -325,15 +345,15 @@ impl PydlApp {
 
     /// Window/panel chrome (dock, hide) on its own row; queue batch actions below.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
-        let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
+        let heading = if self.convert_mode { "Convert queue" } else { "Videos" };
         left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
             self.draw_log_controls_compact(ui);
         });
         left_button_row(ui, |ui| {
-            if self.av1_mode {
-                self.draw_av1_queue_action_toolbar_inner(ui, true);
+            if self.convert_mode {
+                self.draw_convert_queue_action_toolbar_inner(ui, true);
             } else {
                 self.draw_downloader_queue_action_toolbar_inner(ui, true);
             }
@@ -373,14 +393,14 @@ impl PydlApp {
         ui.spacing_mut().item_spacing.y = 3.0;
         let body_bottom = ui.max_rect().bottom();
 
-        if !self.av1_mode {
+        if !self.convert_mode {
             self.draw_queue_search_row(ui);
         }
 
-        if self.av1_mode {
-            if !self.av1_items.is_empty() {
-                self.draw_av1_queue_status_row(ui);
-                self.draw_av1_batch_summary_row(ui);
+        if self.convert_mode {
+            if !self.convert_items.is_empty() {
+                self.draw_convert_queue_status_row(ui);
+                self.draw_convert_batch_summary_row(ui);
             }
         } else if !self.items.is_empty() {
             self.draw_downloader_queue_status_row(ui);
@@ -406,10 +426,10 @@ impl PydlApp {
 
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
-        let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
+        let heading = if self.convert_mode { "Convert queue" } else { "Videos" };
         let window_title = self.videos_window_title();
         let theme = self.settings.theme.clone();
-        let av1 = self.av1_mode;
+        let av1 = self.convert_mode;
         with_full_width(ui, |ui| {
             Self::draw_mode_queue_panel(
                 ui,
@@ -430,15 +450,15 @@ impl PydlApp {
                         self.draw_video_queue_controls(ui);
                         self.draw_log_controls_compact(ui);
                     });
-                    let show_status = if self.av1_mode {
-                        !self.av1_items.is_empty()
+                    let show_status = if self.convert_mode {
+                        !self.convert_items.is_empty()
                     } else {
                         !self.items.is_empty()
                     };
                     if show_status {
                         ui.add_space(4.0);
-                        if self.av1_mode {
-                            self.draw_av1_queue_status_row(ui);
+                        if self.convert_mode {
+                            self.draw_convert_queue_status_row(ui);
                         } else {
                             self.draw_downloader_queue_status_row(ui);
                         }
@@ -575,7 +595,7 @@ impl PydlApp {
         let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
-        let av1 = self.av1_mode;
+        let av1 = self.convert_mode;
 
         Self::draw_mode_queue_panel(ui, &theme, av1, QUEUE_MODE_PANEL_MARGIN, |ui| {
             ui.set_max_height(body_h);
@@ -611,7 +631,7 @@ impl PydlApp {
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let title = self.videos_window_title().to_owned();
         let theme = self.settings.theme.clone();
-        let av1 = self.av1_mode;
+        let av1 = self.convert_mode;
         let mut window = egui::Window::new(title)
             .id(window_id)
             .open(&mut open)

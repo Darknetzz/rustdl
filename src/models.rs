@@ -180,7 +180,7 @@ impl ItemStatus {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Av1QueueItem {
+pub struct ConvertQueueItem {
     pub item_id: u64,
     pub source_path: String,
     pub output_path: String,
@@ -196,7 +196,7 @@ pub struct Av1QueueItem {
     pub bitrate_bps: Option<u64>,
 }
 
-impl Default for Av1QueueItem {
+impl Default for ConvertQueueItem {
     fn default() -> Self {
         Self {
             item_id: 0,

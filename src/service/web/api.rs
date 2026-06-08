@@ -72,7 +72,7 @@ struct StatusResponse {
     auto_add_pasted_urls: bool,
     auto_start_downloads: bool,
     shutdown_pending: bool,
-    av1_running: bool,
+    convert_running: bool,
     status: StatusCountsJson,
     tools: serde_json::Value,
     output_disk_space: Option<DiskSpaceJson>,
@@ -205,7 +205,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/{id}", get(thumbnail_proxy))
         .route("/api/media/{id}", get(media_stream));
-    let protected = super::av1_api::register(protected)
+    let protected = super::convert_api::register(protected)
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
@@ -257,7 +257,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         auto_add_pasted_urls: c.settings.auto_add_pasted_urls,
         auto_start_downloads: c.settings.auto_start_downloads,
         shutdown_pending: c.shutdown_pending,
-        av1_running: c.av1_running,
+        convert_running: c.convert_running,
         status: StatusCountsJson {
             resolving: c.status_resolving,
             ready: c.status_ready,
@@ -641,23 +641,23 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
         }
         UiEvent::AddDone => serde_json::json!({"type":"add_done"}),
         UiEvent::LogLine { line } => serde_json::json!({"type":"log","line":line}),
-        UiEvent::Av1Line { item_id, line } => {
-            serde_json::json!({"type":"av1_line","item_id":item_id,"line":line})
+        UiEvent::ConvertLine { item_id, line } => {
+            serde_json::json!({"type":"convert_line","item_id":item_id,"line":line})
         }
-        UiEvent::Av1Duration {
+        UiEvent::ConvertDuration {
             item_id,
             duration_ms,
-        } => serde_json::json!({"type":"av1_duration","item_id":item_id,"duration_ms":duration_ms}),
-        UiEvent::Av1MediaProbed { item_id, .. } => {
-            serde_json::json!({"type":"av1_media_probed","item_id":item_id})
+        } => serde_json::json!({"type":"convert_duration","item_id":item_id,"duration_ms":duration_ms}),
+        UiEvent::ConvertMediaProbed { item_id, .. } => {
+            serde_json::json!({"type":"convert_media_probed","item_id":item_id})
         }
-        UiEvent::Av1Done {
+        UiEvent::ConvertDone {
             item_id,
             ok,
             detail,
             ..
-        } => serde_json::json!({"type":"av1_done","item_id":item_id,"ok":ok,"detail":detail}),
-        UiEvent::Av1BatchDone => serde_json::json!({"type":"av1_batch_done"}),
+        } => serde_json::json!({"type":"convert_done","item_id":item_id,"ok":ok,"detail":detail}),
+        UiEvent::ConvertBatchDone => serde_json::json!({"type":"convert_batch_done"}),
         UiEvent::ShutdownRequested => serde_json::json!({"type":"shutdown"}),
         _ => serde_json::json!({"type":"other"}),
     }
@@ -736,7 +736,7 @@ pub(super) async fn extract_local_video_thumbnail(
     let path = path.to_path_buf();
     let ffmpeg_path = ffmpeg_path.to_owned();
     tokio::task::spawn_blocking(move || {
-        crate::av1_transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
+        crate::transcode::extract_thumbnail_png_bytes(&path, &ffmpeg_path)
     })
     .await
     .ok()

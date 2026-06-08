@@ -77,25 +77,25 @@ pub(crate) enum UiEvent {
         /// Decoded on a worker thread; GPU upload is deferred (see `pending_thumbnail_uploads`).
         image: Option<egui::ColorImage>,
     },
-    Av1Line {
+    ConvertLine {
         item_id: u64,
         line: String,
     },
-    Av1Duration {
+    ConvertDuration {
         item_id: u64,
         duration_ms: u64,
     },
-    Av1MediaProbed {
+    ConvertMediaProbed {
         item_id: u64,
-        media: crate::av1_transcode::Av1InputMedia,
+        media: crate::transcode::ConvertInputMedia,
     },
-    Av1Done {
+    ConvertDone {
         item_id: u64,
         ok: bool,
         detail: String,
         final_output_path: Option<String>,
     },
-    Av1BatchDone,
+    ConvertBatchDone,
     /// Activity log line (web SSE subscribers).
     LogLine {
         line: String,
@@ -194,21 +194,21 @@ impl PydlApp {
                     };
                     self.pending_thumbnail_uploads.push_back((item_id, image));
                 }
-                // AV1 queue state lives on DownloadCore (applied in service::core_events); the GUI
+                // Convert queue state lives on DownloadCore (applied in service::core_events); the GUI
                 // mirrors it via sync_core_to_app each frame. Here we only need to keep repainting
                 // while a transcode is active so progress updates are visible promptly.
-                UiEvent::Av1Line { .. }
-                | UiEvent::Av1Duration { .. }
-                | UiEvent::Av1MediaProbed { .. }
-                | UiEvent::Av1Done { .. }
-                | UiEvent::Av1BatchDone => {
+                UiEvent::ConvertLine { .. }
+                | UiEvent::ConvertDuration { .. }
+                | UiEvent::ConvertMediaProbed { .. }
+                | UiEvent::ConvertDone { .. }
+                | UiEvent::ConvertBatchDone => {
                     ctx.request_repaint();
                 }
                 UiEvent::LogLine { .. } => {}
                 UiEvent::ShutdownRequested => {
                     self.exit_allowed = true;
                     self.flush_queue_to_disk();
-                    self.flush_av1_queue_to_disk();
+                    self.flush_convert_queue_to_disk();
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
             }

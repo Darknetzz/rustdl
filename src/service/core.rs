@@ -12,13 +12,13 @@ use crate::app::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
 use crate::app::events::{UiEvent, UiEventBus};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
-use crate::av1_transcode::EncoderChoice;
+use crate::transcode::EncoderChoice;
 use crate::config::{
-    load_activity_log, load_queue_items, load_settings, save_activity_log, save_queue_items,
-    save_settings, trim_activity_log, AppSettings,
+    load_activity_log, load_convert_queue_snapshot, load_queue_items, load_settings,
+    save_activity_log, save_queue_items, save_settings, trim_activity_log, AppSettings,
+    ConvertQueueSnapshot,
 };
-use crate::config::{load_av1_queue_snapshot, Av1QueueSnapshot};
-use crate::models::{Av1QueueItem, ItemStatus, QueueItem};
+use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
@@ -73,7 +73,7 @@ pub struct CachedThumbnail {
 #[derive(Clone, Debug, Default)]
 pub struct PendingSessionRestore {
     pub downloader_items: Vec<QueueItem>,
-    pub av1_snapshot: Av1QueueSnapshot,
+    pub convert_snapshot: ConvertQueueSnapshot,
 }
 
 impl PendingSessionRestore {
@@ -81,21 +81,21 @@ impl PendingSessionRestore {
         self.downloader_items.len()
     }
 
-    pub fn av1_count(&self) -> usize {
-        self.av1_snapshot.items.len()
+    pub fn convert_count(&self) -> usize {
+        self.convert_snapshot.items.len()
     }
 }
 
 fn session_has_restorable_data(
     downloader_items: &[QueueItem],
-    av1_snapshot: &Av1QueueSnapshot,
-    av1_remember_queue: bool,
+    convert_snapshot: &ConvertQueueSnapshot,
+    convert_remember_queue: bool,
 ) -> bool {
     if !downloader_items.is_empty() {
         return true;
     }
-    if av1_remember_queue
-        && (!av1_snapshot.items.is_empty() || !av1_snapshot.input_paths.trim().is_empty())
+    if convert_remember_queue
+        && (!convert_snapshot.items.is_empty() || !convert_snapshot.input_paths.trim().is_empty())
     {
         return true;
     }
@@ -111,7 +111,7 @@ fn compute_next_item_id(items: &[QueueItem]) -> u64 {
         .saturating_add(1)
 }
 
-fn compute_av1_next_item_id(snapshot: &Av1QueueSnapshot, items: &[Av1QueueItem]) -> u64 {
+fn compute_convert_next_item_id(snapshot: &ConvertQueueSnapshot, items: &[ConvertQueueItem]) -> u64 {
     if items.is_empty() {
         1_000_000
     } else {
@@ -194,16 +194,16 @@ pub struct DownloadCore {
     pub config_load_issues: Vec<crate::config::ConfigLoadIssue>,
 
     // --- AV1 converter (shared by GUI and web UI) ---
-    pub av1_input_paths: String,
-    pub av1_items: Vec<Av1QueueItem>,
-    pub av1_next_item_id: u64,
-    pub av1_running: bool,
-    pub av1_cancel_flag: Arc<AtomicBool>,
-    pub av1_duration_ms: HashMap<u64, u64>,
-    pub av1_progress_state: HashMap<u64, HashMap<String, String>>,
-    pub av1_media_inflight: HashSet<u64>,
-    pub av1_encoder_choice: Option<EncoderChoice>,
-    pub av1_encoder_detect_key: String,
+    pub convert_input_paths: String,
+    pub convert_items: Vec<ConvertQueueItem>,
+    pub convert_next_item_id: u64,
+    pub convert_running: bool,
+    pub convert_cancel_flag: Arc<AtomicBool>,
+    pub convert_duration_ms: HashMap<u64, u64>,
+    pub convert_progress_state: HashMap<u64, HashMap<String, String>>,
+    pub convert_media_inflight: HashSet<u64>,
+    pub convert_encoder_choice: Option<EncoderChoice>,
+    pub convert_encoder_detect_key: String,
 
     /// Graceful quit requested from the LAN web UI (or completing after cancel).
     pub shutdown_pending: bool,
@@ -228,42 +228,42 @@ impl DownloadCore {
             normalize_restored_item(it);
         }
         let http_client = crate::http_client::build_http_client(&settings);
-        let av1_snapshot = if settings.av1_remember_queue {
-            load_av1_queue_snapshot()
+        let convert_snapshot = if settings.convert_remember_queue {
+            load_convert_queue_snapshot()
         } else {
-            Av1QueueSnapshot::default()
+            ConvertQueueSnapshot::default()
         };
-        let mut restored_av1_items = av1_snapshot.items.clone();
-        for it in &mut restored_av1_items {
-            crate::app_parsing::normalize_restored_av1_item(it);
+        let mut restored_convert_items = convert_snapshot.items.clone();
+        for it in &mut restored_convert_items {
+            crate::app_parsing::normalize_restored_convert_item(it);
         }
 
         let has_restorable = session_has_restorable_data(
             &restored_items,
-            &av1_snapshot,
-            settings.av1_remember_queue,
+            &convert_snapshot,
+            settings.convert_remember_queue,
         );
         let defer_restore = !auto_restore && has_restorable;
         let pending_session_restore = if defer_restore {
             Some(PendingSessionRestore {
                 downloader_items: restored_items.clone(),
-                av1_snapshot: av1_snapshot.clone(),
+                convert_snapshot: convert_snapshot.clone(),
             })
         } else {
             None
         };
 
-        let (items, next_item_id, av1_input_paths, av1_items, av1_next_item_id) = if defer_restore {
+        let (items, next_item_id, convert_input_paths, convert_items, convert_next_item_id) = if defer_restore {
             (Vec::new(), 1, String::new(), Vec::new(), 1_000_000)
         } else {
             let next_item_id = compute_next_item_id(&restored_items);
-            let av1_next_item_id = compute_av1_next_item_id(&av1_snapshot, &restored_av1_items);
+            let convert_next_item_id = compute_convert_next_item_id(&convert_snapshot, &restored_convert_items);
             (
                 restored_items,
                 next_item_id,
-                av1_snapshot.input_paths.clone(),
-                restored_av1_items,
-                av1_next_item_id,
+                convert_snapshot.input_paths.clone(),
+                restored_convert_items,
+                convert_next_item_id,
             )
         };
 
@@ -314,16 +314,16 @@ impl DownloadCore {
             thumbnail_cache: HashMap::new(),
             generation: 1,
             config_load_issues: Vec::new(),
-            av1_input_paths,
-            av1_items,
-            av1_next_item_id,
-            av1_running: false,
-            av1_cancel_flag: Arc::new(AtomicBool::new(false)),
-            av1_duration_ms: HashMap::new(),
-            av1_progress_state: HashMap::new(),
-            av1_media_inflight: HashSet::new(),
-            av1_encoder_choice: None,
-            av1_encoder_detect_key: String::new(),
+            convert_input_paths,
+            convert_items,
+            convert_next_item_id,
+            convert_running: false,
+            convert_cancel_flag: Arc::new(AtomicBool::new(false)),
+            convert_duration_ms: HashMap::new(),
+            convert_progress_state: HashMap::new(),
+            convert_media_inflight: HashSet::new(),
+            convert_encoder_choice: None,
+            convert_encoder_detect_key: String::new(),
             shutdown_pending: false,
             shutdown_notify: None,
             pending_session_restore,
@@ -334,7 +334,7 @@ impl DownloadCore {
         core.refresh_deps();
         core.refresh_done_file_lookup();
         if !defer_restore {
-            core.queue_av1_restored_assets();
+            core.queue_convert_restored_assets();
         }
         core.config_load_issues = crate::config::take_config_load_issues();
         (Arc::new(Mutex::new(core)), rx)
@@ -344,27 +344,27 @@ impl DownloadCore {
         let Some(pending) = self.pending_session_restore.take() else {
             return false;
         };
-        let av1_snapshot = pending.av1_snapshot;
-        let av1_next_item_id = compute_av1_next_item_id(&av1_snapshot, &av1_snapshot.items);
-        let input_paths = av1_snapshot.input_paths;
-        let mut av1_items = av1_snapshot.items;
+        let convert_snapshot = pending.convert_snapshot;
+        let convert_next_item_id = compute_convert_next_item_id(&convert_snapshot, &convert_snapshot.items);
+        let input_paths = convert_snapshot.input_paths;
+        let mut convert_items = convert_snapshot.items;
         let mut items = pending.downloader_items;
         for it in &mut items {
             normalize_restored_item(it);
         }
-        for it in &mut av1_items {
-            crate::app_parsing::normalize_restored_av1_item(it);
+        for it in &mut convert_items {
+            crate::app_parsing::normalize_restored_convert_item(it);
         }
         self.items = items;
         self.next_item_id = compute_next_item_id(&self.items);
-        self.av1_input_paths = input_paths;
-        self.av1_items = av1_items;
-        self.av1_next_item_id = av1_next_item_id;
+        self.convert_input_paths = input_paths;
+        self.convert_items = convert_items;
+        self.convert_next_item_id = convert_next_item_id;
         self.rebuild_item_index();
         self.update_status();
         self.invalidate_queue_caches();
         self.refresh_done_file_lookup();
-        self.queue_av1_restored_assets();
+        self.queue_convert_restored_assets();
         self.bump_generation();
         true
     }
@@ -377,8 +377,8 @@ impl DownloadCore {
         if let Err(err) = save_queue_items(&[]) {
             self.append_log(&format!("Failed to clear saved queue state: {err}"));
         }
-        if self.settings.av1_remember_queue {
-            self.clear_av1_queue_persistence();
+        if self.settings.convert_remember_queue {
+            self.clear_convert_queue_persistence();
         }
         true
     }
@@ -494,7 +494,7 @@ impl DownloadCore {
             || self.status_queued > 0
             || self.status_active > 0
             || self.queue_running > 0
-            || self.av1_running
+            || self.convert_running
     }
 
     /// Graceful quit from the LAN web UI: cancel active jobs, persist state, then notify listeners.
@@ -507,7 +507,7 @@ impl DownloadCore {
             self.shutdown_notify = Some(tx);
         }
         self.append_log("Graceful shutdown requested from web UI: cancelling active jobs…");
-        self.cancel_av1_batch();
+        self.cancel_convert_batch();
         self.cancel_all_active(CancelPostAction::Ready);
         self.maybe_finish_shutdown();
     }
@@ -517,7 +517,7 @@ impl DownloadCore {
             return;
         }
         self.flush_queue_to_disk();
-        self.flush_av1_queue_to_disk();
+        self.flush_convert_queue_to_disk();
         self.persist_settings();
         self.shutdown_pending = false;
         self.append_log("Shutdown complete.");
@@ -569,7 +569,7 @@ impl DownloadCore {
         )
     }
 
-    pub fn av1_thumbnail_source_key(source_path: &str) -> String {
+    pub fn convert_thumbnail_source_key(source_path: &str) -> String {
         source_path.trim().to_owned()
     }
 
@@ -1321,15 +1321,15 @@ mod thumbnail_cache_tests {
         };
         assert!(session_has_restorable_data(
             &[item],
-            &Av1QueueSnapshot::default(),
+            &ConvertQueueSnapshot::default(),
             false
         ));
-        let av1_only = Av1QueueSnapshot {
+        let convert_only = ConvertQueueSnapshot {
             input_paths: "C:\\videos".to_owned(),
             ..Default::default()
         };
-        assert!(!session_has_restorable_data(&[], &av1_only, false));
-        assert!(session_has_restorable_data(&[], &av1_only, true));
+        assert!(!session_has_restorable_data(&[], &convert_only, false));
+        assert!(session_has_restorable_data(&[], &convert_only, true));
     }
 
     #[test]

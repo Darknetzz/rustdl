@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::runtime::Runtime;
 
 use crate::app::events::{try_send_ui, UiEvent, UiEventBus};
-use crate::av1_transcode::{self, Av1Config, Av1Input};
+use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::ytdlp;
@@ -245,7 +245,7 @@ pub(crate) fn spawn_download_worker(
     });
 }
 
-pub(crate) fn spawn_av1_local_thumbnail(
+pub(crate) fn spawn_convert_local_thumbnail(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     shared_core: &crate::service::SharedCore,
@@ -256,12 +256,12 @@ pub(crate) fn spawn_av1_local_thumbnail(
     let bus = bus.clone();
     let rt = rt.clone();
     let shared_core = shared_core.clone();
-    let source_key = crate::service::core::DownloadCore::av1_thumbnail_source_key(
+    let source_key = crate::service::core::DownloadCore::convert_thumbnail_source_key(
         file_path.to_string_lossy().as_ref(),
     );
     rt.spawn(async move {
         let outcome = tokio::task::spawn_blocking(move || {
-            let png = av1_transcode::extract_thumbnail_png_bytes(&file_path, &ffmpeg_path)?;
+            let png = transcode::extract_thumbnail_png_bytes(&file_path, &ffmpeg_path)?;
             let image = super::thumbnails::decode_thumbnail_image(png.clone());
             Some((png, image))
         })
@@ -281,7 +281,7 @@ pub(crate) fn spawn_av1_local_thumbnail(
     });
 }
 
-pub(crate) fn spawn_av1_media_probe(
+pub(crate) fn spawn_convert_media_probe(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     item_id: u64,
@@ -292,42 +292,43 @@ pub(crate) fn spawn_av1_media_probe(
     let rt = rt.clone();
     rt.spawn(async move {
         let media = tokio::task::spawn_blocking(move || {
-            av1_transcode::probe_input_media(&file_path, &ffprobe_path)
+            transcode::probe_input_media(&file_path, &ffprobe_path)
         })
         .await
         .ok()
         .flatten()
         .unwrap_or_default();
-        let _ = try_send_ui(&bus, UiEvent::Av1MediaProbed { item_id, media });
+        let _ = try_send_ui(&bus, UiEvent::ConvertMediaProbed { item_id, media });
     });
 }
 
-pub(crate) fn spawn_av1_worker(
+pub(crate) fn spawn_convert_worker(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
-    cfg: Av1Config,
-    jobs: Vec<(u64, Av1Input, String)>,
+    cfg: ConvertConfig,
+    jobs: Vec<(u64, ConvertInput, String)>,
     cancel_flag: Arc<AtomicBool>,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        let enc = av1_transcode::detect_encoder_with_override(
+        let enc = transcode::detect_encoder_with_override(
             &cfg.ffmpeg_path,
             &cfg.encoder_override,
+            &cfg.target_codec,
         );
         for (item_id, input, output_path) in jobs {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 continue;
             }
-            let item = av1_transcode::Av1PlanItem {
+            let item = transcode::ConvertPlanItem {
                 input: std::path::PathBuf::from(input.source_path),
                 output: std::path::PathBuf::from(output_path),
             };
-            if let Some(ms) = av1_transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
+            if let Some(ms) = transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
                 let _ = try_send_ui(
                     &bus,
-                    UiEvent::Av1Duration {
+                    UiEvent::ConvertDuration {
                         item_id,
                         duration_ms: ms,
                     },
@@ -335,7 +336,7 @@ pub(crate) fn spawn_av1_worker(
             }
             let _ = try_send_ui(
                 &bus,
-                UiEvent::Av1Line {
+                UiEvent::ConvertLine {
                     item_id,
                     line: format!("starting with {} ({})", enc.encoder, enc.hw_type),
                 },
@@ -347,13 +348,13 @@ pub(crate) fn spawn_av1_worker(
                 let enc = enc.clone();
                 let cancel_flag = cancel_flag.clone();
                 move || {
-                    av1_transcode::run_single(
+                    transcode::run_single(
                         &item_for_primary,
                         &cfg,
                         &enc,
                         Some(cancel_flag),
                         |line| {
-                            let _ = try_send_ui(&bus, UiEvent::Av1Line { item_id, line });
+                            let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
                         },
                     )
                 }
@@ -363,7 +364,7 @@ pub(crate) fn spawn_av1_worker(
                 Ok(Ok(final_path)) => {
                     let _ = try_send_ui(
                         &bus,
-                        UiEvent::Av1Done {
+                        UiEvent::ConvertDone {
                             item_id,
                             ok: true,
                             detail: "Completed".to_owned(),
@@ -376,7 +377,7 @@ pub(crate) fn spawn_av1_worker(
                     if err_text.to_ascii_lowercase().starts_with("skipped") {
                         let _ = try_send_ui(
                             &bus,
-                            UiEvent::Av1Done {
+                            UiEvent::ConvertDone {
                                 item_id,
                                 ok: true,
                                 detail: err_text,
@@ -386,20 +387,21 @@ pub(crate) fn spawn_av1_worker(
                         continue;
                     }
                     // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
-                    if enc.encoder != "libsvtav1" {
+                    let cpu_name = transcode::cpu_encoder_for_target(&cfg.target_codec);
+                    if enc.encoder != cpu_name && enc.hw_type != "cpu" {
                         let _ = try_send_ui(
                             &bus,
-                            UiEvent::Av1Line {
+                            UiEvent::ConvertLine {
                                 item_id,
                                 line: format!(
-                                    "encoder {} failed; retrying with libsvtav1",
-                                    enc.encoder
+                                    "encoder {} failed; retrying with {}",
+                                    enc.encoder, cpu_name
                                 ),
                             },
                         );
-                        let cpu_enc = av1_transcode::EncoderChoice {
-                            encoder: "libsvtav1",
-                            codec: "av1",
+                        let cpu_enc = transcode::EncoderChoice {
+                            encoder: cpu_name,
+                            codec: transcode::normalize_target_codec(&cfg.target_codec),
                             hw_type: "cpu",
                         };
                         let retry = tokio::task::spawn_blocking({
@@ -408,14 +410,14 @@ pub(crate) fn spawn_av1_worker(
                             let item = item.clone();
                             let cancel_flag = cancel_flag.clone();
                             move || {
-                                av1_transcode::run_single(
+                                transcode::run_single(
                                     &item,
                                     &cfg,
                                     &cpu_enc,
                                     Some(cancel_flag),
                                     |line| {
                                         let _ =
-                                            try_send_ui(&bus, UiEvent::Av1Line { item_id, line });
+                                            try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
                                     },
                                 )
                             }
@@ -425,7 +427,7 @@ pub(crate) fn spawn_av1_worker(
                             Ok(Ok(final_path)) => {
                                 let _ = try_send_ui(
                                     &bus,
-                                    UiEvent::Av1Done {
+                                    UiEvent::ConvertDone {
                                         item_id,
                                         ok: true,
                                         detail: "Completed (CPU fallback)".to_owned(),
@@ -439,7 +441,7 @@ pub(crate) fn spawn_av1_worker(
                             Ok(Err(retry_err)) => {
                                 let _ = try_send_ui(
                                     &bus,
-                                    UiEvent::Av1Done {
+                                    UiEvent::ConvertDone {
                                         item_id,
                                         ok: false,
                                         detail: format!(
@@ -453,7 +455,7 @@ pub(crate) fn spawn_av1_worker(
                             Err(retry_join_err) => {
                                 let _ = try_send_ui(
                                     &bus,
-                                    UiEvent::Av1Done {
+                                    UiEvent::ConvertDone {
                                         item_id,
                                         ok: false,
                                         detail: format!(
@@ -468,7 +470,7 @@ pub(crate) fn spawn_av1_worker(
                     }
                     let _ = try_send_ui(
                         &bus,
-                        UiEvent::Av1Done {
+                        UiEvent::ConvertDone {
                             item_id,
                             ok: false,
                             detail: err_text,
@@ -479,7 +481,7 @@ pub(crate) fn spawn_av1_worker(
                 Err(e) => {
                     let _ = try_send_ui(
                         &bus,
-                        UiEvent::Av1Done {
+                        UiEvent::ConvertDone {
                             item_id,
                             ok: false,
                             detail: format!("worker failed: {e}"),
@@ -489,7 +491,7 @@ pub(crate) fn spawn_av1_worker(
                 }
             }
         }
-        let _ = try_send_ui(&bus, UiEvent::Av1BatchDone);
+        let _ = try_send_ui(&bus, UiEvent::ConvertBatchDone);
     });
 }
 

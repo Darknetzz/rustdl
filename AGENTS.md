@@ -7,8 +7,8 @@ Guidance for AI agents and automation working in this repository.
 **rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues. It also includes:
 
 - **Downloader mode** — paste URLs, preview cards, queue downloads, activity log, profiles, settings.
-- **AV1 Converter mode** — local file/folder transcoding via ffmpeg (desktop GUI and LAN web UI).
-- **Optional LAN web UI** — Axum HTTP server + embedded `web-assets/` for remote downloader and AV1 queue control.
+- **Video Converter mode** — local file/folder transcoding via ffmpeg (AV1 default; H.265/H.264 optional; desktop GUI and LAN web UI).
+- **Optional LAN web UI** — Axum HTTP server + embedded `web-assets/` for remote downloader and converter queue control.
 - **Headless CLI** — `--download`, `--web-only`, `--list-profiles` (see `README.md`).
 
 The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` from `src/main.rs`.
@@ -55,7 +55,7 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 
 | Path | Role |
 |------|------|
-| `src/app/` | egui UI: `eframe_app.rs` (main window), `videos_panel.rs`, `cards.rs`, `settings_panel.rs`, `log_panel.rs`, `av1_panel.rs` |
+| `src/app/` | egui UI: `eframe_app.rs` (main window), `videos_panel.rs`, `cards.rs`, `settings_panel.rs`, `log_panel.rs`, `convert_panel.rs` |
 | `src/app_ui.rs` | Shared UI helpers (buttons, badges, layout, `compute_main_column_split`) |
 | `src/service/` | Background core + Tokio; `web/` for LAN API and static assets |
 | `src/ytdlp.rs`, `src/ytdlp_download_args.rs` | yt-dlp invocation and argument building |
@@ -71,7 +71,7 @@ User data (not in repo): `<config_dir>/rustdl/` — `rustdl_config.json`, `rustd
 ## Architecture notes for code changes
 
 - **UI thread vs background work**: `PydlApp` in `src/app/mod.rs` owns egui state; download/encode work runs on a shared Tokio `Runtime` via `src/service/core.rs`. UI updates arrive through channels (`src/app/events.rs`, `core_sync.rs`).
-- **Queue persistence**: `src/app/queue_persist.rs` saves/restores the downloader queue; AV1 queue in `src/av1_state.rs`.
+- **Queue persistence**: `src/app/queue_persist.rs` saves/restores the downloader queue; converter queue in `src/convert_state.rs` / `rustdl_convert_queue.json`.
 - **External tools**: Resolved via `PATH` or custom paths in settings (`src/external_tools.rs`). Requires `yt-dlp`; `ffmpeg` / `ffprobe` optional but needed for many features.
 - **Windows-only**: Browser URL drag-and-drop (`src/win_drop_target.rs`), console detach for GUI (`src/cli.rs`).
 
@@ -85,7 +85,7 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 2. **Floating Videos** — resize window; list scrolls; dock/undock toggles work.
 3. **Docked log under Videos** — log lines fill remaining panel height after resize.
 4. **Floating Activity log** — resize window; log lines fill viewport.
-5. **Mode switch** — Downloader ↔ AV1 preserves panel sizes; mode tint/stripe visible.
+5. **Mode switch** — Downloader ↔ Video Converter preserves panel sizes; mode tint/stripe visible.
 6. **Large queue** — import or restore ~200 items; list layout stays responsive (`RUSTDL_PROFILE=1` optional).
 
 ## Versioning and releases

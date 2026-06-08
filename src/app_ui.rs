@@ -7,7 +7,7 @@ use egui::layers::ShapeIdx;
 use crate::disk_space::DiskSpaceLevel;
 use crate::models::ItemStatus;
 use crate::theme::{
-    mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_AV1,
+    mode_accent, mode_border, mode_soft_tint, panel_border, panel_fill, text_muted, MODE_CONVERT,
     MODE_DOWNLOADER,
 };
 use crate::ui_icons;
@@ -174,8 +174,8 @@ pub struct NavbarStatusInfo {
 pub struct NavbarStatusInputs {
     pub shutdown_pending: bool,
     pub add_in_progress: bool,
-    pub av1_running: bool,
-    pub av1_resolving: bool,
+    pub convert_running: bool,
+    pub convert_resolving: bool,
     pub status_resolving: usize,
     pub status_queued: usize,
     pub status_active: usize,
@@ -201,12 +201,12 @@ pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
             title: "Fetching metadata for new URLs".to_owned(),
         };
     }
-    if input.av1_running {
+    if input.convert_running {
         return NavbarStatusInfo {
             slug: NavbarStatusSlug::Converting,
             label: "Converting",
             pulse: true,
-            title: "AV1 batch encode in progress".to_owned(),
+            title: "Convert batch encode in progress".to_owned(),
         };
     }
     if input.status_active > 0 || (input.queue_running > 0 && !input.downloads_paused) {
@@ -220,7 +220,7 @@ pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
             ),
         };
     }
-    if input.status_resolving > 0 || input.av1_resolving {
+    if input.status_resolving > 0 || input.convert_resolving {
         return NavbarStatusInfo {
             slug: NavbarStatusSlug::Resolving,
             label: "Resolving",
@@ -340,7 +340,7 @@ pub enum MetaBadgeKind {
     Bitrate,
     SizePreset,
     ShrinkPercent,
-    Av1WillSkip,
+    ConvertWillSkip,
     FileMissing,
 }
 
@@ -384,7 +384,7 @@ fn resolution_badge_colors(label: &str) -> (Color32, Color32) {
 
 fn codec_badge_colors(label: &str) -> (Color32, Color32) {
     let c = label.to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
-    if c.contains("av1") {
+    if c.contains("convert") {
         (
             Color32::from_rgb(40, 110, 60),
             Color32::from_rgb(215, 255, 225),
@@ -498,7 +498,7 @@ fn meta_badge_colors(kind: MetaBadgeKind, label: &str) -> (Color32, Color32) {
         ),
         MetaBadgeKind::SizePreset => size_preset_badge_colors(label),
         MetaBadgeKind::ShrinkPercent => shrink_percent_badge_colors(label),
-        MetaBadgeKind::Av1WillSkip => (
+        MetaBadgeKind::ConvertWillSkip => (
             Color32::from_rgb(120, 70, 20),
             Color32::from_rgb(255, 220, 180),
         ),
@@ -874,7 +874,7 @@ pub fn compute_main_column_split(
     }
 }
 
-/// Full-width Downloader / AV1 Converter tabs with a fixed 50/50 split.
+/// Full-width Downloader / Video Converter tabs with a fixed 50/50 split.
 pub fn draw_mode_nav_bar(
     ui: &mut egui::Ui,
     theme: &str,
@@ -928,7 +928,7 @@ pub fn draw_mode_nav_bar(
                         }
                         let av1_text = if av1_active { Color32::WHITE } else { muted };
                         let av1_label =
-                            RichText::new(format!("{} AV1 Converter", crate::ui_icons::NAV_AV1))
+                            RichText::new(format!("{} Video Converter", crate::ui_icons::NAV_AV1))
                                 .color(av1_text)
                                 .size(14.0)
                                 .strong();
@@ -936,7 +936,7 @@ pub fn draw_mode_nav_bar(
                             [btn_w, 34.0],
                             egui::Button::new(av1_label)
                                 .fill(if av1_active {
-                                    MODE_AV1
+                                    MODE_CONVERT
                                 } else {
                                     Color32::TRANSPARENT
                                 })
@@ -1369,7 +1369,7 @@ mod tests {
 
     #[test]
     fn codec_badge_colors_distinguish_common_codecs() {
-        let (av1, _) = codec_badge_colors("AV1");
+        let (av1, _) = codec_badge_colors("convert");
         let (h264, _) = codec_badge_colors("H264");
         let (hevc, _) = codec_badge_colors("HEVC");
         assert_ne!(av1, h264);
@@ -1423,8 +1423,8 @@ mod tests {
         NavbarStatusInputs {
             shutdown_pending: false,
             add_in_progress: false,
-            av1_running: false,
-            av1_resolving: false,
+            convert_running: false,
+            convert_resolving: false,
             status_resolving: 0,
             status_queued: 0,
             status_active: 0,
@@ -1454,7 +1454,7 @@ mod tests {
     fn navbar_status_converting_over_downloading() {
         let mut input = idle_inputs();
         input.status_active = 2;
-        input.av1_running = true;
+        input.convert_running = true;
         let info = derive_navbar_status(input);
         assert_eq!(info.slug, NavbarStatusSlug::Converting);
     }

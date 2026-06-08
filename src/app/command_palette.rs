@@ -25,8 +25,12 @@ const COMMANDS: &[PaletteCommand] = &[
         keywords: "download yt-dlp profile",
     },
     PaletteCommand {
-        label: "Settings → AV1 tab",
-        keywords: "av1 encode converter",
+        label: "Settings → Convert tab",
+        keywords: "convert av1 encode video",
+    },
+    PaletteCommand {
+        label: "Settings → Web UI tab",
+        keywords: "web lan api token bind",
     },
     PaletteCommand {
         label: "Add URLs from input",
@@ -57,7 +61,7 @@ const COMMANDS: &[PaletteCommand] = &[
         keywords: "downloader download mode",
     },
     PaletteCommand {
-        label: "Switch to AV1 Converter mode",
+        label: "Switch to Video Converter mode",
         keywords: "av1 convert encode mode",
     },
     PaletteCommand {
@@ -152,8 +156,13 @@ impl PydlApp {
                 self.settings_open = true;
                 self.sync_settings_tab_to_disk();
             }
-            "Settings → AV1 tab" => {
-                self.settings_tab = SettingsTab::Av1;
+            "Settings → Convert tab" => {
+                self.settings_tab = SettingsTab::Convert;
+                self.settings_open = true;
+                self.sync_settings_tab_to_disk();
+            }
+            "Settings → Web UI tab" => {
+                self.settings_tab = SettingsTab::WebUi;
                 self.settings_open = true;
                 self.sync_settings_tab_to_disk();
             }
@@ -170,7 +179,7 @@ impl PydlApp {
             }
             "Focus queue search" => self.focus_queue_search = true,
             "Switch to Downloader mode" => self.set_app_mode(false),
-            "Switch to AV1 Converter mode" => self.set_app_mode(true),
+            "Switch to Video Converter mode" => self.set_app_mode(true),
             "Open output folder" => self.open_output_folder(),
             "Open About" => self.about_open = true,
             _ => {}

@@ -1,4 +1,4 @@
-//! Web REST routes for the AV1 converter. State lives on the shared `DownloadCore`, so these
+//! Web REST routes for the video converter. State lives on the shared `DownloadCore`, so these
 //! endpoints work identically in windowed and `--web-only` (headless) modes.
 
 use axum::extract::{Path, State};
@@ -7,34 +7,34 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
-use crate::av1_state::{
-    av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
-    compute_av1_batch_summary,
+use crate::convert_state::{
+    compute_convert_batch_summary, convert_item_is_skipped, convert_item_status_label,
+    convert_item_will_skip_already_target,
 };
-use crate::av1_transcode::{encoder_indicator_label, encoder_uses_hardware};
-use crate::models::Av1QueueItem;
+use crate::models::ConvertQueueItem;
+use crate::transcode::{encoder_indicator_label, encoder_uses_hardware, target_codec_label};
 
 use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiState};
 
 #[derive(Serialize)]
-struct Av1ItemView {
+struct ConvertItemView {
     #[serde(flatten)]
-    item: Av1QueueItem,
+    item: ConvertQueueItem,
     status_label: &'static str,
     skipped: bool,
-    will_skip_av1: bool,
+    will_skip_target: bool,
     probing: bool,
 }
 
 #[derive(Serialize)]
-struct Av1EncoderJson {
+struct ConvertEncoderJson {
     label: String,
     kind: &'static str,
     encoder: String,
 }
 
 #[derive(Serialize)]
-struct Av1SummaryJson {
+struct ConvertSummaryJson {
     completed: usize,
     completed_input_bytes: u64,
     completed_output_bytes: u64,
@@ -43,58 +43,59 @@ struct Av1SummaryJson {
 }
 
 #[derive(Serialize)]
-struct Av1QueueResponse {
-    items: Vec<Av1ItemView>,
+struct ConvertQueueResponse {
+    items: Vec<ConvertItemView>,
     running: bool,
     input_paths: String,
-    encoder: Option<Av1EncoderJson>,
+    encoder: Option<ConvertEncoderJson>,
     has_ffmpeg: bool,
     has_ffprobe: bool,
-    reencode_av1: bool,
-    summary: Av1SummaryJson,
+    target_codec: String,
+    reencode_target: bool,
+    summary: ConvertSummaryJson,
 }
 
 #[derive(Deserialize)]
-struct Av1ScanBody {
+struct ConvertScanBody {
     paths: Vec<String>,
 }
 
-/// Adds the AV1 routes to the (still unprotected) router so `api_router` can apply auth to them.
+/// Adds the converter routes to the (still unprotected) router so `api_router` can apply auth to them.
 pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
     router
-        .route("/api/av1/queue", get(av1_queue))
-        .route("/api/av1/scan", post(av1_scan))
-        .route("/api/av1/start", post(av1_start))
-        .route("/api/av1/cancel", post(av1_cancel))
-        .route("/api/av1/clear", post(av1_clear))
-        .route("/api/av1/thumbnail/{id}", get(av1_thumbnail))
+        .route("/api/convert/queue", get(convert_queue))
+        .route("/api/convert/scan", post(convert_scan))
+        .route("/api/convert/start", post(convert_start))
+        .route("/api/convert/cancel", post(convert_cancel))
+        .route("/api/convert/clear", post(convert_clear))
+        .route("/api/convert/thumbnail/{id}", get(convert_thumbnail))
 }
 
-async fn av1_queue(State(st): State<ApiState>) -> Json<Av1QueueResponse> {
+async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse> {
     let mut c = st.core.lock();
     if !c.has_ffmpeg {
         c.refresh_deps();
     }
-    c.refresh_av1_encoder_detection();
-    let summary = compute_av1_batch_summary(&c.av1_items);
-    let output_codec = c
-        .av1_encoder_choice
-        .as_ref()
-        .map(|enc| enc.codec)
-        .unwrap_or("av1");
-    let reencode_av1 = c.settings.av1_reencode_av1;
+    c.refresh_convert_encoder_detection();
+    let summary = compute_convert_batch_summary(&c.convert_items);
+    let target_codec = c.settings.convert_target_codec.clone();
+    let reencode_target = c.settings.convert_reencode_target;
     let items = c
-        .av1_items
+        .convert_items
         .iter()
-        .map(|item| Av1ItemView {
-            status_label: av1_item_status_label(item),
-            skipped: av1_item_is_skipped(item),
-            will_skip_av1: av1_item_will_skip_already_av1(item, reencode_av1, output_codec),
-            probing: c.av1_media_inflight.contains(&item.item_id),
+        .map(|item| ConvertItemView {
+            status_label: convert_item_status_label(item),
+            skipped: convert_item_is_skipped(item),
+            will_skip_target: convert_item_will_skip_already_target(
+                item,
+                reencode_target,
+                &target_codec,
+            ),
+            probing: c.convert_media_inflight.contains(&item.item_id),
             item: item.clone(),
         })
         .collect();
-    let encoder = c.av1_encoder_choice.as_ref().map(|enc| Av1EncoderJson {
+    let encoder = c.convert_encoder_choice.as_ref().map(|enc| ConvertEncoderJson {
         label: encoder_indicator_label(enc),
         kind: if encoder_uses_hardware(enc) {
             "gpu"
@@ -103,15 +104,16 @@ async fn av1_queue(State(st): State<ApiState>) -> Json<Av1QueueResponse> {
         },
         encoder: enc.encoder.to_owned(),
     });
-    Json(Av1QueueResponse {
+    Json(ConvertQueueResponse {
         items,
-        running: c.av1_running,
-        input_paths: c.av1_input_paths.clone(),
+        running: c.convert_running,
+        input_paths: c.convert_input_paths.clone(),
         encoder,
         has_ffmpeg: c.has_ffmpeg,
         has_ffprobe: c.has_ffprobe,
-        reencode_av1,
-        summary: Av1SummaryJson {
+        target_codec: target_codec_label(&target_codec).to_owned(),
+        reencode_target,
+        summary: ConvertSummaryJson {
             completed: summary.completed,
             completed_input_bytes: summary.completed_input_bytes,
             completed_output_bytes: summary.completed_output_bytes,
@@ -121,7 +123,7 @@ async fn av1_queue(State(st): State<ApiState>) -> Json<Av1QueueResponse> {
     })
 }
 
-async fn av1_scan(State(st): State<ApiState>, Json(body): Json<Av1ScanBody>) -> StatusCode {
+async fn convert_scan(State(st): State<ApiState>, Json(body): Json<ConvertScanBody>) -> StatusCode {
     let lines: Vec<String> = body
         .paths
         .into_iter()
@@ -129,39 +131,38 @@ async fn av1_scan(State(st): State<ApiState>, Json(body): Json<Av1ScanBody>) -> 
         .filter(|s| !s.is_empty())
         .collect();
     let mut c = st.core.lock();
-    // Mirror the web textarea into the core, then scan (which trims the lines it consumes).
-    c.av1_input_paths = if lines.is_empty() {
+    c.convert_input_paths = if lines.is_empty() {
         String::new()
     } else {
         format!("{}\n", lines.join("\n"))
     };
     if !lines.is_empty() {
-        c.scan_av1_paths_into_queue(&lines);
+        c.scan_convert_paths_into_queue(&lines);
     } else {
         c.bump_generation();
     }
     StatusCode::OK
 }
 
-async fn av1_start(State(st): State<ApiState>) -> StatusCode {
+async fn convert_start(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
-    c.start_av1_batch();
+    c.start_convert_batch();
     StatusCode::OK
 }
 
-async fn av1_cancel(State(st): State<ApiState>) -> StatusCode {
+async fn convert_cancel(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
-    c.cancel_av1_batch();
+    c.cancel_convert_batch();
     StatusCode::OK
 }
 
-async fn av1_clear(State(st): State<ApiState>) -> StatusCode {
+async fn convert_clear(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
-    c.clear_av1_queue();
+    c.clear_convert_queue();
     StatusCode::OK
 }
 
-async fn av1_thumbnail(
+async fn convert_thumbnail(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<axum::response::Response, StatusCode> {
@@ -171,12 +172,12 @@ async fn av1_thumbnail(
             c.refresh_deps();
         }
         let item = c
-            .av1_items
+            .convert_items
             .iter()
             .find(|it| it.item_id == id)
             .ok_or(StatusCode::NOT_FOUND)?;
         let source_key =
-            crate::service::core::DownloadCore::av1_thumbnail_source_key(&item.source_path);
+            crate::service::core::DownloadCore::convert_thumbnail_source_key(&item.source_path);
         let cached = c.cached_thumbnail_bytes(id, &source_key);
         (
             std::path::PathBuf::from(&item.source_path),

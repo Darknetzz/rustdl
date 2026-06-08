@@ -37,7 +37,7 @@ Headless web UI (no GUI window; uses saved queue, settings, and profiles):
 
 ```bash
 cargo run -- --web-only --host 0.0.0.0 --port 8765
-cargo run -- --web-only                    # bind address from Settings → Shared
+cargo run -- --web-only                    # bind address from Settings → Web UI
 ```
 
 On first run without a saved API token, rustdl generates one and prints it. Open the local URL from another device on your LAN with that token (same security notes as the desktop LAN web UI).
@@ -68,15 +68,15 @@ cargo test --all-targets --all-features
 - Persisted activity log with timestamps; optional docked log panel under the queue.
 - Queue search, bulk selection, pause/resume downloads, drag-to-reorder Ready items (list layout), import/export queue URLs to `.txt`.
 - Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, speed limit, and SponsorBlock options.
-- Light / dark / system theme; last mode (Downloader vs AV1) remembered across restarts.
+- Light / dark / system theme; last mode (Downloader vs Video Converter) remembered across restarts.
 - Desktop notification when a download session finishes (where supported by the OS).
-- AV1 converter mode for local file/folder transcoding with queue progress, dry-run, cancel, and encoder auto-detect.
-- Optional: enqueue each completed video download into the AV1 converter queue (Settings → Downloader).
-- Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → Shared → *LAN web UI*).
+- **Video Converter** mode for local file/folder transcoding to AV1 (default), H.265, or H.264 with queue progress, dry-run, cancel, and encoder auto-detect.
+- Optional: enqueue each completed video download into the Video Converter queue (Settings → Downloader).
+- Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → **Web UI**).
 
 ## LAN web UI
 
-When enabled in **Settings → Shared**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to control the **Downloader** queue (add URLs, start/pause, settings, activity log) and the **AV1 converter** queue (scan paths, start/cancel batch encode).
+When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to control the **Downloader** queue (add URLs, start/pause, settings, activity log) and the **Video Converter** queue (scan paths, start/cancel batch encode).
 
 **Still desktop-only:** drag-to-reorder Ready items, queue/settings file import-export dialogs, desktop notifications on session complete, update check (About), browser URL drag-and-drop (Windows only).
 
@@ -91,17 +91,18 @@ When enabled in **Settings → Shared**, rustdl serves a built-in web interface 
 `rustdl` now has two top-level modes:
 
 - **Downloader**: the original yt-dlp workflow (URL preview cards and downloads).
-- **AV1 Converter**: local file/folder conversion to AV1/HEVC (depending on available ffmpeg encoders) from a dedicated in-app panel.
+- **Video Converter**: local file/folder conversion to AV1, H.265, or H.264 (session-wide target) from a dedicated in-app panel.
 
 Switch modes from the **Mode** toggle near the top of the main window.
 
-### AV1 Converter notes
+### Video Converter notes
 
 - Input accepts file and folder paths (one per line).
 - Output goes to the current **Output folder**.
-- Supports recursive scan, dry-run, overwrite, delete original, rename to original filename, and optional AV1 re-encode behavior.
-- Queue items are remembered between sessions until you click **Clear** (disable in Settings → AV1 → *Remember AV1 queue between sessions* to start fresh each launch).
-- Encoder detection priority: `av1_nvenc` -> `av1_amf` -> `hevc_nvenc` -> `hevc_amf` -> `libsvtav1`.
+- **Target codec** (Settings → Converter): AV1 (default), H.265, or H.264.
+- Supports recursive scan, dry-run, overwrite, delete original, rename to original filename, and optional re-encode when input already matches the target codec.
+- Queue items are remembered between sessions until you click **Clear** (disable in Settings → Converter → *Remember Convert queue between sessions* to start fresh each launch).
+- Encoder auto-detect per target: AV1 → `av1_nvenc` → `av1_amf` → `libsvtav1`; H.265 → `hevc_nvenc` → `hevc_amf` → `libx265`; H.264 → `h264_nvenc` → `h264_amf` → `libx264`.
 - Uses the shared **ffmpeg** and **ffprobe** paths from Settings → Shared.
 
 ## Settings
@@ -120,8 +121,8 @@ Settings are split into tabs:
 | UI scale | Global UI zoom factor (`0.85..=1.5`), useful for larger/smaller display density |
 | Auto-add pasted URLs after a short delay | When enabled, valid pasted URLs are auto-queued for metadata fetch; when disabled, use **Add URLs** manually |
 | Auto-start downloads when new items become ready | Optional. When enabled, starts downloads automatically after metadata resolution completes |
-| **LAN web UI** (enable, bind address, API token) | Serves HTTP control plane for the downloader on your local network; see [LAN web UI](#lan-web-ui) |
-| Enqueue completed downloads in AV1 converter queue | After a successful video download, adds the output file to the AV1 queue (skipped for audio-only / MP3 extraction) |
+| **LAN web UI** (enable, bind address, API token) | Settings → **Web UI** tab; see [LAN web UI](#lan-web-ui) |
+| Enqueue completed downloads in Video Converter queue | After a successful video download, adds the output file to the converter queue (skipped for audio-only / MP3 extraction) |
 | Autoscroll log to latest line | Keeps the log viewer pinned to the newest lines while logs are appended |
 | Parallel downloads | Number of concurrent worker queues used when starting downloads (`1..=6`) |
 | Max log chars | Maximum in-memory log buffer length before older characters are trimmed |

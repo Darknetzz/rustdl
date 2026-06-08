@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
-use crate::models::{Av1QueueItem, QueueItem};
+use crate::models::{ConvertQueueItem, QueueItem};
 
 /// A user data file that failed to parse at startup (surfaced in the GUI / web status).
 #[derive(Clone, Debug, Serialize)]
@@ -115,9 +115,9 @@ pub struct AppSettings {
     pub hide_card_subtitle: bool,
     pub auto_add_pasted_urls: bool,
     pub auto_start_downloads: bool,
-    /// After a successful download, add the output file to the AV1 converter queue.
-    #[serde(default)]
-    pub enqueue_downloads_to_av1: bool,
+    /// After a successful download, add the output file to the video converter queue.
+    #[serde(default, alias = "enqueue_downloads_to_av1")]
+    pub enqueue_downloads_to_convert: bool,
     pub ui_scale: f32,
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
@@ -152,49 +152,52 @@ pub struct AppSettings {
     /// Activity log timestamps as relative age instead of full local time.
     #[serde(default)]
     pub log_relative_time: bool,
-    /// Recursive folder scan for AV1 input folders.
-    #[serde(default = "default_av1_recursive")]
-    pub av1_recursive: bool,
-    /// Dry-run mode for AV1 conversion planning.
-    #[serde(default)]
-    pub av1_dry_run: bool,
-    /// Start the AV1 batch automatically after new paths are scanned into the queue.
-    #[serde(default)]
-    pub av1_auto_start_on_add: bool,
-    /// Delete original input file after successful AV1 conversion.
-    #[serde(default)]
-    pub av1_delete_original: bool,
+    /// Recursive folder scan for converter input folders.
+    #[serde(default = "default_convert_recursive", alias = "av1_recursive")]
+    pub convert_recursive: bool,
+    /// Dry-run mode for conversion planning.
+    #[serde(default, alias = "av1_dry_run")]
+    pub convert_dry_run: bool,
+    /// Start the convert batch automatically after new paths are scanned into the queue.
+    #[serde(default, alias = "av1_auto_start_on_add")]
+    pub convert_auto_start_on_add: bool,
+    /// Delete original input file after successful conversion.
+    #[serde(default, alias = "av1_delete_original")]
+    pub convert_delete_original: bool,
     /// Rename encoded output back to the source filename after successful conversion.
-    #[serde(default)]
-    pub av1_rename_original: bool,
+    #[serde(default, alias = "av1_rename_original")]
+    pub convert_rename_original: bool,
     /// Overwrite existing destination file if it exists.
-    #[serde(default)]
-    pub av1_overwrite: bool,
-    /// Re-encode inputs already using AV1 codec.
-    #[serde(default)]
-    pub av1_reencode_av1: bool,
-    /// Write AV1 outputs as MKV (recommended for AV1 + Opus). When false, keep the source file extension.
-    #[serde(default = "default_av1_use_recommended_container")]
-    pub av1_use_recommended_container: bool,
+    #[serde(default, alias = "av1_overwrite")]
+    pub convert_overwrite: bool,
+    /// Re-encode inputs already using the target codec.
+    #[serde(default, alias = "av1_reencode_av1")]
+    pub convert_reencode_target: bool,
+    /// Write outputs using a recommended container for the target codec.
+    #[serde(default = "default_convert_use_recommended_container", alias = "av1_use_recommended_container")]
+    pub convert_use_recommended_container: bool,
+    /// Target video codec: `av1`, `hevc`, or `h264`.
+    #[serde(default = "default_convert_target_codec", alias = "av1_target_codec")]
+    pub convert_target_codec: String,
     /// Default target bitrate (e.g. 1800k). Empty means auto.
-    #[serde(default)]
-    pub av1_target_bitrate: String,
+    #[serde(default, alias = "av1_target_bitrate")]
+    pub convert_target_bitrate: String,
     /// Maximum output width (maintain aspect ratio).
-    #[serde(default = "default_av1_max_width")]
-    pub av1_max_width: u32,
+    #[serde(default = "default_convert_max_width", alias = "av1_max_width")]
+    pub convert_max_width: u32,
     /// Output quality policy.
-    #[serde(default)]
-    pub av1_size_preset: String,
+    #[serde(default, alias = "av1_size_preset")]
+    pub convert_size_preset: String,
     /// Require minimum shrink percentage relative to source. Zero disables.
-    #[serde(default)]
-    pub av1_min_shrink_percent: f32,
-    /// Keep AV1 queue items across app restarts until manually cleared.
-    #[serde(default = "default_av1_remember_queue")]
-    pub av1_remember_queue: bool,
-    /// Last top-level mode: `downloader` or `av1`.
+    #[serde(default, alias = "av1_min_shrink_percent")]
+    pub convert_min_shrink_percent: f32,
+    /// Keep converter queue items across app restarts until manually cleared.
+    #[serde(default = "default_convert_remember_queue", alias = "av1_remember_queue")]
+    pub convert_remember_queue: bool,
+    /// Last top-level mode: `downloader` or `convert`.
     #[serde(default = "default_last_mode")]
     pub last_mode: String,
-    /// Last settings tab: `shared`, `downloader`, or `av1`.
+    /// Last settings tab: `shared`, `downloader`, or `convert`.
     #[serde(default = "default_settings_tab")]
     pub settings_tab: String,
     /// UI theme: `dark`, `light`, or `system`.
@@ -236,9 +239,9 @@ pub struct AppSettings {
     /// Active named download profile (built-in or user-defined).
     #[serde(default = "default_active_profile")]
     pub active_profile: String,
-    /// Force ffmpeg encoder for AV1 mode; empty = auto-detect.
-    #[serde(default)]
-    pub av1_encoder_override: String,
+    /// Force ffmpeg encoder for converter mode; empty = auto-detect.
+    #[serde(default, alias = "av1_encoder_override")]
+    pub convert_encoder_override: String,
     /// Enable LAN web UI (HTTP API + built-in pages).
     #[serde(default)]
     pub web_ui_enabled: bool,
@@ -326,8 +329,12 @@ fn default_active_profile() -> String {
     "Best quality".to_owned()
 }
 
-fn default_av1_remember_queue() -> bool {
+fn default_convert_remember_queue() -> bool {
     true
+}
+
+fn default_convert_target_codec() -> String {
+    "av1".to_owned()
 }
 
 fn default_videos_docked() -> bool {
@@ -366,11 +373,11 @@ fn default_log_float_height() -> f32 {
     440.0
 }
 
-fn default_av1_recursive() -> bool {
+fn default_convert_recursive() -> bool {
     true
 }
 
-fn default_av1_max_width() -> u32 {
+fn default_convert_max_width() -> u32 {
     1920
 }
 
@@ -390,7 +397,7 @@ fn default_downloader_options_expanded() -> bool {
     true
 }
 
-fn default_av1_use_recommended_container() -> bool {
+fn default_convert_use_recommended_container() -> bool {
     true
 }
 
@@ -425,7 +432,7 @@ impl Default for AppSettings {
             hide_card_subtitle: false,
             auto_add_pasted_urls: true,
             auto_start_downloads: true,
-            enqueue_downloads_to_av1: false,
+            enqueue_downloads_to_convert: false,
             ui_scale: 1.08,
             card_list_layout: false,
             downloader_options_expanded: true,
@@ -440,19 +447,20 @@ impl Default for AppSettings {
             log_float_width: default_log_float_width(),
             log_float_height: default_log_float_height(),
             log_relative_time: false,
-            av1_recursive: true,
-            av1_dry_run: false,
-            av1_auto_start_on_add: false,
-            av1_delete_original: false,
-            av1_rename_original: false,
-            av1_overwrite: false,
-            av1_reencode_av1: false,
-            av1_use_recommended_container: true,
-            av1_target_bitrate: String::new(),
-            av1_max_width: 1920,
-            av1_size_preset: "balanced".to_owned(),
-            av1_min_shrink_percent: 0.0,
-            av1_remember_queue: true,
+            convert_recursive: true,
+            convert_dry_run: false,
+            convert_auto_start_on_add: false,
+            convert_delete_original: false,
+            convert_rename_original: false,
+            convert_overwrite: false,
+            convert_reencode_target: false,
+            convert_use_recommended_container: true,
+            convert_target_codec: default_convert_target_codec(),
+            convert_target_bitrate: String::new(),
+            convert_max_width: 1920,
+            convert_size_preset: "balanced".to_owned(),
+            convert_min_shrink_percent: 0.0,
+            convert_remember_queue: true,
             last_mode: default_last_mode(),
             settings_tab: default_settings_tab(),
             theme: default_theme(),
@@ -468,7 +476,7 @@ impl Default for AppSettings {
             yt_sponsorblock_mark: String::new(),
             playlist_preview_cap: default_playlist_preview_cap(),
             active_profile: default_active_profile(),
-            av1_encoder_override: String::new(),
+            convert_encoder_override: String::new(),
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
@@ -592,24 +600,27 @@ pub fn load_settings() -> AppSettings {
     cfg.videos_dock_height = cfg.videos_dock_height.clamp(180.0, 800.0);
     cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
     cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);
-    cfg.av1_max_width = cfg.av1_max_width.clamp(320, 7680);
-    cfg.av1_min_shrink_percent = cfg.av1_min_shrink_percent.clamp(0.0, 95.0);
-    let preset = cfg.av1_size_preset.trim().to_ascii_lowercase();
+    cfg.convert_max_width = cfg.convert_max_width.clamp(320, 7680);
+    cfg.convert_min_shrink_percent = cfg.convert_min_shrink_percent.clamp(0.0, 95.0);
+    let preset = cfg.convert_size_preset.trim().to_ascii_lowercase();
     if !matches!(preset.as_str(), "light" | "balanced" | "aggressive") {
-        cfg.av1_size_preset = "balanced".to_owned();
+        cfg.convert_size_preset = "balanced".to_owned();
     } else {
-        cfg.av1_size_preset = preset;
+        cfg.convert_size_preset = preset;
     }
+    cfg.convert_target_codec =
+        crate::transcode::normalize_target_codec(&cfg.convert_target_codec).to_owned();
     let mode = cfg.last_mode.trim().to_ascii_lowercase();
-    cfg.last_mode = if mode == "av1" {
-        "av1".to_owned()
+    cfg.last_mode = if mode == "convert" || mode == "av1" {
+        "convert".to_owned()
     } else {
         "downloader".to_owned()
     };
     let tab = cfg.settings_tab.trim().to_ascii_lowercase();
     cfg.settings_tab = match tab.as_str() {
         "downloader" => "downloader".to_owned(),
-        "av1" => "av1".to_owned(),
+        "convert" | "av1" => "convert".to_owned(),
+        "web" | "web_ui" => "web".to_owned(),
         _ => "shared".to_owned(),
     };
     let theme = cfg.theme.trim().to_ascii_lowercase();
@@ -744,42 +755,62 @@ pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {
 
 #[derive(Clone, Debug, Serialize, Deserialize, Default)]
 #[serde(default)]
-pub struct Av1QueueSnapshot {
+pub struct ConvertQueueSnapshot {
     pub input_paths: String,
     pub next_item_id: u64,
-    pub items: Vec<Av1QueueItem>,
+    pub items: Vec<ConvertQueueItem>,
 }
 
-pub fn av1_queue_file_path() -> PathBuf {
+pub fn convert_queue_file_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_convert_queue.json")
+}
+
+fn legacy_av1_queue_file_path() -> PathBuf {
     rustdl_config_dir().join("rustdl_av1_queue.json")
 }
 
-fn av1_queue_path() -> PathBuf {
+fn convert_queue_path() -> PathBuf {
     if dirs::config_dir().is_some() {
-        av1_queue_file_path()
+        convert_queue_file_path()
+    } else {
+        PathBuf::from("rustdl_convert_queue.json")
+    }
+}
+
+fn legacy_av1_queue_path() -> PathBuf {
+    if dirs::config_dir().is_some() {
+        legacy_av1_queue_file_path()
     } else {
         PathBuf::from("rustdl_av1_queue.json")
     }
 }
 
-pub fn load_av1_queue_snapshot() -> Av1QueueSnapshot {
-    load_json_file(av1_queue_path(), "AV1 queue")
+pub fn load_convert_queue_snapshot() -> ConvertQueueSnapshot {
+    let path = convert_queue_path();
+    if path.is_file() {
+        return load_json_file(path, "converter queue");
+    }
+    load_json_file(legacy_av1_queue_path(), "converter queue (legacy)")
 }
 
-pub fn save_av1_queue_snapshot(snapshot: &Av1QueueSnapshot) -> Result<()> {
-    let path = av1_queue_path();
+pub fn save_convert_queue_snapshot(snapshot: &ConvertQueueSnapshot) -> Result<()> {
+    let path = convert_queue_path();
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| {
             format!(
-                "failed to create AV1 queue directory: {}",
+                "failed to create converter queue directory: {}",
                 parent.to_string_lossy()
             )
         })?;
     }
-    let raw =
-        serde_json::to_string_pretty(snapshot).context("failed to serialize AV1 queue snapshot")?;
-    fs::write(&path, raw)
-        .with_context(|| format!("failed to write AV1 queue file: {}", path.to_string_lossy()))?;
+    let raw = serde_json::to_string_pretty(snapshot)
+        .context("failed to serialize converter queue snapshot")?;
+    fs::write(&path, raw).with_context(|| {
+        format!(
+            "failed to write converter queue file: {}",
+            path.to_string_lossy()
+        )
+    })?;
     Ok(())
 }
 

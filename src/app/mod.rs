@@ -14,7 +14,7 @@ use tokio::runtime::Runtime;
 use tokio::sync::Semaphore;
 
 mod about;
-mod av1_panel;
+mod convert_panel;
 pub(crate) mod background_spawn;
 mod cards;
 pub(crate) mod core_sync;
@@ -54,7 +54,7 @@ use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,
     save_settings, trim_activity_log, AppSettings, ConfigLoadIssue,
 };
-use crate::models::Av1QueueItem;
+use crate::models::ConvertQueueItem;
 use crate::models::{ItemStatus, QueueItem};
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
 use crate::theme::{self, BG_LOG, BORDER_PANEL};
@@ -69,13 +69,15 @@ const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 pub(super) enum SettingsTab {
     Shared,
     Downloader,
-    Av1,
+    Convert,
+    WebUi,
 }
 
 pub(super) fn settings_tab_from_str(s: &str) -> SettingsTab {
     match s.trim().to_ascii_lowercase().as_str() {
         "downloader" => SettingsTab::Downloader,
-        "av1" => SettingsTab::Av1,
+        "convert" => SettingsTab::Convert,
+        "web" | "web_ui" => SettingsTab::WebUi,
         _ => SettingsTab::Shared,
     }
 }
@@ -84,7 +86,8 @@ pub(super) fn settings_tab_to_str(tab: SettingsTab) -> &'static str {
     match tab {
         SettingsTab::Shared => "shared",
         SettingsTab::Downloader => "downloader",
-        SettingsTab::Av1 => "av1",
+        SettingsTab::Convert => "convert",
+        SettingsTab::WebUi => "web",
     }
 }
 
@@ -162,7 +165,7 @@ pub struct PydlApp {
     settings_tab: SettingsTab,
     session_restore_prompt_open: bool,
     session_restore_downloader_count: usize,
-    session_restore_av1_count: usize,
+    session_restore_convert_count: usize,
     about_open: bool,
     exit_confirm_open: bool,
     /// After the user confirms quit, allow the next viewport close through.
@@ -183,18 +186,18 @@ pub struct PydlApp {
     update_release_url: Option<String>,
     update_has_update: bool,
     update_status_text: String,
-    av1_mode: bool,
-    /// Editable textarea buffer; mirrored to/from `DownloadCore::av1_input_paths`.
-    av1_input_paths: String,
-    /// Mirror of `DownloadCore::av1_items` (the core owns the AV1 queue).
-    av1_items: Vec<Av1QueueItem>,
-    /// Mirror of `DownloadCore::av1_media_inflight` (drives the "probing" badge).
-    av1_media_inflight: HashSet<u64>,
-    /// Mirror of `DownloadCore::av1_running`.
-    av1_running: bool,
+    convert_mode: bool,
+    /// Editable textarea buffer; mirrored to/from `DownloadCore::convert_input_paths`.
+    convert_input_paths: String,
+    /// Mirror of `DownloadCore::convert_items` (the core owns the Convert queue).
+    convert_items: Vec<ConvertQueueItem>,
+    /// Mirror of `DownloadCore::convert_media_inflight` (drives the "probing" badge).
+    convert_media_inflight: HashSet<u64>,
+    /// Mirror of `DownloadCore::convert_running`.
+    convert_running: bool,
     /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
-    av1_encoder_choice: Option<crate::av1_transcode::EncoderChoice>,
-    av1_encoder_detect_key: String,
+    convert_encoder_choice: Option<crate::transcode::EncoderChoice>,
+    convert_encoder_detect_key: String,
 
     done_file_index: done_file_index::DoneFileIndex,
     /// Suppress repeat log spam when output index hits [`DONE_LOOKUP_MAX_ENTRIES`].
@@ -261,36 +264,35 @@ impl PydlApp {
         let (
             session_restore_prompt_open,
             session_restore_downloader_count,
-            session_restore_av1_count,
+            session_restore_convert_count,
             restored_items,
-            restored_av1_input,
+            restored_convert_input,
             next_item_id,
         ) = {
             let mut core = shared_core.lock();
             if crate::config::session_restore_discard_on_startup(&settings.session_restore_preference)
+                && core.pending_session_restore.is_some()
             {
-                if core.pending_session_restore.is_some() {
-                    core.discard_pending_session_restore();
-                }
+                core.discard_pending_session_restore();
             }
-            let (prompt_open, dl_count, av1_count) =
+            let (prompt_open, dl_count, convert_count) =
                 if let Some(pending) = &core.pending_session_restore {
-                    (true, pending.downloader_count(), pending.av1_count())
+                    (true, pending.downloader_count(), pending.convert_count())
                 } else {
                     (false, 0, 0)
                 };
             (
                 prompt_open,
                 dl_count,
-                av1_count,
+                convert_count,
                 core.items.clone(),
-                core.av1_input_paths.clone(),
+                core.convert_input_paths.clone(),
                 core.next_item_id,
             )
         };
         let http_client = crate::http_client::build_http_client(&settings);
         let thumb_semaphore = Arc::new(Semaphore::new(8));
-        let av1_mode = settings.last_mode == "av1";
+        let convert_mode = settings.last_mode == "convert";
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
         let log_filter = LogFilter::from_slug(&settings.log_filter);
         let queue_search = settings.queue_search.clone();
@@ -357,7 +359,7 @@ impl PydlApp {
             settings_tab,
             session_restore_prompt_open,
             session_restore_downloader_count,
-            session_restore_av1_count,
+            session_restore_convert_count,
             about_open: false,
             exit_confirm_open: false,
             exit_allowed: false,
@@ -373,13 +375,13 @@ impl PydlApp {
             update_release_url: None,
             update_has_update: false,
             update_status_text: String::new(),
-            av1_mode,
-            av1_input_paths: restored_av1_input,
-            av1_items: Vec::new(),
-            av1_media_inflight: HashSet::new(),
-            av1_running: false,
-            av1_encoder_choice: None,
-            av1_encoder_detect_key: String::new(),
+            convert_mode,
+            convert_input_paths: restored_convert_input,
+            convert_items: Vec::new(),
+            convert_media_inflight: HashSet::new(),
+            convert_running: false,
+            convert_encoder_choice: None,
+            convert_encoder_detect_key: String::new(),
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             http_client,
@@ -418,13 +420,13 @@ impl PydlApp {
         if app.settings.web_ui_enabled {
             app.restart_web_server();
         }
-        // Pull the core-owned AV1 queue into the GUI mirror and kick off thumbnail loads.
+        // Pull the core-owned Convert queue into the GUI mirror and kick off thumbnail loads.
         {
             let shared = app.shared_core.clone();
             let core = shared.lock();
             core_sync::sync_core_to_app(&core, &mut app);
         }
-        app.ensure_av1_thumbnails();
+        app.ensure_convert_thumbnails();
         app.refresh_input_line_info();
         app
     }
@@ -438,7 +440,7 @@ impl PydlApp {
                 .input_line_info_hold_until
                 .is_some_and(|until| now < until);
         let busy = self.add_in_progress
-            || self.av1_running
+            || self.convert_running
             || self.status_resolving > 0
             || self.status_active > 0
             || self.queue_running > 0
@@ -537,9 +539,9 @@ impl PydlApp {
     }
 
     pub(super) fn set_app_mode(&mut self, av1: bool) {
-        self.av1_mode = av1;
+        self.convert_mode = av1;
         self.settings.last_mode = if av1 {
-            "av1".to_owned()
+            "convert".to_owned()
         } else {
             "downloader".to_owned()
         };
@@ -692,7 +694,7 @@ impl PydlApp {
             let mut core = self.shared_core.lock();
             core.http_client = self.http_client.clone();
         }
-        self.refresh_av1_encoder_detection();
+        self.refresh_convert_encoder_detection();
     }
 
     pub(super) fn append_log(&mut self, message: &str) {
@@ -746,14 +748,14 @@ impl PydlApp {
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
-        // AV1 queue persistence is owned by DownloadCore; mirror this preference change there.
+        // Convert queue persistence is owned by DownloadCore; mirror this preference change there.
         {
             let mut core = self.shared_core.lock();
-            core.settings.av1_remember_queue = self.settings.av1_remember_queue;
-            if self.settings.av1_remember_queue {
-                core.flush_av1_queue_to_disk();
+            core.settings.convert_remember_queue = self.settings.convert_remember_queue;
+            if self.settings.convert_remember_queue {
+                core.flush_convert_queue_to_disk();
             } else {
-                core.clear_av1_queue_persistence();
+                core.clear_convert_queue_persistence();
             }
         }
     }
@@ -988,14 +990,14 @@ impl PydlApp {
     }
 
     fn navbar_status_inputs(&self) -> NavbarStatusInputs {
-        let av1_resolving = self.av1_items.iter().any(|it| {
-            it.status == ItemStatus::Resolving || self.av1_media_inflight.contains(&it.item_id)
+        let convert_resolving = self.convert_items.iter().any(|it| {
+            it.status == ItemStatus::Resolving || self.convert_media_inflight.contains(&it.item_id)
         });
         NavbarStatusInputs {
             shutdown_pending: self.exit_pending_after_cancel,
             add_in_progress: self.add_in_progress,
-            av1_running: self.av1_running,
-            av1_resolving,
+            convert_running: self.convert_running,
+            convert_resolving,
             status_resolving: self.status_resolving,
             status_queued: self.status_queued,
             status_active: self.status_active,
@@ -1429,7 +1431,7 @@ impl PydlApp {
         if taken.is_empty() {
             return;
         }
-        if self.av1_mode {
+        if self.convert_mode {
             let paths: Vec<String> = taken
                 .into_iter()
                 .filter_map(|item| match item {
@@ -1440,7 +1442,7 @@ impl PydlApp {
                 })
                 .collect();
             if !paths.is_empty() {
-                self.extend_av1_input_paths_with_lines(paths);
+                self.extend_convert_input_paths_with_lines(paths);
             }
             return;
         }
@@ -1490,7 +1492,7 @@ impl PydlApp {
         };
     }
 
-    fn extend_av1_input_paths_with_lines(&mut self, lines: Vec<String>) {
+    fn extend_convert_input_paths_with_lines(&mut self, lines: Vec<String>) {
         let lines: Vec<String> = lines
             .into_iter()
             .map(|s| s.trim().to_owned())
@@ -1499,8 +1501,8 @@ impl PydlApp {
         if lines.is_empty() {
             return;
         }
-        self.av1_core_action(|core| core.scan_av1_paths_into_queue(&lines));
-        self.ensure_av1_thumbnails();
+        self.convert_core_action(|core| core.scan_convert_paths_into_queue(&lines));
+        self.ensure_convert_thumbnails();
     }
 
     fn apply_dropped_shortcut_files(&mut self, ctx: &egui::Context) {
@@ -1518,7 +1520,7 @@ impl PydlApp {
         }
     }
 
-    fn apply_dropped_av1_paths(&mut self, ctx: &egui::Context) {
+    fn apply_dropped_convert_paths(&mut self, ctx: &egui::Context) {
         let dropped = ctx.input(|i| i.raw.dropped_files.clone());
         let mut paths = Vec::new();
         for df in dropped {
@@ -1527,7 +1529,7 @@ impl PydlApp {
             }
         }
         if !paths.is_empty() {
-            self.extend_av1_input_paths_with_lines(paths);
+            self.extend_convert_input_paths_with_lines(paths);
         }
     }
 
@@ -1537,7 +1539,7 @@ impl PydlApp {
             || self.status_queued > 0
             || self.status_active > 0
             || self.queue_running > 0
-            || self.av1_running
+            || self.convert_running
     }
 
     pub(super) fn draw_config_load_banner(&mut self, ui: &mut egui::Ui) {
@@ -1571,8 +1573,11 @@ impl PydlApp {
                 self.session_restore_downloader_count
             ));
         }
-        if self.settings.av1_remember_queue && self.session_restore_av1_count > 0 {
-            parts.push(format!("{} AV1 item(s)", self.session_restore_av1_count));
+        if self.settings.convert_remember_queue && self.session_restore_convert_count > 0 {
+            parts.push(format!(
+                "{} converter item(s)",
+                self.session_restore_convert_count
+            ));
         }
         if parts.is_empty() {
             "Saved queue data from your last session.".to_owned()
@@ -1584,7 +1589,7 @@ impl PydlApp {
     fn apply_session_restore(&mut self) {
         self.session_restore_prompt_open = false;
         let dl = self.session_restore_downloader_count;
-        let av1 = self.session_restore_av1_count;
+        let convert_count = self.session_restore_convert_count;
         let applied = {
             let mut core = self.shared_core.lock();
             core.apply_pending_session_restore()
@@ -1599,13 +1604,13 @@ impl PydlApp {
         }
         self.invalidate_queue_caches();
         self.queue_dirty = true;
-        self.ensure_av1_thumbnails();
+        self.ensure_convert_thumbnails();
         let mut parts = Vec::new();
         if dl > 0 {
             parts.push(format!("{dl} download item(s)"));
         }
-        if self.settings.av1_remember_queue && av1 > 0 {
-            parts.push(format!("{av1} AV1 item(s)"));
+        if self.settings.convert_remember_queue && convert_count > 0 {
+            parts.push(format!("{convert_count} converter item(s)"));
         }
         if parts.is_empty() {
             self.append_log("Restored previous session.");
@@ -1696,14 +1701,14 @@ impl PydlApp {
         self.exit_confirm_open = false;
         if self.exit_work_in_progress() {
             self.exit_pending_after_cancel = true;
-            self.av1_core_action(|core| core.cancel_av1_batch());
+            self.convert_core_action(|core| core.cancel_convert_batch());
             self.cancel_all_active(CancelPostAction::Ready);
             self.append_log("Graceful shutdown requested: cancelling active jobs before exit...");
             return;
         }
         self.exit_allowed = true;
         self.flush_queue_to_disk();
-        self.flush_av1_queue_to_disk();
+        self.flush_convert_queue_to_disk();
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 

@@ -11,9 +11,9 @@
   --mode-downloader: #42a5f5;
   --mode-downloader-soft: rgba(66, 165, 245, 0.1);
   --mode-downloader-border: rgba(66, 165, 245, 0.32);
-  --mode-av1: #ab47bc;
-  --mode-av1-soft: rgba(171, 71, 188, 0.1);
-  --mode-av1-border: rgba(171, 71, 188, 0.32);
+  --mode-convert: #ab47bc;
+  --mode-convert-soft: rgba(171, 71, 188, 0.1);
+  --mode-convert-border: rgba(171, 71, 188, 0.32);
   --danger: #ef5350;
   --ok: #81c784;
   --warn: #ffc107;
@@ -295,10 +295,10 @@ body.view-downloader #downloader-main .panel {
   background: linear-gradient(90deg, var(--mode-downloader-soft) 0%, var(--panel) 28%);
 }
 
-body.view-av1 #av1-main .panel {
-  border-color: var(--mode-av1-border);
-  box-shadow: inset 3px 0 0 var(--mode-av1);
-  background: linear-gradient(90deg, var(--mode-av1-soft) 0%, var(--panel) 28%);
+body.view-convert #convert-main .panel {
+  border-color: var(--mode-convert-border);
+  box-shadow: inset 3px 0 0 var(--mode-convert);
+  background: linear-gradient(90deg, var(--mode-convert-soft) 0%, var(--panel) 28%);
 }
 
 .hidden { display: none !important; }
@@ -792,12 +792,12 @@ button.danger:disabled,
 .meta-badge-bitrate { background: rgb(75, 55, 110); color: rgb(235, 225, 255); }
 .meta-badge-skip { background: rgb(120, 70, 20); color: rgb(255, 220, 180); }
 
-.av1-will-skip {
+.convert-will-skip {
   outline: 1.5px solid rgba(255, 167, 38, 0.65);
   outline-offset: 1px;
 }
 
-.av1-will-skip-notice {
+.convert-will-skip-notice {
   margin: 0.2rem 0 0.35rem;
   font-size: 0.75rem;
   font-weight: 700;
@@ -1083,8 +1083,8 @@ dialog::backdrop {
   background: var(--mode-downloader);
 }
 
-.settings-tab[data-tab="av1"].active {
-  background: var(--mode-av1);
+.settings-tab[data-tab="convert"].active {
+  background: var(--mode-convert);
 }
 
 .settings-scroll {
@@ -1201,8 +1201,8 @@ body.shutdown-mode .shutdown-screen {
   color: #fff;
 }
 
-.nav-btn[data-view="av1"].active {
-  background: var(--mode-av1);
+.nav-btn[data-view="convert"].active {
+  background: var(--mode-convert);
   color: #fff;
 }
 
@@ -1219,34 +1219,34 @@ body.view-downloader {
   --accent: var(--mode-downloader);
 }
 
-body.view-av1 {
-  --accent: var(--mode-av1);
+body.view-convert {
+  --accent: var(--mode-convert);
 }
 
 body.view-downloader button.primary {
   background: var(--mode-downloader);
 }
 
-body.view-av1 button.primary {
-  background: var(--mode-av1);
+body.view-convert button.primary {
+  background: var(--mode-convert);
 }
 
 body.view-downloader .card-progress-fill:not([class*="status-"]) {
   background: var(--mode-downloader);
 }
 
-body.view-av1 .card-progress-fill:not([class*="status-"]) {
-  background: var(--mode-av1);
+body.view-convert .card-progress-fill:not([class*="status-"]) {
+  background: var(--mode-convert);
 }
 
-.av1-input-label { display: block; }
-.av1-input-label textarea { width: 100%; margin-top: 0.35rem; }
+.convert-input-label { display: block; }
+.convert-input-label textarea { width: 100%; margin-top: 0.35rem; }
 
-.av1-actions { margin: 0.6rem 0; }
+.convert-actions { margin: 0.6rem 0; }
 
-.av1-encoder { margin: 0.25rem 0 0.5rem; }
+.convert-encoder { margin: 0.25rem 0 0.5rem; }
 
-.av1-paths {
+.convert-paths {
   margin: 0.3rem 0 0;
   font-size: 0.72rem;
   color: var(--hint);
@@ -1255,7 +1255,7 @@ body.view-av1 .card-progress-fill:not([class*="status-"]) {
   text-overflow: ellipsis;
 }
 
-.av1-group-header {
+.convert-group-header {
   grid-column: 1 / -1;
   margin: 0.75rem 0 0.1rem;
   font-size: 0.85rem;
@@ -1264,7 +1264,7 @@ body.view-av1 .card-progress-fill:not([class*="status-"]) {
   padding-bottom: 0.2rem;
 }
 
-.av1-empty { color: var(--hint); }
+.convert-empty { color: var(--hint); }
 
 .status-chip.status-skipped { background: var(--skipped); color: #1a1a1a; }
 .card-footer.status-skipped { color: var(--skipped); }

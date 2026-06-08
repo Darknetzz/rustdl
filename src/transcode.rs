@@ -13,8 +13,17 @@ const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
 const BITRATE_MAXRATE_MULTIPLIER: f64 = 1.2;
 const BITRATE_BUFSIZE_MULTIPLIER: f64 = 2.0;
 
+/// Session-wide target video codec: `av1`, `hevc`, or `h264`.
+pub fn normalize_target_codec(raw: &str) -> &'static str {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "hevc" | "h265" | "h.265" => "hevc",
+        "h264" | "h.264" | "avc" => "h264",
+        _ => "av1",
+    }
+}
+
 #[derive(Clone, Debug, Default)]
-pub struct Av1InputMedia {
+pub struct ConvertInputMedia {
     pub codec: String,
     pub width: Option<u32>,
     pub height: Option<u32>,
@@ -24,7 +33,7 @@ pub struct Av1InputMedia {
 }
 
 #[derive(Clone, Debug)]
-pub struct Av1Config {
+pub struct ConvertConfig {
     pub ffmpeg_path: String,
     pub ffprobe_path: String,
     pub output_dir: String,
@@ -33,8 +42,9 @@ pub struct Av1Config {
     pub delete_original: bool,
     pub rename_original: bool,
     pub overwrite: bool,
-    pub reencode_av1: bool,
-    /// When true, outputs use `.mkv` (recommended for AV1 + Opus). When false, keep the source extension.
+    pub reencode_target: bool,
+    pub target_codec: String,
+    /// When true, outputs use a recommended container for the target codec.
     pub use_recommended_container: bool,
     pub target_bitrate: String,
     pub max_width: u32,
@@ -44,7 +54,7 @@ pub struct Av1Config {
 }
 
 #[derive(Clone, Debug)]
-pub struct Av1Input {
+pub struct ConvertInput {
     pub source_path: String,
 }
 
@@ -56,7 +66,7 @@ pub struct EncoderChoice {
 }
 
 #[derive(Clone, Debug)]
-pub struct Av1PlanItem {
+pub struct ConvertPlanItem {
     pub input: PathBuf,
     pub output: PathBuf,
 }
@@ -67,56 +77,93 @@ fn known_encoder(name: &str) -> Option<&'static str> {
         "av1_amf" => Some("av1_amf"),
         "hevc_nvenc" => Some("hevc_nvenc"),
         "hevc_amf" => Some("hevc_amf"),
+        "h264_nvenc" => Some("h264_nvenc"),
+        "h264_amf" => Some("h264_amf"),
         "libsvtav1" => Some("libsvtav1"),
+        "libx265" => Some("libx265"),
+        "libx264" => Some("libx264"),
         _ => None,
     }
 }
 
-#[allow(dead_code)]
-pub fn detect_encoder(ffmpeg_path: &str) -> EncoderChoice {
-    detect_encoder_with_override(ffmpeg_path, "")
+pub fn codec_for_encoder(encoder: &str) -> &'static str {
+    if encoder.contains("hevc") || encoder == "libx265" {
+        "hevc"
+    } else if encoder.contains("h264") || encoder == "libx264" {
+        "h264"
+    } else {
+        "av1"
+    }
 }
 
-pub fn detect_encoder_with_override(ffmpeg_path: &str, override_enc: &str) -> EncoderChoice {
+pub fn cpu_encoder_for_target(target_codec: &str) -> &'static str {
+    match normalize_target_codec(target_codec) {
+        "hevc" => "libx265",
+        "h264" => "libx264",
+        _ => "libsvtav1",
+    }
+}
+
+fn encoder_chain_for_target(target_codec: &str) -> &'static [&'static str] {
+    match normalize_target_codec(target_codec) {
+        "hevc" => &["hevc_nvenc", "hevc_amf", "libx265"],
+        "h264" => &["h264_nvenc", "h264_amf", "libx264"],
+        _ => &["av1_nvenc", "av1_amf", "libsvtav1"],
+    }
+}
+
+pub fn encoders_for_target(target_codec: &str) -> Vec<&'static str> {
+    encoder_chain_for_target(target_codec).to_vec()
+}
+
+#[allow(dead_code)]
+pub fn detect_encoder(ffmpeg_path: &str, target_codec: &str) -> EncoderChoice {
+    detect_encoder_with_override(ffmpeg_path, "", target_codec)
+}
+
+pub fn detect_encoder_with_override(
+    ffmpeg_path: &str,
+    override_enc: &str,
+    target_codec: &str,
+) -> EncoderChoice {
+    let target = normalize_target_codec(target_codec);
     let override_enc = override_enc.trim();
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     if !override_enc.is_empty() {
         if let Some(enc) = known_encoder(override_enc) {
-            if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
+            if codec_for_encoder(enc) == target
+                && encoder_supported(&ffmpeg, enc)
+                && encoder_usable(&ffmpeg, enc)
+            {
                 return EncoderChoice {
                     encoder: enc,
-                    codec: if enc.contains("hevc") { "hevc" } else { "av1" },
+                    codec: codec_for_encoder(enc),
                     hw_type: hw_type_for_encoder(enc),
                 };
             }
         }
     }
-    for enc in [
-        "av1_nvenc",
-        "av1_amf",
-        "hevc_nvenc",
-        "hevc_amf",
-        "libsvtav1",
-    ] {
+    for enc in encoder_chain_for_target(target) {
         if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
             return EncoderChoice {
                 encoder: enc,
-                codec: if enc.contains("hevc") { "hevc" } else { "av1" },
+                codec: codec_for_encoder(enc),
                 hw_type: hw_type_for_encoder(enc),
             };
         }
     }
+    let cpu = cpu_encoder_for_target(target);
     EncoderChoice {
-        encoder: "libsvtav1",
-        codec: "av1",
+        encoder: cpu,
+        codec: target,
         hw_type: "cpu",
     }
 }
 
 fn hw_type_for_encoder(encoder: &str) -> &'static str {
     match encoder {
-        "av1_nvenc" | "hevc_nvenc" => "nvidia",
-        "av1_amf" | "hevc_amf" => "amd",
+        "av1_nvenc" | "hevc_nvenc" | "h264_nvenc" => "nvidia",
+        "av1_amf" | "hevc_amf" | "h264_amf" => "amd",
         _ => "cpu",
     }
 }
@@ -130,6 +177,22 @@ pub fn encoder_hw_vendor_label(hw_type: &str) -> &'static str {
         "nvidia" => "NVIDIA",
         "amd" => "AMD",
         _ => "CPU",
+    }
+}
+
+pub fn target_codec_label(target_codec: &str) -> &'static str {
+    match normalize_target_codec(target_codec) {
+        "hevc" => "H.265",
+        "h264" => "H.264",
+        _ => "AV1",
+    }
+}
+
+pub fn output_suffix_for_target(target_codec: &str) -> &'static str {
+    match normalize_target_codec(target_codec) {
+        "hevc" => "H265",
+        "h264" => "H264",
+        _ => "AV1",
     }
 }
 
@@ -169,6 +232,20 @@ fn encoder_supported(ffmpeg_bin: &str, encoder: &str) -> bool {
     text.contains(&encoder.to_ascii_lowercase())
 }
 
+fn smoke_test_rate_args(encoder: &str, hw_type: &str) -> Vec<&'static str> {
+    if hw_type == "nvidia" {
+        vec!["-preset", "p7", "-rc", "vbr", "-b:v", "2M"]
+    } else if hw_type == "amd" {
+        vec!["-usage", "0", "-quality", "70", "-rc", "1", "-b:v", "2M"]
+    } else if encoder == "libsvtav1" {
+        vec!["-preset", "8", "-b:v", "2M"]
+    } else if encoder == "libx265" || encoder == "libx264" {
+        vec!["-preset", "medium", "-b:v", "2M"]
+    } else {
+        vec!["-b:v", "2M"]
+    }
+}
+
 fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
     let hw_type = hw_type_for_encoder(encoder);
     let vf = if hw_type == "cpu" {
@@ -191,13 +268,7 @@ fn encoder_usable(ffmpeg_bin: &str, encoder: &str) -> bool {
         "null",
         "-",
     ]);
-    if hw_type == "nvidia" {
-        cmd.args(["-preset", "p7", "-rc", "vbr", "-b:v", "2M"]);
-    } else if hw_type == "amd" {
-        cmd.args(["-usage", "0", "-quality", "70", "-rc", "1", "-b:v", "2M"]);
-    } else if encoder == "libsvtav1" {
-        cmd.args(["-preset", "8", "-b:v", "2M"]);
-    }
+    cmd.args(smoke_test_rate_args(encoder, hw_type));
     let Ok(out) = cmd.stdout(Stdio::null()).stderr(Stdio::null()).output() else {
         return false;
     };
@@ -226,7 +297,7 @@ fn preset_bitrate_multiplier(preset: &str) -> f64 {
     }
 }
 
-fn effective_target_bitrate_bps(cfg: &Av1Config) -> i64 {
+fn effective_target_bitrate_bps(cfg: &ConvertConfig) -> i64 {
     let base = parse_bitrate_to_bps(&cfg.target_bitrate).unwrap_or(BITRATE_FALLBACK_BPS);
     (base as f64 * preset_bitrate_multiplier(&cfg.size_preset)).round() as i64
 }
@@ -251,10 +322,10 @@ fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) 
     format!("{scale},setsar=1")
 }
 
-fn append_encoder_rate_control(cmd: &mut Command, hw_type: &str, target_bitrate_bps: i64) {
+fn append_encoder_rate_control(cmd: &mut Command, enc: &EncoderChoice, target_bitrate_bps: i64) {
     let maxrate = (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
     let bufsize = (target_bitrate_bps as f64 * BITRATE_BUFSIZE_MULTIPLIER).round() as i64;
-    match hw_type {
+    match enc.hw_type {
         "nvidia" => {
             cmd.args(["-preset", "p7", "-rc", "vbr"]);
             cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
@@ -276,14 +347,46 @@ fn append_encoder_rate_control(cmd: &mut Command, hw_type: &str, target_bitrate_
             ]);
             cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
         }
-        _ => {
-            cmd.args(["-preset", "8", "-g", "240"]);
-            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-        }
+        _ => match enc.encoder {
+            "libsvtav1" => {
+                cmd.args(["-preset", "8", "-g", "240"]);
+                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+            }
+            "libx265" => {
+                cmd.args(["-preset", "medium", "-tag:v", "hvc1"]);
+                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+            }
+            "libx264" => {
+                cmd.args(["-preset", "medium", "-profile:v", "high"]);
+                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+            }
+            _ => {
+                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
+            }
+        },
     }
 }
 
-pub fn collect_plan(inputs: &[Av1Input], cfg: &Av1Config) -> Vec<Av1PlanItem> {
+pub fn recommended_container_for_target(target_codec: &str) -> &'static str {
+    match normalize_target_codec(target_codec) {
+        "av1" => "mkv",
+        _ => "mp4",
+    }
+}
+
+fn planned_output_extension(input: &Path, cfg: &ConvertConfig) -> String {
+    if cfg.use_recommended_container {
+        return recommended_container_for_target(&cfg.target_codec).to_owned();
+    }
+    input
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
+        .unwrap_or_else(|| recommended_container_for_target(&cfg.target_codec).to_owned())
+}
+
+pub fn collect_plan(inputs: &[ConvertInput], cfg: &ConvertConfig) -> Vec<ConvertPlanItem> {
     let mut out = Vec::new();
     for item in inputs {
         let p = PathBuf::from(item.source_path.trim());
@@ -296,7 +399,7 @@ pub fn collect_plan(inputs: &[Av1Input], cfg: &Av1Config) -> Vec<Av1PlanItem> {
     out
 }
 
-fn walk_dir(out: &mut Vec<Av1PlanItem>, root: &Path, cfg: &Av1Config) {
+fn walk_dir(out: &mut Vec<ConvertPlanItem>, root: &Path, cfg: &ConvertConfig) {
     let Ok(rd) = std::fs::read_dir(root) else {
         return;
     };
@@ -312,19 +415,7 @@ fn walk_dir(out: &mut Vec<Av1PlanItem>, root: &Path, cfg: &Av1Config) {
     }
 }
 
-fn planned_output_extension(input: &Path, cfg: &Av1Config) -> String {
-    if cfg.use_recommended_container {
-        return "mkv".to_owned();
-    }
-    input
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|e| e.to_ascii_lowercase())
-        .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
-        .unwrap_or_else(|| "mkv".to_owned())
-}
-
-fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
+fn maybe_push_file(out: &mut Vec<ConvertPlanItem>, input: &Path, cfg: &ConvertConfig) {
     if !is_video_path(input) {
         return;
     }
@@ -333,11 +424,26 @@ fn maybe_push_file(out: &mut Vec<Av1PlanItem>, input: &Path, cfg: &Av1Config) {
         .and_then(|s| s.to_str())
         .unwrap_or("video");
     let ext = planned_output_extension(input, cfg);
-    let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-AV1.{ext}"));
-    out.push(Av1PlanItem {
+    let suffix = output_suffix_for_target(&cfg.target_codec);
+    let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-{suffix}.{ext}"));
+    out.push(ConvertPlanItem {
         input: input.to_path_buf(),
         output,
     });
+}
+
+fn default_audio_for_output(output: &Path, target_codec: &str) -> (&'static str, &'static str) {
+    let ext = output
+        .extension()
+        .and_then(|s| s.to_str())
+        .map(|s| s.to_ascii_lowercase());
+    match ext.as_deref() {
+        Some("mp4" | "m4v") => ("aac", "128k"),
+        Some("mkv") if normalize_target_codec(target_codec) == "av1" => ("libopus", "64k"),
+        Some("webm") => ("libopus", "64k"),
+        _ if normalize_target_codec(target_codec) == "av1" => ("libopus", "64k"),
+        _ => ("aac", "128k"),
+    }
 }
 
 fn append_container_mux_args(cmd: &mut Command, output: &Path, enc: &EncoderChoice) {
@@ -348,9 +454,18 @@ fn append_container_mux_args(cmd: &mut Command, output: &Path, enc: &EncoderChoi
     let Some(ext) = ext else {
         return;
     };
-    match ext.as_str() {
-        "mp4" | "m4v" if enc.codec == "av1" => {
+    if !matches!(ext.as_str(), "mp4" | "m4v") {
+        return;
+    }
+    match enc.codec {
+        "av1" => {
             cmd.args(["-tag:v", "av01"]);
+        }
+        "hevc" => {
+            cmd.args(["-tag:v", "hvc1"]);
+        }
+        "h264" => {
+            cmd.args(["-tag:v", "avc1"]);
         }
         _ => {}
     }
@@ -361,6 +476,31 @@ pub fn is_video_path(path: &Path) -> bool {
         .and_then(|s| s.to_str())
         .map(|ext| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext)))
         .unwrap_or(false)
+}
+
+pub fn codec_matches_target(input_codec: &str, target_codec: &str) -> bool {
+    let c = input_codec
+        .trim()
+        .to_ascii_lowercase()
+        .replace(['.', '-', ' ', '_'], "");
+    match normalize_target_codec(target_codec) {
+        "av1" => c == "av1" || c.contains("av01"),
+        "hevc" => {
+            c.contains("hevc")
+                || c.contains("h265")
+                || c == "hev1"
+                || c == "hvc1"
+                || c.contains("x265")
+        }
+        "h264" => {
+            c.contains("h264")
+                || c.contains("avc")
+                || c == "avc1"
+                || c.contains("x264")
+                || c == "264"
+        }
+        _ => false,
+    }
 }
 
 fn parse_ffprobe_fraction(value: &str) -> Option<f64> {
@@ -409,7 +549,7 @@ struct FfprobeMediaRoot {
     format: Option<FfprobeMediaFormat>,
 }
 
-pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Av1InputMedia> {
+pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<ConvertInputMedia> {
     let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
     let mut cmd = Command::new(ffprobe);
     no_console_window(&mut cmd);
@@ -482,7 +622,7 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Av1Inpu
         }
     }
 
-    Some(Av1InputMedia {
+    Some(ConvertInputMedia {
         codec,
         width,
         height,
@@ -608,7 +748,7 @@ pub fn resolve_original_output_path(input: &Path, output: &Path) -> Option<PathB
     Some(original_path)
 }
 
-fn finalize_output_file(plan: &Av1PlanItem, cfg: &Av1Config) -> Result<PathBuf> {
+fn finalize_output_file(plan: &ConvertPlanItem, cfg: &ConvertConfig) -> Result<PathBuf> {
     let output = plan.output.clone();
     let original_deleted = if cfg.delete_original {
         match std::fs::remove_file(&plan.input) {
@@ -646,8 +786,8 @@ fn finalize_output_file(plan: &Av1PlanItem, cfg: &Av1Config) -> Result<PathBuf> 
 }
 
 pub fn run_single<F>(
-    plan: &Av1PlanItem,
-    cfg: &Av1Config,
+    plan: &ConvertPlanItem,
+    cfg: &ConvertConfig,
     enc: &EncoderChoice,
     cancel_flag: Option<Arc<AtomicBool>>,
     mut on_line: F,
@@ -655,11 +795,19 @@ pub fn run_single<F>(
 where
     F: FnMut(String),
 {
-    if !cfg.reencode_av1 {
+    let target = normalize_target_codec(&cfg.target_codec);
+    if !cfg.reencode_target {
         if let Some(codec) = input_codec(&plan.input, &cfg.ffprobe_path) {
-            if codec == "av1" && enc.codec == "av1" {
-                on_line("skip_reason=already AV1 input and re-encode disabled".to_owned());
-                return Err(anyhow!("Skipped: already AV1 ({})", plan.input.display()));
+            if codec_matches_target(&codec, target) && enc.codec == target {
+                on_line(format!(
+                    "skip_reason=already {} input and re-encode disabled",
+                    target_codec_label(target)
+                ));
+                return Err(anyhow!(
+                    "Skipped: already {} ({})",
+                    target_codec_label(target),
+                    plan.input.display()
+                ));
             }
         }
     }
@@ -722,11 +870,12 @@ where
         .arg(vf)
         .arg("-c:v")
         .arg(enc.encoder);
-    if enc.codec == "hevc" {
+    if enc.codec == "hevc" && enc.hw_type != "cpu" {
         cmd.args(["-tag:v", "hvc1"]);
     }
-    append_encoder_rate_control(&mut cmd, enc.hw_type, target_bitrate_bps);
-    cmd.arg("-c:a").arg("libopus").arg("-b:a").arg("64k");
+    append_encoder_rate_control(&mut cmd, enc, target_bitrate_bps);
+    let (audio_codec, audio_bitrate) = default_audio_for_output(&plan.output, target);
+    cmd.arg("-c:a").arg(audio_codec).arg("-b:a").arg(audio_bitrate);
     append_container_mux_args(&mut cmd, &plan.output, enc);
     cmd.arg(&plan.output)
         .stdout(Stdio::piped())
@@ -797,40 +946,61 @@ where
 mod tests {
     use super::*;
 
+    fn test_config(output_dir: &Path, target_codec: &str, recommended: bool) -> ConvertConfig {
+        ConvertConfig {
+            ffmpeg_path: String::new(),
+            ffprobe_path: String::new(),
+            output_dir: output_dir.to_string_lossy().to_string(),
+            recursive: false,
+            dry_run: true,
+            delete_original: false,
+            rename_original: false,
+            overwrite: false,
+            reencode_target: false,
+            target_codec: target_codec.to_owned(),
+            use_recommended_container: recommended,
+            target_bitrate: String::new(),
+            max_width: 1920,
+            size_preset: "balanced".to_owned(),
+            min_shrink_percent: 0.0,
+            encoder_override: String::new(),
+        }
+    }
+
     #[test]
-    fn collect_plan_detects_video_files() {
+    fn collect_plan_detects_video_files_av1() {
         let tmp = tempfile::tempdir().expect("tempdir");
         let root = tmp.path();
         let movie = root.join("movie.mp4");
         let note = root.join("note.txt");
         std::fs::write(&movie, b"x").expect("write movie");
         std::fs::write(&note, b"x").expect("write note");
-        let cfg = Av1Config {
-            ffmpeg_path: String::new(),
-            ffprobe_path: String::new(),
-            output_dir: root.to_string_lossy().to_string(),
-            recursive: false,
-            dry_run: true,
-            use_recommended_container: true,
-            delete_original: false,
-            rename_original: false,
-            overwrite: false,
-            reencode_av1: false,
-            target_bitrate: String::new(),
-            max_width: 1920,
-            size_preset: "balanced".to_owned(),
-            min_shrink_percent: 0.0,
-            encoder_override: String::new(),
-        };
+        let cfg = test_config(root, "av1", true);
         let plan = collect_plan(
-            &[Av1Input {
+            &[ConvertInput {
                 source_path: root.to_string_lossy().to_string(),
             }],
             &cfg,
         );
         assert_eq!(plan.len(), 1);
-        assert!(plan[0].input.to_string_lossy().ends_with("movie.mp4"));
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mkv"));
+    }
+
+    #[test]
+    fn collect_plan_uses_h264_suffix_and_mp4() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let movie = root.join("movie.mp4");
+        std::fs::write(&movie, b"x").expect("write movie");
+        let cfg = test_config(root, "h264", true);
+        let plan = collect_plan(
+            &[ConvertInput {
+                source_path: movie.to_string_lossy().to_string(),
+            }],
+            &cfg,
+        );
+        assert_eq!(plan.len(), 1);
+        assert!(plan[0].output.to_string_lossy().ends_with("movie-H264.mp4"));
     }
 
     #[test]
@@ -839,31 +1009,31 @@ mod tests {
         let root = tmp.path();
         let movie = root.join("movie.mp4");
         std::fs::write(&movie, b"x").expect("write movie");
-        let cfg = Av1Config {
-            ffmpeg_path: String::new(),
-            ffprobe_path: String::new(),
-            output_dir: root.to_string_lossy().to_string(),
-            recursive: false,
-            dry_run: true,
-            use_recommended_container: false,
-            delete_original: false,
-            rename_original: false,
-            overwrite: false,
-            reencode_av1: false,
-            target_bitrate: String::new(),
-            max_width: 1920,
-            size_preset: "balanced".to_owned(),
-            min_shrink_percent: 0.0,
-            encoder_override: String::new(),
-        };
+        let cfg = test_config(root, "av1", false);
         let plan = collect_plan(
-            &[Av1Input {
+            &[ConvertInput {
                 source_path: movie.to_string_lossy().to_string(),
             }],
             &cfg,
         );
         assert_eq!(plan.len(), 1);
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mp4"));
+    }
+
+    #[test]
+    fn codec_matches_target_handles_aliases() {
+        assert!(codec_matches_target("av01", "av1"));
+        assert!(codec_matches_target("hevc", "hevc"));
+        assert!(codec_matches_target("h264", "h264"));
+        assert!(codec_matches_target("avc1", "h264"));
+        assert!(!codec_matches_target("h264", "av1"));
+    }
+
+    #[test]
+    fn normalize_target_codec_maps_aliases() {
+        assert_eq!(normalize_target_codec("H.265"), "hevc");
+        assert_eq!(normalize_target_codec("h264"), "h264");
+        assert_eq!(normalize_target_codec(""), "av1");
     }
 
     #[test]

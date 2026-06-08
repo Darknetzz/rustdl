@@ -97,8 +97,15 @@ impl PydlApp {
                     g.add(|ui| {
                         ui.selectable_value(
                             &mut self.settings_tab,
-                            SettingsTab::Av1,
+                            SettingsTab::Convert,
                             format!("{} AV1", ui_icons::TAB_AV1),
+                        )
+                    });
+                    g.add(|ui| {
+                        ui.selectable_value(
+                            &mut self.settings_tab,
+                            SettingsTab::WebUi,
+                            format!("{} Web UI", ui_icons::WEB_UI),
                         )
                     });
                     });
@@ -151,7 +158,7 @@ impl PydlApp {
                         changed |= ui
                             .checkbox(
                                 &mut self.settings.videos_docked,
-                                "Dock video / AV1 queue in main window",
+                                "Dock video / Convert queue in main window",
                             )
                             .changed();
                         changed |= ui
@@ -302,142 +309,8 @@ impl PydlApp {
                                     .changed();
                             });
                         ui.separator();
-                        ui.label(RichText::new("LAN web UI").strong());
-                        ui.label(
-                            RichText::new(
-                                "HTTP on your local network with a shared token. Not encrypted — use only on networks you trust.",
-                            )
-                            .color(crate::app_ui::ALERT_WARNING_TEXT),
-                        );
-                        let web_enabled_changed = ui
-                            .checkbox(&mut self.settings.web_ui_enabled, "Enable web UI")
-                            .changed();
-                        changed |= web_enabled_changed;
-                        ui.horizontal(|ui| {
-                            ui.label("Bind address");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(&mut self.settings.web_bind_address)
-                                        .hint_text("0.0.0.0:8765"),
-                                )
-                                .changed();
-                        });
-                        {
-                            let show_token_id = ui.id().with("web_token_visible");
-                            let mut show_token = ui.ctx().data_mut(|d| {
-                                *d.get_temp_mut_or(show_token_id, false)
-                            });
-                            ui.horizontal(|ui| {
-                                ui.label("API token");
-                                changed |= ui
-                                    .add(
-                                        egui::TextEdit::singleline(
-                                            &mut self.settings.web_auth_token,
-                                        )
-                                        .password(!show_token),
-                                    )
-                                    .changed();
-                                if ui.checkbox(&mut show_token, "Show").changed() {
-                                    ui.ctx().data_mut(|d| {
-                                        *d.get_temp_mut_or(show_token_id, false) = show_token;
-                                    });
-                                }
-                            });
-                            left_button_row(ui, |ui| {
-                                let feedback_id = ui.id().with("web_token_copy_feedback");
-                                let now = ui.input(|i| i.time);
-                                let copied = ui.ctx().data(|d| {
-                                    d.get_temp::<f64>(feedback_id)
-                                        .is_some_and(|until| now < until)
-                                });
-                                if copied {
-                                    ui.ctx().request_repaint();
-                                }
-                                button_group(ui, "web_token", |g| {
-                                    let can_copy = !self.settings.web_auth_token.trim().is_empty();
-                                    if copied {
-                                        g.success(
-                                            &format!("{} Copied!", ui_icons::STATUS_DONE),
-                                            can_copy,
-                                        )
-                                        .on_hover_text("API token copied to clipboard");
-                                    } else if g
-                                        .secondary(
-                                            &format!("{} Copy", ui_icons::COPY_CLIPBOARD),
-                                            can_copy,
-                                        )
-                                        .on_hover_text("Copy API token to clipboard")
-                                        .clicked()
-                                    {
-                                        g.ui().ctx().copy_text(self.settings.web_auth_token.clone());
-                                        g.ui().ctx().data_mut(|d| {
-                                            d.insert_temp(
-                                                feedback_id,
-                                                now + WEB_TOKEN_COPY_FEEDBACK_SECS,
-                                            );
-                                        });
-                                        g.ui().ctx().request_repaint();
-                                        self.append_log("Web API token copied to clipboard.");
-                                    }
-                                    if g.secondary(
-                                        &format!("{} Generate new API token", ui_icons::TOKEN),
-                                        true,
-                                    )
-                                    .clicked()
-                                    {
-                                        self.settings.web_auth_token =
-                                            crate::config::generate_web_auth_token();
-                                        changed = true;
-                                        self.append_log(
-                                            "New web API token generated. Copy it (Copy button) and update browsers that use the web UI.",
-                                        );
-                                    }
-                                });
-                            });
-                        }
-                        if self.settings.web_ui_enabled {
-                            let url =
-                                crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
-                            ui.horizontal_wrapped(|ui| {
-                                ui.label("Open");
-                                ui.hyperlink_to(&url, &url);
-                                ui.label("in a browser, then paste the API token.");
-                            });
-                            if self.settings.web_bind_address.trim().contains("0.0.0.0") {
-                                ui.label(
-                                    RichText::new(
-                                        "Binding to 0.0.0.0 listens on all network interfaces — use only on a trusted home LAN (plain HTTP, token auth).",
-                                    )
-                                    .small()
-                                    .color(ui.visuals().weak_text_color()),
-                                );
-                                ui.label(
-                                    RichText::new(
-                                        "On other devices, use this PC's IP address instead of 127.0.0.1.",
-                                    )
-                                    .small()
-                                    .color(ui.visuals().weak_text_color()),
-                                );
-                            }
-                            if !self.settings.web_auth_token.trim().is_empty() {
-                                let qr_target = format!(
-                                    "{}?token={}",
-                                    url.trim_end_matches('/'),
-                                    self.settings.web_auth_token.trim()
-                                );
-                                ui.label(
-                                    RichText::new(
-                                        "Scan to open the web UI on this PC (on a phone, swap 127.0.0.1 for this PC's LAN IP):",
-                                    )
-                                    .small()
-                                    .color(ui.visuals().weak_text_color()),
-                                );
-                                super::web_qr::draw_qr_code(ui, &qr_target, 128.0);
-                            }
-                        }
-                        ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
-                        ui.label("Used by the downloader and AV1 converter.");
+                        ui.label("Used by the downloader and Video Converter.");
                         ui.horizontal(|ui| {
                             ui.label("ffmpeg");
                             let resp = ui.add(
@@ -556,8 +429,8 @@ impl PydlApp {
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.enqueue_downloads_to_av1,
-                                "Enqueue completed downloads in AV1 converter queue",
+                                &mut self.settings.enqueue_downloads_to_convert,
+                                "Enqueue completed downloads in Video Converter queue",
                             )
                             .changed();
                         ui.horizontal(|ui| {
@@ -1112,8 +985,8 @@ impl PydlApp {
                             );
                         }
                     }
-                    SettingsTab::Av1 => {
-                        ui.label(RichText::new("AV1 converter settings").strong());
+                    SettingsTab::Convert => {
+                        ui.label(RichText::new("Video Converter settings").strong());
                         ui.label(
                             RichText::new(
                                 "FFmpeg and ffprobe paths are configured in Settings → Shared.",
@@ -1122,25 +995,45 @@ impl PydlApp {
                             .color(Color32::GRAY),
                         );
                         ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.label("Target codec");
+                            egui::ComboBox::from_id_salt("settings_convert_target_codec")
+                                .selected_text(crate::transcode::target_codec_label(
+                                    &self.settings.convert_target_codec,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (value, label) in
+                                        [("av1", "AV1"), ("hevc", "H.265"), ("h264", "H.264")]
+                                    {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_target_codec,
+                                                value.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                        });
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_remember_queue,
-                                "Remember AV1 queue between sessions",
+                                &mut self.settings.convert_remember_queue,
+                                "Remember Convert queue between sessions",
                             )
                             .on_hover_text(
                                 "When enabled, queue items stay until you click Clear. \
-                                 When off, the AV1 queue is cleared each time you start the app.",
+                                 When off, the Convert queue is cleared each time you start the app.",
                             )
                             .changed();
                         changed |= ui
-                            .checkbox(&mut self.settings.av1_recursive, "Recursive folder scan")
+                            .checkbox(&mut self.settings.convert_recursive, "Recursive folder scan")
                             .changed();
                         changed |= ui
-                            .checkbox(&mut self.settings.av1_dry_run, "Dry run by default")
+                            .checkbox(&mut self.settings.convert_dry_run, "Dry run by default")
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_auto_start_on_add,
+                                &mut self.settings.convert_auto_start_on_add,
                                 "Automatically start batch when paths are added",
                             )
                             .on_hover_text(
@@ -1150,13 +1043,13 @@ impl PydlApp {
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_delete_original,
+                                &mut self.settings.convert_delete_original,
                                 "Delete original after success",
                             )
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_rename_original,
+                                &mut self.settings.convert_rename_original,
                                 "Rename output to original filename",
                             )
                             .on_hover_text(
@@ -1166,29 +1059,28 @@ impl PydlApp {
                             )
                             .changed();
                         changed |= ui
-                            .checkbox(&mut self.settings.av1_overwrite, "Overwrite output files")
+                            .checkbox(&mut self.settings.convert_overwrite, "Overwrite output files")
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_reencode_av1,
-                                "Re-encode files already in AV1",
+                                &mut self.settings.convert_reencode_target,
+                                "Re-encode files already in the target codec",
                             )
                             .changed();
                         changed |= ui
                             .checkbox(
-                                &mut self.settings.av1_use_recommended_container,
-                                "Use recommended container (MKV)",
+                                &mut self.settings.convert_use_recommended_container,
+                                "Use recommended container for target codec",
                             )
                             .on_hover_text(
-                                "MKV is the recommended container for AV1 with Opus audio. \
-                                 When off, outputs keep the source extension (e.g. MP4 in → MP4 out).",
+                                "AV1 → MKV; H.264/H.265 → MP4. When off, outputs keep the source extension.",
                             )
                             .changed();
                         ui.horizontal(|ui| {
                             ui.label("Target bitrate");
                             changed |= ui
                                 .add(
-                                    egui::TextEdit::singleline(&mut self.settings.av1_target_bitrate)
+                                    egui::TextEdit::singleline(&mut self.settings.convert_target_bitrate)
                                         .hint_text("auto"),
                                 )
                                 .changed();
@@ -1197,7 +1089,7 @@ impl PydlApp {
                             ui.label("Max width");
                             changed |= ui
                                 .add(
-                                    egui::DragValue::new(&mut self.settings.av1_max_width)
+                                    egui::DragValue::new(&mut self.settings.convert_max_width)
                                         .range(320_u32..=7680_u32)
                                         .speed(10),
                                 )
@@ -1207,7 +1099,7 @@ impl PydlApp {
                             ui.label("Min shrink %");
                             changed |= ui
                                 .add(
-                                    egui::DragValue::new(&mut self.settings.av1_min_shrink_percent)
+                                    egui::DragValue::new(&mut self.settings.convert_min_shrink_percent)
                                         .range(0.0_f32..=95.0_f32)
                                         .speed(0.5),
                                 )
@@ -1216,25 +1108,25 @@ impl PydlApp {
                         ui.horizontal(|ui| {
                             ui.label("Size preset");
                             egui::ComboBox::from_id_salt("settings_av1_preset")
-                                .selected_text(self.settings.av1_size_preset.clone())
+                                .selected_text(self.settings.convert_size_preset.clone())
                                 .show_ui(ui, |ui| {
                                     changed |= ui
                                         .selectable_value(
-                                            &mut self.settings.av1_size_preset,
+                                            &mut self.settings.convert_size_preset,
                                             "light".to_owned(),
                                             "light",
                                         )
                                         .changed();
                                     changed |= ui
                                         .selectable_value(
-                                            &mut self.settings.av1_size_preset,
+                                            &mut self.settings.convert_size_preset,
                                             "balanced".to_owned(),
                                             "balanced",
                                         )
                                         .changed();
                                     changed |= ui
                                         .selectable_value(
-                                            &mut self.settings.av1_size_preset,
+                                            &mut self.settings.convert_size_preset,
                                             "aggressive".to_owned(),
                                             "aggressive",
                                         )
@@ -1243,30 +1135,26 @@ impl PydlApp {
                         });
                         ui.horizontal(|ui| {
                             ui.label("Encoder override");
-                            egui::ComboBox::from_id_salt("settings_av1_encoder")
-                                .selected_text(if self.settings.av1_encoder_override.is_empty() {
+                            egui::ComboBox::from_id_salt("settings_convert_encoder")
+                                .selected_text(if self.settings.convert_encoder_override.is_empty() {
                                     "Auto".to_owned()
                                 } else {
-                                    self.settings.av1_encoder_override.clone()
+                                    self.settings.convert_encoder_override.clone()
                                 })
                                 .show_ui(ui, |ui| {
                                     changed |= ui
                                         .selectable_value(
-                                            &mut self.settings.av1_encoder_override,
+                                            &mut self.settings.convert_encoder_override,
                                             String::new(),
                                             "Auto",
                                         )
                                         .changed();
-                                    for enc in [
-                                        "av1_nvenc",
-                                        "av1_amf",
-                                        "hevc_nvenc",
-                                        "hevc_amf",
-                                        "libsvtav1",
-                                    ] {
+                                    for enc in crate::transcode::encoders_for_target(
+                                        &self.settings.convert_target_codec,
+                                    ) {
                                         changed |= ui
                                             .selectable_value(
-                                                &mut self.settings.av1_encoder_override,
+                                                &mut self.settings.convert_encoder_override,
                                                 enc.to_owned(),
                                                 enc,
                                             )
@@ -1274,6 +1162,140 @@ impl PydlApp {
                                     }
                                 });
                         });
+                    }
+                    SettingsTab::WebUi => {
+                        ui.label(RichText::new("LAN web UI").strong());
+                        ui.label(
+                            RichText::new(
+                                "HTTP on your local network with a shared token. Not encrypted — use only on networks you trust.",
+                            )
+                            .color(crate::app_ui::ALERT_WARNING_TEXT),
+                        );
+                        changed |= ui
+                            .checkbox(&mut self.settings.web_ui_enabled, "Enable web UI")
+                            .changed();
+                        ui.horizontal(|ui| {
+                            ui.label("Bind address");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.web_bind_address)
+                                        .hint_text("0.0.0.0:8765"),
+                                )
+                                .changed();
+                        });
+                        {
+                            let show_token_id = ui.id().with("web_token_visible");
+                            let mut show_token = ui.ctx().data_mut(|d| {
+                                *d.get_temp_mut_or(show_token_id, false)
+                            });
+                            ui.horizontal(|ui| {
+                                ui.label("API token");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.web_auth_token,
+                                        )
+                                        .password(!show_token),
+                                    )
+                                    .changed();
+                                if ui.checkbox(&mut show_token, "Show").changed() {
+                                    ui.ctx().data_mut(|d| {
+                                        *d.get_temp_mut_or(show_token_id, false) = show_token;
+                                    });
+                                }
+                            });
+                            left_button_row(ui, |ui| {
+                                let feedback_id = ui.id().with("web_token_copy_feedback");
+                                let now = ui.input(|i| i.time);
+                                let copied = ui.ctx().data(|d| {
+                                    d.get_temp::<f64>(feedback_id)
+                                        .is_some_and(|until| now < until)
+                                });
+                                if copied {
+                                    ui.ctx().request_repaint();
+                                }
+                                button_group(ui, "web_token", |g| {
+                                    let can_copy = !self.settings.web_auth_token.trim().is_empty();
+                                    if copied {
+                                        g.success(
+                                            &format!("{} Copied!", ui_icons::STATUS_DONE),
+                                            can_copy,
+                                        )
+                                        .on_hover_text("API token copied to clipboard");
+                                    } else if g
+                                        .secondary(
+                                            &format!("{} Copy", ui_icons::COPY_CLIPBOARD),
+                                            can_copy,
+                                        )
+                                        .on_hover_text("Copy API token to clipboard")
+                                        .clicked()
+                                    {
+                                        g.ui().ctx().copy_text(self.settings.web_auth_token.clone());
+                                        g.ui().ctx().data_mut(|d| {
+                                            d.insert_temp(
+                                                feedback_id,
+                                                now + WEB_TOKEN_COPY_FEEDBACK_SECS,
+                                            );
+                                        });
+                                        g.ui().ctx().request_repaint();
+                                        self.append_log("Web API token copied to clipboard.");
+                                    }
+                                    if g.secondary(
+                                        &format!("{} Generate new API token", ui_icons::TOKEN),
+                                        true,
+                                    )
+                                    .clicked()
+                                    {
+                                        self.settings.web_auth_token =
+                                            crate::config::generate_web_auth_token();
+                                        changed = true;
+                                        self.append_log(
+                                            "New web API token generated. Copy it (Copy button) and update browsers that use the web UI.",
+                                        );
+                                    }
+                                });
+                            });
+                        }
+                        if self.settings.web_ui_enabled {
+                            let url =
+                                crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label("Open");
+                                ui.hyperlink_to(&url, &url);
+                                ui.label("in a browser, then paste the API token.");
+                            });
+                            if self.settings.web_bind_address.trim().contains("0.0.0.0") {
+                                ui.label(
+                                    RichText::new(
+                                        "Binding to 0.0.0.0 listens on all network interfaces — use only on a trusted home LAN (plain HTTP, token auth).",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                                ui.label(
+                                    RichText::new(
+                                        "On other devices, use this PC's IP address instead of 127.0.0.1.",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                            }
+                            if !self.settings.web_auth_token.trim().is_empty() {
+                                let qr_target = format!(
+                                    "{}?token={}",
+                                    url.trim_end_matches('/'),
+                                    self.settings.web_auth_token.trim()
+                                );
+                                ui.label(
+                                    RichText::new(
+                                        "Scan to open the web UI on this PC (on a phone, swap 127.0.0.1 for this PC's LAN IP):",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                                super::web_qr::draw_qr_code(ui, &qr_target, 128.0);
+                            }
+                        }
                     }
                 }
             });
@@ -1287,9 +1309,9 @@ impl PydlApp {
             self.settings.worker_count = self.worker_count.clamp(1, 6);
             self.settings.output_dir = self.output_dir.clone();
             self.settings.playlist_preview_cap = self.settings.playlist_preview_cap.clamp(1, 500);
-            self.settings.av1_max_width = self.settings.av1_max_width.clamp(320, 7680);
-            self.settings.av1_min_shrink_percent =
-                self.settings.av1_min_shrink_percent.clamp(0.0, 95.0);
+            self.settings.convert_max_width = self.settings.convert_max_width.clamp(320, 7680);
+            self.settings.convert_min_shrink_percent =
+                self.settings.convert_min_shrink_percent.clamp(0.0, 95.0);
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             self.persist_settings();
             let shared = self.shared_core.clone();

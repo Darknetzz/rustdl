@@ -180,7 +180,7 @@ let refreshAllTimer = null;
 /** @type {object | null} */
 let lastStatusPayload = null;
 /** @type {object | null} */
-let lastAv1Payload = null;
+let lastConvertPayload = null;
 
 let cachedHasYtDlp = false;
 
@@ -236,7 +236,7 @@ async function api(path, options = {}) {
     document.getElementById("auth-panel").classList.remove("hidden");
     document.getElementById("app-main").classList.add("hidden");
     throw new Error(
-      "Token rejected. Copy the current API token from rustdl Settings → Shared (LAN web UI), paste it below, then click Save token."
+      "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token."
     );
   }
   return res;
@@ -299,7 +299,7 @@ async function refreshStatus() {
 /**
  * @returns {{ slug: string, label: string, pulse: boolean, title: string }}
  */
-function deriveNavbarStatus(statusData, av1Data) {
+function deriveNavbarStatus(statusData, convertData) {
   const s = statusData?.status || {};
   const resolving = s.resolving || 0;
   const queued = s.queued || 0;
@@ -307,9 +307,9 @@ function deriveNavbarStatus(statusData, av1Data) {
   const ready = s.ready || 0;
   const paused = !!statusData?.downloads_paused;
   const queueRunning = statusData?.queue_running ?? 0;
-  const av1Running = !!statusData?.av1_running || !!av1Data?.running;
-  const av1Resolving =
-    av1Data?.items?.some(
+  const convertRunning = !!statusData?.convert_running || !!convertData?.running;
+  const convertResolving =
+    convertData?.items?.some(
       (it) => it.status === "Resolving" || it.probing
     ) ?? false;
 
@@ -329,12 +329,12 @@ function deriveNavbarStatus(statusData, av1Data) {
       title: "Fetching metadata for new URLs",
     };
   }
-  if (av1Running) {
+  if (convertRunning) {
     return {
       slug: "converting",
       label: "Converting",
       pulse: true,
-      title: "AV1 batch encode in progress",
+      title: "Convert batch encode in progress",
     };
   }
   if (active > 0 || (queueRunning > 0 && !paused)) {
@@ -345,7 +345,7 @@ function deriveNavbarStatus(statusData, av1Data) {
       title: `${active} active · ${queueRunning} worker slot(s)`,
     };
   }
-  if (resolving > 0 || av1Resolving) {
+  if (resolving > 0 || convertResolving) {
     return {
       slug: "resolving",
       label: "Resolving",
@@ -380,7 +380,7 @@ function deriveNavbarStatus(statusData, av1Data) {
 function renderNavbarStatus() {
   const root = document.getElementById("navbar-status");
   if (!root) return;
-  const info = deriveNavbarStatus(lastStatusPayload, lastAv1Payload);
+  const info = deriveNavbarStatus(lastStatusPayload, lastConvertPayload);
   root.className =
     "navbar-status navbar-status-" +
     info.slug +
@@ -1509,7 +1509,7 @@ async function refreshAll() {
     refreshSettingsCache(),
     refreshQueue(),
     refreshLogs(),
-    refreshAv1(),
+    refreshConvert(),
   ]);
 }
 
@@ -1548,14 +1548,14 @@ function handleSseEvent(data) {
       refreshStatus().catch(() => {});
       refreshQueue(true).catch(() => {});
       return;
-    case "av1_line":
+    case "convert_line":
       scheduleRefreshAll(800);
       return;
-    case "av1_done":
-    case "av1_batch_done":
-    case "av1_duration":
-    case "av1_media_probed":
-      refreshAv1().catch(() => {});
+    case "convert_done":
+    case "convert_batch_done":
+    case "convert_duration":
+    case "convert_media_probed":
+      refreshConvert().catch(() => {});
       refreshStatus().catch(() => {});
       return;
     default:
@@ -1656,7 +1656,7 @@ function populateSettingsForm(s, commandPreview) {
 
   setCheck("set-auto-add", s.auto_add_pasted_urls);
   setCheck("set-auto-start", s.auto_start_downloads);
-  setCheck("set-enqueue-av1", s.enqueue_downloads_to_av1);
+  setCheck("set-enqueue-convert", s.enqueue_downloads_to_convert);
   setVal("set-workers", s.worker_count);
   setVal("set-output-dir", s.output_dir);
   setVal("set-yt-dlp-path", s.yt_dlp_path);
@@ -1690,20 +1690,21 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-ffmpeg-mp3", s.ffmpeg_extract_audio_mp3);
   setCheck("set-verify-streams", s.verify_output_video_audio);
 
-  setVal("set-av1-bitrate", s.av1_target_bitrate);
-  setVal("set-av1-max-width", s.av1_max_width);
-  setVal("set-av1-preset", s.av1_size_preset);
-  setVal("set-av1-min-shrink", s.av1_min_shrink_percent);
-  setVal("set-av1-encoder-override", s.av1_encoder_override);
-  setCheck("set-av1-recursive", s.av1_recursive);
-  setCheck("set-av1-dry-run", s.av1_dry_run);
-  setCheck("set-av1-auto-start", s.av1_auto_start_on_add);
-  setCheck("set-av1-overwrite", s.av1_overwrite);
-  setCheck("set-av1-reencode", s.av1_reencode_av1);
-  setCheck("set-av1-recommended-container", s.av1_use_recommended_container);
-  setCheck("set-av1-delete-original", s.av1_delete_original);
-  setCheck("set-av1-rename-original", s.av1_rename_original);
-  setCheck("set-av1-remember-queue", s.av1_remember_queue);
+  setVal("set-convert-target-codec", s.convert_target_codec || "av1");
+  setVal("set-convert-bitrate", s.convert_target_bitrate);
+  setVal("set-convert-max-width", s.convert_max_width);
+  setVal("set-convert-preset", s.convert_size_preset);
+  setVal("set-convert-min-shrink", s.convert_min_shrink_percent);
+  setVal("set-convert-encoder-override", s.convert_encoder_override);
+  setCheck("set-convert-recursive", s.convert_recursive);
+  setCheck("set-convert-dry-run", s.convert_dry_run);
+  setCheck("set-convert-auto-start", s.convert_auto_start_on_add);
+  setCheck("set-convert-overwrite", s.convert_overwrite);
+  setCheck("set-convert-reencode", s.convert_reencode_target);
+  setCheck("set-convert-recommended-container", s.convert_use_recommended_container);
+  setCheck("set-convert-delete-original", s.convert_delete_original);
+  setCheck("set-convert-rename-original", s.convert_rename_original);
+  setCheck("set-convert-remember-queue", s.convert_remember_queue);
 
   document.getElementById("command-preview").textContent = commandPreview || "";
   updateQualityCustomVisibility();
@@ -1723,7 +1724,7 @@ function collectSettingsForm(base) {
 
   s.auto_add_pasted_urls = document.getElementById("set-auto-add").checked;
   s.auto_start_downloads = document.getElementById("set-auto-start").checked;
-  s.enqueue_downloads_to_av1 = document.getElementById("set-enqueue-av1").checked;
+  s.enqueue_downloads_to_convert = document.getElementById("set-enqueue-convert").checked;
   s.worker_count = parseInt(document.getElementById("set-workers").value, 10) || 3;
   s.output_dir = document.getElementById("set-output-dir").value;
   s.yt_dlp_path = document.getElementById("set-yt-dlp-path").value;
@@ -1759,27 +1760,28 @@ function collectSettingsForm(base) {
   s.ffmpeg_extract_audio_mp3 = document.getElementById("set-ffmpeg-mp3").checked;
   s.verify_output_video_audio = document.getElementById("set-verify-streams").checked;
 
-  s.av1_target_bitrate = document.getElementById("set-av1-bitrate").value;
-  s.av1_max_width = parseInt(document.getElementById("set-av1-max-width").value, 10) || 1920;
-  s.av1_size_preset = document.getElementById("set-av1-preset").value;
-  s.av1_min_shrink_percent =
-    parseFloat(document.getElementById("set-av1-min-shrink").value) || 0;
-  s.av1_encoder_override = document.getElementById("set-av1-encoder-override").value;
-  s.av1_recursive = document.getElementById("set-av1-recursive").checked;
-  s.av1_dry_run = document.getElementById("set-av1-dry-run").checked;
-  s.av1_auto_start_on_add = document.getElementById("set-av1-auto-start").checked;
-  s.av1_overwrite = document.getElementById("set-av1-overwrite").checked;
-  s.av1_reencode_av1 = document.getElementById("set-av1-reencode").checked;
-  s.av1_use_recommended_container = document.getElementById(
-    "set-av1-recommended-container",
+  s.convert_target_codec = document.getElementById("set-convert-target-codec").value || "av1";
+  s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
+  s.convert_max_width = parseInt(document.getElementById("set-convert-max-width").value, 10) || 1920;
+  s.convert_size_preset = document.getElementById("set-convert-preset").value;
+  s.convert_min_shrink_percent =
+    parseFloat(document.getElementById("set-convert-min-shrink").value) || 0;
+  s.convert_encoder_override = document.getElementById("set-convert-encoder-override").value;
+  s.convert_recursive = document.getElementById("set-convert-recursive").checked;
+  s.convert_dry_run = document.getElementById("set-convert-dry-run").checked;
+  s.convert_auto_start_on_add = document.getElementById("set-convert-auto-start").checked;
+  s.convert_overwrite = document.getElementById("set-convert-overwrite").checked;
+  s.convert_reencode_target = document.getElementById("set-convert-reencode").checked;
+  s.convert_use_recommended_container = document.getElementById(
+    "set-convert-recommended-container",
   ).checked;
-  s.av1_delete_original = document.getElementById("set-av1-delete-original").checked;
-  s.av1_rename_original = document.getElementById("set-av1-rename-original").checked;
-  s.av1_remember_queue = document.getElementById("set-av1-remember-queue").checked;
+  s.convert_delete_original = document.getElementById("set-convert-delete-original").checked;
+  s.convert_rename_original = document.getElementById("set-convert-rename-original").checked;
+  s.convert_remember_queue = document.getElementById("set-convert-remember-queue").checked;
 
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
-  s.av1_max_width = Math.min(7680, Math.max(320, s.av1_max_width));
-  s.av1_min_shrink_percent = Math.min(95, Math.max(0, s.av1_min_shrink_percent));
+  s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
+  s.convert_min_shrink_percent = Math.min(95, Math.max(0, s.convert_min_shrink_percent));
   s.worker_count = Math.min(6, Math.max(1, s.worker_count));
   s.playlist_preview_cap = Math.min(500, Math.max(1, s.playlist_preview_cap));
   return s;
@@ -1791,7 +1793,7 @@ function switchSettingsTab(name) {
   });
   document.getElementById("settings-tab-shared").hidden = name !== "shared";
   document.getElementById("settings-tab-downloader").hidden = name !== "downloader";
-  document.getElementById("settings-tab-av1").hidden = name !== "av1";
+  document.getElementById("settings-tab-convert").hidden = name !== "convert";
 }
 
 async function openSettingsDialog() {
@@ -1827,13 +1829,13 @@ function clearThumbnailCaches() {
     revokeThumbBlob(key);
   }
   thumbInflight.clear();
-  av1ThumbFailedKeys.clear();
-  for (const key of av1ThumbBlobCache.keys()) {
-    const url = av1ThumbBlobCache.get(key);
+  convertThumbFailedKeys.clear();
+  for (const key of convertThumbBlobCache.keys()) {
+    const url = convertThumbBlobCache.get(key);
     if (url) URL.revokeObjectURL(url);
-    av1ThumbBlobCache.delete(key);
+    convertThumbBlobCache.delete(key);
   }
-  av1ThumbInflight.clear();
+  convertThumbInflight.clear();
 }
 
 function saveTokenFromForm() {
@@ -1941,14 +1943,14 @@ document.querySelectorAll(".preset-btn").forEach((btn) => {
   btn.onclick = () => applyProfile(btn.dataset.profile).catch(console.error);
 });
 
-/* ----------------------------- AV1 converter ----------------------------- */
+/* ----------------------------- Video Converter ----------------------------- */
 
 let currentView = "downloader";
 /** Skip re-fetching AV1 thumbnails that already failed until the source changes. */
-const av1ThumbFailedKeys = new Set();
-const av1ThumbBlobCache = new Map();
+const convertThumbFailedKeys = new Set();
+const convertThumbBlobCache = new Map();
 /** @type {Map<string, Promise<string|null>>} */
-const av1ThumbInflight = new Map();
+const convertThumbInflight = new Map();
 
 function formatBytes(n) {
   if (n == null) return "";
@@ -1971,22 +1973,22 @@ function baseName(p) {
 }
 
 function setView(view) {
-  currentView = view === "av1" ? "av1" : "downloader";
-  document.body.classList.remove("view-downloader", "view-av1");
+  currentView = view === "convert" ? "convert" : "downloader";
+  document.body.classList.remove("view-downloader", "view-convert");
   document.body.classList.add(
-    currentView === "av1" ? "view-av1" : "view-downloader"
+    currentview === "convert" ? "view-convert" : "view-downloader"
   );
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === currentView);
   });
   document.getElementById("downloader-main").classList.toggle("hidden", currentView !== "downloader");
-  document.getElementById("av1-main").classList.toggle("hidden", currentView !== "av1");
+  document.getElementById("convert-main").classList.toggle("hidden", currentView !== "convert");
   const dlActions = document.getElementById("downloader-only-actions");
   if (dlActions) dlActions.classList.toggle("hidden", currentView !== "downloader");
-  if (currentView === "av1") refreshAv1().catch(() => {});
+  if (currentview === "convert") refreshConvert().catch(() => {});
 }
 
-function av1Slug(item) {
+function convertSlug(item) {
   if (item.skipped) return "skipped";
   switch (item.status) {
     case "Idle":
@@ -2006,7 +2008,7 @@ function av1Slug(item) {
   }
 }
 
-function av1Group(item) {
+function convertGroup(item) {
   if (item.skipped) return "Skipped";
   switch (item.status) {
     case "Queued":
@@ -2022,30 +2024,30 @@ function av1Group(item) {
   }
 }
 
-function av1ThumbKey(item) {
+function convertThumbKey(item) {
   return `${item.item_id}|${item.source_path || ""}`;
 }
 
-function av1ThumbnailUrl(itemId) {
+function convertThumbnailUrl(itemId) {
   const t = token();
   if (!t) return null;
-  return `/api/av1/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
+  return `/api/convert/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
 }
 
-function revealAv1ThumbImage(img, placeholder, key) {
+function revealconvertThumbImage(img, placeholder, key) {
   img.classList.remove("hidden");
   placeholder.classList.add("hidden");
-  av1ThumbFailedKeys.delete(key);
+  convertThumbFailedKeys.delete(key);
 }
 
-function applyAv1ThumbBlobToImg(img, placeholder, key, objUrl) {
+function applyconvertThumbBlobToImg(img, placeholder, key, objUrl) {
   img.onload = () => {
     if (!img.isConnected) return;
-    revealAv1ThumbImage(img, placeholder, key);
+    revealconvertThumbImage(img, placeholder, key);
   };
   img.onerror = () => {
     if (!img.isConnected) return;
-    revokeAv1ThumbBlob(key);
+    revokeconvertThumbBlob(key);
     img.classList.add("hidden");
     img.removeAttribute("src");
     placeholder.textContent = "No preview available";
@@ -2053,38 +2055,38 @@ function applyAv1ThumbBlobToImg(img, placeholder, key, objUrl) {
   };
   img.src = objUrl;
   if (img.complete && img.naturalWidth > 0) {
-    revealAv1ThumbImage(img, placeholder, key);
+    revealconvertThumbImage(img, placeholder, key);
   }
 }
 
-function attachAv1Thumbnail(img, placeholder, item, showThumbnails) {
+function attachconvertThumbnail(img, placeholder, item, showThumbnails) {
   img.classList.add("hidden");
   placeholder.classList.remove("hidden");
   if (!showThumbnails) {
     placeholder.textContent = "Thumbnails off";
     return;
   }
-  if (!av1ThumbnailUrl(item.item_id)) {
+  if (!convertThumbnailUrl(item.item_id)) {
     placeholder.textContent = "Save API token to load thumbnails";
     return;
   }
-  const key = av1ThumbKey(item);
-  if (av1ThumbFailedKeys.has(key)) {
+  const key = convertThumbKey(item);
+  if (convertThumbFailedKeys.has(key)) {
     placeholder.textContent = "No preview available";
     return;
   }
-  const cached = av1ThumbBlobCache.get(key);
+  const cached = convertThumbBlobCache.get(key);
   if (cached) {
-    applyAv1ThumbBlobToImg(img, placeholder, key, cached);
+    applyconvertThumbBlobToImg(img, placeholder, key, cached);
     return;
   }
   placeholder.textContent = "Loading preview…";
-  fetchAv1ThumbnailBlob(item).then((objUrl) => {
+  fetchconvertThumbnailBlob(item).then((objUrl) => {
     if (!img.isConnected) return;
     if (objUrl) {
-      applyAv1ThumbBlobToImg(img, placeholder, key, objUrl);
+      applyconvertThumbBlobToImg(img, placeholder, key, objUrl);
     } else {
-      placeholder.textContent = av1ThumbFailedKeys.has(key)
+      placeholder.textContent = convertThumbFailedKeys.has(key)
         ? "No preview available"
         : "Save API token to load thumbnails";
       placeholder.classList.remove("hidden");
@@ -2155,14 +2157,14 @@ function appendMetaBadge(container, kind, text) {
   container.appendChild(b);
 }
 
-function av1WillSkipNotice() {
+function ConvertWillSkipNotice() {
   const el = document.createElement("p");
-  el.className = "av1-will-skip-notice";
-  el.textContent = "Will skip · already AV1 (re-encode disabled)";
+  el.className = "convert-will-skip-notice";
+  el.textContent = "Will skip · already at target codec (re-encode disabled)";
   return el;
 }
 
-function av1MediaBadges(item) {
+function ConvertMediaBadges(item) {
   const badges = document.createElement("div");
   badges.className = "card-badges";
   if (item.probing) {
@@ -2187,11 +2189,11 @@ function av1MediaBadges(item) {
   return badges;
 }
 
-function renderAv1Card(item, showThumbnails) {
-  const slug = av1Slug(item);
+function renderConvertCard(item, showThumbnails) {
+  const slug = convertSlug(item);
   const active = slug === "downloading" || slug === "queued";
   const card = document.createElement("article");
-  card.className = "card" + (item.will_skip_av1 ? " av1-will-skip" : "");
+  card.className = "card" + (item.will_skip_target ? " convert-will-skip" : "");
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -2201,7 +2203,7 @@ function renderAv1Card(item, showThumbnails) {
   const placeholder = document.createElement("span");
   placeholder.className = "card-thumb-placeholder";
   thumb.appendChild(img);
-  attachAv1Thumbnail(img, placeholder, item, showThumbnails);
+  attachconvertThumbnail(img, placeholder, item, showThumbnails);
   thumb.appendChild(placeholder);
   card.appendChild(thumb);
 
@@ -2214,10 +2216,10 @@ function renderAv1Card(item, showThumbnails) {
   title.title = item.source_path || "";
   body.appendChild(title);
 
-  if (item.will_skip_av1) {
-    body.appendChild(av1WillSkipNotice());
+  if (item.will_skip_target) {
+    body.appendChild(ConvertWillSkipNotice());
   }
-  body.appendChild(av1MediaBadges(item));
+  body.appendChild(ConvertMediaBadges(item));
 
   if (active) {
     const wrap = document.createElement("div");
@@ -2238,7 +2240,7 @@ function renderAv1Card(item, showThumbnails) {
   }
 
   const pathsEl = document.createElement("p");
-  pathsEl.className = "av1-paths";
+  pathsEl.className = "convert-paths";
   pathsEl.textContent = `→ ${item.output_path || ""}`;
   pathsEl.title = item.output_path || "";
   body.appendChild(pathsEl);
@@ -2255,8 +2257,8 @@ function renderAv1Card(item, showThumbnails) {
   return card;
 }
 
-function renderAv1Summary(data) {
-  const root = document.getElementById("av1-summary");
+function renderConvertSummary(data) {
+  const root = document.getElementById("convert-summary");
   if (!root) return;
   root.innerHTML = "";
 
@@ -2267,7 +2269,7 @@ function renderAv1Summary(data) {
 
   const counts = {};
   for (const it of data.items) {
-    const g = av1Group(it);
+    const g = convertGroup(it);
     counts[g] = (counts[g] || 0) + 1;
   }
   for (const [label, slug] of [
@@ -2303,8 +2305,8 @@ function renderAv1Summary(data) {
   }
 }
 
-function renderAv1Encoder(data) {
-  const el = document.getElementById("av1-encoder");
+function renderConvertEncoder(data) {
+  const el = document.getElementById("convert-encoder");
   if (!el) return;
   const parts = [];
   if (data.encoder) parts.push(`Encoder: ${data.encoder.label}`);
@@ -2313,39 +2315,39 @@ function renderAv1Encoder(data) {
   el.textContent = parts.join(" · ");
 }
 
-function revokeAv1ThumbBlob(key) {
-  const url = av1ThumbBlobCache.get(key);
+function revokeconvertThumbBlob(key) {
+  const url = convertThumbBlobCache.get(key);
   if (url) {
     URL.revokeObjectURL(url);
-    av1ThumbBlobCache.delete(key);
+    convertThumbBlobCache.delete(key);
   }
 }
 
-function pruneAv1ThumbKeys(items) {
-  const active = new Set(items.map((it) => av1ThumbKey(it)));
-  for (const key of av1ThumbFailedKeys) {
-    if (!active.has(key)) av1ThumbFailedKeys.delete(key);
+function pruneconvertThumbKeys(items) {
+  const active = new Set(items.map((it) => convertThumbKey(it)));
+  for (const key of convertThumbFailedKeys) {
+    if (!active.has(key)) convertThumbFailedKeys.delete(key);
   }
-  for (const key of av1ThumbBlobCache.keys()) {
-    if (!active.has(key)) revokeAv1ThumbBlob(key);
+  for (const key of convertThumbBlobCache.keys()) {
+    if (!active.has(key)) revokeconvertThumbBlob(key);
   }
-  for (const key of av1ThumbInflight.keys()) {
-    if (!active.has(key)) av1ThumbInflight.delete(key);
+  for (const key of convertThumbInflight.keys()) {
+    if (!active.has(key)) convertThumbInflight.delete(key);
   }
 }
 
-async function fetchAv1ThumbnailBlob(item) {
-  const cacheKey = av1ThumbKey(item);
-  if (av1ThumbBlobCache.has(cacheKey)) {
-    return av1ThumbBlobCache.get(cacheKey);
+async function fetchconvertThumbnailBlob(item) {
+  const cacheKey = convertThumbKey(item);
+  if (convertThumbBlobCache.has(cacheKey)) {
+    return convertThumbBlobCache.get(cacheKey);
   }
-  if (av1ThumbFailedKeys.has(cacheKey)) {
+  if (convertThumbFailedKeys.has(cacheKey)) {
     return null;
   }
-  if (av1ThumbInflight.has(cacheKey)) {
-    return av1ThumbInflight.get(cacheKey);
+  if (convertThumbInflight.has(cacheKey)) {
+    return convertThumbInflight.get(cacheKey);
   }
-  const apiUrl = av1ThumbnailUrl(item.item_id);
+  const apiUrl = convertThumbnailUrl(item.item_id);
   if (!apiUrl) {
     return null;
   }
@@ -2354,123 +2356,123 @@ async function fetchAv1ThumbnailBlob(item) {
       const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
         if (res.status !== 401) {
-          av1ThumbFailedKeys.add(cacheKey);
+          convertThumbFailedKeys.add(cacheKey);
         }
         return null;
       }
       const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
-        av1ThumbFailedKeys.add(cacheKey);
+        convertThumbFailedKeys.add(cacheKey);
         return null;
       }
       const objUrl = URL.createObjectURL(blob);
-      av1ThumbBlobCache.set(cacheKey, objUrl);
-      av1ThumbFailedKeys.delete(cacheKey);
+      convertThumbBlobCache.set(cacheKey, objUrl);
+      convertThumbFailedKeys.delete(cacheKey);
       return objUrl;
     } catch {
-      av1ThumbFailedKeys.add(cacheKey);
+      convertThumbFailedKeys.add(cacheKey);
       return null;
     }
   })();
-  av1ThumbInflight.set(cacheKey, work);
+  convertThumbInflight.set(cacheKey, work);
   try {
     return await work;
   } finally {
-    av1ThumbInflight.delete(cacheKey);
+    convertThumbInflight.delete(cacheKey);
   }
 }
 
-async function refreshAv1() {
+async function refreshConvert() {
   let data;
   try {
-    const res = await api("/api/av1/queue");
+    const res = await api("/api/convert/queue");
     if (!res.ok) return;
     data = await res.json();
   } catch {
     return;
   }
-  lastAv1Payload = data;
+  lastConvertPayload = data;
   // Keep the textarea in sync with the server unless the user is editing it.
-  const input = document.getElementById("av1-input");
+  const input = document.getElementById("convert-input");
   if (input && document.activeElement !== input) {
     input.value = data.input_paths || "";
   }
-  renderAv1Encoder(data);
-  renderAv1Summary(data);
+  renderConvertEncoder(data);
+  renderConvertSummary(data);
   renderNavbarStatus();
 
-  const startBtn = document.getElementById("btn-av1-start");
-  const cancelBtn = document.getElementById("btn-av1-cancel");
+  const startBtn = document.getElementById("btn-convert-start");
+  const cancelBtn = document.getElementById("btn-convert-cancel");
   const readyCount = data.items.filter((it) => it.status === "Idle").length;
   if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
   if (cancelBtn) {
     cancelBtn.disabled = !data.running;
     cancelBtn.title = data.running
-      ? "Cancel the running AV1 batch"
-      : "No AV1 batch is running";
+      ? "Cancel the running Convert batch"
+      : "No Convert batch is running";
   }
 
-  const root = document.getElementById("av1-queue");
+  const root = document.getElementById("convert-queue");
   if (!root) return;
   const showThumbnails = (cachedSettings || {}).show_thumbnails !== false;
-  pruneAv1ThumbKeys(data.items);
+  pruneconvertThumbKeys(data.items);
   root.innerHTML = "";
   if (!data.items.length) {
     const empty = document.createElement("p");
-    empty.className = "hint av1-empty";
+    empty.className = "hint convert-empty";
     empty.textContent = "Nothing here yet. Add file or folder paths above, then Scan inputs.";
     root.appendChild(empty);
     return;
   }
   for (const label of ["Active", "Ready", "Failed", "Skipped", "Done"]) {
-    const group = data.items.filter((it) => av1Group(it) === label);
+    const group = data.items.filter((it) => convertGroup(it) === label);
     if (!group.length) continue;
     const header = document.createElement("h3");
-    header.className = "av1-group-header";
+    header.className = "convert-group-header";
     header.textContent = `${label} (${group.length})`;
     root.appendChild(header);
     for (const item of group) {
-      root.appendChild(renderAv1Card(item, showThumbnails));
+      root.appendChild(renderConvertCard(item, showThumbnails));
     }
   }
 }
 
-async function av1Scan() {
-  const input = document.getElementById("av1-input");
+async function convertScan() {
+  const input = document.getElementById("convert-input");
   const paths = (input ? input.value : "")
     .split(/\n+/)
     .map((s) => s.trim())
     .filter(Boolean);
   if (!paths.length) return;
-  await api("/api/av1/scan", { method: "POST", body: JSON.stringify({ paths }) });
-  await refreshAv1();
+  await api("/api/convert/scan", { method: "POST", body: JSON.stringify({ paths }) });
+  await refreshConvert();
 }
 
-async function av1Start() {
-  await api("/api/av1/start", { method: "POST" });
-  await refreshAv1();
+async function convertStart() {
+  await api("/api/convert/start", { method: "POST" });
+  await refreshConvert();
 }
 
-async function av1Cancel() {
-  await api("/api/av1/cancel", { method: "POST" });
-  await refreshAv1();
+async function convertCancel() {
+  await api("/api/convert/cancel", { method: "POST" });
+  await refreshConvert();
 }
 
-async function av1Clear() {
-  if (!confirm("Clear the entire AV1 queue?")) return;
-  await api("/api/av1/clear", { method: "POST" });
-  await refreshAv1();
+async function convertClear() {
+  if (!confirm("Clear the entire Convert queue?")) return;
+  await api("/api/convert/clear", { method: "POST" });
+  await refreshConvert();
 }
 
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.onclick = () => setView(btn.dataset.view);
 });
-document.getElementById("btn-av1-scan").onclick = () => av1Scan().catch((e) => alert(e.message || String(e)));
-document.getElementById("btn-av1-start").onclick = () => av1Start().catch((e) => alert(e.message || String(e)));
-document.getElementById("btn-av1-cancel").onclick = () => av1Cancel().catch((e) => alert(e.message || String(e)));
-document.getElementById("btn-av1-clear").onclick = () => av1Clear().catch((e) => alert(e.message || String(e)));
-document.getElementById("btn-av1-settings").onclick = () =>
-  openSettingsDialog().then(() => switchSettingsTab("av1")).catch(console.error);
+document.getElementById("btn-convert-scan").onclick = () => convertScan().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-start").onclick = () => convertStart().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-cancel").onclick = () => convertCancel().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-clear").onclick = () => convertClear().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-settings").onclick = () =>
+  openSettingsDialog().then(() => switchSettingsTab("convert")).catch(console.error);
 
 applyStaticButtonIcons();
 

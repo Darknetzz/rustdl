@@ -1,4 +1,4 @@
-//! Pure AV1 queue helpers shared by the desktop GUI, the shared core, and the web API.
+//! Pure video converter queue helpers shared by the desktop GUI, the shared core, and the web API.
 //!
 //! Nothing here depends on egui so the same logic drives both the windowed app and the
 //! headless `--web-only` server.
@@ -7,35 +7,27 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::app_parsing::human_bytes_ui;
-use crate::models::{Av1QueueItem, ItemStatus};
+use crate::models::{ConvertQueueItem, ItemStatus};
+use crate::transcode::{codec_matches_target, normalize_target_codec, target_codec_label};
 
-/// A finished item that was intentionally skipped (already AV1, would not shrink, etc.).
-pub fn av1_item_is_skipped(item: &Av1QueueItem) -> bool {
+/// A finished item that was intentionally skipped (already target codec, would not shrink, etc.).
+pub fn convert_item_is_skipped(item: &ConvertQueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
 }
 
 /// True when the queue row points at a path that is not an existing file on disk.
-pub fn av1_source_path_missing(source_path: &str) -> bool {
+pub fn convert_source_path_missing(source_path: &str) -> bool {
     let p = Path::new(source_path.trim());
     !p.is_file()
 }
 
-/// True when the input file is already AV1 (matches ffprobe / yt-dlp style names).
-pub fn is_av1_video_codec(codec: &str) -> bool {
-    let c = codec
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['.', '-', ' ', '_'], "");
-    c == "av1" || c.contains("av01")
-}
-
-/// Pending row that will be skipped at encode time (already AV1, re-encode disabled, AV1 output).
-pub fn av1_item_will_skip_already_av1(
-    item: &Av1QueueItem,
-    reencode_av1: bool,
-    output_encoder_codec: &str,
+/// Pending row that will be skipped at encode time (already target codec, re-encode disabled).
+pub fn convert_item_will_skip_already_target(
+    item: &ConvertQueueItem,
+    reencode_target: bool,
+    target_codec: &str,
 ) -> bool {
-    if reencode_av1 || output_encoder_codec != "av1" {
+    if reencode_target {
         return false;
     }
     if !matches!(
@@ -44,16 +36,16 @@ pub fn av1_item_will_skip_already_av1(
     ) {
         return false;
     }
-    is_av1_video_codec(&item.video_codec)
+    codec_matches_target(&item.video_codec, target_codec)
 }
 
-/// Short status label for an AV1 queue row.
-pub fn av1_item_status_label(item: &Av1QueueItem) -> &'static str {
+/// Short status label for a converter queue row.
+pub fn convert_item_status_label(item: &ConvertQueueItem) -> &'static str {
     match item.status {
         ItemStatus::Idle => "Ready",
         ItemStatus::Queued => "Queued",
         ItemStatus::Downloading => "Running",
-        ItemStatus::Done if av1_item_is_skipped(item) => "Skipped",
+        ItemStatus::Done if convert_item_is_skipped(item) => "Skipped",
         ItemStatus::Done => "Done",
         ItemStatus::Failed => "Failed",
         ItemStatus::Resolving => "Resolving",
@@ -61,7 +53,7 @@ pub fn av1_item_status_label(item: &Av1QueueItem) -> &'static str {
 }
 
 /// Human-readable savings line for a finished transcode.
-pub fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> String {
+pub fn format_convert_saved_detail(input_bytes: u64, output_bytes: u64) -> String {
     if input_bytes == 0 {
         return format!("Output {}", human_bytes_ui(output_bytes));
     }
@@ -78,7 +70,7 @@ pub fn format_av1_saved_detail(input_bytes: u64, output_bytes: u64) -> String {
 
 /// Aggregated counters used by the batch-summary row in both UIs.
 #[derive(Clone, Copy, Debug, Default)]
-pub struct Av1BatchSummary {
+pub struct ConvertBatchSummary {
     pub completed: usize,
     pub completed_input_bytes: u64,
     pub completed_output_bytes: u64,
@@ -86,8 +78,8 @@ pub struct Av1BatchSummary {
     pub pending_input_bytes: u64,
 }
 
-pub fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
-    let mut summary = Av1BatchSummary::default();
+pub fn compute_convert_batch_summary(items: &[ConvertQueueItem]) -> ConvertBatchSummary {
+    let mut summary = ConvertBatchSummary::default();
     for item in items {
         let pending = matches!(
             item.status,
@@ -99,7 +91,7 @@ pub fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
                 summary.pending_input_bytes.saturating_add(item.input_bytes);
             continue;
         }
-        if item.status != ItemStatus::Done || av1_item_is_skipped(item) {
+        if item.status != ItemStatus::Done || convert_item_is_skipped(item) {
             continue;
         }
         let Some(output_bytes) = item.output_bytes else {
@@ -115,8 +107,8 @@ pub fn compute_av1_batch_summary(items: &[Av1QueueItem]) -> Av1BatchSummary {
     summary
 }
 
-/// Case/seperator-insensitive key for matching the same source file across input lines.
-pub fn normalize_av1_source_key(path: &str) -> String {
+/// Case/separator-insensitive key for matching the same source file across input lines.
+pub fn normalize_convert_source_key(path: &str) -> String {
     Path::new(path)
         .to_string_lossy()
         .replace('/', "\\")
@@ -124,19 +116,19 @@ pub fn normalize_av1_source_key(path: &str) -> String {
 }
 
 /// Drops already-scanned lines from a newline-separated input buffer.
-pub fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
+pub fn remove_scanned_convert_input_lines(input: &mut String, scanned: &[String]) {
     if scanned.is_empty() {
         return;
     }
     let remove: HashSet<String> = scanned
         .iter()
-        .map(|s| normalize_av1_source_key(s))
+        .map(|s| normalize_convert_source_key(s))
         .collect();
     let remaining: Vec<String> = input
         .lines()
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .filter(|s| !remove.contains(&normalize_av1_source_key(s)))
+        .filter(|s| !remove.contains(&normalize_convert_source_key(s)))
         .map(str::to_owned)
         .collect();
     *input = if remaining.is_empty() {
@@ -146,7 +138,7 @@ pub fn remove_scanned_av1_input_lines(input: &mut String, scanned: &[String]) {
     };
 }
 
-fn format_av1_duration_clock(secs: f64) -> String {
+fn format_convert_duration_clock(secs: f64) -> String {
     let total = secs.max(0.0) as u64;
     let h = total / 3600;
     let m = (total % 3600) / 60;
@@ -158,14 +150,14 @@ fn format_av1_duration_clock(secs: f64) -> String {
     }
 }
 
-fn format_av1_rate_display(fps_raw: &str, speed_raw: &str) -> String {
+fn format_convert_rate_display(fps_raw: &str, speed_raw: &str) -> String {
     let mut parts = Vec::new();
     if let Ok(fps) = fps_raw.trim().parse::<f64>() {
         if fps > 0.0 {
             parts.push(format!("{} fps", fps.round() as i64));
         }
     }
-    if let Some(speed) = crate::av1_transcode::parse_ffmpeg_speed(speed_raw) {
+    if let Some(speed) = crate::transcode::parse_ffmpeg_speed(speed_raw) {
         parts.push(format!("{speed:.2}x"));
     } else if !speed_raw.trim().is_empty() {
         parts.push(speed_raw.trim().to_owned());
@@ -173,8 +165,8 @@ fn format_av1_rate_display(fps_raw: &str, speed_raw: &str) -> String {
     parts.join(" · ")
 }
 
-/// Renders the `progress` detail line shown on running AV1 cards.
-pub fn format_av1_progress_detail(
+/// Renders the `progress` detail line shown on running converter cards.
+pub fn format_convert_progress_detail(
     progress: &str,
     current_secs: Option<f64>,
     total_secs: Option<f64>,
@@ -182,17 +174,17 @@ pub fn format_av1_progress_detail(
     speed_raw: &str,
     percent: Option<f32>,
 ) -> String {
-    let rate = format_av1_rate_display(fps_raw, speed_raw);
+    let rate = format_convert_rate_display(fps_raw, speed_raw);
     let pct = percent
         .map(|p| format!("{p:.0}%"))
         .unwrap_or_else(|| "…".to_owned());
     let time = match (current_secs, total_secs) {
         (Some(c), Some(t)) => format!(
             "{} / {}",
-            format_av1_duration_clock(c),
-            format_av1_duration_clock(t)
+            format_convert_duration_clock(c),
+            format_convert_duration_clock(t)
         ),
-        (Some(c), None) => format_av1_duration_clock(c),
+        (Some(c), None) => format_convert_duration_clock(c),
         _ => String::new(),
     };
     let rate_part = if rate.is_empty() {
@@ -209,50 +201,58 @@ pub fn format_av1_progress_detail(
     }
 }
 
+/// Label for skip hint on queue cards.
+pub fn convert_skip_hint_label(target_codec: &str) -> String {
+    format!(
+        "Will skip · already {}",
+        target_codec_label(normalize_target_codec(target_codec))
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::Av1QueueItem;
+    use crate::models::ConvertQueueItem;
 
     #[test]
-    fn will_skip_already_av1_when_reencode_disabled() {
-        let item = Av1QueueItem {
+    fn will_skip_already_target_when_reencode_disabled() {
+        let item = ConvertQueueItem {
             status: ItemStatus::Idle,
             video_codec: "av1".to_owned(),
             ..Default::default()
         };
-        assert!(av1_item_will_skip_already_av1(&item, false, "av1"));
-        assert!(!av1_item_will_skip_already_av1(&item, true, "av1"));
-        assert!(!av1_item_will_skip_already_av1(&item, false, "hevc"));
+        assert!(convert_item_will_skip_already_target(&item, false, "av1"));
+        assert!(!convert_item_will_skip_already_target(&item, true, "av1"));
+        assert!(!convert_item_will_skip_already_target(&item, false, "hevc"));
     }
 
     #[test]
     fn skipped_detection_matches_skipped_prefix() {
-        let item = Av1QueueItem {
+        let item = ConvertQueueItem {
             status: ItemStatus::Done,
             detail: "Skipped: already AV1".to_owned(),
             ..Default::default()
         };
-        assert!(av1_item_is_skipped(&item));
-        assert_eq!(av1_item_status_label(&item), "Skipped");
+        assert!(convert_item_is_skipped(&item));
+        assert_eq!(convert_item_status_label(&item), "Skipped");
     }
 
     #[test]
     fn saved_detail_reports_shrink_and_growth() {
-        assert!(format_av1_saved_detail(1000, 400).starts_with("Saved"));
-        assert!(format_av1_saved_detail(1000, 1500).starts_with("Output +"));
+        assert!(format_convert_saved_detail(1000, 400).starts_with("Saved"));
+        assert!(format_convert_saved_detail(1000, 1500).starts_with("Output +"));
     }
 
     #[test]
     fn remove_scanned_lines_is_case_insensitive() {
         let mut input = "D:/Videos/A.mkv\nD:\\Videos\\B.mkv\n".to_owned();
-        remove_scanned_av1_input_lines(&mut input, &["d:\\videos\\a.mkv".to_owned()]);
+        remove_scanned_convert_input_lines(&mut input, &["d:\\videos\\a.mkv".to_owned()]);
         assert_eq!(input, "D:\\Videos\\B.mkv\n");
     }
 
     #[test]
     fn progress_detail_includes_percent_and_time() {
-        let out = format_av1_progress_detail(
+        let out = format_convert_progress_detail(
             "continue",
             Some(30.0),
             Some(60.0),

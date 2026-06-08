@@ -14,7 +14,7 @@ pub const THUMB_PLACEHOLDER: Color32 = Color32::from_gray(32);
 
 /// Downloader / AV1 section accents (aligned with web `--mode-downloader` / `--mode-av1`).
 pub const MODE_DOWNLOADER: Color32 = Color32::from_rgb(66, 165, 245);
-pub const MODE_AV1: Color32 = Color32::from_rgb(171, 71, 188);
+pub const MODE_CONVERT: Color32 = Color32::from_rgb(171, 71, 188);
 
 pub const BG_CANVAS_LIGHT: Color32 = Color32::from_rgb(245, 246, 248);
 pub const BG_LOG_LIGHT: Color32 = Color32::from_rgb(236, 238, 242);
@@ -69,7 +69,7 @@ pub fn panel_fill(theme: &str) -> Color32 {
 
 pub fn mode_accent(av1: bool) -> Color32 {
     if av1 {
-        MODE_AV1
+        MODE_CONVERT
     } else {
         MODE_DOWNLOADER
     }

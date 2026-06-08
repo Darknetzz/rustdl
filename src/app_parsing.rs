@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::models::{Av1QueueItem, ItemStatus, QueueItem};
+use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
 
 static SPEED_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"at\s+([0-9.]+\s*[KMGTP]?i?B/s)").expect("valid speed regex"));
@@ -218,12 +218,12 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
     }
 }
 
-pub fn av1_detail_is_user_cancellation(detail: &str) -> bool {
+pub fn convert_detail_is_user_cancellation(detail: &str) -> bool {
     let d = detail.trim().to_ascii_lowercase();
     d.starts_with("cancelled") || d.contains("cancelled by user")
 }
 
-pub fn reset_av1_item_to_ready(item: &mut Av1QueueItem) {
+pub fn reset_convert_item_to_ready(item: &mut ConvertQueueItem) {
     item.status = ItemStatus::Idle;
     item.percent = 0.0;
     item.detail = if item.input_bytes > 0 {
@@ -233,14 +233,14 @@ pub fn reset_av1_item_to_ready(item: &mut Av1QueueItem) {
     };
 }
 
-pub fn normalize_restored_av1_item(item: &mut Av1QueueItem) {
+pub fn normalize_restored_convert_item(item: &mut ConvertQueueItem) {
     match item.status {
         ItemStatus::Done => {}
-        ItemStatus::Failed if av1_detail_is_user_cancellation(&item.detail) => {
-            reset_av1_item_to_ready(item);
+        ItemStatus::Failed if convert_detail_is_user_cancellation(&item.detail) => {
+            reset_convert_item_to_ready(item);
         }
         ItemStatus::Failed => {}
-        _ => reset_av1_item_to_ready(item),
+        _ => reset_convert_item_to_ready(item),
     }
 }
 
@@ -419,31 +419,31 @@ mod tests {
     }
 
     #[test]
-    fn normalize_restored_av1_item_restores_cancelled_failures_to_ready() {
-        use crate::models::Av1QueueItem;
+    fn normalize_restored_convert_item_restores_cancelled_failures_to_ready() {
+        use crate::models::ConvertQueueItem;
 
-        let mut item = Av1QueueItem {
+        let mut item = ConvertQueueItem {
             status: ItemStatus::Failed,
             detail: "Cancelled by user.".to_owned(),
             input_bytes: 1_048_576,
             ..Default::default()
         };
-        normalize_restored_av1_item(&mut item);
+        normalize_restored_convert_item(&mut item);
         assert_eq!(item.status, ItemStatus::Idle);
         assert_eq!(item.percent, 0.0);
         assert!(item.detail.starts_with("Ready ·"));
     }
 
     #[test]
-    fn normalize_restored_av1_item_keeps_real_failures() {
-        use crate::models::Av1QueueItem;
+    fn normalize_restored_convert_item_keeps_real_failures() {
+        use crate::models::ConvertQueueItem;
 
-        let mut item = Av1QueueItem {
+        let mut item = ConvertQueueItem {
             status: ItemStatus::Failed,
             detail: "ffmpeg failed with status exit status: 1".to_owned(),
             ..Default::default()
         };
-        normalize_restored_av1_item(&mut item);
+        normalize_restored_convert_item(&mut item);
         assert_eq!(item.status, ItemStatus::Failed);
     }
 }

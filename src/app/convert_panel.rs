@@ -6,13 +6,13 @@ use crate::app_ui::{
     button_group, draw_labeled_meta_badge, draw_meta_badge,
     draw_status_dot, left_button_row, status_color, status_dot_with_label, MetaBadgeKind,
 };
-use crate::av1_state::{
-    av1_item_is_skipped, av1_item_status_label, av1_item_will_skip_already_av1,
-    av1_source_path_missing, compute_av1_batch_summary,
+use crate::convert_state::{
+    compute_convert_batch_summary, convert_item_is_skipped, convert_item_status_label,
+    convert_item_will_skip_already_target, convert_skip_hint_label, convert_source_path_missing,
 };
-use crate::av1_transcode;
+use crate::transcode;
 use crate::config::AppSettings;
-use crate::models::{Av1QueueItem, ItemStatus};
+use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::service::DownloadCore;
 use crate::theme;
 use crate::theme::text_muted;
@@ -20,7 +20,7 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
-const AV1_SKIPPED_COLOR: Color32 = Color32::from_rgb(255, 167, 38);
+const CONVERT_SKIPPED_COLOR: Color32 = Color32::from_rgb(255, 167, 38);
 
 fn ellipsize_str(input: &str, max_chars: usize) -> String {
     let mut out = String::new();
@@ -37,7 +37,7 @@ fn ellipsize_str(input: &str, max_chars: usize) -> String {
     out
 }
 
-fn draw_av1_bytes_arrow(ui: &mut egui::Ui, from: &str, to: &str, text_color: Color32, theme: &str) {
+fn draw_convert_bytes_arrow(ui: &mut egui::Ui, from: &str, to: &str, text_color: Color32, theme: &str) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.label(RichText::new(from).small().color(text_color));
@@ -50,7 +50,7 @@ fn draw_av1_bytes_arrow(ui: &mut egui::Ui, from: &str, to: &str, text_color: Col
     });
 }
 
-fn draw_av1_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) {
+fn draw_convert_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) {
     let shortened = ellipsize_str(path, 76);
     let response = ui.add(
         egui::Label::new(
@@ -65,14 +65,14 @@ fn draw_av1_path_line(ui: &mut egui::Ui, prefix: &str, path: &str, theme: &str) 
     }
 }
 
-fn av1_item_status_color(item: &Av1QueueItem) -> Color32 {
-    if av1_item_is_skipped(item) {
-        return AV1_SKIPPED_COLOR;
+fn convert_item_status_color(item: &ConvertQueueItem) -> Color32 {
+    if convert_item_is_skipped(item) {
+        return CONVERT_SKIPPED_COLOR;
     }
     status_color(item.status)
 }
 
-fn format_av1_bitrate(bps: u64) -> String {
+fn format_convert_bitrate(bps: u64) -> String {
     if bps >= 1_000_000 {
         format!("{:.2} Mbps", bps as f64 / 1_000_000.0)
     } else if bps >= 1_000 {
@@ -82,7 +82,7 @@ fn format_av1_bitrate(bps: u64) -> String {
     }
 }
 
-fn av1_item_has_media(item: &Av1QueueItem) -> bool {
+fn convert_item_has_media(item: &ConvertQueueItem) -> bool {
     !item.video_codec.is_empty()
         || item.width.is_some()
         || item.height.is_some()
@@ -90,15 +90,18 @@ fn av1_item_has_media(item: &Av1QueueItem) -> bool {
         || item.bitrate_bps.is_some()
 }
 
-fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, theme: &str) {
+fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, theme: &str) {
     let muted = text_muted(theme);
-    let bitrate = if settings.av1_target_bitrate.trim().is_empty() {
+    let target = crate::transcode::target_codec_label(&settings.convert_target_codec);
+    draw_labeled_meta_badge(ui, "Target:", target, MetaBadgeKind::Codec, muted);
+    ui.label(RichText::new("·").small().color(muted));
+    let bitrate = if settings.convert_target_bitrate.trim().is_empty() {
         "auto".to_owned()
     } else {
-        settings.av1_target_bitrate.clone()
+        settings.convert_target_bitrate.clone()
     };
-    let max_width = format!("{}w", settings.av1_max_width);
-    let min_shrink = format!("{:.0}%", settings.av1_min_shrink_percent);
+    let max_width = format!("{}w", settings.convert_max_width);
+    let min_shrink = format!("{:.0}%", settings.convert_min_shrink_percent);
     ui.spacing_mut().item_spacing = egui::vec2(8.0, 4.0);
     draw_labeled_meta_badge(ui, "Bitrate:", &bitrate, MetaBadgeKind::Bitrate, muted);
     ui.label(RichText::new("·").small().color(muted));
@@ -113,7 +116,7 @@ fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, th
     draw_labeled_meta_badge(
         ui,
         "Preset:",
-        &settings.av1_size_preset,
+        &settings.convert_size_preset,
         MetaBadgeKind::SizePreset,
         muted,
     );
@@ -126,25 +129,30 @@ fn draw_av1_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, th
         muted,
     );
     ui.label(RichText::new("·").small().color(muted));
-    let container = if settings.av1_use_recommended_container {
-        "MKV"
+    let container = if settings.convert_use_recommended_container {
+        crate::transcode::recommended_container_for_target(&settings.convert_target_codec)
+            .to_ascii_uppercase()
     } else {
-        "same ext"
+        "same ext".to_owned()
     };
     draw_labeled_meta_badge(
         ui,
         "Container:",
-        container,
+        &container,
         MetaBadgeKind::SizePreset,
         muted,
     );
 }
 
-fn draw_av1_will_skip_notice(ui: &mut egui::Ui) {
-    draw_meta_badge(ui, "Will skip · already AV1", MetaBadgeKind::Av1WillSkip);
+fn draw_convert_will_skip_notice(ui: &mut egui::Ui, target_codec: &str) {
+    draw_meta_badge(
+        ui,
+        &convert_skip_hint_label(target_codec),
+        MetaBadgeKind::ConvertWillSkip,
+    );
 }
 
-fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, theme: &str) {
+fn draw_convert_media_badges(ui: &mut egui::Ui, item: &ConvertQueueItem, probing: bool, theme: &str) {
     if probing {
         ui.label(
             RichText::new("Probing metadata...")
@@ -153,7 +161,7 @@ fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, 
         );
         return;
     }
-    if !av1_item_has_media(item) {
+    if !convert_item_has_media(item) {
         ui.label(
             RichText::new("Metadata unavailable")
                 .small()
@@ -180,56 +188,57 @@ fn draw_av1_media_badges(ui: &mut egui::Ui, item: &Av1QueueItem, probing: bool, 
             );
         }
         if let Some(bps) = item.bitrate_bps {
-            draw_meta_badge(ui, &format_av1_bitrate(bps), MetaBadgeKind::Bitrate);
+            draw_meta_badge(ui, &format_convert_bitrate(bps), MetaBadgeKind::Bitrate);
         }
     });
 }
 
-fn av1_encoder_detect_key(ffmpeg_path: &str, encoder_override: &str) -> String {
+fn convert_encoder_detect_key(ffmpeg_path: &str, encoder_override: &str) -> String {
     format!("{ffmpeg_path}\0{encoder_override}")
 }
 
 impl PydlApp {
-    pub(super) fn refresh_av1_encoder_detection(&mut self) {
+    pub(super) fn refresh_convert_encoder_detection(&mut self) {
         if !self.has_ffmpeg {
-            self.av1_encoder_choice = None;
-            self.av1_encoder_detect_key.clear();
+            self.convert_encoder_choice = None;
+            self.convert_encoder_detect_key.clear();
             return;
         }
-        let key = av1_encoder_detect_key(
+        let key = convert_encoder_detect_key(
             &self.settings.ffmpeg_path,
-            &self.settings.av1_encoder_override,
+            &self.settings.convert_encoder_override,
         );
-        if self.av1_encoder_detect_key == key {
+        if self.convert_encoder_detect_key == key {
             return;
         }
-        self.av1_encoder_choice = Some(av1_transcode::detect_encoder_with_override(
+        self.convert_encoder_choice = Some(transcode::detect_encoder_with_override(
             &self.settings.ffmpeg_path,
-            &self.settings.av1_encoder_override,
+            &self.settings.convert_encoder_override,
+            &self.settings.convert_target_codec,
         ));
-        self.av1_encoder_detect_key = key;
+        self.convert_encoder_detect_key = key;
     }
 
     /// Runs an AV1 mutation against the shared `DownloadCore` (the single source of truth) and
     /// refreshes the GUI mirror fields from it. The editable textarea is pushed in first so the
     /// core sees the latest paths, then read back (a scan trims the lines it consumed).
-    pub(super) fn av1_core_action(&mut self, f: impl FnOnce(&mut DownloadCore)) {
+    pub(super) fn convert_core_action(&mut self, f: impl FnOnce(&mut DownloadCore)) {
         {
             let mut core = self.shared_core.lock();
-            core.av1_input_paths = self.av1_input_paths.clone();
+            core.convert_input_paths = self.convert_input_paths.clone();
             f(&mut core);
-            self.av1_input_paths = core.av1_input_paths.clone();
-            self.av1_items = core.av1_items.clone();
-            self.av1_running = core.av1_running;
-            self.av1_media_inflight = core.av1_media_inflight.clone();
+            self.convert_input_paths = core.convert_input_paths.clone();
+            self.convert_items = core.convert_items.clone();
+            self.convert_running = core.convert_running;
+            self.convert_media_inflight = core.convert_media_inflight.clone();
             self.core_generation = core.generation;
         }
-        self.ensure_av1_thumbnails();
+        self.ensure_convert_thumbnails();
     }
 
-    fn clear_av1_queue(&mut self) {
-        let ids: Vec<u64> = self.av1_items.iter().map(|it| it.item_id).collect();
-        self.av1_core_action(|core| core.clear_av1_queue());
+    fn clear_convert_queue(&mut self) {
+        let ids: Vec<u64> = self.convert_items.iter().map(|it| it.item_id).collect();
+        self.convert_core_action(|core| core.clear_convert_queue());
         for id in ids {
             self.textures.remove(&id);
             self.thumbnail_inflight.remove(&id);
@@ -237,10 +246,10 @@ impl PydlApp {
         }
     }
 
-    /// Start/cancel/clear — lives in the AV1 queue panel footer (docked or floating window).
-    pub(super) fn draw_av1_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+    /// Start/cancel/clear — lives in the Convert queue panel footer (docked or floating window).
+    pub(super) fn draw_convert_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let ready_count = self
-            .av1_items
+            .convert_items
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
             .count();
@@ -253,41 +262,41 @@ impl PydlApp {
                 crate::app_ui::button_group(ui, id, |g| add(g));
             }
         };
-        draw(ui, "av1_batch", &mut |g| {
+        draw(ui, "convert_batch", &mut |g| {
             if g.success(
-                &format!("{} Start AV1 batch", ui_icons::PLAY),
-                !self.av1_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
+                &format!("{} Start Convert batch", ui_icons::PLAY),
+                !self.convert_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
             )
             .clicked()
             {
-                self.start_av1_batch();
+                self.start_convert_batch();
             }
             if g.danger(
-                &format!("{} Cancel AV1 batch", ui_icons::CANCEL_TO_READY),
-                self.av1_running,
+                &format!("{} Cancel Convert batch", ui_icons::CANCEL_TO_READY),
+                self.convert_running,
             )
             .clicked()
             {
-                self.av1_core_action(|core| core.cancel_av1_batch());
+                self.convert_core_action(|core| core.cancel_convert_batch());
             }
         });
         draw(ui, "av1_queue", &mut |g| {
             if g.secondary(
-                &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),
-                !self.av1_running,
+                &format!("{} Clear Convert queue", ui_icons::CLEAR_QUEUE),
+                !self.convert_running,
             )
             .clicked()
             {
-                self.clear_av1_queue();
+                self.clear_convert_queue();
             }
         });
     }
 
-    pub(super) fn draw_av1_panel(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_convert_panel(&mut self, ui: &mut egui::Ui) {
         self.constrain_content(ui);
 
         ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new("AV1 Converter").heading());
+            ui.label(RichText::new("Video Converter").heading());
             ui.label(
                 RichText::new("Near-parity mode for local video transcoding.")
                     .small()
@@ -297,22 +306,22 @@ impl PydlApp {
         ui.separator();
         ui.label("Input paths (file/folder, one per line)");
         left_button_row(ui, |ui| {
-            button_group(ui, "av1_input", |g| {
+            button_group(ui, "convert_input", |g| {
                 if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true)
                     .clicked()
                 {
-                    self.browse_av1_inputs();
+                    self.browse_convert_inputs();
                 }
                 if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true)
                     .clicked()
                 {
-                    self.scan_av1_input_textbox();
+                    self.scan_convert_input_textbox();
                 }
             });
         });
         ui.horizontal_wrapped(|ui| {
             let ready = self
-                .av1_items
+                .convert_items
                 .iter()
                 .filter(|item| item.status == ItemStatus::Idle)
                 .count();
@@ -329,24 +338,24 @@ impl PydlApp {
         // there on scan / exit, so no per-keystroke save is needed here.
         ui.add_sized(
             [ui.available_width(), 90.0],
-            egui::TextEdit::multiline(&mut self.av1_input_paths)
+            egui::TextEdit::multiline(&mut self.convert_input_paths)
                 .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
         );
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Session").strong());
             if ui
-                .checkbox(&mut self.settings.av1_dry_run, "Dry run this batch")
+                .checkbox(&mut self.settings.convert_dry_run, "Dry run this batch")
                 .changed()
             {
                 self.persist_settings();
             }
             if ui
                 .checkbox(
-                    &mut self.settings.av1_auto_start_on_add,
+                    &mut self.settings.convert_auto_start_on_add,
                     "Start batch when paths are added",
                 )
                 .on_hover_text(
-                    "Automatically run Start AV1 batch after Browse, Scan inputs, \
+                    "Automatically run Start Convert batch after Browse, Scan inputs, \
                              or drag-and-drop adds new ready items.",
                 )
                 .changed()
@@ -354,15 +363,15 @@ impl PydlApp {
                 self.persist_settings();
             }
         });
-        self.refresh_av1_encoder_detection();
+        self.refresh_convert_encoder_detection();
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Encode settings").small());
-            draw_av1_encode_settings_badges(ui, &self.settings, &self.settings.theme);
-            if let Some(enc) = &self.av1_encoder_choice {
+            draw_convert_encode_settings_badges(ui, &self.settings, &self.settings.theme);
+            if let Some(enc) = &self.convert_encoder_choice {
                 status_dot_with_label(
                     ui,
-                    av1_transcode::encoder_indicator_label(enc),
-                    av1_transcode::encoder_indicator_color(enc),
+                    transcode::encoder_indicator_label(enc),
+                    transcode::encoder_indicator_color(enc),
                     true,
                 );
             } else if !self.has_ffmpeg {
@@ -375,21 +384,21 @@ impl PydlApp {
             }
         });
         left_button_row(ui, |ui| {
-            button_group(ui, "av1_settings", |g| {
+            button_group(ui, "convert_settings", |g| {
                 if g.secondary(&format!("{} Edit in Settings", ui_icons::SETTINGS), true)
                     .clicked()
                 {
                     self.settings_open = true;
-                    self.settings_tab = super::SettingsTab::Av1;
+                    self.settings_tab = super::SettingsTab::Convert;
                 }
             });
         });
     }
 
-    pub(super) fn draw_av1_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
+    pub(super) fn draw_convert_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
         let scroll_h = scroll_max.max(120.0);
         egui::ScrollArea::vertical()
-            .id_salt("av1_queue_scroll")
+            .id_salt("convert_queue_scroll")
             .auto_shrink([false, false])
             .max_height(scroll_h)
             .animated(true)
@@ -397,7 +406,7 @@ impl PydlApp {
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 2.0;
-                if self.av1_items.is_empty() {
+                if self.convert_items.is_empty() {
                     ui.vertical_centered(|ui| {
                         ui.add_space(8.0);
                         ui.label(
@@ -413,22 +422,22 @@ impl PydlApp {
                     });
                     return;
                 }
-                self.draw_av1_grouped_cards(ui);
+                self.draw_convert_grouped_cards(ui);
             });
     }
 
-    fn av1_item_in_queue_group(item: &Av1QueueItem, label: &str) -> bool {
+    fn convert_item_in_queue_group(item: &ConvertQueueItem, label: &str) -> bool {
         match label {
             "Active" => matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading),
             "Ready" => item.status == ItemStatus::Idle,
             "Failed" => item.status == ItemStatus::Failed,
-            "Skipped" => av1_item_is_skipped(item),
-            "Done" => item.status == ItemStatus::Done && !av1_item_is_skipped(item),
+            "Skipped" => convert_item_is_skipped(item),
+            "Done" => item.status == ItemStatus::Done && !convert_item_is_skipped(item),
             _ => false,
         }
     }
 
-    fn av1_queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
+    fn convert_queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
         if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
             return true;
         }
@@ -439,32 +448,32 @@ impl PydlApp {
         }
     }
 
-    fn av1_queue_group_color(label: &str) -> Color32 {
+    fn convert_queue_group_color(label: &str) -> Color32 {
         match label {
             "Active" => status_color(ItemStatus::Downloading),
             "Ready" => status_color(ItemStatus::Idle),
             "Failed" => status_color(ItemStatus::Failed),
-            "Skipped" => AV1_SKIPPED_COLOR,
+            "Skipped" => CONVERT_SKIPPED_COLOR,
             "Done" => status_color(ItemStatus::Done),
             _ => Color32::LIGHT_GRAY,
         }
     }
 
-    fn draw_av1_grouped_cards(&mut self, ui: &mut egui::Ui) {
+    fn draw_convert_grouped_cards(&mut self, ui: &mut egui::Ui) {
         let groups = ["Active", "Ready", "Failed", "Skipped", "Done"];
         for label in groups {
             if self.queue_group_focus.is_some_and(|f| f != label) {
                 continue;
             }
             let mut ids: Vec<u64> = self
-                .av1_items
+                .convert_items
                 .iter()
-                .filter(|it| Self::av1_item_in_queue_group(it, label))
+                .filter(|it| Self::convert_item_in_queue_group(it, label))
                 .map(|it| it.item_id)
                 .collect();
             if label == "Active" {
                 ids.sort_by_key(|id| {
-                    self.av1_items
+                    self.convert_items
                         .iter()
                         .find(|it| it.item_id == *id)
                         .map(|it| match it.status {
@@ -479,25 +488,25 @@ impl PydlApp {
                 continue;
             }
             let scroll_here = self.scroll_to_queue_group == Some(label);
-            let default_open = self.av1_queue_group_default_open(label, scroll_here);
+            let default_open = self.convert_queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
-            let id = ui.make_persistent_id(("av1_queue_group", label));
+            let id = ui.make_persistent_id(("convert_queue_group", label));
             let header = egui::collapsing_header::CollapsingState::load_with_default_open(
                 ui.ctx(),
                 id,
                 default_open,
             )
             .show_header(ui, |ui| {
-                status_dot_with_label(ui, &header_text, Self::av1_queue_group_color(label), true);
+                status_dot_with_label(ui, &header_text, Self::convert_queue_group_color(label), true);
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
                 for item_id in &ids {
-                    let Some(it) = self.av1_items.iter().find(|x| x.item_id == *item_id) else {
+                    let Some(it) = self.convert_items.iter().find(|x| x.item_id == *item_id) else {
                         continue;
                     };
                     ui.group(|ui| {
-                        self.draw_av1_queue_card(ui, it);
+                        self.draw_convert_queue_card(ui, it);
                     });
                 }
             });
@@ -508,42 +517,42 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn draw_av1_queue_status_row(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_convert_queue_status_row(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
-            let heading = if self.av1_items.is_empty() {
+            let heading = if self.convert_items.is_empty() {
                 "Queue:".to_owned()
             } else {
-                format!("Queue ({}):", self.av1_items.len())
+                format!("Queue ({}):", self.convert_items.len())
             };
             ui.label(RichText::new(heading).color(text_muted(&self.settings.theme)));
             let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
             let ready = self
-                .av1_items
+                .convert_items
                 .iter()
                 .filter(|i| i.status == ItemStatus::Idle)
                 .count();
             let queued = self
-                .av1_items
+                .convert_items
                 .iter()
                 .filter(|i| i.status == ItemStatus::Queued)
                 .count();
             let running = self
-                .av1_items
+                .convert_items
                 .iter()
                 .filter(|i| i.status == ItemStatus::Downloading)
                 .count();
             let done = self
-                .av1_items
+                .convert_items
                 .iter()
-                .filter(|i| i.status == ItemStatus::Done && !av1_item_is_skipped(i))
+                .filter(|i| i.status == ItemStatus::Done && !convert_item_is_skipped(i))
                 .count();
             let skipped = self
-                .av1_items
+                .convert_items
                 .iter()
-                .filter(|i| av1_item_is_skipped(i))
+                .filter(|i| convert_item_is_skipped(i))
                 .count();
             let failed = self
-                .av1_items
+                .convert_items
                 .iter()
                 .filter(|i| i.status == ItemStatus::Failed)
                 .count();
@@ -560,7 +569,7 @@ impl PydlApp {
                 parts.push(("done", done, status_color(ItemStatus::Done)));
             }
             if skipped > 0 {
-                parts.push(("skipped", skipped, AV1_SKIPPED_COLOR));
+                parts.push(("skipped", skipped, CONVERT_SKIPPED_COLOR));
             }
             if failed > 0 {
                 parts.push(("failed", failed, status_color(ItemStatus::Failed)));
@@ -599,8 +608,8 @@ impl PydlApp {
         });
     }
 
-    pub(super) fn draw_av1_batch_summary_row(&self, ui: &mut egui::Ui) {
-        let batch = compute_av1_batch_summary(&self.av1_items);
+    pub(super) fn draw_convert_batch_summary_row(&self, ui: &mut egui::Ui) {
+        let batch = compute_convert_batch_summary(&self.convert_items);
         if batch.completed == 0 && batch.pending_count == 0 {
             return;
         }
@@ -623,7 +632,7 @@ impl PydlApp {
 
             if batch.completed > 0 {
                 ui.label(RichText::new(format!("{} completed", batch.completed)).color(done_color));
-                draw_av1_bytes_arrow(
+                draw_convert_bytes_arrow(
                     ui,
                     &human_bytes_ui(batch.completed_input_bytes),
                     &human_bytes_ui(batch.completed_output_bytes),
@@ -654,24 +663,24 @@ impl PydlApp {
         });
     }
 
-    fn draw_av1_queue_card(&self, ui: &mut egui::Ui, it: &Av1QueueItem) {
+    fn draw_convert_queue_card(&self, ui: &mut egui::Ui, it: &ConvertQueueItem) {
         let theme = &self.settings.theme;
-        let done = it.status == ItemStatus::Done && !av1_item_is_skipped(it);
-        let item_color = av1_item_status_color(it);
-        let output_codec = self
-            .av1_encoder_choice
-            .as_ref()
-            .map(|enc| enc.codec)
-            .unwrap_or("av1");
-        let will_skip_av1 =
-            av1_item_will_skip_already_av1(it, self.settings.av1_reencode_av1, output_codec);
+        let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
+        let item_color = convert_item_status_color(it);
+        let output_codec =
+            transcode::normalize_target_codec(&self.settings.convert_target_codec);
+        let will_skip_target = convert_item_will_skip_already_target(
+            it,
+            self.settings.convert_reencode_target,
+            output_codec,
+        );
         let fill = if done {
             theme::done_card_fill(theme)
         } else {
             Color32::TRANSPARENT
         };
-        let stroke = if will_skip_av1 {
-            egui::Stroke::new(1.5, AV1_SKIPPED_COLOR)
+        let stroke = if will_skip_target {
+            egui::Stroke::new(1.5, CONVERT_SKIPPED_COLOR)
         } else {
             egui::Stroke::NONE
         };
@@ -698,7 +707,7 @@ impl PydlApp {
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
-                    } else if av1_source_path_missing(&it.source_path) {
+                    } else if convert_source_path_missing(&it.source_path) {
                         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(thumb_rect), |ui| {
                             ui.centered_and_justified(|ui| {
                                 draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
@@ -730,7 +739,7 @@ impl PydlApp {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 8.0;
                             ui.label(RichText::new(format!("#{}", it.item_id)).strong());
-                            status_dot_with_label(ui, av1_item_status_label(it), item_color, false);
+                            status_dot_with_label(ui, convert_item_status_label(it), item_color, false);
                         });
 
                         if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
@@ -745,17 +754,17 @@ impl PydlApp {
                             ui.add(pb);
                         }
 
-                        let probing = self.av1_media_inflight.contains(&it.item_id);
-                        if will_skip_av1 {
-                            draw_av1_will_skip_notice(ui);
+                        let probing = self.convert_media_inflight.contains(&it.item_id);
+                        if will_skip_target {
+                            draw_convert_will_skip_notice(ui, &self.settings.convert_target_codec);
                         }
-                        draw_av1_media_badges(ui, it, probing, theme);
+                        draw_convert_media_badges(ui, it, probing, theme);
 
-                        draw_av1_path_line(ui, "in:", &it.source_path, theme);
-                        draw_av1_path_line(ui, "out:", &it.output_path, theme);
+                        draw_convert_path_line(ui, "in:", &it.source_path, theme);
+                        draw_convert_path_line(ui, "out:", &it.output_path, theme);
 
                         if it.status == ItemStatus::Done
-                            && !av1_item_is_skipped(it)
+                            && !convert_item_is_skipped(it)
                             && it.input_bytes > 0
                         {
                             if let Some(output_bytes) = it.output_bytes {
@@ -766,7 +775,7 @@ impl PydlApp {
                                             RichText::new(&it.detail).small().color(item_color),
                                         );
                                     }
-                                    draw_av1_bytes_arrow(
+                                    draw_convert_bytes_arrow(
                                         ui,
                                         &human_bytes_ui(it.input_bytes),
                                         &human_bytes_ui(output_bytes),
@@ -783,9 +792,9 @@ impl PydlApp {
             });
     }
 
-    fn scan_av1_input_textbox(&mut self) {
+    fn scan_convert_input_textbox(&mut self) {
         let lines: Vec<String> = self
-            .av1_input_paths
+            .convert_input_paths
             .lines()
             .map(str::trim)
             .filter(|s| !s.is_empty())
@@ -794,27 +803,27 @@ impl PydlApp {
         if lines.is_empty() {
             return;
         }
-        self.av1_core_action(|core| core.scan_av1_paths_into_queue(&lines));
+        self.convert_core_action(|core| core.scan_convert_paths_into_queue(&lines));
     }
 
-    fn start_av1_batch(&mut self) {
+    fn start_convert_batch(&mut self) {
         // Persist current AV1 settings first so the worker (in the core) uses the latest config.
         self.persist_settings();
-        self.av1_core_action(|core| core.start_av1_batch());
+        self.convert_core_action(|core| core.start_convert_batch());
     }
 
-    fn browse_av1_inputs(&mut self) {
-        let files = app_actions::pick_av1_input_files();
+    fn browse_convert_inputs(&mut self) {
+        let files = app_actions::pick_convert_input_files();
         if !files.is_empty() {
             let lines: Vec<String> = files
                 .into_iter()
                 .map(|p| p.to_string_lossy().to_string())
                 .collect();
-            self.extend_av1_input_paths_with_lines(lines);
+            self.extend_convert_input_paths_with_lines(lines);
             return;
         }
-        if let Some(folder) = app_actions::pick_av1_input_folder() {
-            self.extend_av1_input_paths_with_lines(vec![folder.to_string_lossy().to_string()]);
+        if let Some(folder) = app_actions::pick_convert_input_folder() {
+            self.extend_convert_input_paths_with_lines(vec![folder.to_string_lossy().to_string()]);
         }
     }
 }

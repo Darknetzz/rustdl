@@ -1,7 +1,7 @@
 //! Shared download service and LAN web control plane.
 
 pub mod core;
-pub mod core_av1;
+pub mod core_convert;
 pub mod core_events;
 pub mod web;
 

@@ -20,7 +20,7 @@
       </button>
       <nav class="view-nav btn-group" id="view-nav" aria-label="Section">
         <button type="button" id="nav-downloader" class="nav-btn active" data-view="downloader" data-icon="cloud_download">Downloader</button>
-        <button type="button" id="nav-av1" class="nav-btn" data-view="av1" data-icon="bolt">AV1</button>
+        <button type="button" id="nav-convert" class="nav-btn" data-view="convert" data-icon="bolt">Convert</button>
       </nav>
       <div id="navbar-status" class="navbar-status navbar-status-idle" role="status" aria-live="polite" title="Application activity">
         <span class="navbar-status-dot" aria-hidden="true"></span>
@@ -48,7 +48,7 @@
 
   <section id="auth-panel" class="panel">
     <h2>Connect</h2>
-    <p class="hint">Enter the API token from rustdl Settings → Shared → Web UI. Traffic is HTTP on your LAN; use only on networks you trust.</p>
+    <p class="hint">Enter the API token from rustdl Settings → Web UI. Traffic is HTTP on your LAN; use only on networks you trust.</p>
     <form id="auth-form">
       <label>API token <input type="password" id="token-input" autocomplete="off" /></label>
       <button type="submit" id="btn-save-token" class="primary" data-icon="save">Save token</button>
@@ -94,29 +94,29 @@
     </section>
     </div>
 
-    <div id="av1-main" class="hidden">
+    <div id="convert-main" class="hidden">
       <section class="panel">
-        <h2>AV1 Converter</h2>
-        <p class="hint">Transcode local videos to AV1/HEVC to save space. Paths are read on the rustdl host, not your browser.</p>
-        <label class="av1-input-label">Input paths (file or folder, one per line)
-          <textarea id="av1-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
+        <h2>Video Converter</h2>
+        <p class="hint">Transcode local videos to AV1, H.265, or H.264 to save space. Paths are read on the rustdl host, not your browser.</p>
+        <label class="convert-input-label">Input paths (file or folder, one per line)
+          <textarea id="convert-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
         </label>
-        <div class="row av1-actions btn-toolbar">
-          <div class="btn-group" role="group" aria-label="AV1 batch controls">
-            <button type="button" id="btn-av1-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
-            <button type="button" id="btn-av1-start" class="primary" data-icon="play_arrow">Start AV1 batch</button>
-            <button type="button" id="btn-av1-cancel" class="danger" data-icon="stop" disabled title="No AV1 batch is running">Cancel</button>
+        <div class="row convert-actions btn-toolbar">
+          <div class="btn-group" role="group" aria-label="Convert batch controls">
+            <button type="button" id="btn-convert-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
+            <button type="button" id="btn-convert-start" class="primary" data-icon="play_arrow">Start Convert batch</button>
+            <button type="button" id="btn-convert-cancel" class="danger" data-icon="stop" disabled title="No Convert batch is running">Cancel</button>
           </div>
-          <div class="btn-group" role="group" aria-label="AV1 queue">
-            <button type="button" id="btn-av1-clear" class="secondary" data-icon="clear_all">Clear queue</button>
-            <button type="button" id="btn-av1-settings" class="secondary" data-icon="settings">AV1 settings</button>
+          <div class="btn-group" role="group" aria-label="Convert queue">
+            <button type="button" id="btn-convert-clear" class="secondary" data-icon="clear_all">Clear queue</button>
+            <button type="button" id="btn-convert-settings" class="secondary" data-icon="settings">Converter settings</button>
           </div>
         </div>
-        <p id="av1-encoder" class="av1-encoder hint"></p>
-        <div id="av1-summary" class="status-summary"></div>
+        <p id="convert-encoder" class="convert-encoder hint"></p>
+        <div id="convert-summary" class="status-summary"></div>
       </section>
       <section class="panel">
-        <div id="av1-queue" class="queue"></div>
+        <div id="convert-queue" class="queue"></div>
       </section>
     </div>
   </main>
@@ -131,7 +131,7 @@
       </div>
     </div>
     <div class="about-body">
-      <p>Download and organize videos with yt-dlp, then optionally transcode to AV1.</p>
+      <p>Download and organize videos with yt-dlp, then optionally transcode with the Video Converter.</p>
       <p class="hint">This page is the LAN web UI. Settings, queue control, and shutdown run on the rustdl instance on your network.</p>
       <p class="hint">Check for updates from the desktop app (<strong>About rustdl</strong> on the logo in the main window).</p>
       <p><a id="about-releases-link" href="https://github.com/Darknetzz/rustdl/releases" target="_blank" rel="noopener noreferrer">View releases on GitHub</a> · <a href="https://github.com/Darknetzz/rustdl" target="_blank" rel="noopener noreferrer">Source repository</a></p>
@@ -150,7 +150,7 @@
         <div class="settings-tabs btn-group" role="tablist">
           <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
           <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
-          <button type="button" class="settings-tab" data-tab="av1" data-icon="bolt" role="tab">AV1</button>
+          <button type="button" class="settings-tab" data-tab="convert" data-icon="bolt" role="tab">Convert</button>
         </div>
       </div>
       <div class="settings-scroll">
@@ -173,7 +173,7 @@
           </div>
 
           <h3>Shared executables</h3>
-          <p class="hint">Used by the downloader and AV1 converter. Leave empty to use PATH.</p>
+          <p class="hint">Used by the downloader and Video Converter. Leave empty to use PATH.</p>
           <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
           <label>ffprobe path <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" /></label>
         </div>
@@ -182,7 +182,7 @@
           <h3>Behavior</h3>
           <label class="check"><input type="checkbox" id="set-auto-add" /> Auto-add pasted URLs after a short delay</label>
           <label class="check"><input type="checkbox" id="set-auto-start" /> Auto-start downloads when new items become ready</label>
-          <label class="check"><input type="checkbox" id="set-enqueue-av1" /> Enqueue completed downloads in AV1 converter queue</label>
+          <label class="check"><input type="checkbox" id="set-enqueue-convert" /> Enqueue completed downloads in Video Converter queue</label>
           <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
           <label>Output folder <input type="text" id="set-output-dir" /></label>
           <p id="settings-output-disk" class="hint hidden" aria-live="polite"></p>
@@ -266,31 +266,38 @@
           <pre id="command-preview" class="command-preview"></pre>
         </div>
 
-        <div id="settings-tab-av1" class="settings-panel" role="tabpanel" hidden>
+        <div id="settings-tab-convert" class="settings-panel" role="tabpanel" hidden>
           <h3>Encoding</h3>
-          <p class="hint">ffmpeg/ffprobe paths are shared (see the Shared tab). The fastest available AV1/HEVC encoder is picked automatically unless overridden.</p>
-          <label>Target bitrate <input type="text" id="set-av1-bitrate" placeholder="auto (e.g. 2M, 1500k)" /></label>
-          <label>Max width (px) <input type="number" id="set-av1-max-width" min="320" max="7680" step="2" /></label>
+          <p class="hint">ffmpeg/ffprobe paths are shared (see the Shared tab). The fastest available encoder for the target codec is picked automatically unless overridden.</p>
+          <label>Target codec
+            <select id="set-convert-target-codec">
+              <option value="av1">AV1</option>
+              <option value="hevc">H.265</option>
+              <option value="h264">H.264</option>
+            </select>
+          </label>
+          <label>Target bitrate <input type="text" id="set-convert-bitrate" placeholder="auto (e.g. 2M, 1500k)" /></label>
+          <label>Max width (px) <input type="number" id="set-convert-max-width" min="320" max="7680" step="2" /></label>
           <label>Size preset
-            <select id="set-av1-preset">
+            <select id="set-convert-preset">
               <option value="light">Light (largest, best quality)</option>
               <option value="balanced">Balanced</option>
               <option value="aggressive">Aggressive (smallest)</option>
             </select>
           </label>
-          <label>Minimum shrink to keep output (%) <input type="number" id="set-av1-min-shrink" min="0" max="95" step="1" /></label>
-          <label>Encoder override <input type="text" id="set-av1-encoder-override" placeholder="av1_nvenc, av1_amf, libsvtav1…" /></label>
+          <label>Minimum shrink to keep output (%) <input type="number" id="set-convert-min-shrink" min="0" max="95" step="1" /></label>
+          <label>Encoder override <input type="text" id="set-convert-encoder-override" placeholder="av1_nvenc, hevc_nvenc, libx264…" /></label>
 
           <h3>Files</h3>
-          <label class="check"><input type="checkbox" id="set-av1-recursive" /> Scan folders recursively</label>
-          <label class="check"><input type="checkbox" id="set-av1-dry-run" /> Dry run (analyze only, do not write)</label>
-          <label class="check"><input type="checkbox" id="set-av1-auto-start" /> Automatically start batch when paths are added</label>
-          <label class="check"><input type="checkbox" id="set-av1-overwrite" /> Overwrite existing output files</label>
-          <label class="check"><input type="checkbox" id="set-av1-reencode" /> Re-encode files that are already AV1</label>
-          <label class="check"><input type="checkbox" id="set-av1-recommended-container" checked /> Use recommended container (MKV)</label>
-          <label class="check"><input type="checkbox" id="set-av1-delete-original" /> Delete original after a successful transcode</label>
-          <label class="check"><input type="checkbox" id="set-av1-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
-          <label class="check"><input type="checkbox" id="set-av1-remember-queue" /> Remember the AV1 queue between sessions</label>
+          <label class="check"><input type="checkbox" id="set-convert-recursive" /> Scan folders recursively</label>
+          <label class="check"><input type="checkbox" id="set-convert-dry-run" /> Dry run (analyze only, do not write)</label>
+          <label class="check"><input type="checkbox" id="set-convert-auto-start" /> Automatically start batch when paths are added</label>
+          <label class="check"><input type="checkbox" id="set-convert-overwrite" /> Overwrite existing output files</label>
+          <label class="check"><input type="checkbox" id="set-convert-reencode" /> Re-encode files that are already at target codec</label>
+          <label class="check"><input type="checkbox" id="set-convert-recommended-container" checked /> Use recommended container for target codec</label>
+          <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
+          <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
+          <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>
         </div>
       </div>
       <div class="dialog-actions">
