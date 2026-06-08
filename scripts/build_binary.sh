@@ -2,4 +2,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 cargo build --release
-echo "Built: $(pwd)/target/release/rustdl"
+bin="$(pwd)/target/release/rustdl"
+echo "Built: $bin"
+echo "Run:   $bin"
