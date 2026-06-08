@@ -29,6 +29,7 @@ const ICON = {
   upload: "upload",
   check: "check",
   contentCopy: "content_copy",
+  link: "link",
   openInNew: "open_in_new",
   schedule: "schedule",
   hourglassEmpty: "hourglass_empty",

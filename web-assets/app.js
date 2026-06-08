@@ -978,27 +978,51 @@ function resolveItemPageUrl(item) {
   return null;
 }
 
-function appendUrlActionButtons(actions, item) {
+function appendUrlMenuButton(group, item) {
   const url = resolveItemPageUrl(item);
   if (!url) return;
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.className = "secondary";
-  setButtonLabel(copy, ICON.contentCopy, "Copy URL");
-  copy.title = url;
-  copy.onclick = () => {
+
+  const menu = document.createElement("details");
+  menu.className = "btn-menu";
+
+  const trigger = document.createElement("summary");
+  trigger.className = "btn-menu-trigger secondary";
+  trigger.title = url;
+  setButtonLabel(trigger, ICON.link, "URL...");
+  menu.appendChild(trigger);
+
+  const panel = document.createElement("div");
+  panel.className = "btn-menu-panel";
+  panel.setAttribute("role", "menu");
+
+  const copyBtn = document.createElement("button");
+  copyBtn.type = "button";
+  copyBtn.className = "btn-menu-item";
+  setButtonLabel(copyBtn, ICON.contentCopy, "Copy URL");
+  copyBtn.title = url;
+  copyBtn.onclick = (e) => {
+    e.preventDefault();
+    menu.open = false;
     navigator.clipboard.writeText(url).catch(() => {
       window.prompt("Copy URL:", url);
     });
   };
-  actions.appendChild(copy);
-  const open = document.createElement("button");
-  open.type = "button";
-  open.className = "secondary";
-  setButtonLabel(open, ICON.openInNew, "Open URL");
-  open.title = url;
-  open.onclick = () => window.open(url, "_blank", "noopener,noreferrer");
-  actions.appendChild(open);
+  panel.appendChild(copyBtn);
+
+  const openBtn = document.createElement("button");
+  openBtn.type = "button";
+  openBtn.className = "btn-menu-item";
+  setButtonLabel(openBtn, ICON.openInNew, "Open URL");
+  openBtn.title = "Open in your default browser";
+  openBtn.onclick = (e) => {
+    e.preventDefault();
+    menu.open = false;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+  panel.appendChild(openBtn);
+
+  menu.appendChild(panel);
+  group.appendChild(menu);
 }
 
 function thumbCacheKey(item) {
@@ -1324,7 +1348,7 @@ function appendRemoveMenuButton(group, item) {
   menu.className = "btn-menu";
 
   const trigger = document.createElement("summary");
-  trigger.className = "btn-menu-trigger secondary";
+  trigger.className = "btn-menu-trigger danger";
   trigger.title = "Remove from queue or delete the saved file";
   setButtonLabel(trigger, ICON.remove, "Remove...");
   menu.appendChild(trigger);
@@ -1487,7 +1511,7 @@ function renderQueueCard(item, settings) {
 
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
-  appendUrlActionButtons(group, item);
+  appendUrlMenuButton(group, item);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";
@@ -1546,7 +1570,7 @@ function renderQueueCardListRow(item, settings) {
 
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
-  appendUrlActionButtons(group, item);
+  appendUrlMenuButton(group, item);
   if (canCancel(item)) {
     const cancel = document.createElement("button");
     cancel.type = "button";

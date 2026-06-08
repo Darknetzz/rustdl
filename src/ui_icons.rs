@@ -50,6 +50,8 @@ pub const PRESET_FAST: &str = m::ICON_BOLT;
 pub const PRESET_ARCHIVE: &str = m::ICON_ARCHIVE;
 
 pub const COPY_CLIPBOARD: &str = m::ICON_CONTENT_PASTE;
+/// Page link actions on downloader queue cards.
+pub const PAGE_URL: &str = m::ICON_LINK;
 pub const UPDATE_CHECK: &str = m::ICON_SYNC;
 /// Open release / get update (browser).
 pub const UPDATE_OPEN: &str = m::ICON_OPEN_IN_NEW;

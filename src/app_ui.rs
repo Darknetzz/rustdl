@@ -1265,6 +1265,37 @@ impl<'a> ButtonGroup<'a> {
         self.add(|ui| grouped_warning_button(ui, label, enabled, compact))
     }
 
+    /// Copy or open the downloader page URL for this row.
+    pub fn url_menu(
+        &mut self,
+        url: &str,
+        copy_clicked: &mut bool,
+        open_clicked: &mut bool,
+    ) -> Response {
+        let compact = self.compact;
+        let label = format!("{} URL...", crate::ui_icons::PAGE_URL);
+        self.add(|ui| {
+            ui.menu_button(grouped_button_label(&label, compact), |ui| {
+                if ui
+                    .button(format!("{} Copy URL", crate::ui_icons::COPY_CLIPBOARD))
+                    .on_hover_text(url)
+                    .clicked()
+                {
+                    *copy_clicked = true;
+                }
+                if ui
+                    .button(format!("{} Open URL", crate::ui_icons::UPDATE_OPEN))
+                    .on_hover_text("Open in your default browser")
+                    .clicked()
+                {
+                    *open_clicked = true;
+                }
+            })
+            .response
+            .on_hover_text(url)
+        })
+    }
+
     /// Fused "Remove..." menu: queue row removal and optional on-disk file delete.
     pub fn remove_menu(
         &mut self,

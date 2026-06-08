@@ -942,6 +942,17 @@ button.danger:disabled,
   white-space: nowrap;
 }
 
+.btn-menu-trigger.secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+.btn-menu-trigger.danger {
+  background: rgba(239, 83, 80, 0.2);
+  color: var(--failed);
+  box-shadow: inset 0 0 0 1px rgba(239, 83, 80, 0.45);
+}
+
 .btn-menu-trigger::-webkit-details-marker {
   display: none;
 }

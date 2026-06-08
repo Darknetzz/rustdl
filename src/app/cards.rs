@@ -281,22 +281,13 @@ impl PydlApp {
                     let ctx = ui.ctx().clone();
                     left_button_row(ui, |ui| {
                         compact_button_group(ui, ("card_url", id), |g| {
-                            if g.secondary(
-                                &format!("{} Copy URL", ui_icons::COPY_CLIPBOARD),
-                                true,
-                            )
-                            .on_hover_text(&url)
-                            .clicked()
-                            {
+                            let mut copy_url = false;
+                            let mut open_url = false;
+                            g.url_menu(&url, &mut copy_url, &mut open_url);
+                            if copy_url {
                                 ctx.copy_text(url.clone());
                             }
-                            if g.secondary(
-                                &format!("{} Open URL", ui_icons::UPDATE_OPEN),
-                                true,
-                            )
-                            .on_hover_text("Open in your default browser")
-                            .clicked()
-                            {
+                            if open_url {
                                 if let Err(e) = crate::app_actions::open_browser(&url) {
                                     self.append_log(&format!("Failed to open URL: {e}"));
                                 }
@@ -493,7 +484,7 @@ impl PydlApp {
                                 self.request_cancel_item(id, CancelPostAction::Remove);
                             }
                             if !show_saved_file_actions
-                                && g.secondary(
+                                && g.danger(
                                     &format!("{} Remove", ui_icons::REMOVE),
                                     removable,
                                 )
@@ -550,18 +541,30 @@ impl PydlApp {
             }
             if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
                 let ctx = ui.ctx().clone();
-                if ui
-                    .small_button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
-                    .on_hover_text(&url)
-                    .clicked()
-                {
+                let mut copy_url = false;
+                let mut open_url = false;
+                ui.menu_button(format!("{} URL...", ui_icons::PAGE_URL), |ui| {
+                    if ui
+                        .button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
+                        .on_hover_text(&url)
+                        .clicked()
+                    {
+                        copy_url = true;
+                    }
+                    if ui
+                        .button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
+                        .on_hover_text("Open in your default browser")
+                        .clicked()
+                    {
+                        open_url = true;
+                    }
+                })
+                .response
+                .on_hover_text(&url);
+                if copy_url {
                     ctx.copy_text(url.clone());
                 }
-                if ui
-                    .small_button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
-                    .on_hover_text("Open in your default browser")
-                    .clicked()
-                {
+                if open_url {
                     if let Err(e) = crate::app_actions::open_browser(&url) {
                         self.append_log(&format!("Failed to open URL: {e}"));
                     }
