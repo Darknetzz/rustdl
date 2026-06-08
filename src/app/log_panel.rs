@@ -6,8 +6,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, content_width, left_button_row, remaining_ui_height,
-    secondary_button,
+    button_group, button_toolbar, button_toolbar_wrapped, compact_button_group, content_width,
+    left_button_row, remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -199,28 +199,102 @@ impl PydlApp {
         }
     }
 
+    pub(super) fn draw_log_controls(&mut self, ui: &mut egui::Ui) {
+        button_toolbar_wrapped(ui, |ui| self.draw_log_controls_inner(ui, false));
+    }
+
+    fn draw_log_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, "queue_logs_controls", |g| add(g));
+            } else {
+                button_group(ui, "queue_logs_controls", |g| add(g));
+            }
+        };
+        draw(ui, &mut |g| {
+            if !self.settings.logs_open {
+                if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                    .on_hover_text(
+                        "Open the activity log (dock under the queue or in its own window)",
+                    )
+                    .clicked()
+                {
+                    self.settings.logs_open = true;
+                    self.persist_settings();
+                }
+            } else {
+                let log_dock_label = if self.settings.logs_docked {
+                    format!("{} Undock log", ui_icons::UNDOCK_LOG)
+                } else {
+                    format!("{} Dock log", ui_icons::DOCK_LOG)
+                };
+                if g.secondary(&log_dock_label, true)
+                    .on_hover_text(
+                        "Dock the log under the queue in the main window, or show it in a separate window",
+                    )
+                    .clicked()
+                {
+                    self.settings.logs_docked = !self.settings.logs_docked;
+                    self.persist_settings();
+                }
+                if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
+                    .on_hover_text("Close the activity log")
+                    .clicked()
+                {
+                    self.settings.logs_open = false;
+                    self.settings.logs_docked = false;
+                    self.persist_settings();
+                }
+            }
+        });
+    }
+
     pub(super) fn draw_activity_log_toolbar(&mut self, ui: &mut egui::Ui) {
-        button_toolbar_wrapped(ui, |ui| {
-            button_group(ui, "log_clear", |g| {
+        self.draw_activity_log_toolbar_inner(ui, false);
+    }
+
+    fn draw_activity_log_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, "log_clear", |g| add(g));
+            } else {
+                button_group(ui, "log_clear", |g| add(g));
+            }
+        };
+        let mut row = |ui: &mut egui::Ui| {
+            draw(ui, &mut |g| {
                 if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true).clicked() {
                     self.clear_activity_log();
                 }
             });
-            ui.label("Filter");
-            egui::ComboBox::from_id_salt("log_filter")
-                .selected_text(self.log_filter.as_str())
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
-                    ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
-                    ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
-                });
-            if ui
-                .checkbox(&mut self.settings.log_relative_time, "Relative timestamps")
-                .changed()
+            ui.label(RichText::new("Filter").small());
+            egui::ComboBox::from_id_salt(if compact {
+                "log_filter_compact"
+            } else {
+                "log_filter"
+            })
+            .selected_text(self.log_filter.as_str())
+            .width(if compact { 88.0 } else { 120.0 })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
+                ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
+                ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
+            });
+            if !compact
+                && ui
+                    .checkbox(&mut self.settings.log_relative_time, "Relative timestamps")
+                    .changed()
             {
                 self.persist_settings();
             }
-            button_group(ui, "log_actions", |g| {
+            let actions = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+                if compact {
+                    compact_button_group(ui, "log_actions", |g| add(g));
+                } else {
+                    button_group(ui, "log_actions", |g| add(g));
+                }
+            };
+            actions(ui, &mut |g| {
                 if g
                     .secondary(
                         &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
@@ -241,17 +315,68 @@ impl PydlApp {
                 {
                     self.open_activity_log_file();
                 }
-                if g
-                    .secondary(
-                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                        true,
-                    )
-                    .clicked()
+                if !compact
+                    && g
+                        .secondary(
+                            &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
+                            true,
+                        )
+                        .clicked()
                 {
                     self.open_config_folder();
                 }
             });
+        };
+        if compact {
+            row(ui);
+        } else {
+            button_toolbar_wrapped(ui, row);
+        }
+    }
+
+    /// One compact row + log lines when the activity log is docked under the video queue.
+    pub(super) fn draw_docked_log_under_videos(&mut self, ui: &mut egui::Ui, log_lines_h: f32) {
+        button_toolbar(ui, |ui| {
+            ui.label(RichText::new("Activity log").small().strong());
+            self.draw_log_controls_inner(ui, true);
+            compact_button_group(ui, "log_clear_dock", |g| {
+                if g.danger(&format!("{} Clear", ui_icons::CLEAR_LOG), true).clicked() {
+                    self.clear_activity_log();
+                }
+            });
+            ui.label(RichText::new("Filter").small());
+            egui::ComboBox::from_id_salt("log_filter_dock")
+                .selected_text(self.log_filter.as_str())
+                .width(88.0)
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
+                    ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
+                    ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
+                });
+            compact_button_group(ui, "log_actions_dock", |g| {
+                if g
+                    .secondary(
+                        &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
+                        true,
+                    )
+                    .clicked()
+                {
+                    if let Some(last) = self
+                        .log_lines
+                        .iter()
+                        .rev()
+                        .find(|line| is_error_line(log_message_body(line)))
+                    {
+                        g.ui().ctx().copy_text(last.clone());
+                    }
+                }
+                if g.secondary(&format!("{} Open log file", ui_icons::OPEN_FILE), true).clicked()
+                {
+                    self.open_activity_log_file();
+                }
+            });
         });
+        self.draw_activity_log_lines_scroll(ui, log_lines_h);
     }
 
     /// Scrollable log lines only (toolbar is separate).
