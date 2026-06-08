@@ -20,6 +20,7 @@ fn settings_form_grid<R>(ui: &mut egui::Ui, id_salt: &str, f: impl FnOnce(&mut e
         .min_col_width(SETTINGS_FORM_LABEL_WIDTH)
         .spacing([16.0, 6.0])
         .show(ui, f)
+        .inner
 }
 
 fn settings_checkbox(ui: &mut egui::Ui, label: &str, value: &mut bool) -> bool {
