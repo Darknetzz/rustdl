@@ -825,20 +825,18 @@ impl PydlApp {
             .map(|label| format!(" ({label})"))
             .unwrap_or_default();
         let tail = format!(" / {}{}", human_bytes_ui(space.total_bytes), vol);
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing.y = 3.0;
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.label(RichText::new("Destination disk: ").small().color(muted));
-                ui.label(
-                    RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
-                        .small()
-                        .strong()
-                        .color(free_color),
-                );
-                ui.label(RichText::new(tail).small().color(muted));
-            });
-            draw_disk_space_progress_bar(ui, pct, level, 140.0);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            ui.label(RichText::new("Destination disk: ").small().color(muted));
+            ui.label(
+                RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
+                    .small()
+                    .strong()
+                    .color(free_color),
+            );
+            ui.label(RichText::new(tail).small().color(muted));
+            ui.add_space(6.0);
+            draw_disk_space_progress_bar(ui, pct, level, 100.0);
         });
     }
 

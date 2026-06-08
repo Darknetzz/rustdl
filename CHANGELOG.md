@@ -28,6 +28,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Header tool checks and destination disk info (including the free-space bar) stay on one line instead of stacking the bar below the text.
 - Floating **Videos** / **Activity log** windows and the docked queue panel keep their size when resized (content fills the allocated area so egui no longer snaps back to shrink-wrapped height).
 - Floating **Videos** window can be resized again (queue content now fills the window instead of shrink-wrapping).
 - Floating **Activity log** window: resizable again, log lines fill the viewport (no empty black area above the toolbar).
