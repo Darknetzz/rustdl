@@ -15,6 +15,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- LAN web UI: output disk space badge moved from the queue status row into the top header (next to tool status).
 - Startup asks whether to restore saved downloader and AV1 queues from the previous session instead of loading them automatically (headless `--web-only` still auto-restores).
 - LAN web UI: SSE events update download progress and logs in place instead of always refetching every endpoint; queue refresh skips unchanged generations; 5s fallback polling pauses while SSE is connected.
 - Desktop download control (Start, Pause, Resume, Retry, Redo, cancel) now goes through the shared `DownloadCore` service (same path as the LAN web UI) instead of duplicate GUI-only logic.

@@ -121,6 +121,7 @@ async function refreshStatus() {
   if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
   renderNavbarStatus();
+  renderNavbarDiskSpace(data.output_disk_space);
   updateTopbarVersion(data);
   updateSettingsOutputDiskHint(data.output_disk_space);
   updateQuitButtonState();
@@ -383,7 +384,6 @@ function renderStatusSummary(data) {
     root.appendChild(el);
   }
 
-  appendOutputDiskSpaceBadge(root, data.output_disk_space);
 }
 
 function diskSpaceLevel(disk) {
@@ -420,7 +420,10 @@ function updateSettingsOutputDiskHint(disk) {
   el.classList.remove("hidden");
 }
 
-function appendOutputDiskSpaceBadge(root, disk) {
+function renderNavbarDiskSpace(disk) {
+  const root = document.getElementById("navbar-disk-space");
+  if (!root) return;
+  root.innerHTML = "";
   if (!disk || disk.total_bytes == null) return;
   const level = diskSpaceLevel(disk);
   const el = document.createElement("span");
