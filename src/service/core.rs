@@ -583,14 +583,37 @@ impl DownloadCore {
         if bytes.len() < 32 {
             return;
         }
+        let content_type = content_type.into();
         self.thumbnail_cache.insert(
             item_id,
             CachedThumbnail {
-                source_key,
-                bytes,
-                content_type: content_type.into(),
+                source_key: source_key.clone(),
+                bytes: bytes.clone(),
+                content_type: content_type.clone(),
             },
         );
+        if let Some(idx) = self.item_idx(item_id) {
+            let item = &self.items[idx];
+            match crate::thumbnail_store::save_downloader_thumbnail(
+                item_id,
+                crate::thumbnail_store::DownloaderThumbnailSave {
+                    source_key: &source_key,
+                    content_type: &content_type,
+                    webpage_url: &item.webpage_url,
+                    thumbnail_url: item.thumbnail_url.as_deref(),
+                    source_line: &item.source_line,
+                    bytes: &bytes,
+                },
+            ) {
+                Ok(rel_path) => {
+                    self.items[idx].thumbnail_path = Some(rel_path);
+                    self.schedule_queue_save();
+                }
+                Err(err) => {
+                    eprintln!("rustdl: failed to save queue thumbnail for item {item_id}: {err:#}");
+                }
+            }
+        }
     }
 
     pub fn cached_thumbnail_bytes(
@@ -598,15 +621,24 @@ impl DownloadCore {
         item_id: u64,
         source_key: &str,
     ) -> Option<(Vec<u8>, String)> {
-        let entry = self.thumbnail_cache.get(&item_id)?;
-        if entry.source_key != source_key {
-            return None;
+        if let Some(entry) = self.thumbnail_cache.get(&item_id) {
+            if entry.source_key == source_key {
+                return Some((entry.bytes.clone(), entry.content_type.clone()));
+            }
         }
-        Some((entry.bytes.clone(), entry.content_type.clone()))
+        crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key)
     }
 
     pub fn evict_thumbnail(&mut self, item_id: u64) {
         self.thumbnail_cache.remove(&item_id);
+    }
+
+    pub fn remove_queue_thumbnail(&mut self, item_id: u64) {
+        self.evict_thumbnail(item_id);
+        crate::thumbnail_store::delete_downloader_thumbnail(item_id);
+        if let Some(idx) = self.item_idx(item_id) {
+            self.items[idx].thumbnail_path = None;
+        }
     }
 
     pub fn refresh_done_file_lookup(&mut self) {
@@ -939,7 +971,7 @@ impl DownloadCore {
         if self.items[idx].status == ItemStatus::Resolving {
             self.pending_resolve_ids.retain(|_, iid| *iid != item_id);
         }
-        self.evict_thumbnail(item_id);
+        self.remove_queue_thumbnail(item_id);
         self.items.remove(idx);
         self.rebuild_item_index();
         self.invalidate_queue_caches();

@@ -24,8 +24,16 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
         loop {
             match rx.recv().await {
                 Ok(ev) => {
-                    let mut c = core.lock();
-                    c.apply_ui_event(ev);
+                    let prefetch_ids = {
+                        let mut c = core.lock();
+                        c.apply_ui_event(ev)
+                    };
+                    for item_id in prefetch_ids {
+                        crate::app::background_spawn::spawn_queue_thumbnail_prefetch(
+                            core.clone(),
+                            item_id,
+                        );
+                    }
                 }
                 Err(RecvError::Lagged(_)) => {}
                 Err(RecvError::Closed) => break,
@@ -35,10 +43,11 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
 }
 
 impl super::core::DownloadCore {
-    pub(crate) fn apply_ui_event(&mut self, ev: UiEvent) {
+    pub(crate) fn apply_ui_event(&mut self, ev: UiEvent) -> Vec<u64> {
+        let mut prefetch = Vec::new();
         match ev {
             UiEvent::AddResolved { rows, source_line } => {
-                self.handle_add_resolved(rows, source_line);
+                prefetch.extend(self.handle_add_resolved(rows, source_line));
             }
             UiEvent::AddProgress {
                 processed,
@@ -95,6 +104,7 @@ impl super::core::DownloadCore {
             _ => {}
         }
         self.maybe_finish_shutdown();
+        prefetch
     }
 
     fn handle_convert_line(&mut self, item_id: u64, line: &str) {
@@ -250,9 +260,14 @@ impl super::core::DownloadCore {
         self.bump_generation();
     }
 
-    fn handle_add_resolved(&mut self, rows: Vec<crate::models::VideoPreview>, source_line: String) {
+    fn handle_add_resolved(
+        &mut self,
+        rows: Vec<crate::models::VideoPreview>,
+        source_line: String,
+    ) -> Vec<u64> {
+        let mut prefetch = Vec::new();
         let Some(iid) = self.pending_resolve_ids.remove(&source_line) else {
-            return;
+            return prefetch;
         };
         if let Some(idx) = self.item_idx(iid) {
             self.items.remove(idx);
@@ -271,6 +286,7 @@ impl super::core::DownloadCore {
                     item_id: iid,
                     source_line: source_line.clone(),
                     title: source_line.clone(),
+                    webpage_url: source_line.clone(),
                     error: Some("No preview returned for this URL.".to_owned()),
                     status: ItemStatus::Idle,
                     ..Default::default()
@@ -288,6 +304,7 @@ impl super::core::DownloadCore {
                 }
                 let item = QueueItem::from_preview(iid, pv);
                 self.items.insert(0, item);
+                prefetch.push(iid);
             }
         }
         self.rebuild_item_index();
@@ -296,6 +313,7 @@ impl super::core::DownloadCore {
         self.schedule_queue_save();
         self.maybe_auto_start_downloads();
         self.bump_generation();
+        prefetch
     }
 
     fn handle_download_line(&mut self, item_id: u64, line: &str) {

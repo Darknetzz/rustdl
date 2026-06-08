@@ -2112,7 +2112,7 @@ function setView(view) {
   currentView = view === "convert" ? "convert" : "downloader";
   document.body.classList.remove("view-downloader", "view-convert");
   document.body.classList.add(
-    currentview === "convert" ? "view-convert" : "view-downloader"
+    currentView === "convert" ? "view-convert" : "view-downloader"
   );
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === currentView);
@@ -2121,7 +2121,7 @@ function setView(view) {
   document.getElementById("convert-main").classList.toggle("hidden", currentView !== "convert");
   const dlActions = document.getElementById("downloader-only-actions");
   if (dlActions) dlActions.classList.toggle("hidden", currentView !== "downloader");
-  if (currentview === "convert") refreshConvert().catch(() => {});
+  if (currentView === "convert") refreshConvert().catch(() => {});
 }
 
 function convertSlug(item) {

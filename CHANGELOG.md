@@ -8,10 +8,15 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- Downloader queue thumbnails and URLs are saved when metadata resolves: preview images go to `thumbnails/downloader/` under the rustdl config folder (with a JSON sidecar for `webpage_url`, `thumbnail_url`, and `source_line`), the queue JSON records `thumbnail_path`, and URLs are stored from the moment a link is added.
+
 ### Fixed
 
 - Activity log no longer appears blank after downloads or converts: GUI log lines go through the shared core, the GUI no longer overwrites core logs each frame (which dropped convert/download messages from background work), **Important** filter includes convert/skip messages, and a hint appears when the filter hides all lines.
 - Floating activity log window layout uses remaining height correctly so log lines fill the resizable window.
+- LAN web UI **Convert** tab no longer fails silently (typo in view switch threw a JavaScript error before the page could open).
 - LAN web UI activity log shows an empty-state hint, supports vertical drag-resize, and refreshes every 5 seconds (not only when SSE is disconnected).
 - LAN web UI no longer shows **Save API token to load thumbnails** when a token is saved but the preview fetch failed (wrong token, no preview yet, or ffmpeg missing); shows **Thumbnail unavailable** or **Token rejected** instead, and thumbnail 401 responses reopen the Connect screen like other API calls.
 - Video Converter batch summary now reports **output growth** (e.g. `output +4.1 GiB (+71.9%)`) when encoded files are larger than the sources, instead of incorrectly showing `saved 0B (0.0%)`.

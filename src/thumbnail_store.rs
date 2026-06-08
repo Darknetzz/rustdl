@@ -1,0 +1,168 @@
+//! On-disk cache for downloader queue card thumbnails and their source URLs.
+
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+
+use crate::config::rustdl_config_dir;
+
+const DOWNLOADER_SUBDIR: &str = "thumbnails/downloader";
+
+/// Metadata persisted beside each saved thumbnail image.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DownloaderThumbnailRecord {
+    pub source_key: String,
+    pub content_type: String,
+    pub webpage_url: String,
+    pub thumbnail_url: Option<String>,
+    pub source_line: String,
+    /// Path relative to [`rustdl_config_dir`] (e.g. `thumbnails/downloader/42.img`).
+    pub image_path: String,
+}
+
+pub fn downloader_thumbnail_dir() -> PathBuf {
+    rustdl_config_dir().join(DOWNLOADER_SUBDIR)
+}
+
+fn meta_path(base: &Path, item_id: u64) -> PathBuf {
+    base.join(format!("{item_id}.json"))
+}
+
+fn image_file(base: &Path, item_id: u64) -> PathBuf {
+    base.join(format!("{item_id}.img"))
+}
+
+fn relative_image_path(item_id: u64) -> String {
+    format!("{DOWNLOADER_SUBDIR}/{item_id}.img")
+}
+
+pub struct DownloaderThumbnailSave<'a> {
+    pub source_key: &'a str,
+    pub content_type: &'a str,
+    pub webpage_url: &'a str,
+    pub thumbnail_url: Option<&'a str>,
+    pub source_line: &'a str,
+    pub bytes: &'a [u8],
+}
+
+pub fn save_downloader_thumbnail(item_id: u64, save: DownloaderThumbnailSave<'_>) -> Result<String> {
+    save_downloader_thumbnail_at(&downloader_thumbnail_dir(), item_id, save)
+}
+
+pub fn save_downloader_thumbnail_at(
+    base: &Path,
+    item_id: u64,
+    save: DownloaderThumbnailSave<'_>,
+) -> Result<String> {
+    fs::create_dir_all(base)
+        .with_context(|| format!("failed to create thumbnail directory: {}", base.display()))?;
+    let rel = relative_image_path(item_id);
+    let record = DownloaderThumbnailRecord {
+        source_key: save.source_key.to_owned(),
+        content_type: save.content_type.to_owned(),
+        webpage_url: save.webpage_url.to_owned(),
+        thumbnail_url: save.thumbnail_url.map(str::to_owned),
+        source_line: save.source_line.to_owned(),
+        image_path: rel.clone(),
+    };
+    fs::write(image_file(base, item_id), save.bytes)
+        .with_context(|| format!("failed to write thumbnail image for item {item_id}"))?;
+    let raw = serde_json::to_string_pretty(&record).context("failed to serialize thumbnail meta")?;
+    fs::write(meta_path(base, item_id), raw)
+        .with_context(|| format!("failed to write thumbnail meta for item {item_id}"))?;
+    Ok(rel)
+}
+
+pub fn load_downloader_thumbnail(item_id: u64, source_key: &str) -> Option<(Vec<u8>, String)> {
+    load_downloader_thumbnail_at(&downloader_thumbnail_dir(), item_id, source_key)
+}
+
+pub fn load_downloader_thumbnail_at(
+    base: &Path,
+    item_id: u64,
+    source_key: &str,
+) -> Option<(Vec<u8>, String)> {
+    let meta_raw = fs::read_to_string(meta_path(base, item_id)).ok()?;
+    let record: DownloaderThumbnailRecord = serde_json::from_str(&meta_raw).ok()?;
+    if record.source_key != source_key {
+        return None;
+    }
+    let bytes = fs::read(image_file(base, item_id)).ok()?;
+    if bytes.len() < 32 {
+        return None;
+    }
+    Some((bytes, record.content_type))
+}
+
+pub fn delete_downloader_thumbnail(item_id: u64) {
+    delete_downloader_thumbnail_at(&downloader_thumbnail_dir(), item_id);
+}
+
+pub fn delete_downloader_thumbnail_at(base: &Path, item_id: u64) {
+    let _ = fs::remove_file(meta_path(base, item_id));
+    let _ = fs::remove_file(image_file(base, item_id));
+}
+
+/// Removes on-disk thumbnails for queue rows that no longer exist.
+pub fn prune_downloader_thumbnails(active_item_ids: &HashSet<u64>) {
+    prune_downloader_thumbnails_at(&downloader_thumbnail_dir(), active_item_ids);
+}
+
+pub fn prune_downloader_thumbnails_at(base: &Path, active_item_ids: &HashSet<u64>) {
+    let Ok(entries) = fs::read_dir(base) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let Some(stem) = name.to_str().and_then(|n| n.strip_suffix(".json")) else {
+            continue;
+        };
+        let Ok(item_id) = stem.parse::<u64>() else {
+            continue;
+        };
+        if !active_item_ids.contains(&item_id) {
+            delete_downloader_thumbnail_at(base, item_id);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn save_load_and_prune_roundtrip() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let rel = save_downloader_thumbnail_at(
+            dir.path(),
+            42,
+            DownloaderThumbnailSave {
+                source_key: "key-a",
+                content_type: "image/png",
+                webpage_url: "https://example.com/watch?v=abc",
+                thumbnail_url: Some("https://example.com/thumb.jpg"),
+                source_line: "https://example.com/watch?v=abc",
+                bytes: &[0u8; 64],
+            },
+        )
+        .expect("save");
+        assert_eq!(rel, "thumbnails/downloader/42.img");
+        let loaded = load_downloader_thumbnail_at(dir.path(), 42, "key-a").expect("load");
+        assert_eq!(loaded.0.len(), 64);
+        assert_eq!(loaded.1, "image/png");
+        assert!(load_downloader_thumbnail_at(dir.path(), 42, "other").is_none());
+
+        let mut active = HashSet::new();
+        active.insert(42);
+        prune_downloader_thumbnails_at(dir.path(), &active);
+        assert!(load_downloader_thumbnail_at(dir.path(), 42, "key-a").is_some());
+
+        active.clear();
+        prune_downloader_thumbnails_at(dir.path(), &active);
+        assert!(load_downloader_thumbnail_at(dir.path(), 42, "key-a").is_none());
+    }
+}

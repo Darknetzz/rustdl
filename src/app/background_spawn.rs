@@ -121,6 +121,35 @@ pub(crate) fn spawn_url_resolve_pipeline(
     });
 }
 
+pub(crate) fn spawn_queue_thumbnail_prefetch(core: crate::service::core::SharedCore, item_id: u64) {
+    let (client, urls, rt) = {
+        let c = core.lock();
+        let Some(idx) = c.item_idx(item_id) else {
+            return;
+        };
+        let urls = ytdlp::thumbnail_url_candidates(&c.items[idx]);
+        if urls.is_empty() {
+            return;
+        }
+        (c.http_client.clone(), urls, c.runtime.clone())
+    };
+    rt.spawn(async move {
+        for url in urls {
+            if let Some((bytes, content_type)) = ytdlp::fetch_thumbnail_bytes(&client, &url).await
+            {
+                let mut c = core.lock();
+                let Some(idx) = c.item_idx(item_id) else {
+                    return;
+                };
+                let source_key =
+                    crate::service::core::DownloadCore::queue_thumbnail_source_key(&c.items[idx]);
+                c.cache_thumbnail_bytes(item_id, source_key, bytes, content_type);
+                return;
+            }
+        }
+    });
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_download_worker(
     rt: &Arc<Runtime>,

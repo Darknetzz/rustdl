@@ -353,6 +353,71 @@ pub fn guess_image_content_type(bytes: &[u8]) -> &'static str {
     }
 }
 
+fn thumbnail_bytes_look_valid(bytes: &[u8], mime: Option<&str>) -> bool {
+    if bytes.len() < 32 {
+        return false;
+    }
+    let mime_is_image = mime
+        .is_some_and(|m| m.to_ascii_lowercase().starts_with("image/"));
+    mime_is_image || thumbnail_bytes_have_image_magic(bytes)
+}
+
+fn thumbnail_bytes_have_image_magic(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"\x89PNG\r\n\x1a\n")
+        || bytes.starts_with(b"\xff\xd8\xff")
+        || bytes.starts_with(b"GIF87a")
+        || bytes.starts_with(b"GIF89a")
+        || (bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP")
+}
+
+fn content_type_from_mime(mime: &str) -> Option<&'static str> {
+    let m = mime.split(';').next()?.trim().to_ascii_lowercase();
+    match m.as_str() {
+        "image/png" => Some("image/png"),
+        "image/jpeg" | "image/jpg" => Some("image/jpeg"),
+        "image/gif" => Some("image/gif"),
+        "image/webp" => Some("image/webp"),
+        _ => None,
+    }
+}
+
+/// Downloads a remote preview image for queue cards (desktop prefetch + LAN web proxy).
+pub async fn fetch_thumbnail_bytes(
+    client: &reqwest::Client,
+    url: &str,
+) -> Option<(Vec<u8>, String)> {
+    let fetch_url = normalize_thumbnail_url(url);
+    let mut req = client
+        .get(&fetch_url)
+        .header(
+            reqwest::header::USER_AGENT,
+            format!("rustdl/{}", crate::pkg_version::VERSION),
+        )
+        .header(reqwest::header::ACCEPT, "image/*,*/*;q=0.8");
+    if thumbnail_request_needs_referer(&fetch_url) {
+        req = req.header(reqwest::header::REFERER, "https://www.youtube.com/");
+    }
+    let resp = req.send().await.ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let mime = resp
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
+    let bytes = resp.bytes().await.ok()?.to_vec();
+    if !thumbnail_bytes_look_valid(&bytes, mime.as_deref()) {
+        return None;
+    }
+    let content_type = mime
+        .as_deref()
+        .and_then(content_type_from_mime)
+        .unwrap_or_else(|| guess_image_content_type(&bytes))
+        .to_owned();
+    Some((bytes, content_type))
+}
+
 fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
     let title = entry
         .get("title")

@@ -72,26 +72,31 @@ impl PydlApp {
                 );
                 return;
             };
-            let fetch_url = crate::ytdlp::normalize_thumbnail_url(&url);
-            let mut req = client.get(&fetch_url);
-            if crate::ytdlp::thumbnail_request_needs_referer(&fetch_url) {
-                req = req.header("Referer", "https://www.youtube.com/");
-            }
-            let bytes = match req.send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    resp.bytes().await.ok().map(|b| b.to_vec())
-                }
-                _ => None,
+            let bytes = if let Some(key) = source_key.as_ref() {
+                shared_core
+                    .lock()
+                    .cached_thumbnail_bytes(item_id, key)
+                    .map(|(b, _)| b)
+            } else {
+                None
             };
-            if let (Some(ref raw), Some(key)) = (&bytes, &source_key) {
-                let content_type = crate::ytdlp::guess_image_content_type(raw).to_owned();
-                shared_core.lock().cache_thumbnail_bytes(
-                    item_id,
-                    key.clone(),
-                    raw.clone(),
-                    content_type,
-                );
-            }
+            let bytes = if bytes.is_some() {
+                bytes
+            } else {
+                crate::ytdlp::fetch_thumbnail_bytes(&client, &url)
+                    .await
+                    .map(|(b, content_type)| {
+                        if let Some(key) = source_key.as_ref() {
+                            shared_core.lock().cache_thumbnail_bytes(
+                                item_id,
+                                key.clone(),
+                                b.clone(),
+                                content_type,
+                            );
+                        }
+                        b
+                    })
+            };
             let image = match bytes {
                 None => None,
                 Some(b) => tokio::task::spawn_blocking(move || decode_thumbnail_image(b))

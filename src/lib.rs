@@ -18,6 +18,7 @@ pub mod pkg_version;
 pub mod profiles;
 pub(crate) mod service;
 pub mod theme;
+pub mod thumbnail_store;
 pub mod time_format;
 pub mod ui_icons;
 #[cfg(windows)]

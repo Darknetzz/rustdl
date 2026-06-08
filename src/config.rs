@@ -750,6 +750,8 @@ pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {
     let raw = serde_json::to_string_pretty(items).context("failed to serialize queue items")?;
     fs::write(&path, raw)
         .with_context(|| format!("failed to write queue file: {}", path.to_string_lossy()))?;
+    let active: std::collections::HashSet<u64> = items.iter().map(|it| it.item_id).collect();
+    crate::thumbnail_store::prune_downloader_thumbnails(&active);
     Ok(())
 }
 

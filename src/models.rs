@@ -43,6 +43,9 @@ pub struct QueueItem {
     /// Absolute path to the finished download when known (survives restarts; used for play/thumbnails).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local_path: Option<String>,
+    /// Saved preview image under the rustdl config dir (`thumbnails/downloader/`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail_path: Option<String>,
     /// Unix seconds when this row last reached Done (display order for the Done group).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completed_at: Option<u64>,
@@ -70,6 +73,7 @@ impl Default for QueueItem {
             detail: String::new(),
             sort_order: 0,
             local_path: None,
+            thumbnail_path: None,
             completed_at: None,
         }
     }
@@ -81,8 +85,8 @@ impl QueueItem {
             item_id,
             source_line: source_line.clone(),
             video_id: String::new(),
-            title: source_line,
-            webpage_url: String::new(),
+            title: source_line.clone(),
+            webpage_url: source_line,
             thumbnail_url: None,
             duration: None,
             uploader: None,
@@ -97,6 +101,7 @@ impl QueueItem {
             detail: "Fetching metadata...".to_owned(),
             sort_order: item_id,
             local_path: None,
+            thumbnail_path: None,
             completed_at: None,
         }
     }
@@ -135,6 +140,7 @@ impl QueueItem {
             detail: String::new(),
             sort_order: item_id,
             local_path: None,
+            thumbnail_path: None,
             completed_at: None,
         }
     }
