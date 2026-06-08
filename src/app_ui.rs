@@ -794,6 +794,37 @@ pub fn show_mode_panel<R>(
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
+/// Minimum main-window inner width (see [`VIEWPORT_MIN_INNER`]).
+pub const VIEWPORT_MIN_INNER_WIDTH: f32 = 920.0;
+/// Minimum main-window inner height (see [`VIEWPORT_MIN_INNER`]).
+pub const VIEWPORT_MIN_INNER_HEIGHT: f32 = 760.0;
+/// Minimum inner size passed to [`egui::ViewportBuilder::with_min_inner_size`].
+pub const VIEWPORT_MIN_INNER: [f32; 2] =
+    [VIEWPORT_MIN_INNER_WIDTH, VIEWPORT_MIN_INNER_HEIGHT];
+/// Extra inner size required before auto re-docking the video queue after a size-driven undock.
+const AUTO_REDOCK_VIDEOS_MARGIN: f32 = 80.0;
+
+/// Logical size of the primary window viewport (points).
+pub fn main_viewport_size(ctx: &egui::Context) -> egui::Vec2 {
+    ctx.input(|i| {
+        i.viewport()
+            .inner_rect
+            .map(|r| r.size())
+            .unwrap_or_else(|| ctx.screen_rect().size())
+    })
+}
+
+/// True when the docked video queue leaves too little room for the main controls.
+pub fn viewport_too_small_for_docked_videos(size: egui::Vec2) -> bool {
+    size.y <= VIEWPORT_MIN_INNER_HEIGHT || size.x <= VIEWPORT_MIN_INNER_WIDTH
+}
+
+/// True when the main window is large enough to restore a size-driven undock (hysteresis).
+pub fn viewport_large_enough_to_redock_videos(size: egui::Vec2) -> bool {
+    size.y >= VIEWPORT_MIN_INNER_HEIGHT + AUTO_REDOCK_VIDEOS_MARGIN
+        && size.x >= VIEWPORT_MIN_INNER_WIDTH + AUTO_REDOCK_VIDEOS_MARGIN
+}
+
 /// [`egui::TopBottomPanel`] id for the docked video queue.
 pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v3";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
@@ -1600,6 +1631,23 @@ mod tests {
             UNDOCKED_VIDEOS_STRIP_H + 120.0 + DOCKED_LOG_CHROME_H
         );
         assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn viewport_auto_undock_at_min_inner_size() {
+        let at_min = egui::vec2(VIEWPORT_MIN_INNER_WIDTH, VIEWPORT_MIN_INNER_HEIGHT);
+        assert!(viewport_too_small_for_docked_videos(at_min));
+        assert!(!viewport_large_enough_to_redock_videos(at_min));
+    }
+
+    #[test]
+    fn viewport_auto_redock_after_hysteresis_margin() {
+        let big = egui::vec2(
+            VIEWPORT_MIN_INNER_WIDTH + 80.0,
+            VIEWPORT_MIN_INNER_HEIGHT + 80.0,
+        );
+        assert!(!viewport_too_small_for_docked_videos(big));
+        assert!(viewport_large_enough_to_redock_videos(big));
     }
 
     fn idle_inputs() -> NavbarStatusInputs {

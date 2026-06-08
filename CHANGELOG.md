@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 When releasing, bump `version` in `Cargo.toml`, add a dated section below, and tag `rustdl-vX.Y.Z` for GitHub release builds.
 
+**Version history:** **`0.4.7`** is the first GitHub-tagged release. The **`0.1.x`** sections below are the pre-tag development baseline (no `rustdl-v0.1.3` tag). In-tree bumps through **`0.4.6`** were not cut as separate releases—those changes were rolled into **`0.4.7`**, which is why the jump from **`0.4.7`** to **`0.1.3`** looks abrupt.
+
 ## [Unreleased]
 
 ### Fixed
@@ -18,11 +20,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Destination disk** labels (desktop header, LAN web UI header and settings hint) show a storage/hard-drive icon before the text.
 
 - **Show log** / **Hide log** live only in the main header (also removed from the floating/docked log chrome); **Dock log** / **Undock log** stay on the log panel. Hiding the log no longer resets dock preference, so **Show log** restores the log where you left it.
-- Floating activity log window: filter/actions toolbar and log lines use a horizontal layout again so the scroll area fills the window.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
 
 ## [0.4.7] - 2026-06-08
 
+First tagged GitHub release; rolls up changes since the **0.1.3** baseline below (including in-tree **0.4.x** work that was never tagged separately).
 
 ### Documentation
 
@@ -113,7 +115,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Removed duplicate **Effective command preview** block in Settings → Downloader.
 - **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating), grouped under a **Cancel all…** dropdown.
 
-## [0.1.3] - 2026-06-08
+## [0.1.3] - 2026-06-02
+
+Pre-tag development baseline (not released or tagged on GitHub).
 
 ### Added
 
@@ -215,7 +219,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[0.4.7]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.3...rustdl-v0.4.7
+[0.4.7]: https://github.com/Darknetzz/rustdl/releases/tag/rustdl-v0.4.7
 [Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.7...dev
+[0.1.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...rustdl-v0.1.3
 [0.1.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.0...rustdl-v0.1.1
 [0.1.0]: https://github.com/Darknetzz/rustdl/tree/rustdl-v0.1.0

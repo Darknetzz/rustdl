@@ -284,8 +284,8 @@ impl PydlApp {
                     )
                     .clicked()
                 {
+                    self.note_videos_dock_user_choice(false);
                     self.settings.videos_docked = false;
-                    self.settings.videos_open = true;
                     self.persist_settings();
                 }
             } else {
@@ -296,6 +296,7 @@ impl PydlApp {
                 .on_hover_text("Move the queue back into this window.")
                 .clicked()
                 {
+                    self.note_videos_dock_user_choice(true);
                     self.settings.videos_docked = true;
                     self.persist_settings();
                 }

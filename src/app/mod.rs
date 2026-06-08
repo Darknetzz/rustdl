@@ -234,6 +234,10 @@ pub struct PydlApp {
     /// Set by keyboard shortcut; consumed by queue search field.
     focus_queue_search: bool,
     profile_rename_buffer: Option<(String, String)>,
+    /// Queue was undocked automatically because the main window is too small.
+    videos_auto_undocked_for_size: bool,
+    /// User chose docked layout (toolbar or Settings); skip auto-undock until they undock manually.
+    videos_dock_user_prefers_docked: bool,
 }
 
 impl PydlApp {
@@ -397,6 +401,8 @@ impl PydlApp {
             command_palette_query: String::new(),
             focus_queue_search: false,
             profile_rename_buffer: None,
+            videos_auto_undocked_for_size: false,
+            videos_dock_user_prefers_docked: false,
         };
         let startup_config_issues = app.config_load_issues.clone();
         for issue in &startup_config_issues {
@@ -773,6 +779,36 @@ impl PydlApp {
 
     pub(super) fn constrain_content(&self, ui: &mut egui::Ui) -> f32 {
         crate::app_ui::constrain_content_width(ui, self.settings.max_content_width)
+    }
+
+    /// User toggled dock/undock (toolbar or Settings); overrides size-driven auto layout.
+    pub(super) fn note_videos_dock_user_choice(&mut self, docked: bool) {
+        self.videos_auto_undocked_for_size = false;
+        self.videos_dock_user_prefers_docked = docked;
+        if !docked {
+            self.settings.videos_open = true;
+        }
+    }
+
+    /// Undock the queue when the main window is cramped; re-dock when it grows again.
+    fn maybe_adjust_videos_dock_for_viewport(&mut self, ctx: &egui::Context) {
+        let size = crate::app_ui::main_viewport_size(ctx);
+        if self.settings.videos_docked {
+            if crate::app_ui::viewport_too_small_for_docked_videos(size)
+                && !self.videos_dock_user_prefers_docked
+            {
+                self.settings.videos_docked = false;
+                self.settings.videos_open = true;
+                self.videos_auto_undocked_for_size = true;
+                self.persist_settings();
+            }
+        } else if self.videos_auto_undocked_for_size
+            && crate::app_ui::viewport_large_enough_to_redock_videos(size)
+        {
+            self.settings.videos_docked = true;
+            self.videos_auto_undocked_for_size = false;
+            self.persist_settings();
+        }
     }
 
     pub(super) fn restart_web_server(&mut self) {

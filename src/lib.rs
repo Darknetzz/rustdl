@@ -34,16 +34,13 @@ use std::sync::Arc;
 use eframe::egui;
 use tokio::runtime::Runtime;
 
-/// Minimum inner size so header/actions, the non-wrapping output-folder row, and queue controls stay visible.
-const VIEWPORT_MIN_INNER: [f32; 2] = [920.0, 760.0];
-
 pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("rustdl")
             .with_icon(app_icon::window_icon())
             .with_inner_size([1280.0, 880.0])
-            .with_min_inner_size(VIEWPORT_MIN_INNER),
+            .with_min_inner_size(app_ui::VIEWPORT_MIN_INNER),
         ..Default::default()
     };
 

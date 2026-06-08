@@ -171,11 +171,15 @@ impl PydlApp {
                                 "Autoscroll log to latest line",
                                 &mut self.settings.autoscroll_log,
                             );
+                            let videos_docked_before = self.settings.videos_docked;
                             changed |= settings_checkbox(
                                 ui,
                                 "Dock video / Convert queue in main window",
                                 &mut self.settings.videos_docked,
                             );
+                            if self.settings.videos_docked != videos_docked_before {
+                                self.note_videos_dock_user_choice(self.settings.videos_docked);
+                            }
                             changed |= settings_checkbox(
                                 ui,
                                 "Dock activity log under video queue (when queue is docked)",

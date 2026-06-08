@@ -36,6 +36,7 @@ impl eframe::App for PydlApp {
             self.apply_dropped_shortcut_files(ctx);
         }
         self.handle_viewport_close_request(ctx);
+        self.maybe_adjust_videos_dock_for_viewport(ctx);
         if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
             self.exit_pending_after_cancel = false;
             self.exit_allowed = true;
