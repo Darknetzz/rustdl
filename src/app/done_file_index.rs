@@ -272,7 +272,7 @@ pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
     }
     #[cfg(windows)]
     {
-        let norm = |p: &Path| p.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+        let norm = windows_path_compare_string;
         let r = norm(root);
         let f = norm(file);
         !r.is_empty() && (f == r || f.starts_with(&format!("{r}\\")))
@@ -281,6 +281,20 @@ pub(crate) fn path_is_under_output_dir(output_dir: &str, file: &Path) -> bool {
     {
         false
     }
+}
+
+#[cfg(windows)]
+fn windows_path_compare_string(p: &Path) -> String {
+    let mut s = p.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
+    if let Some(rest) = s.strip_prefix(r"\\?\") {
+        s = rest.to_owned();
+    }
+    s
+}
+
+#[cfg(not(windows))]
+fn windows_path_compare_string(p: &Path) -> String {
+    p.to_string_lossy().replace('/', "\\").to_ascii_lowercase()
 }
 
 fn find_unique_by_title_hint(index: &DoneFileIndex, title: &str) -> Option<(PathBuf, SystemTime)> {
@@ -385,13 +399,40 @@ mod tests {
 
     #[test]
     #[cfg(windows)]
+    fn path_is_under_output_dir_accepts_extended_length_prefix() {
+        assert!(super::path_is_under_output_dir(
+            r"D:\Kriss\Downloads",
+            Path::new(r"\\?\D:\Kriss\Downloads\clip [abc123].mkv"),
+        ));
+        let dir = std::env::temp_dir().join("rustdl_extended_under_test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("clip.mkv");
+        std::fs::write(&file, b"x").unwrap();
+        let dir_s = dir
+            .canonicalize()
+            .unwrap_or(dir.clone())
+            .to_string_lossy()
+            .to_string();
+        let canon = file.canonicalize().unwrap_or_else(|_| file.clone());
+        let extended = PathBuf::from(format!(r"\\?\{}", canon.display()));
+        assert!(super::path_is_under_output_dir(&dir_s, &extended));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    #[cfg(windows)]
     fn resolve_path_under_output_accepts_extended_length_prefix() {
         let dir = std::env::temp_dir().join("rustdl_extended_path_test");
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("clip [abc123].mkv");
         std::fs::write(&file, b"x").unwrap();
-        let dir_s = dir.to_string_lossy().to_string();
+        let dir_s = dir
+            .canonicalize()
+            .unwrap_or(dir.clone())
+            .to_string_lossy()
+            .to_string();
         let canon = file.canonicalize().unwrap_or_else(|_| file.clone());
         let extended = format!(r"\\?\{}", canon.display());
         assert_eq!(

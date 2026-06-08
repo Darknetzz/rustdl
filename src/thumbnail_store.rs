@@ -84,6 +84,11 @@ pub fn load_downloader_thumbnail(item_id: u64, source_key: &str) -> Option<(Vec<
     load_downloader_thumbnail_at(&downloader_thumbnail_dir(), item_id, source_key)
 }
 
+/// Loads a saved downloader thumbnail when the on-disk image exists, ignoring `source_key`.
+pub fn load_downloader_thumbnail_any(item_id: u64) -> Option<(Vec<u8>, String)> {
+    load_downloader_thumbnail_any_at(&downloader_thumbnail_dir(), item_id)
+}
+
 pub fn load_downloader_thumbnail_at(
     base: &Path,
     item_id: u64,
@@ -94,6 +99,16 @@ pub fn load_downloader_thumbnail_at(
     if record.source_key != source_key {
         return None;
     }
+    let bytes = fs::read(image_file(base, item_id)).ok()?;
+    if bytes.len() < 32 {
+        return None;
+    }
+    Some((bytes, record.content_type))
+}
+
+pub fn load_downloader_thumbnail_any_at(base: &Path, item_id: u64) -> Option<(Vec<u8>, String)> {
+    let meta_raw = fs::read_to_string(meta_path(base, item_id)).ok()?;
+    let record: DownloaderThumbnailRecord = serde_json::from_str(&meta_raw).ok()?;
     let bytes = fs::read(image_file(base, item_id)).ok()?;
     if bytes.len() < 32 {
         return None;
@@ -159,6 +174,9 @@ mod tests {
         assert_eq!(loaded.0.len(), 64);
         assert_eq!(loaded.1, "image/png");
         assert!(load_downloader_thumbnail_at(dir.path(), 42, "other").is_none());
+
+        let any = load_downloader_thumbnail_any_at(dir.path(), 42).expect("any");
+        assert_eq!(any.0.len(), 64);
 
         let mut active = HashSet::new();
         active.insert(42);

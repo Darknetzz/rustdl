@@ -632,7 +632,16 @@ impl DownloadCore {
                 return Some((entry.bytes.clone(), entry.content_type.clone()));
             }
         }
-        crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key)
+        if let Some(found) = crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key) {
+            return Some(found);
+        }
+        if self
+            .item_idx(item_id)
+            .is_some_and(|idx| self.items[idx].thumbnail_path.is_some())
+        {
+            return crate::thumbnail_store::load_downloader_thumbnail_any(item_id);
+        }
+        None
     }
 
     pub fn evict_thumbnail(&mut self, item_id: u64) {
@@ -1389,21 +1398,12 @@ mod thumbnail_cache_tests {
         if !dir.join("316.json").is_file() {
             return;
         }
-        let item = QueueItem {
-            item_id: 316,
-            source_line: "https://www.youtube.com/watch?v=b4fx6BjWEqk".to_owned(),
-            video_id: "b4fx6BjWEqk".to_owned(),
-            webpage_url: "https://www.youtube.com/watch?v=b4fx6BjWEqk".to_owned(),
-            thumbnail_url: Some(
-                "https://i.ytimg.com/vi_webp/b4fx6BjWEqk/maxresdefault.webp".to_owned(),
-            ),
-            local_path: Some(
-                r"\\?\D:\Kriss\Downloads\Last two Afghan Jews fighting each other [b4fx6BjWEqk].mkv"
-                    .to_owned(),
-            ),
-            status: ItemStatus::Done,
-            ..Default::default()
-        };
+        let raw = std::fs::read_to_string(crate::config::queue_file_path()).expect("queue json");
+        let items: Vec<QueueItem> = serde_json::from_str(&raw).expect("parse queue");
+        let item = items
+            .into_iter()
+            .find(|it| it.item_id == 316)
+            .expect("item 316 in queue");
         let key = DownloadCore::queue_thumbnail_source_key(&item);
         let runtime = Arc::new(Runtime::new().expect("runtime"));
         let (shared, _rx) = DownloadCore::new_shared(runtime, true);

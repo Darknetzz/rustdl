@@ -22,7 +22,7 @@ use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_us
 use crate::service::core::DownloadCore;
 use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
 use crate::service::web::media;
-use crate::ytdlp::{self, thumbnail_proxy_url_candidates};
+use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
 
 use super::assets;
@@ -706,7 +706,7 @@ async fn thumbnail_proxy(
         let item = c.items[idx].clone();
         let source_key = DownloadCore::queue_thumbnail_source_key(&item);
         let cached = c.cached_thumbnail_bytes(id, &source_key);
-        let urls = thumbnail_proxy_url_candidates(&item);
+        let urls = thumbnail_url_candidates(&item);
         let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
             .ok()
             .filter(|p| media::media_kind_for_path(p).is_some());
