@@ -242,13 +242,46 @@ async function api(path, options = {}) {
     headers: { ...headers(), ...(options.headers || {}) },
   });
   if (res.status === 401) {
-    document.getElementById("auth-panel").classList.remove("hidden");
-    document.getElementById("app-main").classList.add("hidden");
-    throw new Error(
-      "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token."
-    );
+    const msg =
+      "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token.";
+    showAuthPanel(msg);
+    throw new Error(msg);
   }
   return res;
+}
+
+function showAuthPanel(statusText) {
+  document.getElementById("auth-panel").classList.remove("hidden");
+  document.getElementById("app-main").classList.add("hidden");
+  if (statusText) {
+    document.getElementById("auth-status").textContent = statusText;
+  }
+}
+
+function thumbFailurePlaceholder(reason, cacheKey) {
+  if (reason === "no_token" || !token()) {
+    return "Save API token to load thumbnails";
+  }
+  if (reason === "unauthorized") {
+    return "Token rejected — re-save below";
+  }
+  if (reason === "unavailable" || thumbFailuresExhausted(cacheKey)) {
+    return "Thumbnail unavailable";
+  }
+  return "Fetching thumbnail…";
+}
+
+function convertThumbFailurePlaceholder(reason, key) {
+  if (reason === "no_token" || !token()) {
+    return "Save API token to load thumbnails";
+  }
+  if (reason === "unauthorized") {
+    return "Token rejected — re-save below";
+  }
+  if (reason === "unavailable" || convertThumbFailedKeys.has(key)) {
+    return "No preview available";
+  }
+  return "Loading preview…";
 }
 
 function showApp() {
@@ -855,39 +888,43 @@ function pruneThumbFailedKeys(activeItems) {
 async function fetchQueueThumbnailBlob(item, options = {}) {
   const cacheKey = thumbCacheKey(item);
   if (thumbBlobCache.has(cacheKey)) {
-    return thumbBlobCache.get(cacheKey);
+    return { url: thumbBlobCache.get(cacheKey), reason: null };
   }
   if (!options.force && thumbFailuresExhausted(cacheKey)) {
-    return null;
+    return { url: null, reason: "unavailable" };
   }
   if (thumbInflight.has(cacheKey)) {
     return thumbInflight.get(cacheKey);
   }
   const apiUrl = thumbnailApiUrl(item.item_id);
   if (!apiUrl) {
-    return null;
+    return { url: null, reason: "no_token" };
   }
   const work = (async () => {
     try {
       const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
-        if (res.status !== 401) {
-          noteThumbFailure(cacheKey);
+        if (res.status === 401) {
+          showAuthPanel(
+            "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token."
+          );
+          return { url: null, reason: "unauthorized" };
         }
-        return null;
+        noteThumbFailure(cacheKey);
+        return { url: null, reason: "unavailable" };
       }
       const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
         noteThumbFailure(cacheKey);
-        return null;
+        return { url: null, reason: "unavailable" };
       }
       const objUrl = URL.createObjectURL(blob);
       thumbBlobCache.set(cacheKey, objUrl);
       thumbRetryCounts.delete(cacheKey);
-      return objUrl;
+      return { url: objUrl, reason: null };
     } catch {
       noteThumbFailure(cacheKey);
-      return null;
+      return { url: null, reason: "unavailable" };
     }
   })();
   thumbInflight.set(cacheKey, work);
@@ -1004,14 +1041,12 @@ function applyThumbBlobToImg(img, placeholder, cacheKey, objUrl, item, showThumb
     if (item && !thumbFailuresExhausted(cacheKey)) {
       placeholder.textContent = "Fetching thumbnail…";
       placeholder.classList.remove("hidden");
-      fetchQueueThumbnailBlob(item, { force: true }).then((retryUrl) => {
+      fetchQueueThumbnailBlob(item, { force: true }).then((result) => {
         if (!img.isConnected) return;
-        if (retryUrl) {
-          applyThumbBlobToImg(img, placeholder, cacheKey, retryUrl, item, showThumbnails);
+        if (result.url) {
+          applyThumbBlobToImg(img, placeholder, cacheKey, result.url, item, showThumbnails);
         } else {
-          placeholder.textContent = thumbFailuresExhausted(cacheKey)
-            ? "Thumbnail unavailable"
-            : "Fetching thumbnail…";
+          placeholder.textContent = thumbFailurePlaceholder(result.reason, cacheKey);
           placeholder.classList.remove("hidden");
         }
       });
@@ -1034,11 +1069,11 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   if (!showThumbnails || !itemHasThumbnailSource(item)) {
     return;
   }
+  const cacheKey = thumbCacheKey(item);
   if (!thumbnailApiUrl(item.item_id)) {
-    placeholder.textContent = "Save API token to load thumbnails";
+    placeholder.textContent = thumbFailurePlaceholder("no_token", cacheKey);
     return;
   }
-  const cacheKey = thumbCacheKey(item);
   if (thumbFailuresExhausted(cacheKey)) {
     placeholder.textContent = "Thumbnail unavailable";
     return;
@@ -1051,14 +1086,12 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   }
 
   placeholder.textContent = "Fetching thumbnail…";
-  fetchQueueThumbnailBlob(item).then((objUrl) => {
+  fetchQueueThumbnailBlob(item).then((result) => {
     if (!img.isConnected) return;
-    if (objUrl) {
-      applyThumbBlobToImg(img, placeholder, cacheKey, objUrl, item, showThumbnails);
+    if (result.url) {
+      applyThumbBlobToImg(img, placeholder, cacheKey, result.url, item, showThumbnails);
     } else {
-      placeholder.textContent = thumbFailuresExhausted(cacheKey)
-        ? "Thumbnail unavailable"
-        : "Save API token to load thumbnails";
+      placeholder.textContent = thumbFailurePlaceholder(result.reason, cacheKey);
       placeholder.classList.remove("hidden");
       img.classList.add("hidden");
     }
@@ -2151,7 +2184,7 @@ function attachconvertThumbnail(img, placeholder, item, showThumbnails) {
     return;
   }
   if (!convertThumbnailUrl(item.item_id)) {
-    placeholder.textContent = "Save API token to load thumbnails";
+    placeholder.textContent = convertThumbFailurePlaceholder("no_token", convertThumbKey(item));
     return;
   }
   const key = convertThumbKey(item);
@@ -2165,14 +2198,12 @@ function attachconvertThumbnail(img, placeholder, item, showThumbnails) {
     return;
   }
   placeholder.textContent = "Loading preview…";
-  fetchconvertThumbnailBlob(item).then((objUrl) => {
+  fetchconvertThumbnailBlob(item).then((result) => {
     if (!img.isConnected) return;
-    if (objUrl) {
-      applyconvertThumbBlobToImg(img, placeholder, key, objUrl);
+    if (result.url) {
+      applyconvertThumbBlobToImg(img, placeholder, key, result.url);
     } else {
-      placeholder.textContent = convertThumbFailedKeys.has(key)
-        ? "No preview available"
-        : "Save API token to load thumbnails";
+      placeholder.textContent = convertThumbFailurePlaceholder(result.reason, key);
       placeholder.classList.remove("hidden");
       img.classList.add("hidden");
     }
@@ -2430,39 +2461,43 @@ function pruneconvertThumbKeys(items) {
 async function fetchconvertThumbnailBlob(item) {
   const cacheKey = convertThumbKey(item);
   if (convertThumbBlobCache.has(cacheKey)) {
-    return convertThumbBlobCache.get(cacheKey);
+    return { url: convertThumbBlobCache.get(cacheKey), reason: null };
   }
   if (convertThumbFailedKeys.has(cacheKey)) {
-    return null;
+    return { url: null, reason: "unavailable" };
   }
   if (convertThumbInflight.has(cacheKey)) {
     return convertThumbInflight.get(cacheKey);
   }
   const apiUrl = convertThumbnailUrl(item.item_id);
   if (!apiUrl) {
-    return null;
+    return { url: null, reason: "no_token" };
   }
   const work = (async () => {
     try {
       const res = await fetch(apiUrl, { headers: imageFetchHeaders() });
       if (!res.ok) {
-        if (res.status !== 401) {
-          convertThumbFailedKeys.add(cacheKey);
+        if (res.status === 401) {
+          showAuthPanel(
+            "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token."
+          );
+          return { url: null, reason: "unauthorized" };
         }
-        return null;
+        convertThumbFailedKeys.add(cacheKey);
+        return { url: null, reason: "unavailable" };
       }
       const blob = await blobFromImageResponse(res);
       if (blob.size < 32) {
         convertThumbFailedKeys.add(cacheKey);
-        return null;
+        return { url: null, reason: "unavailable" };
       }
       const objUrl = URL.createObjectURL(blob);
       convertThumbBlobCache.set(cacheKey, objUrl);
       convertThumbFailedKeys.delete(cacheKey);
-      return objUrl;
+      return { url: objUrl, reason: null };
     } catch {
       convertThumbFailedKeys.add(cacheKey);
-      return null;
+      return { url: null, reason: "unavailable" };
     }
   })();
   convertThumbInflight.set(cacheKey, work);
