@@ -742,8 +742,10 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
+            fill_allocated_rect(ui);
             let bg_idx = ui.painter().add(Shape::Noop);
             let ret = add_contents(ui);
+            consume_remaining_ui_space(ui);
             let paint_rect = ui.min_rect() + inner_margin;
             if ui.is_rect_visible(paint_rect) {
                 paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
@@ -755,20 +757,63 @@ pub fn show_mode_panel<R>(
 const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
-/// Expand the current UI node to the parent's allocated rect.
-///
-/// Required for resizable [`egui::TopBottomPanel`]s and floating [`egui::Window`]s: egui
-/// persists height from the content rect; shrink-wrapped children make resizes snap back.
+/// [`egui::TopBottomPanel`] id for the docked video queue.
+pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v3";
+/// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
+pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v3";
+
+/// Expand the current UI node to the parent's allocated rect (call at the start of panel/window bodies).
 pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
-    let mut size = ui.available_size();
-    if !size.x.is_finite() || size.x < 1.0 {
-        size.x = ui.max_rect().width().max(1.0);
-    }
-    if !size.y.is_finite() || size.y < 1.0 {
-        size.y = ui.max_rect().height().max(1.0);
-    }
+    let w = ui.max_rect().width().max(1.0);
+    let h = ui.max_rect().height().max(1.0);
+    let size = egui::vec2(w, h);
     ui.set_min_size(size);
     size
+}
+
+/// Fill leftover space so resizable panels/windows keep their dragged size.
+///
+/// See egui docs: put `ui.allocate_space(ui.available_size())` **last** in resizable panel/window code.
+pub fn consume_remaining_ui_space(ui: &mut egui::Ui) {
+    let mut size = ui.available_size();
+    if !size.x.is_finite() || size.x < 0.0 {
+        size.x = 0.0;
+    }
+    if !size.y.is_finite() || size.y < 0.0 {
+        size.y = 0.0;
+    }
+    if size.x > 0.5 || size.y > 0.5 {
+        ui.allocate_space(size);
+    }
+}
+
+/// Remember the panel's allocated height for [`patch_resizable_panel_state_height`].
+pub fn note_resizable_panel_height(ctx: &egui::Context, panel_id: &str, height: f32) {
+    if height.is_finite() && height >= 1.0 {
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new(panel_id).with("allocated_h"), height);
+        });
+    }
+}
+
+/// egui stores [`egui::panel::PanelState`] height from shrink-wrapped content; patch it after show.
+pub fn patch_resizable_panel_state_height(ctx: &egui::Context, panel_id: &str) {
+    let id = egui::Id::new(panel_id);
+    let Some(height) = ctx.data(|d| d.get_temp::<f32>(id.with("allocated_h"))) else {
+        return;
+    };
+    if !height.is_finite() || height < 1.0 {
+        return;
+    }
+    if let Some(mut state) = egui::panel::PanelState::load(ctx, id) {
+        if (state.rect.height() - height).abs() > 0.5 {
+            state.rect = egui::Rect::from_min_size(
+                state.rect.min,
+                egui::vec2(state.rect.width().max(1.0), height),
+            );
+            ctx.data_mut(|d| d.insert_persisted(id, state));
+        }
+    }
 }
 
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
@@ -1223,6 +1268,22 @@ impl<'a> ButtonGroup<'a> {
             })
             .response
             .on_hover_text("Remove from queue or delete the saved file")
+        })
+    }
+
+    /// Fused "Import/Export" menu for settings, queue I/O, URL import, etc.
+    pub fn import_export_menu<F>(&mut self, enabled: bool, add_items: F) -> Response
+    where
+        F: FnOnce(&mut egui::Ui),
+    {
+        let compact = self.compact;
+        let label = format!("{} Import/Export", crate::ui_icons::IMPORT_FILE);
+        self.add(|ui| {
+            if !enabled {
+                return grouped_secondary_button(ui, &label, false, compact);
+            }
+            ui.menu_button(grouped_button_label(&label, compact), add_items)
+                .response
         })
     }
 }

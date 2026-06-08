@@ -18,6 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Destination disk free space is shown as a color-coded progress bar (green → amber → red as space runs low) in the desktop header and LAN web UI.
 - **Show log** is its own header button (not fused with Settings/Exit); queue **Videos** dock/hide controls sit on a separate row from Pause/Export/Clear; docked activity log uses the same placement vs. toolbar split as the floating log window.
+- Import and export actions are grouped under an **Import/Export** dropdown (URL input, download queue, settings, and profiles) instead of separate toolbar buttons.
 - **Show log** moved to the top header (next to Settings) instead of above the download queue.
 - Destination disk free space is shown in the top header next to the yt-dlp/ffmpeg/ffprobe checks (removed from Download options); redundant **Queue** label above the action toolbar removed.
 - Done download cards show the most recently finished items first (left in the horizontal strip).
@@ -29,6 +30,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Header tool checks and destination disk info (including the free-space bar) stay on one line instead of stacking the bar below the text.
+- Queue search moved from Download options into the **Videos** panel (docked and floating window).
 - Floating **Videos** / **Activity log** windows and the docked queue panel keep their size when resized (content fills the allocated area so egui no longer snaps back to shrink-wrapped height).
 - Floating **Videos** window can be resized again (queue content now fills the window instead of shrink-wrapping).
 - Floating **Activity log** window: resizable again, log lines fill the viewport (no empty black area above the toolbar).

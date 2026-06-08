@@ -2,7 +2,8 @@ use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
     constrain_content_width, content_width, draw_mode_nav_bar, draw_navbar_status_badge,
-    left_button_row, show_mode_panel, with_full_width,
+    left_button_row, patch_resizable_panel_state_height, show_mode_panel, with_full_width,
+    UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -66,13 +67,14 @@ impl eframe::App for PydlApp {
 
         let body_est = ctx.input(|i| i.screen_rect.height()) - 100.0;
         if self.settings.videos_docked {
-            egui::TopBottomPanel::bottom("rustdl_videos_dock_v3")
+            egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                 .resizable(true)
                 .default_height(self.settings.videos_dock_height)
                 .height_range(180.0..=800.0)
                 .show(ctx, |ui| {
                     self.draw_docked_videos_panel(ui);
                 });
+            patch_resizable_panel_state_height(ctx, VIDEOS_DOCK_PANEL_ID);
         } else {
             let log_docked = self.settings.logs_open && self.settings.logs_docked;
             let footer_h = compute_main_column_split(
@@ -86,13 +88,14 @@ impl eframe::App for PydlApp {
             .footer_height
             .min(body_est * 0.42)
             .max(100.0);
-            egui::TopBottomPanel::bottom("rustdl_undocked_footer_v3")
+            egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
                 .resizable(log_docked)
                 .default_height(footer_h)
                 .height_range(100.0..=600.0)
                 .show(ctx, |ui| {
                     self.draw_queue_footer(ui);
                 });
+            patch_resizable_panel_state_height(ctx, UNDOCKED_FOOTER_PANEL_ID);
         }
 
         egui::CentralPanel::default()
@@ -297,6 +300,7 @@ impl eframe::App for PydlApp {
                 log_panel::draw_input_line_preview(ui, summary_lines);
 
                 left_button_row(ui, |ui| {
+                    let mut import_urls = false;
                     button_group(ui, "add_urls", |g| {
                         if g.success(
                             &format!("{} Add URLs", ui_icons::ADD),
@@ -306,19 +310,24 @@ impl eframe::App for PydlApp {
                         {
                             self.add_urls(ctx.input(|i| i.time));
                         }
-                        if g
-                            .secondary(
-                                &format!(
-                                    "{} Import file (.txt/.csv)",
-                                    ui_icons::IMPORT_FILE
-                                ),
-                                true,
-                            )
-                            .clicked()
-                        {
-                            self.import_urls_from_file();
-                        }
+                        g.import_export_menu(!self.add_in_progress, |ui| {
+                            if ui
+                                .add_enabled(
+                                    !self.add_in_progress,
+                                    egui::Button::new(format!(
+                                        "{} Import file (.txt/.csv)",
+                                        ui_icons::IMPORT_FILE
+                                    )),
+                                )
+                                .clicked()
+                            {
+                                import_urls = true;
+                            }
+                        });
                     });
+                    if import_urls {
+                        self.import_urls_from_file();
+                    }
                 });
                 ui.horizontal_wrapped(|ui| {
                     if self.add_in_progress {
@@ -421,7 +430,6 @@ impl eframe::App for PydlApp {
                 let options_header = downloader_options_collapsing_label(
                     &self.output_dir,
                     &self.settings.active_profile,
-                    &self.queue_search,
                     options_expanded,
                 );
                 let options_resp = egui::CollapsingHeader::new(options_header)
@@ -472,8 +480,8 @@ impl eframe::App for PydlApp {
                         });
                         ui.add_space(4.0);
                         let profiles = crate::profiles::all_profiles(&self.profile_store);
-                        ui.horizontal(|ui| {
-                            if !profiles.is_empty() {
+                        if !profiles.is_empty() {
+                            ui.horizontal(|ui| {
                                 ui.label("Profile");
                                 egui::ComboBox::from_id_salt("toolbar_profile")
                                     .selected_text(self.settings.active_profile.clone())
@@ -498,28 +506,8 @@ impl eframe::App for PydlApp {
                                             }
                                         }
                                     });
-                                ui.add_space(20.0);
-                            }
-                            ui.label("Search");
-                            let search = ui.add(
-                                egui::TextEdit::singleline(&mut self.queue_search)
-                                    .hint_text("Title, URL, uploader…")
-                                    .desired_width(220.0),
-                            );
-                            if search.changed() {
-                                self.queue_group_focus = None;
-                            }
-                            if !self.queue_search.is_empty()
-                                && ui
-                                    .small_button(format!(
-                                        "{} Clear",
-                                        ui_icons::CLEAR_SEARCH
-                                    ))
-                                    .clicked()
-                            {
-                                self.queue_search.clear();
-                            }
-                        });
+                            });
+                        }
                     });
                 if options_resp.header_response.changed() {
                     if let Some(state) =
@@ -758,7 +746,6 @@ impl PydlApp {
 fn downloader_options_collapsing_label(
     output_dir: &str,
     profile: &str,
-    search: &str,
     expanded: bool,
 ) -> String {
     if expanded {
@@ -775,16 +762,5 @@ fn downloader_options_collapsing_label(
     } else {
         folder.to_owned()
     };
-    let mut label = format!("Download options — {folder} · {profile}");
-    let q = search.trim();
-    if !q.is_empty() {
-        let short = if q.chars().count() > 20 {
-            let s: String = q.chars().take(17).collect();
-            format!("{s}…")
-        } else {
-            q.to_owned()
-        };
-        label.push_str(&format!(" · \"{short}\""));
-    }
-    label
+    format!("Download options — {folder} · {profile}")
 }

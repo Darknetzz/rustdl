@@ -295,60 +295,29 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("Settings portability").strong());
                         left_button_row(ui, |ui| {
+                            let mut export_settings = false;
+                            let mut import_settings = false;
                             button_group(ui, "settings_portability", |g| {
-                                if g.secondary(
-                                    &format!("{} Export settings", ui_icons::EXPORT),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .set_file_name("rustdl_config_export.json")
-                                        .save_file()
+                                g.import_export_menu(true, |ui| {
+                                    if ui
+                                        .button(format!(
+                                            "{} Export settings",
+                                            ui_icons::EXPORT
+                                        ))
+                                        .clicked()
                                     {
-                                        match export_settings_json(&self.settings, &path) {
-                                            Ok(()) => self.append_log(&format!(
-                                                "Exported settings to {}",
-                                                path.to_string_lossy()
-                                            )),
-                                            Err(e) => self.append_log(&format!(
-                                                "Export settings failed: {e:#}"
-                                            )),
-                                        }
+                                        export_settings = true;
                                     }
-                                }
-                                if g.secondary(
-                                    &format!("{} Import settings", ui_icons::IMPORT_FILE),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .add_filter("JSON", &["json"])
-                                        .pick_file()
+                                    if ui
+                                        .button(format!(
+                                            "{} Import settings",
+                                            ui_icons::IMPORT_FILE
+                                        ))
+                                        .clicked()
                                     {
-                                        match import_settings_json(&path) {
-                                            Ok(imported) => {
-                                                self.settings = imported;
-                                                self.output_dir = self.settings.output_dir.clone();
-                                                self.worker_count =
-                                                    self.settings.worker_count.clamp(1, 6);
-                                                self.settings_tab =
-                                                    super::settings_tab_from_str(
-                                                        &self.settings.settings_tab,
-                                                    );
-                                                changed = true;
-                                                self.append_log(&format!(
-                                                    "Imported settings from {}",
-                                                    path.to_string_lossy()
-                                                ));
-                                            }
-                                            Err(e) => self.append_log(&format!(
-                                                "Import settings failed: {e:#}"
-                                            )),
-                                        }
+                                        import_settings = true;
                                     }
-                                }
+                                });
                                 if g.secondary(
                                     &format!("{} Reset to defaults", ui_icons::RESET),
                                     true,
@@ -362,6 +331,49 @@ impl PydlApp {
                                     changed = true;
                                 }
                             });
+                            if export_settings {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_file_name("rustdl_config_export.json")
+                                    .save_file()
+                                {
+                                    match export_settings_json(&self.settings, &path) {
+                                        Ok(()) => self.append_log(&format!(
+                                            "Exported settings to {}",
+                                            path.to_string_lossy()
+                                        )),
+                                        Err(e) => self.append_log(&format!(
+                                            "Export settings failed: {e:#}"
+                                        )),
+                                    }
+                                }
+                            }
+                            if import_settings {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .pick_file()
+                                {
+                                    match import_settings_json(&path) {
+                                        Ok(imported) => {
+                                            self.settings = imported;
+                                            self.output_dir = self.settings.output_dir.clone();
+                                            self.worker_count =
+                                                self.settings.worker_count.clamp(1, 6);
+                                            self.settings_tab =
+                                                super::settings_tab_from_str(
+                                                    &self.settings.settings_tab,
+                                                );
+                                            changed = true;
+                                            self.append_log(&format!(
+                                                "Imported settings from {}",
+                                                path.to_string_lossy()
+                                            ));
+                                        }
+                                        Err(e) => self.append_log(&format!(
+                                            "Import settings failed: {e:#}"
+                                        )),
+                                    }
+                                }
+                            }
                         });
                     }
                     SettingsTab::Downloader => {
@@ -477,57 +489,69 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("User profiles file").strong());
                         left_button_row(ui, |ui| {
+                            let mut export_profiles = false;
+                            let mut import_profiles = false;
                             button_group(ui, "profiles_io", |g| {
-                                if g.secondary(
-                                    &format!("{} Export profiles", ui_icons::EXPORT),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .set_file_name("rustdl_profiles.json")
-                                        .save_file()
+                                g.import_export_menu(true, |ui| {
+                                    if ui
+                                        .button(format!(
+                                            "{} Export profiles",
+                                            ui_icons::EXPORT
+                                        ))
+                                        .clicked()
                                     {
-                                        if let Err(e) = crate::profiles::export_profiles_json(
-                                            &self.profile_store,
-                                            &path,
-                                        ) {
-                                            self.append_log(&format!("Export profiles failed: {e:#}"));
-                                        } else {
+                                        export_profiles = true;
+                                    }
+                                    if ui
+                                        .button(format!(
+                                            "{} Import profiles",
+                                            ui_icons::IMPORT_FILE
+                                        ))
+                                        .clicked()
+                                    {
+                                        import_profiles = true;
+                                    }
+                                });
+                            });
+                            if export_profiles {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .set_file_name("rustdl_profiles.json")
+                                    .save_file()
+                                {
+                                    if let Err(e) = crate::profiles::export_profiles_json(
+                                        &self.profile_store,
+                                        &path,
+                                    ) {
+                                        self.append_log(&format!("Export profiles failed: {e:#}"));
+                                    } else {
+                                        self.append_log(&format!(
+                                            "Exported profiles to {}",
+                                            path.to_string_lossy()
+                                        ));
+                                    }
+                                }
+                            }
+                            if import_profiles {
+                                if let Some(path) = rfd::FileDialog::new()
+                                    .add_filter("JSON", &["json"])
+                                    .pick_file()
+                                {
+                                    match crate::profiles::import_profiles_json(&path) {
+                                        Ok(imported) => {
+                                            self.profile_store = imported;
                                             self.append_log(&format!(
-                                                "Exported profiles to {}",
+                                                "Imported profiles from {}",
                                                 path.to_string_lossy()
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            self.append_log(&format!(
+                                                "Import profiles failed: {e:#}"
                                             ));
                                         }
                                     }
                                 }
-                                if g.secondary(
-                                    &format!("{} Import profiles", ui_icons::IMPORT_FILE),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    if let Some(path) = rfd::FileDialog::new()
-                                        .add_filter("JSON", &["json"])
-                                        .pick_file()
-                                    {
-                                        match crate::profiles::import_profiles_json(&path) {
-                                            Ok(imported) => {
-                                                self.profile_store = imported;
-                                                self.append_log(&format!(
-                                                    "Imported profiles from {}",
-                                                    path.to_string_lossy()
-                                                ));
-                                            }
-                                            Err(e) => {
-                                                self.append_log(&format!(
-                                                    "Import profiles failed: {e:#}"
-                                                ));
-                                            }
-                                        }
-                                    }
-                                }
-                            });
+                            }
                         });
                         ui.separator();
                         ui.label(RichText::new("Output and quality").strong());

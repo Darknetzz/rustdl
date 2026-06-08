@@ -4,9 +4,10 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, constrain_content_width, content_width, draw_status_dot,
-    fill_allocated_rect, left_button_row, remaining_ui_height, show_mode_panel, status_color,
-    with_full_width,
+    compact_button_group, constrain_content_width, consume_remaining_ui_space, content_width,
+    draw_status_dot, fill_allocated_rect, left_button_row, note_resizable_panel_height,
+    remaining_ui_height, show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
+    VIDEOS_DOCK_PANEL_ID,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -87,7 +88,7 @@ impl PydlApp {
         });
     }
 
-    /// Pause/export/import/recheck/clear — lives in the video queue card or floating window.
+    /// Pause/import-export/recheck/clear — lives in the video queue card or floating window.
     fn draw_downloader_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
@@ -96,6 +97,8 @@ impl PydlApp {
                 button_group(ui, "dl_queue_actions", |g| add(g));
             }
         };
+        let mut export_queue = false;
+        let mut import_queue = false;
         draw(ui, &mut |g| {
             if self.downloads_paused {
                 if g
@@ -116,25 +119,32 @@ impl PydlApp {
             {
                 self.pause_all_downloads();
             }
-            if g
-                .secondary(
-                    &format!("{} Export URLs", ui_icons::EXPORT),
-                    !self.items.is_empty(),
-                )
-                .clicked()
-            {
-                self.export_queue_to_file();
-            }
-            if g
-                .secondary(
-                    &format!("{} Import queue", ui_icons::IMPORT_FILE),
-                    !self.add_in_progress,
-                )
-                .on_hover_text("Load URLs from a .txt file directly into the download queue")
-                .clicked()
-            {
-                self.import_queue_from_file();
-            }
+            g.import_export_menu(
+                !self.items.is_empty() || !self.add_in_progress,
+                |ui| {
+                    if ui
+                        .add_enabled(
+                            !self.items.is_empty(),
+                            egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
+                        )
+                        .clicked()
+                    {
+                        export_queue = true;
+                    }
+                    if ui
+                        .add_enabled(
+                            !self.add_in_progress,
+                            egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
+                        )
+                        .on_hover_text(
+                            "Load URLs from a .txt file directly into the download queue",
+                        )
+                        .clicked()
+                    {
+                        import_queue = true;
+                    }
+                },
+            );
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),
@@ -165,6 +175,12 @@ impl PydlApp {
                 self.mark_queue_dirty();
             }
         });
+        if export_queue {
+            self.export_queue_to_file();
+        }
+        if import_queue {
+            self.import_queue_from_file();
+        }
     }
 
     fn draw_downloader_queue_list_scroll(
@@ -306,6 +322,28 @@ impl PydlApp {
         });
     }
 
+    fn draw_queue_search_row(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Search");
+            let search = ui.add(
+                egui::TextEdit::singleline(&mut self.queue_search)
+                    .hint_text("Title, URL, uploader…")
+                    .desired_width(220.0),
+            );
+            if search.changed() {
+                self.queue_group_focus = None;
+            }
+            if !self.queue_search.is_empty()
+                && ui
+                    .small_button(format!("{} Clear", ui_icons::CLEAR_SEARCH))
+                    .clicked()
+            {
+                self.queue_search.clear();
+            }
+        });
+        ui.add_space(2.0);
+    }
+
     /// Status row, scrollable cards (top), toolbar (bottom); optional log under the toolbar when docked.
     fn draw_videos_queue_body(
         &mut self,
@@ -316,6 +354,10 @@ impl PydlApp {
         constrain_content_width(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
         let body_bottom = ui.max_rect().bottom();
+
+        if !self.av1_mode {
+            self.draw_queue_search_row(ui);
+        }
 
         if self.av1_mode {
             if !self.av1_items.is_empty() {
@@ -524,6 +566,8 @@ impl PydlApp {
         if self.settings.logs_open && self.settings.logs_docked {
             self.draw_docked_log_only_section(ui);
         }
+        consume_remaining_ui_space(ui);
+        note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, ui.max_rect().height());
     }
 
     /// Pinned footer when the queue is undocked (`TopBottomPanel` body).
@@ -539,14 +583,17 @@ impl PydlApp {
             av1,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                fill_allocated_rect(ui);
                 self.draw_videos_queue_body(ui, "rustdl_videos_dock_scroll", dock_log);
             },
         );
-        let saved_h = ui.max_rect().height();
-        if (saved_h - self.settings.videos_dock_height).abs() > 1.0 {
-            self.settings.videos_dock_height = saved_h.clamp(180.0, 800.0);
-            self.persist_settings();
+        consume_remaining_ui_space(ui);
+        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, ui.max_rect().height());
+        if !ui.ctx().input(|i| i.pointer.any_down()) {
+            let saved_h = ui.max_rect().height();
+            if (saved_h - self.settings.videos_dock_height).abs() > 1.0 {
+                self.settings.videos_dock_height = saved_h.clamp(180.0, 800.0);
+                self.persist_settings();
+            }
         }
     }
 
@@ -586,10 +633,10 @@ impl PydlApp {
                 av1,
                 QUEUE_MODE_PANEL_MARGIN,
                 |ui| {
-                    fill_allocated_rect(ui);
                     self.draw_videos_queue_body(ui, "rustdl_videos_float_v4", false);
                 },
             );
+            consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
             if !pointer_down {

@@ -6,8 +6,8 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compact_button_group, fill_allocated_rect,
-    left_button_row, remaining_ui_height, secondary_button,
+    button_group, button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space,
+    fill_allocated_rect, left_button_row, remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -177,6 +177,7 @@ impl PydlApp {
                 self.draw_log_controls(ui);
             });
             self.draw_activity_log_panel(ui);
+            consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
             if !pointer_down {
