@@ -692,13 +692,31 @@ async fn thumbnail_proxy(
     State(st): State<ApiState>,
     Path(id): Path<u64>,
 ) -> Result<Response, StatusCode> {
-    let (candidates, client, local_thumb, ffmpeg_path, has_ffmpeg, source_key, cached, core_ref) = {
+    let (
+        candidates,
+        client,
+        local_thumb,
+        ffmpeg_path,
+        has_ffmpeg,
+        source_key,
+        cached,
+        core_ref,
+    ) = {
         let mut c = st.core.lock();
         c.refresh_done_file_lookup();
         if !c.has_ffmpeg {
             c.refresh_deps();
         }
-        let idx = c.item_idx(id).ok_or(StatusCode::NOT_FOUND)?;
+        let idx = match c.item_idx(id) {
+            Some(idx) => idx,
+            None => {
+                eprintln!(
+                    "rustdl: thumbnail {id}: queue item not found ({} items)",
+                    c.items.len()
+                );
+                return Err(StatusCode::NOT_FOUND);
+            }
+        };
         let output_dir = c.effective_output_dir();
         let index = &c.done_file_index;
         let ffmpeg_path = c.settings.ffmpeg_path.clone();
@@ -710,6 +728,14 @@ async fn thumbnail_proxy(
         let local_media = media::resolve_item_media_path_from_index(&output_dir, index, &item)
             .ok()
             .filter(|p| media::media_kind_for_path(p).is_some());
+        if cached.is_none() {
+            eprintln!(
+                "rustdl: thumbnail {id}: cache miss (thumb_path={:?}, urls={}, local={})",
+                item.thumbnail_path,
+                urls.len(),
+                local_media.is_some(),
+            );
+        }
         (
             urls,
             c.http_client.clone(),
