@@ -21,6 +21,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Done download cards show the most recently finished items first (left in the horizontal strip).
 - Failed download cards show **Retry** only (not a duplicate **Redo**); **Redo** remains on completed downloads.
 - LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
+- Desktop GUI: **Downloader** and **AV1** panels use the same muted mode tint and left accent stripe as the LAN web UI (main controls and queue panels); mode nav tabs use blue / purple when active.
 - LAN web UI: queue thumbnails load reliably during live SSE updates (debounced refresh, ignore aborted image loads, typed image blobs).
 
 ### Fixed

@@ -5,10 +5,10 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     constrain_content_width, content_width, draw_status_dot, height_to_bottom, left_button_row,
-    remaining_ui_height, status_color, with_full_width,
+    remaining_ui_height, show_mode_panel, status_color, with_full_width,
 };
 use crate::models::ItemStatus;
-use crate::theme::{canvas_bg, panel_border, BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
+use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 
 use super::PydlApp;
@@ -395,7 +395,6 @@ impl PydlApp {
 
     /// Compact strip when the queue lives in a floating window.
     pub(super) fn draw_videos_undocked_strip(&mut self, ui: &mut egui::Ui) {
-        let theme = self.settings.theme.clone();
         let heading = if self.av1_mode { "AV1 queue" } else { "Videos" };
         let window_title = self.videos_window_title();
         with_full_width(ui, |ui| {
@@ -570,27 +569,20 @@ impl PydlApp {
         let panel_w = content_width(ui).max(1.0);
         // egui persists panel height from the content rect; fill the panel so resize sticks.
         ui.set_min_size(egui::vec2(panel_w, panel_h));
-        let fill = self.videos_panel_fill();
-        let border = self.videos_panel_border();
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
 
-        egui::Frame::dark_canvas(ui.style())
-            .fill(fill)
-            .stroke(egui::Stroke::new(1.0, border))
-            .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-            .rounding(egui::Rounding::same(8.0))
-            .show(ui, |ui| {
-                let inner_h = remaining_ui_height(ui).max(180.0);
-                let inner_w = content_width(ui).max(1.0);
-                allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
-                    self.draw_videos_queue_body(
-                        ui,
-                        ui.max_rect().bottom(),
-                        "rustdl_videos_dock_scroll",
-                        dock_log,
-                    );
-                });
+        self.draw_mode_queue_panel(ui, egui::Margin::symmetric(10.0, 8.0), |ui| {
+            let inner_h = remaining_ui_height(ui).max(180.0);
+            let inner_w = content_width(ui).max(1.0);
+            allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
+                self.draw_videos_queue_body(
+                    ui,
+                    ui.max_rect().bottom(),
+                    "rustdl_videos_dock_scroll",
+                    dock_log,
+                );
             });
+        });
         if (panel_h - self.settings.videos_dock_height).abs() > 0.5 {
             self.settings.videos_dock_height = panel_h.clamp(180.0, 800.0);
             self.persist_settings();
@@ -607,8 +599,6 @@ impl PydlApp {
             self.settings.video_float_height,
         );
         let title = self.videos_window_title().to_owned();
-        let fill = self.videos_panel_fill();
-        let border = self.videos_panel_border();
         let response = egui::Window::new(title)
             .id(egui::Id::new("rustdl_videos_float_v4"))
             .open(&mut open)
@@ -622,23 +612,18 @@ impl PydlApp {
                 let panel_w = content_width(ui).max(480.0);
                 // Fill the window body so the resize grip changes the window (not just shrink-wrapped content).
                 ui.set_min_size(egui::vec2(panel_w, panel_h));
-                egui::Frame::dark_canvas(ui.style())
-                    .fill(fill)
-                    .stroke(egui::Stroke::new(1.0, border))
-                    .inner_margin(egui::Margin::symmetric(10.0, 8.0))
-                    .rounding(egui::Rounding::same(8.0))
-                    .show(ui, |ui| {
-                        let inner_h = remaining_ui_height(ui).max(120.0);
-                        let inner_w = content_width(ui).max(480.0);
-                        allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
-                            self.draw_videos_queue_body(
-                                ui,
-                                ui.max_rect().bottom(),
-                                "rustdl_videos_float_v4",
-                                false,
-                            );
-                        });
+                self.draw_mode_queue_panel(ui, egui::Margin::symmetric(10.0, 8.0), |ui| {
+                    let inner_h = remaining_ui_height(ui).max(120.0);
+                    let inner_w = content_width(ui).max(480.0);
+                    allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
+                        self.draw_videos_queue_body(
+                            ui,
+                            ui.max_rect().bottom(),
+                            "rustdl_videos_float_v4",
+                            false,
+                        );
                     });
+                });
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();
