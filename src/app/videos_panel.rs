@@ -2,12 +2,16 @@
 
 use eframe::egui::{self, Color32, RichText};
 
+use crate::app_parsing::human_bytes_ui;
+use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width,
-    draw_status_dot, fill_allocated_rect, left_button_row, persist_resizable_window_size,
-    remaining_ui_height, show_mode_panel, status_color, with_full_width,
+    draw_batch_progress_bar, draw_status_dot, fill_allocated_rect, left_button_row,
+    persist_resizable_window_size, remaining_ui_height, show_mode_panel, status_color,
+    with_full_width,
 };
+use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -390,10 +394,12 @@ impl PydlApp {
         if self.convert_mode {
             if !self.convert_items.is_empty() {
                 self.draw_convert_queue_status_row(ui);
+                self.draw_convert_batch_progress_row(ui);
                 self.draw_convert_batch_summary_row(ui);
             }
         } else if !self.items.is_empty() {
             self.draw_downloader_queue_status_row(ui);
+            self.draw_download_batch_progress_row(ui);
         }
 
         let list_h = (body_bottom - ui.cursor().min.y - layout.bottom_reserve())
@@ -449,8 +455,10 @@ impl PydlApp {
                         ui.add_space(4.0);
                         if self.convert_mode {
                             self.draw_convert_queue_status_row(ui);
+                            self.draw_convert_batch_progress_row(ui);
                         } else {
                             self.draw_downloader_queue_status_row(ui);
+                            self.draw_download_batch_progress_row(ui);
                         }
                     }
                 },
@@ -537,6 +545,91 @@ impl PydlApp {
                 });
             }
         });
+    }
+
+    pub(super) fn draw_download_batch_progress_row(&mut self, ui: &mut egui::Ui) {
+        let progress = compute_download_batch_progress(&self.items);
+        if progress.is_empty() {
+            return;
+        }
+        let busy =
+            self.status_active > 0 || self.queue_running > 0 || self.add_in_progress;
+        let mut caption = format!(
+            "Batch progress: {:.1}% · {}/{} done",
+            progress.percent(),
+            progress.finished,
+            progress.total,
+        );
+        if progress.active > 0 {
+            caption.push_str(&format!(" · {} active", progress.active));
+        }
+        if self.status_failed > 0 {
+            caption.push_str(&format!(" · {} failed", self.status_failed));
+        }
+        let resp = draw_batch_progress_bar(
+            ui,
+            progress.fraction,
+            caption,
+            status_color(ItemStatus::Downloading),
+            busy,
+        );
+        if resp.clicked() {
+            self.focus_queue_group("Done");
+        }
+
+        let totals = self.transfer_totals();
+        if totals.with_known_total > 0 && totals.known_total_bytes > 0 {
+            let frac =
+                totals.downloaded_bytes as f32 / totals.known_total_bytes.max(1) as f32;
+            let pct = (frac * 100.0).clamp(0.0, 100.0);
+            draw_batch_progress_bar(
+                ui,
+                frac,
+                format!(
+                    "Transfer: {} / {} ({pct:.1}%)",
+                    human_bytes_ui(totals.downloaded_bytes),
+                    human_bytes_ui(totals.known_total_bytes),
+                ),
+                status_color(ItemStatus::Downloading),
+                busy,
+            );
+        }
+
+        if self.status_ready == 0
+            && self.status_queued == 0
+            && self.status_active == 0
+            && self.status_resolving == 0
+            && progress.finished > 0
+            && progress.finished == progress.total
+        {
+            ui.colored_label(
+                status_color(ItemStatus::Done),
+                "All downloads finished for this session.",
+            );
+        }
+    }
+
+    pub(super) fn draw_convert_batch_progress_row(&self, ui: &mut egui::Ui) {
+        let progress = compute_convert_batch_progress(&self.convert_items);
+        if progress.is_empty() {
+            return;
+        }
+        let mut caption = format!(
+            "Batch progress: {:.1}% · {}/{} processed",
+            progress.percent(),
+            progress.finished,
+            progress.total,
+        );
+        if progress.active > 0 {
+            caption.push_str(&format!(" · {} active", progress.active));
+        }
+        draw_batch_progress_bar(
+            ui,
+            progress.fraction,
+            caption,
+            status_color(ItemStatus::Downloading),
+            self.convert_running,
+        );
     }
 
     /// Activity log docked in the main panel when the video queue is undocked.

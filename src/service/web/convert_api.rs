@@ -8,13 +8,13 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
 use crate::convert_state::{
-    compute_convert_batch_summary, convert_item_is_skipped, convert_item_status_label,
-    convert_item_will_skip_already_target,
+    compute_convert_batch_progress, compute_convert_batch_summary, convert_item_is_skipped,
+    convert_item_status_label, convert_item_will_skip_already_target,
 };
 use crate::models::ConvertQueueItem;
 use crate::transcode::{encoder_indicator_label, encoder_uses_hardware, target_codec_label};
 
-use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiState};
+use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiState, BatchProgressJson};
 
 #[derive(Serialize)]
 struct ConvertItemView {
@@ -53,6 +53,7 @@ struct ConvertQueueResponse {
     target_codec: String,
     reencode_target: bool,
     summary: ConvertSummaryJson,
+    batch_progress: BatchProgressJson,
 }
 
 #[derive(Deserialize)]
@@ -121,6 +122,7 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
             pending_count: summary.pending_count,
             pending_input_bytes: summary.pending_input_bytes,
         },
+        batch_progress: compute_convert_batch_progress(&c.convert_items).into(),
     })
 }
 

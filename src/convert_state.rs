@@ -7,6 +7,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::app_parsing::{human_bytes_ui, reset_convert_item_to_ready};
+use crate::app_state::BatchProgress;
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{codec_matches_target, normalize_target_codec, target_codec_label};
 
@@ -117,6 +118,43 @@ pub fn compute_convert_batch_summary(items: &[ConvertQueueItem]) -> ConvertBatch
             summary.completed_output_bytes.saturating_add(output_bytes);
     }
     summary
+}
+
+fn convert_item_batch_fraction(item: &ConvertQueueItem) -> f32 {
+    if convert_item_is_skipped(item) {
+        return 1.0;
+    }
+    match item.status {
+        ItemStatus::Done | ItemStatus::Failed => 1.0,
+        ItemStatus::Downloading => (item.percent / 100.0).clamp(0.0, 1.0),
+        ItemStatus::Queued | ItemStatus::Idle | ItemStatus::Resolving => 0.0,
+    }
+}
+
+/// Weighted batch progress for the converter queue (includes partial credit for running encodes).
+pub fn compute_convert_batch_progress(items: &[ConvertQueueItem]) -> BatchProgress {
+    let mut sum = 0.0f32;
+    let mut total = 0usize;
+    let mut finished = 0usize;
+    let mut active = 0usize;
+    for item in items {
+        let frac = convert_item_batch_fraction(item);
+        total += 1;
+        sum += frac;
+        if frac >= 1.0 {
+            finished += 1;
+        }
+        match item.status {
+            ItemStatus::Downloading | ItemStatus::Queued => active += 1,
+            _ => {}
+        }
+    }
+    BatchProgress {
+        fraction: if total > 0 { sum / total as f32 } else { 0.0 },
+        total,
+        finished,
+        active,
+    }
 }
 
 /// Case/separator-insensitive key for matching the same source file across input lines.
@@ -270,6 +308,34 @@ mod tests {
         assert_eq!(items[0].status, ItemStatus::Idle);
         assert!(items[0].detail.starts_with("Ready"));
         assert_eq!(items[1].status, ItemStatus::Done);
+    }
+
+    #[test]
+    fn convert_batch_progress_weights_running_percent() {
+        let items = vec![
+            ConvertQueueItem {
+                item_id: 1,
+                status: ItemStatus::Done,
+                output_bytes: Some(500),
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 2,
+                status: ItemStatus::Downloading,
+                percent: 40.0,
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 3,
+                status: ItemStatus::Queued,
+                ..Default::default()
+            },
+        ];
+        let p = compute_convert_batch_progress(&items);
+        assert_eq!(p.total, 3);
+        assert_eq!(p.finished, 1);
+        assert_eq!(p.active, 2);
+        assert!((p.fraction - 0.466666).abs() < 0.001);
     }
 
     #[test]

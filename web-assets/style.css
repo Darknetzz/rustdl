@@ -734,6 +734,62 @@ button.danger:disabled,
   margin-top: 0.1rem;
 }
 
+.batch-progress-wrap {
+  margin: 0.35rem 0 0.65rem;
+}
+
+.batch-progress-wrap.hidden {
+  display: none;
+}
+
+.batch-progress {
+  position: relative;
+  height: 22px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.batch-progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  background: var(--downloading);
+  transition: width 0.25s ease;
+}
+
+.batch-progress-live .batch-progress-fill {
+  background: linear-gradient(
+    90deg,
+    var(--downloading) 0%,
+    rgba(66, 165, 245, 0.55) 50%,
+    var(--downloading) 100%
+  );
+  background-size: 200% 100%;
+  animation: batch-progress-shimmer 1.4s linear infinite;
+}
+
+@keyframes batch-progress-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.batch-progress-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .card-detail {
   margin: 0;
   font-size: 0.72rem;

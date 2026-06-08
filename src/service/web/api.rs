@@ -62,6 +62,27 @@ struct DiskSpaceJson {
 }
 
 #[derive(Serialize)]
+pub(super) struct BatchProgressJson {
+    fraction: f32,
+    percent: f32,
+    finished: usize,
+    total: usize,
+    active: usize,
+}
+
+impl From<crate::app_state::BatchProgress> for BatchProgressJson {
+    fn from(p: crate::app_state::BatchProgress) -> Self {
+        Self {
+            fraction: p.fraction,
+            percent: p.percent(),
+            finished: p.finished,
+            total: p.total,
+            active: p.active,
+        }
+    }
+}
+
+#[derive(Serialize)]
 struct StatusResponse {
     version: &'static str,
     build_date: String,
@@ -74,6 +95,7 @@ struct StatusResponse {
     shutdown_pending: bool,
     convert_running: bool,
     status: StatusCountsJson,
+    download_batch: BatchProgressJson,
     tools: serde_json::Value,
     output_disk_space: Option<DiskSpaceJson>,
     config_warnings: Vec<String>,
@@ -266,6 +288,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             done: c.status_done,
             failed: c.status_failed,
         },
+        download_batch: crate::app_state::compute_download_batch_progress(&c.items).into(),
         tools: c.tools_status_json(),
         output_disk_space: disk_space_json(&output_dir),
         config_warnings,

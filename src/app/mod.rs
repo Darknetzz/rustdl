@@ -44,11 +44,11 @@ pub(crate) use log_panel::{
 
 use crate::app_actions;
 use crate::app_icon;
-use crate::app_parsing::{human_bytes_ui, parse_urls_from_text_blob};
+use crate::app_parsing::parse_urls_from_text_blob;
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, content_panel_frame,
-    modal_backdrop, status_color, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_activity_log, load_settings, rustdl_config_dir,

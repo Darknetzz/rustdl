@@ -3,6 +3,64 @@ use std::collections::{HashMap, HashSet};
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 
+#[derive(Clone, Copy, Default, Debug, PartialEq)]
+pub struct BatchProgress {
+    /// Weighted completion in `[0.0, 1.0]` (active items contribute partial credit).
+    pub fraction: f32,
+    /// Items included in the batch (excludes download metadata rows still resolving).
+    pub total: usize,
+    /// Items fully processed (done, failed, or skipped).
+    pub finished: usize,
+    /// Items currently running (downloading, or queued/downloading for convert).
+    pub active: usize,
+}
+
+impl BatchProgress {
+    pub fn percent(&self) -> f32 {
+        (self.fraction * 100.0).clamp(0.0, 100.0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+}
+
+fn download_item_batch_fraction(item: &QueueItem) -> Option<f32> {
+    match item.status {
+        ItemStatus::Resolving => None,
+        ItemStatus::Done | ItemStatus::Failed => Some(1.0),
+        ItemStatus::Downloading => Some((item.percent / 100.0).clamp(0.0, 1.0)),
+        ItemStatus::Queued | ItemStatus::Idle => Some(0.0),
+    }
+}
+
+/// Weighted batch progress for the downloader queue (includes partial credit for active rows).
+pub fn compute_download_batch_progress(items: &[QueueItem]) -> BatchProgress {
+    let mut sum = 0.0f32;
+    let mut total = 0usize;
+    let mut finished = 0usize;
+    let mut active = 0usize;
+    for item in items {
+        let Some(frac) = download_item_batch_fraction(item) else {
+            continue;
+        };
+        total += 1;
+        sum += frac;
+        if frac >= 1.0 {
+            finished += 1;
+        }
+        if item.status == ItemStatus::Downloading {
+            active += 1;
+        }
+    }
+    BatchProgress {
+        fraction: if total > 0 { sum / total as f32 } else { 0.0 },
+        total,
+        finished,
+        active,
+    }
+}
+
 #[derive(Default, Clone)]
 pub struct TransferTotals {
     pub downloaded_bytes: u64,
@@ -288,6 +346,43 @@ mod tests {
             ..Default::default()
         };
         assert!(done_item_sort_key(&newer) > done_item_sort_key(&older));
+    }
+
+    #[test]
+    fn download_batch_progress_weights_active_percent() {
+        let items = vec![
+            QueueItem {
+                item_id: 1,
+                status: ItemStatus::Done,
+                ..Default::default()
+            },
+            QueueItem {
+                item_id: 2,
+                status: ItemStatus::Downloading,
+                percent: 50.0,
+                ..Default::default()
+            },
+            QueueItem {
+                item_id: 3,
+                status: ItemStatus::Idle,
+                ..Default::default()
+            },
+        ];
+        let p = compute_download_batch_progress(&items);
+        assert_eq!(p.total, 3);
+        assert_eq!(p.finished, 1);
+        assert_eq!(p.active, 1);
+        assert!((p.fraction - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn download_batch_progress_excludes_resolving() {
+        let items = vec![QueueItem {
+            item_id: 1,
+            status: ItemStatus::Resolving,
+            ..Default::default()
+        }];
+        assert!(compute_download_batch_progress(&items).is_empty());
     }
 
     #[test]

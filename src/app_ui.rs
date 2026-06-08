@@ -118,6 +118,22 @@ pub fn status_color(s: ItemStatus) -> Color32 {
     }
 }
 
+/// Full-width batch progress bar with a caller-supplied caption.
+pub fn draw_batch_progress_bar(
+    ui: &mut egui::Ui,
+    fraction: f32,
+    caption: impl AsRef<str>,
+    fill: Color32,
+    animate: bool,
+) -> Response {
+    ui.add(
+        egui::ProgressBar::new(fraction.clamp(0.0, 1.0))
+            .fill(fill)
+            .animate(animate)
+            .text(caption.as_ref()),
+    )
+}
+
 /// Small filled circle aligned with status summary text (e.g. download counts).
 pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
     let dot = 8.0;

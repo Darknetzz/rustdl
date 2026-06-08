@@ -415,6 +415,17 @@ fn walk_dir(out: &mut Vec<ConvertPlanItem>, root: &Path, cfg: &ConvertConfig) {
     }
 }
 
+fn planned_output_directory(input: &Path, cfg: &ConvertConfig) -> PathBuf {
+    if cfg.delete_original && cfg.rename_original {
+        input
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from(&cfg.output_dir))
+    } else {
+        PathBuf::from(&cfg.output_dir)
+    }
+}
+
 fn maybe_push_file(out: &mut Vec<ConvertPlanItem>, input: &Path, cfg: &ConvertConfig) {
     if !is_video_path(input) {
         return;
@@ -425,7 +436,7 @@ fn maybe_push_file(out: &mut Vec<ConvertPlanItem>, input: &Path, cfg: &ConvertCo
         .unwrap_or("video");
     let ext = planned_output_extension(input, cfg);
     let suffix = output_suffix_for_target(&cfg.target_codec);
-    let output = PathBuf::from(&cfg.output_dir).join(format!("{stem}-{suffix}.{ext}"));
+    let output = planned_output_directory(input, cfg).join(format!("{stem}-{suffix}.{ext}"));
     out.push(ConvertPlanItem {
         input: input.to_path_buf(),
         output,
@@ -1018,6 +1029,28 @@ mod tests {
         );
         assert_eq!(plan.len(), 1);
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mp4"));
+    }
+
+    #[test]
+    fn collect_plan_uses_input_directory_for_inplace_replace() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let source_dir = tmp.path().join("media");
+        let output_dir = tmp.path().join("downloads");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        std::fs::create_dir_all(&output_dir).expect("create output dir");
+        let movie = source_dir.join("movie.mp4");
+        std::fs::write(&movie, b"x").expect("write movie");
+        let mut cfg = test_config(&output_dir, "av1", true);
+        cfg.delete_original = true;
+        cfg.rename_original = true;
+        let plan = collect_plan(
+            &[ConvertInput {
+                source_path: movie.to_string_lossy().to_string(),
+            }],
+            &cfg,
+        );
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].output, source_dir.join("movie-AV1.mkv"));
     }
 
     #[test]

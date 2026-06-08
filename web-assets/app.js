@@ -177,6 +177,15 @@ let shuttingDown = false;
 let refreshIntervalId = null;
 /** Debounce SSE/poll rebuilds so in-flight thumbnails are not aborted every tick. */
 let refreshAllTimer = null;
+let statusRefreshTimer = null;
+
+function scheduleStatusRefresh(delayMs = 300) {
+  if (statusRefreshTimer) clearTimeout(statusRefreshTimer);
+  statusRefreshTimer = setTimeout(() => {
+    statusRefreshTimer = null;
+    refreshStatus().catch(() => {});
+  }, delayMs);
+}
 /** @type {object | null} */
 let lastStatusPayload = null;
 /** @type {object | null} */
@@ -508,6 +517,68 @@ async function requestAppShutdown() {
   await api("/api/shutdown", { method: "POST" });
 }
 
+function renderBatchProgressBar(root, progress, caption, animate) {
+  if (!root) return;
+  root.innerHTML = "";
+  if (!progress || !progress.total) {
+    root.classList.add("hidden");
+    return;
+  }
+  root.classList.remove("hidden");
+  const pct = Math.min(100, Math.max(0, Number(progress.percent) || progress.fraction * 100 || 0));
+  const wrap = document.createElement("div");
+  wrap.className = "batch-progress" + (animate ? " batch-progress-live" : "");
+  wrap.setAttribute("role", "progressbar");
+  wrap.setAttribute("aria-valuemin", "0");
+  wrap.setAttribute("aria-valuemax", "100");
+  wrap.setAttribute("aria-valuenow", String(Math.round(pct)));
+  const fill = document.createElement("div");
+  fill.className = "batch-progress-fill";
+  fill.style.width = `${pct}%`;
+  const label = document.createElement("span");
+  label.className = "batch-progress-label";
+  label.textContent = caption;
+  wrap.appendChild(fill);
+  wrap.appendChild(label);
+  root.appendChild(wrap);
+}
+
+function renderDownloadBatchProgress(statusData) {
+  const root = document.getElementById("download-batch-progress");
+  const batch = statusData?.download_batch;
+  if (!batch || !batch.total) {
+    if (root) {
+      root.innerHTML = "";
+      root.classList.add("hidden");
+    }
+    return;
+  }
+  const failed = statusData?.status?.failed || 0;
+  let caption = `Batch progress: ${batch.percent.toFixed(1)}% · ${batch.finished}/${batch.total} done`;
+  if (batch.active > 0) caption += ` · ${batch.active} active`;
+  if (failed > 0) caption += ` · ${failed} failed`;
+  const animate =
+    !!statusData?.add_in_progress ||
+    (batch.active || 0) > 0 ||
+    (statusData?.queue_running || 0) > 0;
+  renderBatchProgressBar(root, batch, caption, animate);
+}
+
+function renderConvertBatchProgress(convertData) {
+  const root = document.getElementById("convert-batch-progress");
+  const batch = convertData?.batch_progress;
+  if (!batch || !batch.total) {
+    if (root) {
+      root.innerHTML = "";
+      root.classList.add("hidden");
+    }
+    return;
+  }
+  let caption = `Batch progress: ${batch.percent.toFixed(1)}% · ${batch.finished}/${batch.total} processed`;
+  if (batch.active > 0) caption += ` · ${batch.active} active`;
+  renderBatchProgressBar(root, batch, caption, !!convertData?.running);
+}
+
 function renderStatusSummary(data) {
   const root = document.getElementById("status-summary");
   if (!root) return;
@@ -559,6 +630,7 @@ function renderStatusSummary(data) {
     }
     root.appendChild(el);
   }
+  renderDownloadBatchProgress(data);
 }
 
 function diskSpaceLevel(disk) {
@@ -1544,6 +1616,7 @@ function handleSseEvent(data) {
     case "download_line":
       if (data.item_id != null) {
         patchQueueCardDownloadLine(data.item_id, data.line || "");
+        scheduleStatusRefresh();
       }
       return;
     case "log":
@@ -2410,6 +2483,7 @@ async function refreshConvert() {
   }
   renderConvertEncoder(data);
   renderConvertSummary(data);
+  renderConvertBatchProgress(data);
   renderNavbarStatus();
 
   const startBtn = document.getElementById("btn-convert-start");

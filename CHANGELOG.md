@@ -8,8 +8,13 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- Video Converter in-place replacement (delete original + rename to original filename) now encodes next to the source file instead of the shared downloader output folder, so the final file overwrites the original path.
+
 ### Added
 
+- **Batch progress bars** on download and converter queues (desktop and LAN web UI): overall percentage includes partial credit for active items, with a second transfer bar on downloads when byte totals are known.
 - **Retry skipped** on the Video Converter queue (desktop and LAN web UI): resets skipped rows to Ready so you can lower **Min shrink %** and run **Start Convert batch** without clearing and re-scanning paths.
 - **Video Converter** mode (formerly AV1 Converter): session-wide target codec **AV1** (default), **H.265**, or **H.264** with per-codec encoder auto-detect and recommended containers (MKV for AV1, MP4 for H.264/H.265).
 - Target codec selector in Settings → Converter (desktop and LAN web UI).

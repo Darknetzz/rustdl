@@ -360,50 +360,7 @@ impl eframe::App for PydlApp {
                 self.constrain_content(ui);
 
                 self.draw_downloader_queue_status_row(ui);
-                let total_finished = self.status_done + self.status_failed;
-                let total_known =
-                    self.status_ready + self.status_queued + self.status_active + total_finished;
-                if total_known > 0 {
-                    let session_busy =
-                        self.status_active > 0 || self.queue_running > 0 || self.add_in_progress;
-                    let pb = egui::ProgressBar::new(total_finished as f32 / total_known as f32)
-                        .animate(session_busy)
-                        .text(format!(
-                            "Session progress: {}/{} done ({} failed)",
-                            total_finished, total_known, self.status_failed
-                        ));
-                    let pb_resp = ui.add(pb);
-                    if pb_resp.clicked() {
-                        self.focus_queue_group("Done");
-                    }
-                    if self.status_ready == 0
-                        && self.status_queued == 0
-                        && self.status_active == 0
-                        && self.status_resolving == 0
-                        && total_finished > 0
-                    {
-                        ui.colored_label(
-                            status_color(ItemStatus::Done),
-                            "All downloads finished for this session.",
-                        );
-                    }
-                    let totals = self.transfer_totals();
-                    if totals.with_known_total > 0 && totals.known_total_bytes > 0 {
-                        let pct = (totals.downloaded_bytes as f64
-                            / totals.known_total_bytes as f64
-                            * 100.0)
-                            .clamp(0.0, 100.0);
-                        ui.label(
-                            RichText::new(format!(
-                                "Transfer: {} / {} ({pct:.1}%)",
-                                human_bytes_ui(totals.downloaded_bytes),
-                                human_bytes_ui(totals.known_total_bytes),
-                            ))
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                    }
-                }
+                self.draw_download_batch_progress_row(ui);
 
                 ui.separator();
                 let has_idle_items = self
