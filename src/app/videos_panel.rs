@@ -7,8 +7,8 @@ use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
-    draw_status_dot, fill_allocated_rect, left_button_row, persist_resizable_window_size,
-    remaining_ui_height, show_mode_panel, status_color, with_full_width,
+    draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
+    persist_resizable_window_size, show_mode_panel, status_color, with_full_width,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -17,10 +17,10 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
-/// Chrome below the queue list when the activity log is docked under Videos (placement + filter rows).
-const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 70.0;
+/// Chrome below the queue list when the activity log is docked under Videos (placement + slider + filter rows).
+const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
 /// Chrome above log lines when the activity log is docked in the main column (videos undocked).
-const UNDOCKED_DOCKED_LOG_CHROME: f32 = 72.0;
+const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
 /// Space reserved at the panel bottom for dock/hide row + queue action row.
@@ -637,6 +637,7 @@ impl PydlApp {
             .show(ui, |ui| {
                 fill_allocated_rect(ui);
                 self.constrain_content(ui);
+                let body_bottom = ui.max_rect().bottom();
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Activity log").small().strong());
                     let tail_w = ui.available_width();
@@ -648,11 +649,11 @@ impl PydlApp {
                         },
                     );
                 });
-                let budget = remaining_ui_height(ui).max(80.0);
+                let budget = height_to_bottom(ui, body_bottom).max(80.0);
                 let max_log = (budget - UNDOCKED_DOCKED_LOG_CHROME).max(80.0);
                 self.draw_log_height_slider(ui, max_log);
                 self.draw_activity_log_toolbar(ui);
-                let log_h = remaining_ui_height(ui).max(60.0);
+                let log_h = height_to_bottom(ui, body_bottom).max(60.0);
                 self.draw_activity_log_lines_scroll(ui, log_h);
             });
     }
