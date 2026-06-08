@@ -6,7 +6,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    button_group, button_toolbar, button_toolbar_wrapped, compact_button_group, content_width,
+    button_group, button_toolbar_wrapped, compact_button_group, content_width,
     left_button_row, remaining_ui_height, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
@@ -334,48 +334,13 @@ impl PydlApp {
         }
     }
 
-    /// One compact row + log lines when the activity log is docked under the video queue.
+    /// Docked under the video queue: placement row, then filter/actions, then lines.
     pub(super) fn draw_docked_log_under_videos(&mut self, ui: &mut egui::Ui, log_lines_h: f32) {
-        button_toolbar(ui, |ui| {
+        left_button_row(ui, |ui| {
             ui.label(RichText::new("Activity log").small().strong());
             self.draw_log_controls_inner(ui, true);
-            compact_button_group(ui, "log_clear_dock", |g| {
-                if g.danger(&format!("{} Clear", ui_icons::CLEAR_LOG), true).clicked() {
-                    self.clear_activity_log();
-                }
-            });
-            ui.label(RichText::new("Filter").small());
-            egui::ComboBox::from_id_salt("log_filter_dock")
-                .selected_text(self.log_filter.as_str())
-                .width(88.0)
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut self.log_filter, LogFilter::All, "All");
-                    ui.selectable_value(&mut self.log_filter, LogFilter::Important, "Important");
-                    ui.selectable_value(&mut self.log_filter, LogFilter::Errors, "Errors");
-                });
-            compact_button_group(ui, "log_actions_dock", |g| {
-                if g
-                    .secondary(
-                        &format!("{} Copy last error", ui_icons::COPY_CLIPBOARD),
-                        true,
-                    )
-                    .clicked()
-                {
-                    if let Some(last) = self
-                        .log_lines
-                        .iter()
-                        .rev()
-                        .find(|line| is_error_line(log_message_body(line)))
-                    {
-                        g.ui().ctx().copy_text(last.clone());
-                    }
-                }
-                if g.secondary(&format!("{} Open log file", ui_icons::OPEN_FILE), true).clicked()
-                {
-                    self.open_activity_log_file();
-                }
-            });
         });
+        self.draw_activity_log_toolbar_inner(ui, true);
         self.draw_activity_log_lines_scroll(ui, log_lines_h);
     }
 

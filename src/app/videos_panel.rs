@@ -3,8 +3,8 @@
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
-    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar,
-    button_toolbar_wrapped, compact_button_group, constrain_content_width, content_width,
+    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
+    compact_button_group, constrain_content_width, content_width,
     draw_status_dot, left_button_row, remaining_ui_height, show_mode_panel,
     status_color, with_full_width,
 };
@@ -14,14 +14,14 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
-/// Chrome below the queue list when the activity log is docked under Videos (single compact toolbar row).
-const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 28.0;
+/// Chrome below the queue list when the activity log is docked under Videos (placement + filter rows).
+const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 70.0;
 /// Chrome above log lines when the activity log is docked in the main column (videos undocked).
 const UNDOCKED_DOCKED_LOG_CHROME: f32 = 72.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
-/// Space reserved at the panel bottom for the dock/hide/action toolbar (single compact row).
-const QUEUE_FOOTER_TOOLBAR_RESERVE: f32 = 32.0;
+/// Space reserved at the panel bottom for dock/hide row + queue action row.
+const QUEUE_FOOTER_TOOLBAR_RESERVE: f32 = 64.0;
 const DOCKED_LOG_MIN_LINES_H: f32 = 48.0;
 const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     left: 10.0,
@@ -290,16 +290,18 @@ impl PydlApp {
         self.draw_video_queue_controls_inner(ui, true);
     }
 
-    /// Dock/hide and queue actions — pinned below the card list.
+    /// Window/panel chrome (dock, hide) on its own row; queue batch actions below.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
-        button_toolbar(ui, |ui| {
-            let heading = if self.av1_mode {
-                "AV1 queue"
-            } else {
-                "Videos"
-            };
+        let heading = if self.av1_mode {
+            "AV1 queue"
+        } else {
+            "Videos"
+        };
+        left_button_row(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
+        });
+        left_button_row(ui, |ui| {
             if self.av1_mode {
                 self.draw_av1_queue_action_toolbar_inner(ui, true);
             } else {
@@ -354,6 +356,9 @@ impl PydlApp {
         self.draw_videos_footer_toolbar(ui);
 
         if dock_log {
+            ui.add_space(6.0);
+            ui.separator();
+            ui.add_space(4.0);
             let log_lines_h = (body_bottom - ui.cursor().min.y - 2.0)
                 .max(DOCKED_LOG_MIN_LINES_H)
                 .min(body_bottom - ui.cursor().min.y);

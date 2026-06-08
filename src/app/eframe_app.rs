@@ -688,6 +688,23 @@ impl PydlApp {
                                     self.open_web_ui_in_browser();
                                 }
                             }
+                            if !self.settings.logs_open {
+                                button_group(ui, "hdr_log", |g| {
+                                    if g
+                                        .secondary(
+                                            &format!("{} Show log", ui_icons::LOGS),
+                                            true,
+                                        )
+                                        .on_hover_text(
+                                            "Open the activity log (dock under the queue or in its own window)",
+                                        )
+                                        .clicked()
+                                    {
+                                        self.settings.logs_open = true;
+                                        self.persist_settings();
+                                    }
+                                });
+                            }
                             button_group(ui, "hdr_nav", |g| {
                                 if g
                                     .secondary(
@@ -700,20 +717,6 @@ impl PydlApp {
                                     .clicked()
                                 {
                                     self.settings_open = true;
-                                }
-                                if !self.settings.logs_open
-                                    && g
-                                        .secondary(
-                                            &format!("{} Show log", ui_icons::LOGS),
-                                            true,
-                                        )
-                                        .on_hover_text(
-                                            "Open the activity log (dock under the queue or in its own window)",
-                                        )
-                                        .clicked()
-                                {
-                                    self.settings.logs_open = true;
-                                    self.persist_settings();
                                 }
                                 if g
                                     .danger(&format!("{} Exit", ui_icons::EXIT), true)
