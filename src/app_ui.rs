@@ -18,6 +18,73 @@ pub fn disk_space_free_color(level: DiskSpaceLevel) -> Color32 {
     }
 }
 
+/// Fill color for the free-space progress bar (green → amber → red by [`DiskSpaceLevel`]).
+pub fn disk_space_bar_fill_color(level: DiskSpaceLevel) -> Color32 {
+    match level {
+        DiskSpaceLevel::Ok => Color32::from_rgb(102, 187, 106),
+        DiskSpaceLevel::Low => Color32::from_rgb(255, 167, 38),
+        DiskSpaceLevel::Critical => Color32::from_rgb(229, 57, 53),
+    }
+}
+
+fn disk_space_bar_label_color(level: DiskSpaceLevel) -> Color32 {
+    match level {
+        DiskSpaceLevel::Ok | DiskSpaceLevel::Critical => Color32::WHITE,
+        DiskSpaceLevel::Low => Color32::from_rgb(24, 24, 24),
+    }
+}
+
+fn disk_space_bar_track_color(ui: &egui::Ui) -> Color32 {
+    if ui.visuals().dark_mode {
+        Color32::from_rgb(48, 50, 56)
+    } else {
+        Color32::from_rgb(210, 212, 218)
+    }
+}
+
+/// Thin progress bar showing remaining free-space percentage; fill color reflects [`DiskSpaceLevel`].
+pub fn draw_disk_space_progress_bar(
+    ui: &mut egui::Ui,
+    percent_free: f64,
+    level: DiskSpaceLevel,
+    width: f32,
+) -> Response {
+    let fraction = (percent_free / 100.0).clamp(0.0, 1.0) as f32;
+    let height = 12.0;
+    let rounding = height * 0.5;
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
+
+    let track = disk_space_bar_track_color(ui);
+    let fill_color = disk_space_bar_fill_color(level);
+    let label_color = disk_space_bar_label_color(level);
+
+    ui.painter().rect_filled(rect, rounding, track);
+
+    if fraction > 0.0 {
+        let fill_w = (rect.width() * fraction)
+            .max(if fraction >= 1.0 { rect.width() } else { rounding * 2.0 })
+            .min(rect.width());
+        let fill_rect = egui::Rect::from_min_size(rect.min, egui::vec2(fill_w, rect.height()));
+        ui.painter().rect_filled(fill_rect, rounding, fill_color);
+
+        let pct_text = format!("{:.0}%", percent_free);
+        let font = egui::FontId::proportional(10.0);
+        let galley = ui
+            .painter()
+            .layout_no_wrap(pct_text, font, label_color);
+        let text_home = if fill_w >= galley.size().x + 6.0 {
+            fill_rect
+        } else {
+            rect
+        };
+        let pos = text_home.center() - galley.size() * 0.5;
+        ui.painter().galley(pos, galley, label_color);
+    }
+
+    response.on_hover_text(format!("{:.1}% free space remaining", percent_free))
+}
+
 pub fn status_color(s: ItemStatus) -> Color32 {
     match s {
         ItemStatus::Resolving => Color32::from_rgb(120, 144, 156),

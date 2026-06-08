@@ -398,17 +398,51 @@ button.danger:disabled,
 .status-badge.disk-space-low .status-dot { background: var(--warn); }
 .status-badge.disk-space-critical .status-dot { background: var(--failed); }
 
-.disk-space-free-ok,
-.disk-space-pct-ok { color: var(--ok); font-weight: 700; }
+.disk-space-free-ok { color: var(--ok); font-weight: 700; }
 
-.disk-space-free-low,
-.disk-space-pct-low { color: var(--warn); font-weight: 700; }
+.disk-space-free-low { color: var(--warn); font-weight: 700; }
 
-.disk-space-free-critical,
-.disk-space-pct-critical { color: var(--failed); font-weight: 700; }
+.disk-space-free-critical { color: var(--failed); font-weight: 700; }
 
-#settings-output-disk .disk-space-free,
-#settings-output-disk .disk-space-pct { font-weight: 700; }
+#settings-output-disk .disk-space-free { font-weight: 700; }
+
+.disk-space-bar {
+  display: block;
+  width: 100%;
+  max-width: 10rem;
+  height: 0.75rem;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.disk-space-bar-fill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 100%;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.disk-space-bar-fill-ok {
+  background: #66bb6a;
+  color: #fff;
+}
+
+.disk-space-bar-fill-low {
+  background: #ffa726;
+  color: #181818;
+}
+
+.disk-space-bar-fill-critical {
+  background: #e53935;
+  color: #fff;
+}
 
 .queue-toolbar {
   margin-bottom: 0.75rem;

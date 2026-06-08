@@ -385,6 +385,15 @@ function diskSpaceFreeHtml(disk) {
   return `<span class="disk-space-free disk-space-free-${level}">${free} free</span>`;
 }
 
+function diskSpaceBarHtml(disk) {
+  if (disk?.percent_free == null || !isFinite(disk.percent_free)) return "";
+  const level = diskSpaceLevel(disk);
+  const pct = Math.max(0, Math.min(100, Math.round(disk.percent_free)));
+  return `<div class="disk-space-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Free disk space">
+    <div class="disk-space-bar-fill disk-space-bar-fill-${level}" style="width:${pct}%">${pct}%</div>
+  </div>`;
+}
+
 function updateSettingsOutputDiskHint(disk) {
   const el = document.getElementById("settings-output-disk");
   if (!el) return;
@@ -394,15 +403,9 @@ function updateSettingsOutputDiskHint(disk) {
     return;
   }
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
-  const pct =
-    disk.percent_free != null && isFinite(disk.percent_free)
-      ? ` · <span class="disk-space-pct disk-space-pct-${diskSpaceLevel(disk)}">${Math.round(
-          disk.percent_free
-        )}% free</span>`
-      : "";
   el.innerHTML = `Destination disk${vol}: ${diskSpaceFreeHtml(disk)} / ${formatBytes(
     disk.total_bytes
-  )} total${pct}`;
+  )} total${diskSpaceBarHtml(disk)}`;
   el.classList.remove("hidden");
 }
 
@@ -414,9 +417,7 @@ function appendOutputDiskSpaceBadge(root, disk) {
   const vol = disk.volume_label ? ` (${disk.volume_label})` : "";
   const pct =
     disk.percent_free != null && isFinite(disk.percent_free)
-      ? ` · <span class="disk-space-pct disk-space-pct-${level}">${Math.round(
-          disk.percent_free
-        )}% free</span>`
+      ? ` · ${Math.round(disk.percent_free)}% free`
       : "";
   el.title = "Free and total space on the output folder volume";
   el.innerHTML = `<span class="status-dot" aria-hidden="true"></span>Disk${vol}: ${diskSpaceFreeHtml(

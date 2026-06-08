@@ -793,7 +793,7 @@ impl PydlApp {
 
     pub(super) fn draw_output_disk_space(&self, ui: &mut egui::Ui) {
         use crate::app_parsing::human_bytes_ui;
-        use crate::app_ui::disk_space_free_color;
+        use crate::app_ui::{disk_space_free_color, draw_disk_space_progress_bar};
         use eframe::egui::RichText;
 
         let theme = &self.settings.theme;
@@ -817,28 +817,28 @@ impl PydlApp {
         };
         let level = space.level();
         let free_color = disk_space_free_color(level);
+        let pct = space.percent_free();
         let vol = space
             .volume_label
             .as_deref()
             .filter(|s| !s.is_empty())
             .map(|label| format!(" ({label})"))
             .unwrap_or_default();
-        let tail = format!(
-            " / {}{} · {:.0}% free",
-            human_bytes_ui(space.total_bytes),
-            vol,
-            space.percent_free()
-        );
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 0.0;
-            ui.label(RichText::new("Destination disk: ").small().color(muted));
-            ui.label(
-                RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
-                    .small()
-                    .strong()
-                    .color(free_color),
-            );
-            ui.label(RichText::new(tail).small().color(muted));
+        let tail = format!(" / {}{}", human_bytes_ui(space.total_bytes), vol);
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 3.0;
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label(RichText::new("Destination disk: ").small().color(muted));
+                ui.label(
+                    RichText::new(format!("{} free", human_bytes_ui(space.available_bytes)))
+                        .small()
+                        .strong()
+                        .color(free_color),
+                );
+                ui.label(RichText::new(tail).small().color(muted));
+            });
+            draw_disk_space_progress_bar(ui, pct, level, 140.0);
         });
     }
 

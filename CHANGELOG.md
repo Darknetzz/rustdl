@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Destination disk free space is shown as a color-coded progress bar (green → amber → red as space runs low) in the desktop header and LAN web UI.
 - **Show log** moved to the top header (next to Settings) instead of above the download queue.
 - Destination disk free space is shown in the top header next to the yt-dlp/ffmpeg/ffprobe checks (removed from Download options); redundant **Queue** label above the action toolbar removed.
 - Done download cards show the most recently finished items first (left in the horizontal strip).
