@@ -8,6 +8,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-06-08
+
+
 ### Documentation
 
 - Release routine scripts: `scripts/bump_version.*` (semver bump in `Cargo.toml`) and `scripts/release.*` (finalize changelog, commit, tag, optional push). Documented in `AGENTS.md` and `README.md`.
@@ -199,6 +202,7 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...dev
+[0.4.7]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.3...rustdl-v0.4.7
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.7...dev
 [0.1.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.0...rustdl-v0.1.1
 [0.1.0]: https://github.com/Darknetzz/rustdl/tree/rustdl-v0.1.0
