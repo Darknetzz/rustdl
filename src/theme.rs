@@ -75,7 +75,7 @@ pub fn mode_accent(av1: bool) -> Color32 {
     }
 }
 
-pub fn mode_accent_for(av1: bool, colors: ModePanelColors<'_>) -> Color32 {
+pub fn mode_accent_for(av1: bool, colors: &ModePanelColors<'_>) -> Color32 {
     if av1 {
         parse_mode_color(colors.convert, MODE_CONVERT)
     } else {

@@ -763,7 +763,7 @@ pub fn show_mode_panel<R>(
     rounding: f32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
-    let accent = mode_accent_for(av1, colors);
+    let accent = mode_accent_for(av1, &colors);
     let border = mode_border(accent);
     let panel = panel_fill(theme);
     let soft = mode_soft_tint(accent, theme);
@@ -922,8 +922,8 @@ pub fn draw_mode_nav_bar(
     av1_active: bool,
     colors: ModePanelColors<'_>,
 ) -> (bool, bool) {
-    let dl_accent = mode_accent_for(false, colors);
-    let convert_accent = mode_accent_for(true, colors);
+    let dl_accent = mode_accent_for(false, &colors);
+    let convert_accent = mode_accent_for(true, &colors);
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     let row_w = content_width(ui).max(1.0);
