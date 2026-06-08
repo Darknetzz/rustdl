@@ -667,6 +667,7 @@ impl PydlApp {
     }
 
     pub(super) fn refresh_deps(&mut self) {
+        eprintln!("rustdl startup: refresh_deps tools");
         let (yt, ffm, ffp) = ytdlp::get_external_tools_with_paths(
             &self.settings.yt_dlp_path,
             &self.settings.ffmpeg_path,
@@ -675,30 +676,37 @@ impl PydlApp {
         self.has_yt_dlp = yt;
         self.has_ffmpeg = ffm;
         self.has_ffprobe = ffp;
+        eprintln!("rustdl startup: refresh_deps yt-dlp version");
         self.yt_dlp_version = if yt {
             ytdlp::read_yt_dlp_version(&self.settings.yt_dlp_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
+        eprintln!("rustdl startup: refresh_deps ffmpeg version");
         self.ffmpeg_version = if ffm {
             ytdlp::read_ffmpeg_version(&self.settings.ffmpeg_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
+        eprintln!("rustdl startup: refresh_deps ffprobe version");
         self.ffprobe_version = if ffp {
             ytdlp::read_ffprobe_version(&self.settings.ffprobe_path)
                 .unwrap_or_else(|| "unknown".to_owned())
         } else {
             String::new()
         };
+        eprintln!("rustdl startup: refresh_deps http client");
         self.http_client = crate::http_client::build_http_client(&self.settings);
+        eprintln!("rustdl startup: refresh_deps sync http client to core");
         {
             let mut core = self.shared_core.lock();
             core.http_client = self.http_client.clone();
         }
+        eprintln!("rustdl startup: refresh_deps encoder detection");
         self.refresh_convert_encoder_detection();
+        eprintln!("rustdl startup: refresh_deps done");
     }
 
     pub(super) fn append_log(&mut self, message: &str) {
