@@ -641,6 +641,16 @@ pub fn content_panel_frame() -> egui::Frame {
     })
 }
 
+/// Horizontal inset for docked bottom panels (queue / footer) to match [`content_panel_frame`].
+pub fn dock_panel_horizontal_frame() -> egui::Frame {
+    egui::Frame::default().inner_margin(egui::Margin {
+        left: CONTENT_MARGIN_LEFT,
+        right: CONTENT_MARGIN_RIGHT,
+        top: 0.0,
+        bottom: 0.0,
+    })
+}
+
 fn mode_panel_gradient_shape(rect: egui::Rect, left: Color32, right: Color32) -> Shape {
     let mut mesh = egui::Mesh::default();
     let base = mesh.vertices.len() as u32;
@@ -947,10 +957,10 @@ pub fn draw_mode_nav_bar(
 pub fn content_width(ui: &egui::Ui) -> f32 {
     let max_w = ui.max_rect().width();
     if max_w.is_finite() && max_w > 0.0 {
-        // Inside a scroll area, nested rows shrink-wrap `max_rect`; use the viewport clip then.
+        // Shrink-wrapped nested rows inside a scroll area report a tiny `max_rect`; widen then only.
         if ui.stack().contained_in(egui::UiKind::ScrollArea) {
             let clip_w = ui.clip_rect().width();
-            if clip_w.is_finite() && clip_w > max_w + 4.0 {
+            if clip_w.is_finite() && clip_w > max_w + 4.0 && max_w < clip_w * 0.75 {
                 return clip_w;
             }
         }

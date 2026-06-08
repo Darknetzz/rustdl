@@ -26,6 +26,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Main window and docked queue panels keep the right-side content inset again (scroll-area width no longer bleeds to the window edge).
 - LAN web UI: queue thumbnails load from a shared cache populated by the desktop app and fixed proxy fetch order (metadata URL before local ffmpeg); thumbnail retries no longer stick after transient failures.
 - Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.

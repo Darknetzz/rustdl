@@ -50,6 +50,8 @@ body {
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--border-panel);
   background: var(--panel);
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .topbar-left {
@@ -181,8 +183,9 @@ body {
   gap: 0.35rem;
   align-items: center;
   min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
   margin-left: auto;
-  margin-right: 0.25rem;
 }
 
 .tool-badge {

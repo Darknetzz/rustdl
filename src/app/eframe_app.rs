@@ -1,9 +1,9 @@
 use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, compute_main_column_split,
-    constrain_content_width, content_width, draw_mode_nav_bar, draw_navbar_status_badge,
-    left_button_row, show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
-    VIDEOS_DOCK_PANEL_ID,
+    constrain_content_width, content_width, dock_panel_horizontal_frame, draw_mode_nav_bar,
+    draw_navbar_status_badge, left_button_row, show_mode_panel, with_full_width,
+    UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -71,6 +71,7 @@ impl eframe::App for PydlApp {
                 .resizable(true)
                 .default_height(self.settings.videos_dock_height)
                 .height_range(180.0..=800.0)
+                .frame(dock_panel_horizontal_frame())
                 .show(ctx, |ui| {
                     self.draw_docked_videos_panel(ui);
                 });
@@ -91,6 +92,7 @@ impl eframe::App for PydlApp {
                 .resizable(log_docked)
                 .default_height(footer_h)
                 .height_range(100.0..=600.0)
+                .frame(dock_panel_horizontal_frame())
                 .show(ctx, |ui| {
                     self.draw_queue_footer(ui);
                 });
