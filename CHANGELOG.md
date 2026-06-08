@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 When releasing, bump `version` in `Cargo.toml`, add a dated section below, and tag `rustdl-vX.Y.Z` for GitHub release builds.
 
-**Version history:** **`0.4.7`** is the first GitHub-tagged release. The **`0.1.x`** sections below are the pre-tag development baseline (no `rustdl-v0.1.3` tag). In-tree bumps through **`0.4.6`** were not cut as separate releases—those changes were rolled into **`0.4.7`**, which is why the jump from **`0.4.7`** to **`0.1.3`** looks abrupt.
+**Version history:** In-tree `Cargo.toml` bumps through **0.4.6** were not tagged on GitHub; sections below match those bumps. **`0.4.7`** is the first tagged release (`rustdl-v0.4.7`). Compare links for untagged versions use commit SHAs.
 
 ## [Unreleased]
 
@@ -22,61 +22,101 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Changed
 
 - **Destination disk** labels (desktop header, LAN web UI header and settings hint) show a storage/hard-drive icon before the text.
-
 - **Show log** / **Hide log** live only in the main header (also removed from the floating/docked log chrome); **Dock log** / **Undock log** stay on the log panel. Hiding the log no longer resets dock preference, so **Show log** restores the log where you left it.
 - Downloader queue cards (desktop and LAN web UI): **Copy URL** and **Open URL** are grouped under a **URL…** menu; **Remove** uses danger styling.
 
 ## [0.4.7] - 2026-06-08
 
-First tagged GitHub release; rolls up changes since the **0.1.3** baseline below (including in-tree **0.4.x** work that was never tagged separately).
+First tagged GitHub release.
 
 ### Documentation
 
 - Release routine scripts: `scripts/bump_version.*` (semver bump in `Cargo.toml`) and `scripts/release.*` (finalize changelog, commit, tag, optional push). Documented in `AGENTS.md` and `README.md`.
 
-### Added
-
-- **Mode panel colors** in Settings → Shared (desktop and LAN web UI): customize the Downloader and Video Converter panel tint / accent (defaults: blue and purple). Use **Default** to restore built-in colors.
-- Downloader queue cards (desktop and LAN web UI) include **Copy URL** and **Open URL** on every row that has a saved page link (paste URL, resolved `webpage_url`, or YouTube id).
-- Downloader queue thumbnails and URLs are saved when metadata resolves: preview images go to `thumbnails/downloader/` under the rustdl config folder (with a JSON sidecar for `webpage_url`, `thumbnail_url`, and `source_line`), the queue JSON records `thumbnail_path`, and URLs are stored from the moment a link is added.
-
 ### Fixed
 
 - LAN web UI queue card thumbnails (and in-browser playback) work again: Axum 0.7 path routes used `{id}` syntax from 0.8, so `/api/thumbnail/:id` and `/api/media/:id` never matched and always returned 404.
 - Saved downloader thumbnails load in the LAN web UI even when the cache key drifts (e.g. after `local_path` is backfilled on Windows extended-length paths); Windows `\\?\` download paths are recognized under the output folder again.
-- Completed downloader cards no longer stay on **Thumbnail unavailable** when the file is on disk: Done/Failed rows always load previews (even in large queues), saved `local_path` is used for ffmpeg frame grabs, and the local file is tried before remote CDN URLs.
-- Downloader queue card thumbnails load again when YouTube CDN URLs fail: the desktop UI now tries all preview URL candidates (not only the metadata URL) and falls back to an ffmpeg frame grab from the downloaded file, matching the LAN web UI. Cards show **Thumbnail unavailable** after all sources fail instead of staying on **Fetching thumbnail...** forever; thumbnails retry automatically when a download finishes.
 
+## [0.4.6] - 2026-06-08
+
+### Added
+
+- **Mode panel colors** in Settings → Shared (desktop and LAN web UI): customize the Downloader and Video Converter panel tint / accent (defaults: blue and purple). Use **Default** to restore built-in colors.
+
+### Changed
+
+- Settings window uses a two-column table layout so labels and controls align across Shared, Downloader, AV1, and Web UI tabs.
+
+### Fixed
+
+- Completed downloader cards no longer stay on **Thumbnail unavailable** when the file is on disk: Done/Failed rows always load previews (even in large queues), saved `local_path` is used for ffmpeg frame grabs, and the local file is tried before remote CDN URLs.
+
+## [0.4.5] - 2026-06-08
+
+### Added
+
+- Downloader queue cards (desktop and LAN web UI) include **Copy URL** and **Open URL** on every row that has a saved page link (paste URL, resolved `webpage_url`, or YouTube id).
+
+### Changed
+
+- Download and converter batch progress (status counts and progress bars) now appear only in the Videos panel or floating window, not duplicated in the main downloader column or undocked footer strip.
+
+### Fixed
+
+- Downloader queue card thumbnails load again when YouTube CDN URLs fail: the desktop UI now tries all preview URL candidates (not only the metadata URL) and falls back to an ffmpeg frame grab from the downloaded file, matching the LAN web UI. Cards show **Thumbnail unavailable** after all sources fail instead of staying on **Fetching thumbnail...** forever; thumbnails retry automatically when a download finishes.
 - Activity log under the docked Videos panel no longer renders blank: the queue list reserves the configured log height instead of squeezing it away, and a height slider adjusts `log_dock_height` there too.
 - Download progress lines are recorded on the shared core (not only when the GUI event loop handles them), so the activity log fills during batch downloads and survives restarts from `rustdl_activity_log.json`.
 - Activity log open/docked state, dock height, undocked footer height, and floating window size are persisted across sessions (`logs_open` now defaults to open when missing from older configs).
+
+## [0.4.4] - 2026-06-08
+
+### Added
+
+- Downloader queue thumbnails and URLs are saved when metadata resolves: preview images go to `thumbnails/downloader/` under the rustdl config folder (with a JSON sidecar for `webpage_url`, `thumbnail_url`, and `source_line`), the queue JSON records `thumbnail_path`, and URLs are stored from the moment a link is added.
+
+### Fixed
+
 - Activity log no longer appears blank after downloads or converts: GUI log lines go through the shared core, the GUI no longer overwrites core logs each frame (which dropped convert/download messages from background work), **Important** filter includes convert/skip messages, and a hint appears when the filter hides all lines.
 - Floating activity log window layout uses remaining height correctly so log lines fill the resizable window.
 - LAN web UI **Convert** tab no longer fails silently (typo in view switch threw a JavaScript error before the page could open).
 - LAN web UI activity log shows an empty-state hint, supports vertical drag-resize, and refreshes every 5 seconds (not only when SSE is disconnected).
 - LAN web UI no longer shows **Save API token to load thumbnails** when a token is saved but the preview fetch failed (wrong token, no preview yet, or ffmpeg missing); shows **Thumbnail unavailable** or **Token rejected** instead, and thumbnail 401 responses reopen the Connect screen like other API calls.
 - Video Converter batch summary now reports **output growth** (e.g. `output +4.1 GiB (+71.9%)`) when encoded files are larger than the sources, instead of incorrectly showing `saved 0B (0.0%)`.
-- Video Converter in-place replacement (delete original + rename to original filename) now encodes next to the source file instead of the shared downloader output folder, so the final file overwrites the original path.
+
+## [0.4.3] - 2026-06-08
 
 ### Added
 
 - **Batch progress bars** on download and converter queues (desktop and LAN web UI): overall percentage includes partial credit for active items, with a second transfer bar on downloads when byte totals are known.
-- **Retry skipped** on the Video Converter queue (desktop and LAN web UI): resets skipped rows to Ready so you can lower **Min shrink %** and run **Start Convert batch** without clearing and re-scanning paths.
-- **Video Converter** mode (formerly AV1 Converter): session-wide target codec **AV1** (default), **H.265**, or **H.264** with per-codec encoder auto-detect and recommended containers (MKV for AV1, MP4 for H.264/H.265).
-- Target codec selector in Settings → Converter (desktop and LAN web UI).
 
-### Changed
+### Fixed
 
-- Settings window uses a two-column table layout so labels and controls align across Shared, Downloader, AV1, and Web UI tabs.
-- Download and converter batch progress (status counts and progress bars) now appear only in the Videos panel or floating window, not duplicated in the main downloader column or undocked footer strip.
-- **Breaking:** AV1 mode rebranded to **Video Converter**; `last_mode` `av1` → `convert`; settings keys `av1_*` → `convert_*` (legacy aliases still load); queue file `rustdl_av1_queue.json` → `rustdl_convert_queue.json` (legacy still read); LAN API `/api/av1/*` → `/api/convert/*`; SSE events `av1_*` → `convert_*`.
-- Output filenames use `-AV1`, `-H265`, or `-H264` suffix per target codec.
-- Audio defaults: Opus for AV1/MKV/WebM; AAC for H.264/H.265 MP4.
+- Video Converter in-place replacement (delete original + rename to original filename) now encodes next to the source file instead of the shared downloader output folder, so the final file overwrites the original path.
+
+## [0.4.1] - 2026-06-08
 
 ### Added
 
-- Startup warning banner when settings, queue, profiles, or activity log JSON fails to parse (original file renamed to `.bak` when possible); same warnings in activity log, `--web-only` stderr, and LAN `/api/status`.
-- Layout QA checklist in `AGENTS.md` for docked/floating queue and log panels.
+- **Retry skipped** on the Video Converter queue (desktop and LAN web UI): resets skipped rows to Ready so you can lower **Min shrink %** and run **Start Convert batch** without clearing and re-scanning paths.
+
+### Fixed
+
+- Main header **Settings** and **Exit** buttons align to the far right again (header row uses full content width).
+- Destination disk progress bar shows **used** percentage (e.g. 80%) instead of free; hover still shows both used and free.
+- Destination disk bar color follows **used** space (warning from 75%, critical from 90%); free-space text color still reflects absolute free bytes.
+- Main header **Settings** button no longer clips away when disk status is wide (actions reserve a fixed right column).
+- Main header **Show log**, **Settings**, and **Exit** sit flush on the right (flex spacer between status row and actions).
+- Main header actions stay inside the content right margin (left status row is width-capped so buttons cannot overflow).
+- Header status text (tool checks, activity badge, destination disk) is slightly larger (+2px).
+- **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating), grouped under a **Cancel all…** dropdown.
+
+## [0.4.0] - 2026-06-08
+
+### Added
+
+- **Video Converter** mode (formerly AV1 Converter): session-wide target codec **AV1** (default), **H.265**, or **H.264** with per-codec encoder auto-detect and recommended containers (MKV for AV1, MP4 for H.264/H.265).
+- Target codec selector in Settings → Converter (desktop and LAN web UI).
 - **Command palette** (Ctrl/Cmd+K): fuzzy search for Settings tabs, Start/Pause/Resume, log toggle, mode switch, and more.
 - **Layout presets** in Settings → Shared: Compact queue, Review mode, and Minimal one-click display bundles (desktop and LAN web UI).
 - **Session restore preference** in Settings → Shared: always restore, never restore, or ask each startup (desktop).
@@ -88,14 +128,10 @@ First tagged GitHub release; rolls up changes since the **0.1.3** baseline below
 
 ### Changed
 
+- **Breaking:** AV1 mode rebranded to **Video Converter**; `last_mode` `av1` → `convert`; settings keys `av1_*` → `convert_*` (legacy aliases still load); queue file `rustdl_av1_queue.json` → `rustdl_convert_queue.json` (legacy still read); LAN API `/api/av1/*` → `/api/convert/*`; SSE events `av1_*` → `convert_*`.
+- Output filenames use `-AV1`, `-H265`, or `-H264` suffix per target codec.
+- Audio defaults: Opus for AV1/MKV/WebM; AAC for H.264/H.265 MP4.
 - LAN web UI: output disk space badge moved from the queue status row into the top header (next to tool status).
-- Startup asks whether to restore saved downloader and AV1 queues from the previous session instead of loading them automatically (headless `--web-only` still auto-restores).
-- LAN web UI: SSE events update download progress and logs in place instead of always refetching every endpoint; queue refresh skips unchanged generations; 5s fallback polling pauses while SSE is connected.
-- Desktop download control (Start, Pause, Resume, Retry, Redo, cancel) now goes through the shared `DownloadCore` service (same path as the LAN web UI) instead of duplicate GUI-only logic.
-- GUI↔core sync skips full queue clones when core generation is unchanged; patches queue rows in place when the generation bumps.
-- README documents LAN AV1 converter support, desktop-only web gaps, expanded Download settings (cookies, archive, proxy, speed limit), and `--download` CLI limitations.
-- Tool version labels show **unknown** when a binary is found but its version probe fails.
-- Settings → Shared shows a clearer note when LAN bind address uses `0.0.0.0`.
 - Queue search and activity log filter persist across restarts (Settings / shared config).
 - Settings tab choice persists when switching tabs without changing other settings.
 - LAN web UI honors **relative log timestamps** and **autoscroll log** settings; activity log uses the same formatting rules as the desktop app.
@@ -104,24 +140,47 @@ First tagged GitHub release; rolls up changes since the **0.1.3** baseline below
 
 ### Fixed
 
-- Main header **Settings** and **Exit** buttons align to the far right again (header row uses full content width).
-- Destination disk progress bar shows **used** percentage (e.g. 80%) instead of free; hover still shows both used and free.
-- Destination disk bar color follows **used** space (warning from 75%, critical from 90%); free-space text color still reflects absolute free bytes.
-- Main header **Settings** button no longer clips away when disk status is wide (actions reserve a fixed right column).
-- Main header **Show log**, **Settings**, and **Exit** sit flush on the right (flex spacer between status row and actions).
-- Main header actions stay inside the content right margin (left status row is width-capped so buttons cannot overflow).
-- Header status text (tool checks, activity badge, destination disk) is slightly larger (+2px).
 - Settings → Shared: **Copy** API token button briefly shows **Copied!** after a successful clipboard copy.
 - Main window and docked queue panels keep the right-side content inset again (scroll-area width no longer bleeds to the window edge).
+- Removed duplicate **Effective command preview** block in Settings → Downloader.
+
+## [0.2.2] - 2026-06-08
+
+### Changed
+
+- Startup asks whether to restore saved downloader and AV1 queues from the previous session instead of loading them automatically (headless `--web-only` still auto-restores).
+
+## [0.2.1] - 2026-06-08
+
+### Changed
+
+- LAN web UI: SSE events update download progress and logs in place instead of always refetching every endpoint; queue refresh skips unchanged generations; 5s fallback polling pauses while SSE is connected.
+
+### Fixed
+
 - LAN web UI: queue thumbnails load from a shared cache populated by the desktop app and fixed proxy fetch order (metadata URL before local ffmpeg); thumbnail retries no longer stick after transient failures.
 - Floating **Activity log** window is resizable again (explicit scroll height from the window body; resets stale layout state).
+
+## [0.2.0] - 2026-06-08
+
+### Added
+
+- Startup warning banner when settings, queue, profiles, or activity log JSON fails to parse (original file renamed to `.bak` when possible); same warnings in activity log, `--web-only` stderr, and LAN `/api/status`.
+- Layout QA checklist in `AGENTS.md` for docked/floating queue and log panels.
+
+### Changed
+
+- Desktop download control (Start, Pause, Resume, Retry, Redo, cancel) now goes through the shared `DownloadCore` service (same path as the LAN web UI) instead of duplicate GUI-only logic.
+- GUI↔core sync skips full queue clones when core generation is unchanged; patches queue rows in place when the generation bumps.
+- README documents LAN AV1 converter support, desktop-only web gaps, expanded Download settings (cookies, archive, proxy, speed limit), and `--download` CLI limitations.
+- Tool version labels show **unknown** when a binary is found but its version probe fails.
+- Settings → Shared shows a clearer note when LAN bind address uses `0.0.0.0`.
+
+### Fixed
+
 - Drag-to-reorder Ready queue items now mark the queue dirty so order changes sync to the LAN web UI.
-- Removed duplicate **Effective command preview** block in Settings → Downloader.
-- **Cancel all → Ready** and **Cancel all → Remove** moved from Download options into the **Videos** queue toolbar (docked and floating), grouped under a **Cancel all…** dropdown.
 
-## [0.1.3] - 2026-06-02
-
-Pre-tag development baseline (not released or tagged on GitHub).
+## [0.1.3] - 2026-06-07
 
 ### Added
 
@@ -139,12 +198,11 @@ Pre-tag development baseline (not released or tagged on GitHub).
 - Destination disk free space is shown in the top header next to the yt-dlp/ffmpeg/ffprobe checks (removed from Download options); redundant **Queue** label above the action toolbar removed.
 - Done download cards show the most recently finished items first (left in the horizontal strip).
 - Failed download cards show **Retry** only (not a duplicate **Redo**); **Redo** remains on completed downloads.
-- LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
 - Desktop GUI: **Downloader** and **AV1** panels use the same muted mode tint and left accent stripe as the LAN web UI (main controls and queue panels); mode nav tabs use blue / purple when active.
-- LAN web UI: queue thumbnails load reliably during live SSE updates (debounced refresh, ignore aborted image loads, typed image blobs).
 
 ### Fixed
 
+- **Videos** queue stays pinned at the bottom of the main window (controls scroll above it); the card list scrolls inside the panel. Floating **Videos** window scroll area uses the full window height.
 - Header tool checks and destination disk info (including the free-space bar) stay on one line instead of stacking the bar below the text.
 - Queue search moved from Download options into the **Videos** panel (docked and floating window).
 - **Open output folder** moved into the **Videos** panel action toolbar (removed duplicate from Download options and the session-finished banner).
@@ -183,6 +241,13 @@ Pre-tag development baseline (not released or tagged on GitHub).
 - Header: tool status on a second row so Settings, Web UI, and status badge no longer overlap on narrower widths.
 - Header: **Settings** and **Exit** are grouped together on the right.
 - Shared `DownloadCore` service state synchronized between the egui app and the web control plane.
+
+## [0.1.2] - 2026-06-05
+
+### Changed
+
+- LAN web UI: **Downloader** and **AV1** sections use distinct accent colors (blue / purple) on the nav toggle, panels, and primary actions.
+- LAN web UI: queue thumbnails load reliably during live SSE updates (debounced refresh, ignore aborted image loads, typed image blobs).
 
 ## [0.1.1] - 2026-06-02
 
@@ -223,8 +288,18 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[0.4.7]: https://github.com/Darknetzz/rustdl/releases/tag/rustdl-v0.4.7
 [Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.7...dev
-[0.1.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.1...rustdl-v0.1.3
-[0.1.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.1.0...rustdl-v0.1.1
-[0.1.0]: https://github.com/Darknetzz/rustdl/tree/rustdl-v0.1.0
+[0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7
+[0.4.6]: https://github.com/Darknetzz/rustdl/compare/db8b01f...b76f00b
+[0.4.5]: https://github.com/Darknetzz/rustdl/compare/1f4ab5a...db8b01f
+[0.4.4]: https://github.com/Darknetzz/rustdl/compare/7df5b56...1f4ab5a
+[0.4.3]: https://github.com/Darknetzz/rustdl/compare/a41447b...7df5b56
+[0.4.1]: https://github.com/Darknetzz/rustdl/compare/22ac970...a41447b
+[0.4.0]: https://github.com/Darknetzz/rustdl/compare/03295db...22ac970
+[0.2.2]: https://github.com/Darknetzz/rustdl/compare/0d3ed3e...03295db
+[0.2.1]: https://github.com/Darknetzz/rustdl/compare/9dd14b0...0d3ed3e
+[0.2.0]: https://github.com/Darknetzz/rustdl/compare/1cacd41...9dd14b0
+[0.1.3]: https://github.com/Darknetzz/rustdl/compare/abdbe09...1cacd41
+[0.1.2]: https://github.com/Darknetzz/rustdl/compare/7bc69b4...abdbe09
+[0.1.1]: https://github.com/Darknetzz/rustdl/compare/ebd0995...7bc69b4
+[0.1.0]: https://github.com/Darknetzz/rustdl/compare/1f7aa16...ebd0995
