@@ -239,13 +239,20 @@ impl PydlApp {
     }
 
     /// Start/cancel/clear — lives in the AV1 queue panel footer (docked or floating window).
-    pub(super) fn draw_av1_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_av1_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let ready_count = self
             .av1_items
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
             .count();
-        button_group(ui, "av1_batch", |g| {
+        let draw = |ui: &mut egui::Ui, id: &str, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                crate::app_ui::compact_button_group(ui, id, |g| add(g));
+            } else {
+                crate::app_ui::button_group(ui, id, |g| add(g));
+            }
+        };
+        draw(ui, "av1_batch", &mut |g| {
             if g
                 .success(
                     &format!("{} Start AV1 batch", ui_icons::PLAY),
@@ -268,7 +275,7 @@ impl PydlApp {
                 self.av1_core_action(|core| core.cancel_av1_batch());
             }
         });
-        button_group(ui, "av1_queue", |g| {
+        draw(ui, "av1_queue", &mut |g| {
             if g
                 .secondary(
                     &format!("{} Clear AV1 queue", ui_icons::CLEAR_QUEUE),

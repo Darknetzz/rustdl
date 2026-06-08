@@ -38,6 +38,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Log height slider shows whole pixels instead of long floating-point values.
 - Main controls scroll fills the central panel (no dead gap above the bottom footer); docked log lines expand to use remaining footer space.
 - Docked **Videos** bottom panel respects manual resize (content no longer forces the panel back to full height); card list fills space below the toolbar.
+- Docked **Videos** panel resize works again after mode-tint styling (queue height no longer escapes the panel bounds).
+- Queue footer toolbar uses a single compact button row (less vertical padding).
 - Docked **Videos** card list uses `available_height` layout (fixes toolbar floating mid-panel and invisible queue from stale panel state).
 - **Downloader** / **AV1 Converter** mode tabs show their labels again (icon + text use separate fonts; tabs no longer rely on oversized min-width buttons).
 - Fixed startup crash (`FontFamily::Name("material-icons")`) when drawing the mode tabs.

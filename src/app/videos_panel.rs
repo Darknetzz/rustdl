@@ -3,9 +3,10 @@
 use eframe::egui::{self, Color32, RichText};
 
 use crate::app_ui::{
-    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    constrain_content_width, content_width, draw_status_dot, height_to_bottom, left_button_row,
-    remaining_ui_height, show_mode_panel, status_color, with_full_width,
+    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar,
+    button_toolbar_wrapped, compact_button_group, constrain_content_width, content_width,
+    draw_status_dot, height_to_bottom, left_button_row, remaining_ui_height, show_mode_panel,
+    status_color, with_full_width,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -19,8 +20,18 @@ const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
 const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 160.0;
-/// Space reserved at the panel bottom for the dock/hide/action toolbar (may wrap to two rows).
-const QUEUE_FOOTER_TOOLBAR_RESERVE: f32 = 100.0;
+/// Space reserved at the panel bottom for the dock/hide/action toolbar (single compact row).
+const QUEUE_FOOTER_TOOLBAR_RESERVE: f32 = 44.0;
+const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
+    left: 10.0,
+    right: 10.0,
+    top: 6.0,
+    bottom: 6.0,
+};
+
+fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
+    (outer_h - margin.top - margin.bottom).max(DOCKED_QUEUE_LIST_MIN_H)
+}
 
 impl PydlApp {
     fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
@@ -80,8 +91,15 @@ impl PydlApp {
     }
 
     /// Pause/export/import/recheck/clear — lives in the video queue card or floating window.
-    fn draw_downloader_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui) {
-        button_group(ui, "dl_queue_actions", |g| {
+    fn draw_downloader_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, "dl_queue_actions", |g| add(g));
+            } else {
+                button_group(ui, "dl_queue_actions", |g| add(g));
+            }
+        };
+        draw(ui, &mut |g| {
             if self.downloads_paused {
                 if g
                     .success(
@@ -198,9 +216,16 @@ impl PydlApp {
     }
 
     /// Dock/undock and show/hide for the video queue (videos window and docked panel only).
-    fn draw_video_queue_controls_inner(&mut self, ui: &mut egui::Ui) {
+    fn draw_video_queue_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let window_title = self.videos_window_title();
-        button_group(ui, "queue_videos_controls", |g| {
+        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, "queue_videos_controls", |g| add(g));
+            } else {
+                button_group(ui, "queue_videos_controls", |g| add(g));
+            }
+        };
+        draw(ui, &mut |g| {
             if self.settings.videos_docked {
                 if g
                     .secondary(
@@ -256,7 +281,12 @@ impl PydlApp {
     }
 
     pub(super) fn draw_video_queue_controls(&mut self, ui: &mut egui::Ui) {
-        button_toolbar_wrapped(ui, |ui| self.draw_video_queue_controls_inner(ui));
+        button_toolbar_wrapped(ui, |ui| self.draw_video_queue_controls_inner(ui, false));
+    }
+
+    /// Compact dock/undock control for the queue footer (single row with action buttons).
+    fn draw_video_queue_controls_compact(&mut self, ui: &mut egui::Ui) {
+        self.draw_video_queue_controls_inner(ui, true);
     }
 
     /// Dock/undock and show/hide for the activity log (log window and docked log sections only).
@@ -303,18 +333,18 @@ impl PydlApp {
 
     /// Dock/hide and queue actions — pinned below the card list.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
-        button_toolbar_wrapped(ui, |ui| {
+        button_toolbar(ui, |ui| {
             let heading = if self.av1_mode {
                 "AV1 queue"
             } else {
                 "Videos"
             };
             ui.label(RichText::new(heading).strong());
-            self.draw_video_queue_controls_inner(ui);
+            self.draw_video_queue_controls_compact(ui);
             if self.av1_mode {
-                self.draw_av1_queue_action_toolbar_inner(ui);
+                self.draw_av1_queue_action_toolbar_inner(ui, true);
             } else {
-                self.draw_downloader_queue_action_toolbar_inner(ui);
+                self.draw_downloader_queue_action_toolbar_inner(ui, true);
             }
         });
     }
@@ -360,7 +390,7 @@ impl PydlApp {
         let list_h = (panel_bottom - ui.cursor().min.y - bottom_reserve).max(min_list);
         self.draw_queue_list_body(ui, list_h, scroll_id);
 
-        ui.add_space(4.0);
+        ui.add_space(2.0);
         self.draw_videos_footer_toolbar(ui);
 
         if dock_log {
@@ -562,26 +592,32 @@ impl PydlApp {
 
     /// Docked video queue (`TopBottomPanel` body).
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = remaining_ui_height(ui).max(180.0);
+        let panel_h = ui.max_rect().height().max(180.0);
         let panel_w = content_width(ui).max(1.0);
+        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         // egui persists panel height from the content rect; fill the panel so resize sticks.
         ui.set_min_size(egui::vec2(panel_w, panel_h));
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.av1_mode;
 
-        Self::draw_mode_queue_panel(ui, &theme, av1, egui::Margin::symmetric(10.0, 8.0), |ui| {
-            let inner_h = remaining_ui_height(ui).max(180.0);
-            let inner_w = content_width(ui).max(1.0);
-            allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
-                self.draw_videos_queue_body(
-                    ui,
-                    ui.max_rect().bottom(),
-                    "rustdl_videos_dock_scroll",
-                    dock_log,
-                );
-            });
-        });
+        Self::draw_mode_queue_panel(
+            ui,
+            &theme,
+            av1,
+            QUEUE_MODE_PANEL_MARGIN,
+            |ui| {
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                    self.draw_videos_queue_body(
+                        ui,
+                        ui.max_rect().bottom(),
+                        "rustdl_videos_dock_scroll",
+                        dock_log,
+                    );
+                });
+            },
+        );
         if (panel_h - self.settings.videos_dock_height).abs() > 0.5 {
             self.settings.videos_dock_height = panel_h.clamp(180.0, 800.0);
             self.persist_settings();
@@ -609,27 +645,28 @@ impl PydlApp {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.spacing_mut().item_spacing.y = 6.0;
-                let panel_h = remaining_ui_height(ui).max(320.0);
+                let panel_h = ui.max_rect().height().max(320.0);
                 let panel_w = content_width(ui).max(480.0);
+                let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
                 // Fill the window body so the resize grip changes the window (not just shrink-wrapped content).
                 ui.set_min_size(egui::vec2(panel_w, panel_h));
                 Self::draw_mode_queue_panel(
                     ui,
                     &theme,
                     av1,
-                    egui::Margin::symmetric(10.0, 8.0),
+                    QUEUE_MODE_PANEL_MARGIN,
                     |ui| {
-                    let inner_h = remaining_ui_height(ui).max(120.0);
-                    let inner_w = content_width(ui).max(480.0);
-                    allocate_top_down_rect(ui, egui::vec2(inner_w, inner_h), |ui| {
-                        self.draw_videos_queue_body(
-                            ui,
-                            ui.max_rect().bottom(),
-                            "rustdl_videos_float_v4",
-                            false,
-                        );
-                    });
-                });
+                        let inner_w = content_width(ui).max(480.0);
+                        allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                            self.draw_videos_queue_body(
+                                ui,
+                                ui.max_rect().bottom(),
+                                "rustdl_videos_float_v4",
+                                false,
+                            );
+                        });
+                    },
+                );
             });
         if let Some(inner) = response {
             let size = inner.response.rect.size();
