@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Done download cards show **file size**, **codec**, and **fps** as badges next to resolution (populated via ffprobe when a download finishes or when you click **Verify file** in **Verify…**).
 - Done download cards group **Verify file** and **Re-download** under a **Verify…** menu (replacing separate **Streams** and **Redo** buttons).
 - Settings **UI scale** uses **− / +** step buttons (5% steps) instead of a drag slider so the layout does not fight the control while adjusting zoom.
+- When the main window is too small for a docked queue, auto-undock now **hides** the floating Videos window by default (use **Show Videos** in the footer to open it).
 
 ### Fixed
 

@@ -809,7 +809,7 @@ impl PydlApp {
                 && !self.videos_dock_user_prefers_docked
             {
                 self.settings.videos_docked = false;
-                self.settings.videos_open = true;
+                self.settings.videos_open = false;
                 self.videos_auto_undocked_for_size = true;
                 self.persist_settings();
             }
