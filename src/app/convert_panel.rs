@@ -453,8 +453,13 @@ impl PydlApp {
         });
     }
 
-    pub(super) fn draw_convert_queue_list_scroll(&mut self, ui: &mut egui::Ui, scroll_max: f32) {
-        let scroll_h = scroll_max.max(120.0);
+    pub(super) fn draw_convert_queue_list_scroll(
+        &mut self,
+        ui: &mut egui::Ui,
+        scroll_max: f32,
+        min_h: f32,
+    ) {
+        let scroll_h = scroll_max.max(min_h);
         egui::ScrollArea::vertical()
             .id_salt("convert_queue_scroll")
             .auto_shrink([false, false])

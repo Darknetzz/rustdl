@@ -24,6 +24,8 @@ const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
 const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
+/// Footer chrome for the docked panel (wide; toolbar stays on one or two rows).
+const DOCKED_QUEUE_FOOTER_RESERVE: f32 = 64.0;
 const DOCKED_LOG_MIN_LINES_H: f32 = 48.0;
 const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     left: 10.0,
@@ -40,8 +42,12 @@ struct VideosQueueLayout<'a> {
 }
 
 impl VideosQueueLayout<'_> {
+    fn is_docked(&self) -> bool {
+        self.scroll_id.contains("dock")
+    }
+
     fn min_list_height(&self) -> f32 {
-        if self.scroll_id.contains("dock") {
+        if self.is_docked() {
             DOCKED_QUEUE_LIST_MIN_H
         } else {
             80.0
@@ -59,12 +65,21 @@ impl VideosQueueLayout<'_> {
         } else {
             0.0
         };
-        queue_footer_toolbar_reserve(content_width) + log_bar + log_lines_reserve + 4.0
+        let toolbar = if self.is_docked() {
+            DOCKED_QUEUE_FOOTER_RESERVE
+        } else {
+            queue_footer_toolbar_reserve(content_width)
+        };
+        toolbar + log_bar + log_lines_reserve + 4.0
     }
 }
 
-fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
-    (outer_h - margin.top - margin.bottom).max(80.0)
+fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
+    if scroll_id.contains("dock") {
+        DOCKED_QUEUE_LIST_MIN_H
+    } else {
+        80.0
+    }
 }
 
 impl PydlApp {
@@ -95,16 +110,17 @@ impl PydlApp {
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
     fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32, scroll_id: &str) {
-        let mut scroll_h = scroll_h.max(80.0);
+        let min_h = queue_list_min_scroll_h(scroll_id);
+        let mut scroll_h = scroll_h.max(min_h);
         if !scroll_h.is_finite() {
-            scroll_h = bounded_ui_height(ui, 80.0);
+            scroll_h = bounded_ui_height(ui, min_h);
         }
         let w = content_width(ui).max(1.0);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             self.constrain_content(ui);
             let inner_h = ui.max_rect().height();
             if self.convert_mode {
-                self.draw_convert_queue_list_scroll(ui, inner_h);
+                self.draw_convert_queue_list_scroll(ui, inner_h, min_h);
             } else {
                 self.draw_downloader_queue_list_scroll(ui, inner_h, scroll_id);
             }
@@ -232,7 +248,7 @@ impl PydlApp {
         scroll_h: f32,
         scroll_id: &str,
     ) {
-        let scroll_h = scroll_h.max(80.0);
+        let scroll_h = scroll_h.max(queue_list_min_scroll_h(scroll_id));
         egui::ScrollArea::vertical()
             .id_salt(scroll_id)
             .auto_shrink([false, false])
@@ -334,22 +350,36 @@ impl PydlApp {
         self.draw_video_queue_controls_inner(ui, true);
     }
 
-    /// Window/panel chrome (dock, hide) and queue batch actions; wraps on narrow widths.
-    fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
+    /// Window/panel chrome (dock, hide) and queue batch actions.
+    fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui, wrapped: bool) {
         let heading = if self.convert_mode {
             "Convert queue"
         } else {
             "Videos"
         };
-        button_toolbar_wrapped(ui, |ui| {
-            ui.label(RichText::new(heading).strong());
-            self.draw_video_queue_controls_compact(ui);
-            if self.convert_mode {
-                self.draw_convert_queue_action_groups(ui, true);
-            } else {
-                self.draw_downloader_queue_action_groups(ui, true);
-            }
-        });
+        if wrapped {
+            button_toolbar_wrapped(ui, |ui| {
+                ui.label(RichText::new(heading).strong());
+                self.draw_video_queue_controls_compact(ui);
+                if self.convert_mode {
+                    self.draw_convert_queue_action_groups(ui, true);
+                } else {
+                    self.draw_downloader_queue_action_groups(ui, true);
+                }
+            });
+        } else {
+            left_button_row(ui, |ui| {
+                ui.label(RichText::new(heading).strong());
+                self.draw_video_queue_controls_compact(ui);
+            });
+            left_button_row(ui, |ui| {
+                if self.convert_mode {
+                    self.draw_convert_queue_action_groups(ui, true);
+                } else {
+                    self.draw_downloader_queue_action_groups(ui, true);
+                }
+            });
+        }
     }
 
     fn draw_queue_search_row(&mut self, ui: &mut egui::Ui) {
@@ -403,15 +433,14 @@ impl PydlApp {
         let w = content_width(ui).max(1.0);
         let available_below = (body_bottom - ui.cursor().min.y).max(0.0);
         let min_list = layout.min_list_height();
-        let toolbar_min = queue_footer_toolbar_reserve(w).min(available_below);
         let footer_reserve = layout
             .bottom_reserve(w)
-            .min((available_below - min_list).max(toolbar_min));
+            .min((available_below - min_list).max(0.0));
         let list_h = (available_below - footer_reserve).max(min_list);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id);
 
         ui.add_space(2.0);
-        self.draw_videos_footer_toolbar(ui);
+        self.draw_videos_footer_toolbar(ui, !layout.is_docked());
 
         if layout.dock_log {
             ui.add_space(6.0);
@@ -421,6 +450,8 @@ impl PydlApp {
                 .max(DOCKED_LOG_MIN_LINES_H);
             self.draw_docked_log_under_videos(ui, max_log);
         }
+
+        consume_remaining_ui_space(ui);
     }
 
     /// Compact strip when the queue lives in a floating window.
@@ -675,8 +706,6 @@ impl PydlApp {
 
     /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = ui.clip_rect().height().max(180.0);
-        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -691,18 +720,15 @@ impl PydlApp {
             mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                ui.set_max_height(body_h);
-                let inner_w = content_width(ui).max(1.0);
-                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
-                    self.draw_videos_queue_body(
-                        ui,
-                        VideosQueueLayout {
-                            scroll_id: "rustdl_videos_dock_scroll",
-                            dock_log,
-                            log_dock_height: self.settings.log_dock_height,
-                        },
-                    );
-                });
+                fill_allocated_rect(ui);
+                self.draw_videos_queue_body(
+                    ui,
+                    VideosQueueLayout {
+                        scroll_id: "rustdl_videos_dock_scroll",
+                        dock_log,
+                        log_dock_height: self.settings.log_dock_height,
+                    },
+                );
             },
         );
         // egui persists panel height from content rect; claim leftover space at the panel root.

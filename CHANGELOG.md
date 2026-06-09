@@ -12,7 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
-- Docked video queue panel is resizable again after the responsive footer layout change (footer no longer over-allocates vertical space at the panel minimum height).
+- Docked video queue panel keeps its dragged height again (list/footer layout no longer forces the panel back to the saved default size).
 
 ### Changed
 
