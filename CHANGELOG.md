@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- GitHub Releases created from pushed tags now include the matching `CHANGELOG.md` section (release notes from `[Unreleased]` before finalize, or the dated version section after `release.ps1` / `release.sh`).
+
 ### Fixed
 
 - Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).

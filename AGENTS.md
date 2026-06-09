@@ -176,9 +176,9 @@ Triggered by pushing a tag matching `rustdl-v*` or `v*`.
 | Job | What it does |
 |-----|----------------|
 | **build** (matrix) | `cargo build --release` for `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`, `x86_64-apple-darwin`, `aarch64-apple-darwin`; uploads `rustdl` / `rustdl.exe` artifacts. |
-| **release** | Downloads artifacts, runs `gh release create` with title `rustdl X.Y.Z`, release notes linking to `CHANGELOG.md` on `dev`, attaches all binaries. |
+| **release** | Downloads artifacts; builds release notes from `CHANGELOG.md` at the tag via `scripts/extract_release_notes.sh` (dated `## [X.Y.Z]` section, or `## [Unreleased]` if that section is not present yet); creates or updates a GitHub Release with title `rustdl X.Y.Z` and attaches all binaries. |
 
-Requires `contents: write` on the repo. Release notes on GitHub are a short pointer to the changelog—not a duplicate of every bullet.
+Requires `contents: write` on the repo. Pushing any `rustdl-v*` / `v*` tag triggers this workflow (including bump tags if you push them early).
 
 ### CI workflow (`.github/workflows/ci.yml`)
 
