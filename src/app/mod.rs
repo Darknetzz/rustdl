@@ -1367,7 +1367,7 @@ impl PydlApp {
         let (msg, probe_media) = match self.probe_saved_file_streams(&item) {
             Ok((v, a)) => {
                 let summary = format!(
-                    "Streams: {} video, {} audio",
+                    "Verify: {} video, {} audio",
                     if v { "has" } else { "no" },
                     if a { "has" } else { "no" },
                 );

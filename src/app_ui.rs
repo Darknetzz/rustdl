@@ -1455,6 +1455,70 @@ impl<'a> ButtonGroup<'a> {
         })
     }
 
+    /// Verify saved file streams and optionally re-download (done rows).
+    pub fn verify_menu(
+        &mut self,
+        show_verify_file: bool,
+        can_verify_file: bool,
+        show_redownload: bool,
+        can_redownload: bool,
+        verify_clicked: &mut bool,
+        redownload_clicked: &mut bool,
+    ) -> Response {
+        let compact = self.compact;
+        let label = format!("{} Verify...", crate::ui_icons::CHECK_STREAMS);
+        self.add(|ui| {
+            let popup_id = ui.make_persistent_id("verify_menu");
+            let button = grouped_secondary_button(ui, &label, true, compact);
+            if button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+            if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+                show_menu_popup(ui, popup_id, &button, |ui| {
+                    if show_verify_file
+                        && ui
+                            .add_enabled(
+                                can_verify_file,
+                                egui::Button::new(format!(
+                                    "{} Verify file",
+                                    crate::ui_icons::CHECK_STREAMS
+                                )),
+                            )
+                            .on_hover_text(
+                                "Run ffprobe on the saved file; refresh stream check and media badges.",
+                            )
+                            .on_disabled_hover_text(
+                                "Configure ffprobe in Settings → Executables.",
+                            )
+                            .clicked()
+                    {
+                        *verify_clicked = true;
+                    }
+                    if show_redownload
+                        && ui
+                            .add_enabled(
+                                can_redownload,
+                                egui::Button::new(format!(
+                                    "{} Re-download",
+                                    crate::ui_icons::REDOWNLOAD
+                                )),
+                            )
+                            .on_hover_text(
+                                "Deletes the matched file in the output folder (if found), then downloads this URL again.",
+                            )
+                            .on_disabled_hover_text(
+                                "Needs a video URL on this row, a valid output folder, and yt-dlp.",
+                            )
+                            .clicked()
+                    {
+                        *redownload_clicked = true;
+                    }
+                });
+            }
+            button.on_hover_text("Verify the saved file or re-download this URL")
+        })
+    }
+
     /// Fused "Remove..." menu: queue row removal and optional on-disk file delete.
     pub fn remove_menu(
         &mut self,

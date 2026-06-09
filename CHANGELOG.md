@@ -13,7 +13,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Changed
 
 - Done download cards: **Open** and **Folder** are grouped under a single **Open…** menu (same pattern as **URL…** and **Remove…**).
-- Done download cards show **file size**, **codec**, and **fps** as badges next to resolution (populated via ffprobe when a download finishes or when you click **Streams**).
+- Done download cards show **file size**, **codec**, and **fps** as badges next to resolution (populated via ffprobe when a download finishes or when you click **Verify file** in **Verify…**).
+- Done download cards group **Verify file** and **Re-download** under a **Verify…** menu (replacing separate **Streams** and **Redo** buttons).
 
 ### Fixed
 

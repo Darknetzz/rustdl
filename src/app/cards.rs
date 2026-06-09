@@ -381,35 +381,28 @@ impl PydlApp {
                                     }
                                 }
                             }
-                            if done_file.is_some()
-                                && g.secondary(
-                                    &format!("{} Streams", ui_icons::CHECK_STREAMS),
-                                    self.has_ffprobe,
-                                )
-                                .on_hover_text(
-                                    "Run ffprobe on the saved file and refresh resolution on the card.",
-                                )
-                                .on_disabled_hover_text(
-                                    "Configure ffprobe in Settings → Executables.",
-                                )
-                                .clicked()
-                            {
-                                self.check_streams_for_item_id(id);
-                            }
-                            if status == ItemStatus::Done
-                                && g.secondary(
-                                    &format!("{} Redo", ui_icons::REDOWNLOAD),
-                                    self.has_yt_dlp && output_ready && can_redownload,
-                                )
-                            .on_hover_text(
-                                "Deletes the matched file in the output folder (if found), then downloads this URL again.",
-                            )
-                            .on_disabled_hover_text(
-                                "Needs a video URL on this row, a valid output folder, and yt-dlp.",
-                            )
-                            .clicked()
-                            {
-                                self.redownload_item_id(id);
+                            let can_verify_file = done_file.is_some() && self.has_ffprobe;
+                            let can_redownload_action = status == ItemStatus::Done
+                                && self.has_yt_dlp
+                                && output_ready
+                                && can_redownload;
+                            if done_file.is_some() || status == ItemStatus::Done {
+                                let mut verify_file = false;
+                                let mut redownload = false;
+                                g.verify_menu(
+                                    done_file.is_some(),
+                                    can_verify_file,
+                                    status == ItemStatus::Done,
+                                    can_redownload_action,
+                                    &mut verify_file,
+                                    &mut redownload,
+                                );
+                                if verify_file {
+                                    self.check_streams_for_item_id(id);
+                                }
+                                if redownload {
+                                    self.redownload_item_id(id);
+                                }
                             }
                             let mut remove_from_queue = false;
                             let mut delete_file = false;
