@@ -74,6 +74,10 @@ impl VideosQueueLayout<'_> {
     }
 }
 
+fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
+    (outer_h - margin.top - margin.bottom).max(80.0)
+}
+
 fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
     if scroll_id.contains("dock") {
         DOCKED_QUEUE_LIST_MIN_H
@@ -109,11 +113,23 @@ impl PydlApp {
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
-    fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32, scroll_id: &str) {
+    fn draw_queue_list_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        scroll_h: f32,
+        scroll_id: &str,
+        body_bottom: f32,
+    ) {
         let min_h = queue_list_min_scroll_h(scroll_id);
-        let mut scroll_h = scroll_h.max(min_h);
+        let max_h = height_to_bottom(ui, body_bottom).max(0.0);
+        let mut scroll_h = scroll_h.max(0.0);
+        if max_h >= min_h {
+            scroll_h = scroll_h.clamp(min_h, max_h);
+        } else {
+            scroll_h = scroll_h.min(max_h);
+        }
         if !scroll_h.is_finite() {
-            scroll_h = bounded_ui_height(ui, min_h);
+            scroll_h = bounded_ui_height(ui, min_h).min(max_h);
         }
         let w = content_width(ui).max(1.0);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
@@ -200,6 +216,115 @@ impl PydlApp {
             });
         });
         draw(ui, "dl_queue_maint", &mut |g| {
+            if g
+                .warning(
+                    &format!("{} Re-check saved files", ui_icons::RECHECK),
+                    self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
+                )
+                .on_hover_text(
+                    "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
+                )
+                .on_disabled_hover_text(
+                    "Requires ffprobe. Disabled while MP3 extraction is enabled.",
+                )
+                .clicked()
+            {
+                self.recheck_all_saved_downloads();
+            }
+            if g.danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
+                .clicked()
+            {
+                self.items
+                    .retain(|x| matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading));
+                self.pending_resolve_ids
+                    .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
+                self.update_status();
+                self.refresh_input_line_info();
+                self.schedule_queue_save();
+                self.mark_queue_dirty();
+            }
+        });
+        if export_queue {
+            self.export_queue_to_file();
+        }
+        if import_queue {
+            self.import_queue_from_file();
+        }
+        if cancel_all_ready {
+            self.cancel_all_active(super::CancelPostAction::Ready);
+        }
+        if cancel_all_remove {
+            self.cancel_all_active(super::CancelPostAction::Remove);
+        }
+    }
+
+    /// Single fused action row for the docked queue footer (stable height for panel resize).
+    fn draw_downloader_queue_action_fused(&mut self, ui: &mut egui::Ui, compact: bool) {
+        let mut export_queue = false;
+        let mut import_queue = false;
+        let mut cancel_all_ready = false;
+        let mut cancel_all_remove = false;
+        let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
+        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, "dl_queue_actions", |g| add(g));
+            } else {
+                button_group(ui, "dl_queue_actions", |g| add(g));
+            }
+        };
+        draw(ui, &mut |g| {
+            if self.downloads_paused {
+                if g.success(
+                    &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                    true,
+                )
+                .clicked()
+                {
+                    self.resume_all_downloads();
+                }
+            } else if g
+                .warning(
+                    &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                    self.status_queued > 0 || self.status_active > 0,
+                )
+                .clicked()
+            {
+                self.pause_all_downloads();
+            }
+            g.cancel_all_menu(
+                can_cancel_all,
+                &mut cancel_all_ready,
+                &mut cancel_all_remove,
+            );
+            if g.secondary(
+                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+                true,
+            )
+            .clicked()
+            {
+                self.open_output_folder();
+            }
+            g.import_export_menu(!self.items.is_empty() || !self.add_in_progress, |ui| {
+                if ui
+                    .add_enabled(
+                        !self.items.is_empty(),
+                        egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
+                    )
+                    .clicked()
+                {
+                    export_queue = true;
+                }
+                if ui
+                    .add_enabled(
+                        !self.add_in_progress,
+                        egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
+                    )
+                    .on_hover_text("Load URLs from a .txt file directly into the download queue")
+                    .clicked()
+                {
+                    import_queue = true;
+                }
+            });
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),
@@ -376,7 +501,7 @@ impl PydlApp {
                 if self.convert_mode {
                     self.draw_convert_queue_action_groups(ui, true);
                 } else {
-                    self.draw_downloader_queue_action_groups(ui, true);
+                    self.draw_downloader_queue_action_fused(ui, true);
                 }
             });
         }
@@ -433,11 +558,12 @@ impl PydlApp {
         let w = content_width(ui).max(1.0);
         let available_below = (body_bottom - ui.cursor().min.y).max(0.0);
         let min_list = layout.min_list_height();
-        let footer_reserve = layout
-            .bottom_reserve(w)
-            .min((available_below - min_list).max(0.0));
-        let list_h = (available_below - footer_reserve).max(min_list);
-        self.draw_queue_list_body(ui, list_h, layout.scroll_id);
+        let footer_reserve = layout.bottom_reserve(w).min(available_below.max(0.0));
+        let mut list_h = (available_below - footer_reserve).max(0.0);
+        if list_h >= min_list || available_below >= footer_reserve + min_list {
+            list_h = list_h.max(min_list);
+        }
+        self.draw_queue_list_body(ui, list_h, layout.scroll_id, body_bottom);
 
         ui.add_space(2.0);
         self.draw_videos_footer_toolbar(ui, !layout.is_docked());
@@ -706,6 +832,8 @@ impl PydlApp {
 
     /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
+        let panel_h = ui.clip_rect().height().max(180.0);
+        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -720,15 +848,18 @@ impl PydlApp {
             mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                fill_allocated_rect(ui);
-                self.draw_videos_queue_body(
-                    ui,
-                    VideosQueueLayout {
-                        scroll_id: "rustdl_videos_dock_scroll",
-                        dock_log,
-                        log_dock_height: self.settings.log_dock_height,
-                    },
-                );
+                ui.set_max_height(body_h);
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                    self.draw_videos_queue_body(
+                        ui,
+                        VideosQueueLayout {
+                            scroll_id: "rustdl_videos_dock_scroll",
+                            dock_log,
+                            log_dock_height: self.settings.log_dock_height,
+                        },
+                    );
+                });
             },
         );
         // egui persists panel height from content rect; claim leftover space at the panel root.

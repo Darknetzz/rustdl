@@ -12,7 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
-- Docked video queue panel keeps its dragged height again (list/footer layout no longer forces the panel back to the saved default size).
+- Docked video queue panel keeps its dragged height again (queue body is height-capped to the panel and uses the pre-responsive docked footer layout).
 
 ### Changed
 
