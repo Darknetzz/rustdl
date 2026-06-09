@@ -8,7 +8,8 @@ use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
     draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
-    persist_resizable_window_size, show_mode_panel, status_color, with_full_width,
+    persist_resizable_window_size, queue_footer_toolbar_reserve, show_mode_panel, status_color,
+    with_full_width,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -23,8 +24,6 @@ const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
 const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
-/// Space reserved at the panel bottom for dock/hide row + queue action row.
-const QUEUE_FOOTER_TOOLBAR_RESERVE: f32 = 64.0;
 const DOCKED_LOG_MIN_LINES_H: f32 = 48.0;
 const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     left: 10.0,
@@ -49,7 +48,7 @@ impl VideosQueueLayout<'_> {
         }
     }
 
-    fn bottom_reserve(&self) -> f32 {
+    fn bottom_reserve(&self, content_width: f32) -> f32 {
         let log_bar = if self.dock_log {
             DOCKED_LOG_UNDER_VIDEOS_CHROME
         } else {
@@ -60,7 +59,7 @@ impl VideosQueueLayout<'_> {
         } else {
             0.0
         };
-        QUEUE_FOOTER_TOOLBAR_RESERVE + log_bar + log_lines_reserve + 4.0
+        queue_footer_toolbar_reserve(content_width) + log_bar + log_lines_reserve + 4.0
     }
 }
 
@@ -112,21 +111,23 @@ impl PydlApp {
         });
     }
 
-    /// Pause/import-export/recheck/clear — lives in the video queue card or floating window.
-    fn draw_downloader_queue_action_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
-        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
-            if compact {
-                compact_button_group(ui, "dl_queue_actions", |g| add(g));
-            } else {
-                button_group(ui, "dl_queue_actions", |g| add(g));
-            }
-        };
+    /// Pause/import-export/recheck/clear — split into wrap-friendly groups for narrow footers.
+    fn draw_downloader_queue_action_groups(&mut self, ui: &mut egui::Ui, compact: bool) {
         let mut export_queue = false;
         let mut import_queue = false;
         let mut cancel_all_ready = false;
         let mut cancel_all_remove = false;
         let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
-        draw(ui, &mut |g| {
+        let draw = |ui: &mut egui::Ui,
+                    id: &str,
+                    add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
+            if compact {
+                compact_button_group(ui, id, |g| add(g));
+            } else {
+                button_group(ui, id, |g| add(g));
+            }
+        };
+        draw(ui, "dl_queue_transport", &mut |g| {
             if self.downloads_paused {
                 if g.success(
                     &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
@@ -150,6 +151,8 @@ impl PydlApp {
                 &mut cancel_all_ready,
                 &mut cancel_all_remove,
             );
+        });
+        draw(ui, "dl_queue_io", &mut |g| {
             if g.secondary(
                 &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
                 true,
@@ -179,6 +182,8 @@ impl PydlApp {
                     import_queue = true;
                 }
             });
+        });
+        draw(ui, "dl_queue_maint", &mut |g| {
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),
@@ -329,22 +334,20 @@ impl PydlApp {
         self.draw_video_queue_controls_inner(ui, true);
     }
 
-    /// Window/panel chrome (dock, hide) on its own row; queue batch actions below.
+    /// Window/panel chrome (dock, hide) and queue batch actions; wraps on narrow widths.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui) {
         let heading = if self.convert_mode {
             "Convert queue"
         } else {
             "Videos"
         };
-        left_button_row(ui, |ui| {
+        button_toolbar_wrapped(ui, |ui| {
             ui.label(RichText::new(heading).strong());
             self.draw_video_queue_controls_compact(ui);
-        });
-        left_button_row(ui, |ui| {
             if self.convert_mode {
-                self.draw_convert_queue_action_toolbar_inner(ui, true);
+                self.draw_convert_queue_action_groups(ui, true);
             } else {
-                self.draw_downloader_queue_action_toolbar_inner(ui, true);
+                self.draw_downloader_queue_action_groups(ui, true);
             }
         });
     }
@@ -397,12 +400,17 @@ impl PydlApp {
             self.draw_download_batch_progress_row(ui);
         }
 
-        let list_h = (body_bottom - ui.cursor().min.y - layout.bottom_reserve())
-            .max(layout.min_list_height());
+        let w = content_width(ui).max(1.0);
+        let footer_reserve = layout.bottom_reserve(w);
+        let list_h =
+            (body_bottom - ui.cursor().min.y - footer_reserve).max(layout.min_list_height());
         self.draw_queue_list_body(ui, list_h, layout.scroll_id);
 
         ui.add_space(2.0);
-        self.draw_videos_footer_toolbar(ui);
+        let footer_h = height_to_bottom(ui, body_bottom).max(queue_footer_toolbar_reserve(w));
+        allocate_top_down_rect(ui, egui::vec2(w, footer_h), |ui| {
+            self.draw_videos_footer_toolbar(ui);
+        });
 
         if layout.dock_log {
             ui.add_space(6.0);

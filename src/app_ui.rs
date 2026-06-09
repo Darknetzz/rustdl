@@ -799,8 +799,7 @@ pub const VIEWPORT_MIN_INNER_WIDTH: f32 = 920.0;
 /// Minimum main-window inner height (see [`VIEWPORT_MIN_INNER`]).
 pub const VIEWPORT_MIN_INNER_HEIGHT: f32 = 760.0;
 /// Minimum inner size passed to [`egui::ViewportBuilder::with_min_inner_size`].
-pub const VIEWPORT_MIN_INNER: [f32; 2] =
-    [VIEWPORT_MIN_INNER_WIDTH, VIEWPORT_MIN_INNER_HEIGHT];
+pub const VIEWPORT_MIN_INNER: [f32; 2] = [VIEWPORT_MIN_INNER_WIDTH, VIEWPORT_MIN_INNER_HEIGHT];
 /// Extra inner size required before auto re-docking the video queue after a size-driven undock.
 const AUTO_REDOCK_VIDEOS_MARGIN: f32 = 80.0;
 
@@ -908,6 +907,17 @@ pub struct MainColumnSplit {
 const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 /// Header row, height slider, and filter toolbar above docked log lines.
 const DOCKED_LOG_CHROME_H: f32 = 100.0;
+
+/// Estimated vertical space for the video queue footer toolbar (dock/hide + batch actions).
+pub fn queue_footer_toolbar_reserve(content_width: f32) -> f32 {
+    if content_width >= 900.0 {
+        72.0
+    } else if content_width >= 600.0 {
+        96.0
+    } else {
+        130.0
+    }
+}
 
 pub fn compute_main_column_split(
     available_height: f32,
@@ -1554,10 +1564,7 @@ impl<'a> ButtonGroup<'a> {
                 }
                 if show_delete_file
                     && ui
-                        .button(format!(
-                            "{} Delete file",
-                            crate::ui_icons::DELETE_FILE
-                        ))
+                        .button(format!("{} Delete file", crate::ui_icons::DELETE_FILE))
                         .on_hover_text(
                             "Delete only this file; the queue row stays until you remove it.",
                         )
@@ -1770,6 +1777,15 @@ mod tests {
         let at_min = egui::vec2(VIEWPORT_MIN_INNER_WIDTH, VIEWPORT_MIN_INNER_HEIGHT);
         assert!(viewport_too_small_for_docked_videos(at_min));
         assert!(!viewport_large_enough_to_redock_videos(at_min));
+    }
+
+    #[test]
+    fn queue_footer_reserve_scales_with_width() {
+        assert_eq!(queue_footer_toolbar_reserve(1000.0), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(900.0), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(750.0), 96.0);
+        assert_eq!(queue_footer_toolbar_reserve(600.0), 96.0);
+        assert_eq!(queue_footer_toolbar_reserve(480.0), 130.0);
     }
 
     #[test]

@@ -758,10 +758,26 @@ impl PydlApp {
                                 Some(d) => format!("Last {d} days"),
                             })
                             .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.history_filter_days, None, "All time");
-                                ui.selectable_value(&mut self.history_filter_days, Some(1), "Last 24h");
-                                ui.selectable_value(&mut self.history_filter_days, Some(7), "Last 7 days");
-                                ui.selectable_value(&mut self.history_filter_days, Some(30), "Last 30 days");
+                                ui.selectable_value(
+                                    &mut self.history_filter_days,
+                                    None,
+                                    "All time",
+                                );
+                                ui.selectable_value(
+                                    &mut self.history_filter_days,
+                                    Some(1),
+                                    "Last 24h",
+                                );
+                                ui.selectable_value(
+                                    &mut self.history_filter_days,
+                                    Some(7),
+                                    "Last 7 days",
+                                );
+                                ui.selectable_value(
+                                    &mut self.history_filter_days,
+                                    Some(30),
+                                    "Last 30 days",
+                                );
                             });
                     });
                 }

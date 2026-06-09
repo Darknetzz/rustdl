@@ -645,7 +645,13 @@ fn web_ui_link_host(url: &str) -> String {
     }
 }
 
-pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool, version: &str) {
+pub(crate) fn draw_precheck_status(
+    ui: &mut egui::Ui,
+    tool_name: &str,
+    ok: bool,
+    version: &str,
+    compact: bool,
+) {
     let (icon, fg, text) = if ok {
         ("✔", Color32::from_rgb(132, 235, 156), "OK")
     } else {
@@ -653,7 +659,13 @@ pub(crate) fn draw_precheck_status(ui: &mut egui::Ui, tool_name: &str, ok: bool,
     };
     let v = version.trim();
     let cv = compact_tool_version_display(v);
-    let body = if ok && !cv.is_empty() {
+    let body = if compact {
+        if ok {
+            format!("{icon} {tool_name}")
+        } else {
+            format!("{icon} {tool_name}: {text}")
+        }
+    } else if ok && !cv.is_empty() {
         format!("{icon} {tool_name} {text} · {cv}")
     } else if ok {
         format!("{icon} {tool_name} {text}")

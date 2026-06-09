@@ -15,8 +15,8 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt;
 
-use crate::domain::UiEvent;
 use crate::config::AppSettings;
+use crate::domain::UiEvent;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
 use crate::service::core::DownloadCore;
@@ -561,7 +561,10 @@ async fn queue_export(State(st): State<ApiState>) -> impl IntoResponse {
     let c = st.core.lock();
     let body = c.export_queue_url_lines().join("\n");
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; charset=utf-8",
+        )],
         body,
     )
 }
@@ -665,12 +668,8 @@ async fn settings_patch(
 ) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
     if let Some(patch) = body.patch {
-        c.merge_settings_patch(&patch).map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ApiErrorBody { error: e }),
-            )
-        })?;
+        c.merge_settings_patch(&patch)
+            .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiErrorBody { error: e })))?;
     } else if let Some(settings) = body.settings {
         c.apply_settings_patch(settings);
     } else {

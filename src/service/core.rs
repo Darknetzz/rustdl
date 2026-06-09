@@ -7,9 +7,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::service::background_spawn;
-use crate::domain::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
-use crate::domain::events::{UiEvent, UiEventBus};
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
 use crate::config::{
@@ -17,13 +14,16 @@ use crate::config::{
     save_activity_log, save_queue_items, save_settings, trim_activity_log, AppSettings,
     ConvertQueueSnapshot,
 };
+use crate::domain::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
+use crate::domain::events::{UiEvent, UiEventBus};
 use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
 use crate::profiles::{load_profiles, ProfileStore};
+use crate::service::background_spawn;
 use crate::transcode::EncoderChoice;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
-    build_redownload_extra_args, metadata_extra_args,
-    output_filename_template, remove_video_ids_from_download_archive,
+    build_redownload_extra_args, metadata_extra_args, output_filename_template,
+    remove_video_ids_from_download_archive,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
@@ -740,7 +740,9 @@ impl DownloadCore {
         let path = item
             .local_path
             .as_ref()
-            .and_then(|rel| crate::app::done_file_index::resolve_path_under_output(&output_dir, rel))
+            .and_then(|rel| {
+                crate::app::done_file_index::resolve_path_under_output(&output_dir, rel)
+            })
             .or_else(|| {
                 self.done_file_index
                     .find_path_for_queue_item(&output_dir, &item)

@@ -6,12 +6,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::domain::events::is_throttled_download_log_line;
-use crate::domain::UiEvent;
 use crate::app_parsing::{
     convert_detail_is_user_cancellation, parse_speed_eta, reset_convert_item_to_ready,
 };
 use crate::convert_state::{format_convert_progress_detail, format_convert_saved_detail};
+use crate::domain::events::is_throttled_download_log_line;
+use crate::domain::UiEvent;
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
 

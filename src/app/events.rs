@@ -35,7 +35,11 @@ impl PydlApp {
                 UiEvent::DownloadLine { .. } => {
                     ctx.request_repaint();
                 }
-                UiEvent::DownloadDone { item_id, ok, detail: _ } => {
+                UiEvent::DownloadDone {
+                    item_id,
+                    ok,
+                    detail: _,
+                } => {
                     if ok {
                         self.probe_done_item_resolution_if_missing(item_id);
                         if self.settings.show_thumbnails && !self.textures.contains_key(&item_id) {

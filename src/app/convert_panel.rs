@@ -243,11 +243,7 @@ impl PydlApp {
         let ctx = ctx.clone();
         rt.spawn(async move {
             let choice = tokio::task::spawn_blocking(move || {
-                transcode::detect_encoder_with_override(
-                    &ffmpeg_path,
-                    &override_enc,
-                    &target_codec,
-                )
+                transcode::detect_encoder_with_override(&ffmpeg_path, &override_enc, &target_codec)
             })
             .await
             .ok();
@@ -288,12 +284,8 @@ impl PydlApp {
         }
     }
 
-    /// Start/cancel/clear — lives in the Convert queue panel footer (docked or floating window).
-    pub(super) fn draw_convert_queue_action_toolbar_inner(
-        &mut self,
-        ui: &mut egui::Ui,
-        compact: bool,
-    ) {
+    /// Start/cancel/clear groups for the Convert queue footer (wrap-friendly).
+    pub(super) fn draw_convert_queue_action_groups(&mut self, ui: &mut egui::Ui, compact: bool) {
         let ready_count = self
             .convert_items
             .iter()

@@ -219,7 +219,11 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
 }
 
 /// Fills resolution, codec, and fps on a finished row from a local media file.
-pub fn apply_local_media_probe(item: &mut QueueItem, file_path: &std::path::Path, ffprobe_path: &str) {
+pub fn apply_local_media_probe(
+    item: &mut QueueItem,
+    file_path: &std::path::Path,
+    ffprobe_path: &str,
+) {
     let Some(media) = crate::transcode::probe_input_media(file_path, ffprobe_path) else {
         return;
     };

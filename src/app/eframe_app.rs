@@ -561,108 +561,152 @@ impl PydlApp {
     fn draw_main_header(&mut self, ui: &mut egui::Ui) {
         self.constrain_content(ui);
         with_full_width(ui, |ui| {
-            ui.horizontal(|ui| {
-                const ACTIONS_MIN_W: f32 = 300.0;
-                let row_w = ui.available_width();
-                let actions_w = ACTIONS_MIN_W.min(row_w * 0.38).max(0.0);
-                let left_w = (row_w - actions_w).max(80.0);
+            let row_w = ui.available_width();
+            const HEADER_WIDE_BREAKPOINT: f32 = 1040.0;
+            if row_w >= HEADER_WIDE_BREAKPOINT {
+                self.draw_main_header_wide(ui, row_w);
+            } else {
+                self.draw_main_header_narrow(ui);
+            }
+        });
+    }
 
+    fn draw_main_header_branding(&mut self, ui: &mut egui::Ui) {
+        ui.spacing_mut().item_spacing.x = 12.0;
+        let sz = egui::vec2(40.0, 40.0);
+        let img = ui.add(
+            egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
+                .sense(egui::Sense::click()),
+        );
+        let title =
+            ui.add(egui::Label::new(RichText::new("rustdl").heading()).sense(egui::Sense::click()));
+        let header = img
+            .union(title)
+            .on_hover_text("About rustdl — click to open");
+        if header.clicked() {
+            self.about_open = true;
+        }
+    }
+
+    fn draw_main_header_web_and_status(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(4.0);
+        if self.settings.web_ui_enabled {
+            let url = crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+            let running = self.web_server.is_some();
+            if draw_web_ui_header_button(ui, running, &url) {
+                self.open_web_ui_in_browser();
+            }
+        }
+        let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
+        draw_navbar_status_badge(ui, &navbar);
+    }
+
+    fn draw_main_header_tool_checks(&mut self, ui: &mut egui::Ui, compact: bool) {
+        ui.spacing_mut().item_spacing.x = 10.0;
+        draw_precheck_status(
+            ui,
+            "ffprobe",
+            self.has_ffprobe,
+            &self.ffprobe_version,
+            compact,
+        );
+        draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, compact);
+        draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, compact);
+        self.draw_output_disk_space(ui);
+    }
+
+    fn draw_main_header_actions(&mut self, ui: &mut egui::Ui) {
+        button_toolbar_wrapped(ui, |ui| {
+            button_group(ui, "hdr_actions", |g| {
+                if self.settings.logs_open {
+                    if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
+                        .on_hover_text("Close the activity log")
+                        .clicked()
+                    {
+                        self.settings.logs_open = false;
+                        self.persist_settings();
+                    }
+                } else if g
+                    .secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                    .on_hover_text(
+                        "Open the activity log (dock under the queue or in its own window)",
+                    )
+                    .clicked()
+                {
+                    self.settings.logs_open = true;
+                    self.persist_settings();
+                }
+                if g.secondary(&format!("{} Settings", ui_icons::SETTINGS), true)
+                    .on_hover_text(
+                        "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
+                    )
+                    .clicked()
+                {
+                    self.settings_open = true;
+                }
+                if g.danger(&format!("{} Exit", ui_icons::EXIT), true)
+                    .clicked()
+                {
+                    self.open_exit_confirm();
+                }
+            });
+        });
+    }
+
+    fn draw_main_header_wide(&mut self, ui: &mut egui::Ui, row_w: f32) {
+        ui.horizontal(|ui| {
+            let actions_w = (row_w * 0.34).clamp(220.0, 340.0);
+            let left_w = (row_w - actions_w).max(120.0);
+
+            ui.allocate_ui_with_layout(
+                egui::vec2(left_w, 0.0),
+                egui::Layout::left_to_right(egui::Align::Center),
+                |ui| {
+                    ui.set_max_width(left_w);
+                    ui.horizontal_wrapped(|ui| {
+                        self.draw_main_header_branding(ui);
+                        self.draw_main_header_web_and_status(ui);
+                        ui.add_space(6.0);
+                        self.draw_main_header_tool_checks(ui, false);
+                    });
+                },
+            );
+            ui.allocate_ui_with_layout(
+                egui::vec2(actions_w, 0.0),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.set_max_width(actions_w);
+                    self.draw_main_header_actions(ui);
+                },
+            );
+        });
+    }
+
+    fn draw_main_header_narrow(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.horizontal_wrapped(|ui| {
+                self.draw_main_header_branding(ui);
+                self.draw_main_header_web_and_status(ui);
+            });
+            ui.horizontal(|ui| {
+                let left_w = (ui.available_width() * 0.55).max(120.0);
+                let right_w = (ui.available_width() - left_w).max(120.0);
                 ui.allocate_ui_with_layout(
                     egui::vec2(left_w, 0.0),
                     egui::Layout::left_to_right(egui::Align::Center),
                     |ui| {
                         ui.set_max_width(left_w);
-                        ui.spacing_mut().item_spacing.x = 12.0;
-                        let sz = egui::vec2(40.0, 40.0);
-                        let img = ui.add(
-                            egui::Image::new(egui::load::SizedTexture::new(self.logo.id(), sz))
-                                .sense(egui::Sense::click()),
-                        );
-                        let title = ui.add(
-                            egui::Label::new(RichText::new("rustdl").heading())
-                                .sense(egui::Sense::click()),
-                        );
-                        let header = img
-                            .union(title)
-                            .on_hover_text("About rustdl — click to open");
-                        if header.clicked() {
-                            self.about_open = true;
-                        }
-
-                        ui.add_space(4.0);
-                        if self.settings.web_ui_enabled {
-                            let url = crate::service::web::web_ui_browser_url(
-                                &self.settings.web_bind_address,
-                            );
-                            let running = self.web_server.is_some();
-                            if draw_web_ui_header_button(ui, running, &url) {
-                                self.open_web_ui_in_browser();
-                            }
-                        }
-                        let navbar =
-                            crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
-                        draw_navbar_status_badge(ui, &navbar);
-
-                        ui.add_space(6.0);
-                        ui.spacing_mut().item_spacing.x = 10.0;
-                        draw_precheck_status(
-                            ui,
-                            "ffprobe",
-                            self.has_ffprobe,
-                            &self.ffprobe_version,
-                        );
-                        draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version);
-                        draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version);
-                        self.draw_output_disk_space(ui);
+                        ui.horizontal_wrapped(|ui| {
+                            self.draw_main_header_tool_checks(ui, true);
+                        });
                     },
                 );
                 ui.allocate_ui_with_layout(
-                    egui::vec2(actions_w, 0.0),
+                    egui::vec2(right_w, 0.0),
                     egui::Layout::right_to_left(egui::Align::Center),
                     |ui| {
-                        ui.spacing_mut().item_spacing.x = 6.0;
-                        button_group(ui, "hdr_actions", |g| {
-                            if self.settings.logs_open {
-                                if g
-                                    .secondary(
-                                        &format!("{} Hide log", ui_icons::DISMISS),
-                                        true,
-                                    )
-                                    .on_hover_text("Close the activity log")
-                                    .clicked()
-                                {
-                                    self.settings.logs_open = false;
-                                    self.persist_settings();
-                                }
-                            } else if g
-                                .secondary(
-                                    &format!("{} Show log", ui_icons::LOGS),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Open the activity log (dock under the queue or in its own window)",
-                                )
-                                .clicked()
-                            {
-                                self.settings.logs_open = true;
-                                self.persist_settings();
-                            }
-                            if g
-                                .secondary(
-                                    &format!("{} Settings", ui_icons::SETTINGS),
-                                    true,
-                                )
-                                .on_hover_text(
-                                    "Ctrl/Cmd+Enter adds URLs · Ctrl/Cmd+D starts · Ctrl/Cmd+K command palette",
-                                )
-                                .clicked()
-                            {
-                                self.settings_open = true;
-                            }
-                            if g.danger(&format!("{} Exit", ui_icons::EXIT), true).clicked() {
-                                self.open_exit_confirm();
-                            }
-                        });
+                        ui.set_max_width(right_w);
+                        self.draw_main_header_actions(ui);
                     },
                 );
             });

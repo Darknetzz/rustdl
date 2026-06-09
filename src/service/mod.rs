@@ -1,9 +1,9 @@
 //! Shared download service and LAN web control plane.
 
+pub mod background_spawn;
 pub mod core;
 pub mod core_convert;
 pub mod core_events;
-pub mod background_spawn;
 pub mod web;
 
 pub use core::{CancelPostAction, DownloadCore, SharedCore};

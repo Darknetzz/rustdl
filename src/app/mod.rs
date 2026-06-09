@@ -33,8 +33,8 @@ pub(crate) mod update_check;
 mod videos_panel;
 mod web_qr;
 
-pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
 pub(crate) use crate::domain::events::UiEvent;
+pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
 pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
@@ -937,11 +937,8 @@ impl PydlApp {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.label(
-                header_status_rich(format!(
-                    "{} Destination disk: ",
-                    ui_icons::DESTINATION_DISK
-                ))
-                .color(muted),
+                header_status_rich(format!("{} Destination disk: ", ui_icons::DESTINATION_DISK))
+                    .color(muted),
             );
             ui.label(
                 header_status_rich(format!("{} free", human_bytes_ui(space.available_bytes)))
@@ -1435,7 +1432,6 @@ impl PydlApp {
             "Re-checked saved files: {issues} item(s) marked failed (missing stream or probe error)."
         ));
     }
-
 
     #[cfg(windows)]
     fn maybe_install_win_browser_drop_target(&mut self, frame: &eframe::Frame) {

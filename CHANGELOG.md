@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Queue footers (docked and floating Videos window) and the main header **wrap toolbar buttons** on narrow widths so controls like **Settings**, **Exit**, and batch actions stay visible when the window is resized small.
 - Done download cards: **Open** and **Folder** are grouped under a single **Open…** menu (same pattern as **URL…** and **Remove…**).
 - Done download cards show **file size**, **codec**, and **fps** as badges next to resolution (populated via ffprobe when a download finishes or when you click **Verify file** in **Verify…**).
 - Done download cards group **Verify file** and **Re-download** under a **Verify…** menu (replacing separate **Streams** and **Redo** buttons).
