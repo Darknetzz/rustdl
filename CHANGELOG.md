@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- Docked video queue panel is resizable again after the responsive footer layout change (footer no longer over-allocates vertical space at the panel minimum height).
+
 ### Changed
 
 - Queue footers (docked and floating Videos window) and the main header **wrap toolbar buttons** on narrow widths so controls like **Settings**, **Exit**, and batch actions stay visible when the window is resized small.

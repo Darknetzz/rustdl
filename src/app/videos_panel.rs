@@ -401,16 +401,17 @@ impl PydlApp {
         }
 
         let w = content_width(ui).max(1.0);
-        let footer_reserve = layout.bottom_reserve(w);
-        let list_h =
-            (body_bottom - ui.cursor().min.y - footer_reserve).max(layout.min_list_height());
+        let available_below = (body_bottom - ui.cursor().min.y).max(0.0);
+        let min_list = layout.min_list_height();
+        let toolbar_min = queue_footer_toolbar_reserve(w).min(available_below);
+        let footer_reserve = layout
+            .bottom_reserve(w)
+            .min((available_below - min_list).max(toolbar_min));
+        let list_h = (available_below - footer_reserve).max(min_list);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id);
 
         ui.add_space(2.0);
-        let footer_h = height_to_bottom(ui, body_bottom).max(queue_footer_toolbar_reserve(w));
-        allocate_top_down_rect(ui, egui::vec2(w, footer_h), |ui| {
-            self.draw_videos_footer_toolbar(ui);
-        });
+        self.draw_videos_footer_toolbar(ui);
 
         if layout.dock_log {
             ui.add_space(6.0);
