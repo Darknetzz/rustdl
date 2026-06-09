@@ -13,6 +13,14 @@ use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
 const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
+const UI_SCALE_MIN: f32 = 0.85;
+const UI_SCALE_MAX: f32 = 1.5;
+const UI_SCALE_STEP: f32 = 0.05;
+
+fn bump_ui_scale(scale: &mut f32, delta: f32) {
+    *scale = (*scale + delta).clamp(UI_SCALE_MIN, UI_SCALE_MAX);
+    *scale = ((*scale * 100.0).round()) / 100.0;
+}
 
 fn settings_form_grid<R>(
     ui: &mut egui::Ui,
@@ -191,12 +199,37 @@ impl PydlApp {
                                 &mut self.settings.log_relative_time,
                             );
                             ui.label("UI scale");
-                            changed |= ui
-                                .add(
-                                    egui::Slider::new(&mut self.settings.ui_scale, 0.85..=1.5)
-                                        .fixed_decimals(2),
-                                )
-                                .changed();
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                let pct = (self.settings.ui_scale * 100.0).round() as i32;
+                                let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
+                                let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
+                                left_button_row(ui, |ui| {
+                                    button_group(ui, "ui_scale_minus", |g| {
+                                        if g
+                                            .secondary("−", !at_min)
+                                            .on_hover_text("Decrease UI scale")
+                                            .clicked()
+                                        {
+                                            bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
+                                            changed = true;
+                                        }
+                                    });
+                                });
+                                ui.label(RichText::new(format!("{pct}%")).strong());
+                                left_button_row(ui, |ui| {
+                                    button_group(ui, "ui_scale_plus", |g| {
+                                        if g
+                                            .secondary("+", !at_max)
+                                            .on_hover_text("Increase UI scale")
+                                            .clicked()
+                                        {
+                                            bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
+                                            changed = true;
+                                        }
+                                    });
+                                });
+                            });
                             ui.end_row();
                             ui.label("Theme");
                             egui::ComboBox::from_id_salt("settings_theme")
