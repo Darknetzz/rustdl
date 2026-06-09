@@ -213,7 +213,12 @@ finalize_changelog "$version" "$date" "$prev"
 git add CHANGELOG.md
 git commit -m "release: v${version}"
 
-git tag -a "$tag" -m "rustdl ${version}"
+if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null 2>&1; then
+  echo "Tag ${tag} exists (from a version bump); moving to release commit."
+  git tag -f -a "$tag" -m "release: rustdl ${version}"
+else
+  git tag -a "$tag" -m "rustdl ${version}"
+fi
 
 echo
 echo "Created commit and tag $tag."

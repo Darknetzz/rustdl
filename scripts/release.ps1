@@ -168,7 +168,12 @@ try {
     git commit -m "release: v$version"
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-    git tag -a $tag -m "rustdl $version"
+    if (git rev-parse -q --verify "refs/tags/$tag" 2>$null) {
+        Write-Host "Tag $tag exists (from a version bump); moving to release commit."
+        git tag -f -a $tag -m "release: rustdl $version"
+    } else {
+        git tag -a $tag -m "rustdl $version"
+    }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
     Write-Host ''

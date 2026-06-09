@@ -64,7 +64,7 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`) |
 | `tests/` | Integration tests (ytdlp fixtures, queue perf, subprocess smoke) |
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
-| `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` during development |
+| `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
 
@@ -108,6 +108,8 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 
    Default is **patch** (`0.4.6` → `0.4.7`). Skip bumps for trivial fixes and non-user-facing work.
 
+   **Tag on every bump:** the bump scripts create an annotated tag `rustdl-vX.Y.Z` on `HEAD` when that commit already contains the new `Cargo.toml` version. After a manual version edit, commit first, then run `.\scripts\bump_version.ps1 -TagOnly` or `./scripts/bump_version.sh --tag-only`. **Do not push** `rustdl-v*` tags until release day (push triggers `.github/workflows/release.yml`). `release.ps1` / `release.sh` move an existing bump tag to the release commit with `-f`.
+
 3. **Before opening a PR** → run CI checks locally (see **Running and testing locally**).
 
 ### CHANGELOG on every commit
@@ -134,6 +136,8 @@ When committing **medium or larger** user-visible work, bump `version` in `Cargo
 **Bump the version** for anything you would call a medium or bigger change—do not wait for release day.
 
 **Skip the version bump** for trivial one-off fixes (typo, tiny tweak) and changes with no user-facing effect (CI, internal refactors, docs-only edits such as this file).
+
+When you bump `version` in `Cargo.toml` (via the bump scripts or by hand), **always create the matching `rustdl-vX.Y.Z` tag** on that commit before finishing the task (`-TagOnly` after a manual edit).
 
 ### Cutting a release
 
@@ -194,7 +198,7 @@ Fix clippy/fmt/test failures before tagging a release.
 - **Comments**: Only for non-obvious behavior; prefer clear code.
 - **Tests**: Add or extend tests when fixing real behavior bugs; avoid trivial tests unless requested.
 - **Docs**: Do not add new markdown files unless asked (this file is the exception the user requested).
-- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]`; bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**).
+- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]`; bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**) and tag the bump commit with `rustdl-vX.Y.Z` (bump scripts or `-TagOnly`; do not push the tag until release unless asked).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.
 
 ## Further reading
