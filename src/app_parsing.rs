@@ -218,6 +218,43 @@ pub fn normalize_restored_item(item: &mut QueueItem) {
     }
 }
 
+/// Fills resolution, codec, and fps on a finished row from a local media file.
+pub fn apply_local_media_probe(item: &mut QueueItem, file_path: &std::path::Path, ffprobe_path: &str) {
+    let Some(media) = crate::transcode::probe_input_media(file_path, ffprobe_path) else {
+        return;
+    };
+    if !media.codec.is_empty() {
+        item.video_codec = media.codec;
+    }
+    if let Some(w) = media.width {
+        item.width = Some(w);
+    }
+    if let Some(h) = media.height {
+        item.height = Some(h);
+    }
+    if let Some(fps) = media.fps {
+        item.fps = Some(fps);
+    }
+}
+
+/// Bytes to show on a done card badge (download total, then on-disk size).
+pub fn queue_item_file_size_bytes(
+    item: &QueueItem,
+    local_file: Option<&std::path::Path>,
+) -> Option<u64> {
+    if let Some((downloaded, total)) = parse_item_size_text(&item.size_text) {
+        if let Some(bytes) = total {
+            return Some(bytes);
+        }
+        if downloaded > 0 {
+            return Some(downloaded);
+        }
+    }
+    local_file
+        .and_then(|p| std::fs::metadata(p).ok())
+        .map(|m| m.len())
+}
+
 pub fn convert_detail_is_user_cancellation(detail: &str) -> bool {
     let d = detail.trim().to_ascii_lowercase();
     d.starts_with("cancelled") || d.contains("cancelled by user")

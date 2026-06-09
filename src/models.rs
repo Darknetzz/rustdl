@@ -55,6 +55,12 @@ pub struct QueueItem {
     /// Optional named download profile; overrides session profile for this row only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile_override: Option<String>,
+    /// Video codec from ffprobe on the saved file (e.g. h264, av1).
+    #[serde(default)]
+    pub video_codec: String,
+    /// Frame rate from ffprobe on the saved file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fps: Option<f32>,
 }
 
 impl Default for QueueItem {
@@ -83,6 +89,8 @@ impl Default for QueueItem {
             completed_at: None,
             format_override: None,
             profile_override: None,
+            video_codec: String::new(),
+            fps: None,
         }
     }
 }
@@ -113,6 +121,8 @@ impl QueueItem {
             completed_at: None,
             format_override: None,
             profile_override: None,
+            video_codec: String::new(),
+            fps: None,
         }
     }
 
@@ -154,6 +164,8 @@ impl QueueItem {
             completed_at: None,
             format_override: None,
             profile_override: None,
+            video_codec: String::new(),
+            fps: None,
         }
     }
 }

@@ -406,6 +406,8 @@ impl super::core::DownloadCore {
             if let Some(msg) = self.verify_done_item_streams(item_id) {
                 completed = false;
                 final_detail = msg;
+            } else {
+                self.probe_saved_file_media_for_item(item_id);
             }
         }
         if let Some(idx) = self.item_idx(item_id) {

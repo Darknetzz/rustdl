@@ -4,6 +4,7 @@ use std::time::SystemTime;
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
+use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, popup_menu_above,
     status_color, status_dot_with_label, MetaBadgeKind,
@@ -61,6 +62,9 @@ impl PydlApp {
             format_resolution_label(self.items[idx].width, self.items[idx].height)
                 .map(|s| s.replace('x', "×"));
         let show_size_badge = is_pre_download && size_text != "-";
+        let video_codec = self.items[idx].video_codec.clone();
+        let item_fps = self.items[idx].fps;
+        let show_done_media_badges = show_saved_file_actions;
 
         let highlight_completed = status == ItemStatus::Done && !done_but_file_missing;
         let done_fill = theme::done_card_fill(&self.settings.theme);
@@ -230,6 +234,15 @@ impl PydlApp {
                     "metadata".to_owned()
                 } else if is_pre_download {
                     "ready".to_owned()
+                } else if matches!(status, ItemStatus::Done | ItemStatus::Failed) {
+                    let mut parts = vec![format!("{pct:.1}%")];
+                    if speed_text != "-" {
+                        parts.push(speed_text);
+                    }
+                    if eta_text != "-" {
+                        parts.push(eta_text);
+                    }
+                    parts.join(" · ")
                 } else {
                     format!("{pct:.1}% · {size_text} · {speed_text} · {eta_text}")
                 };
@@ -344,34 +357,29 @@ impl PydlApp {
                 if show_saved_file_actions {
                     left_button_row(ui, |ui| {
                         compact_button_group(ui, ("card_done_actions", id), |g| {
-                            if let Some((p, _)) = done_file.as_ref() {
-                                if g.success(
-                                    &format!("{} Open", ui_icons::OPEN_FILE),
-                                    true,
-                                )
-                                .on_hover_text("Open with the default app for this file type")
-                                .clicked()
-                                {
-                                    self.open_file_path(p);
+                            let can_open_file = done_file.is_some();
+                            let can_open_folder = done_file.is_some() || done_but_file_missing;
+                            if can_open_file || can_open_folder {
+                                let mut open_file = false;
+                                let mut open_folder = false;
+                                g.open_menu(
+                                    can_open_file,
+                                    can_open_folder,
+                                    &mut open_file,
+                                    &mut open_folder,
+                                );
+                                if open_file {
+                                    if let Some((p, _)) = done_file.as_ref() {
+                                        self.open_file_path(p);
+                                    }
                                 }
-                                if g.secondary(
-                                    &format!("{} Folder", ui_icons::REVEAL_FOLDER),
-                                    true,
-                                )
-                                .on_hover_text("Show the file in Explorer / file manager")
-                                .clicked()
-                                {
-                                    self.reveal_file_path(p);
+                                if open_folder {
+                                    if let Some((p, _)) = done_file.as_ref() {
+                                        self.reveal_file_path(p);
+                                    } else {
+                                        self.open_item_output_folder(id);
+                                    }
                                 }
-                            } else if done_but_file_missing
-                                && g.secondary(
-                                    &format!("{} Folder", ui_icons::REVEAL_FOLDER),
-                                    true,
-                                )
-                                .on_hover_text("Open the output folder for this download")
-                                .clicked()
-                            {
-                                self.open_item_output_folder(id);
                             }
                             if done_file.is_some()
                                 && g.secondary(
@@ -442,6 +450,32 @@ impl PydlApp {
                         };
                         draw_meta_badge(ui, &est, MetaBadgeKind::SizeEstimate);
                     }
+                    if show_done_media_badges {
+                        let local_path = done_file.as_ref().map(|(p, _)| p.as_path());
+                        if let Some(bytes) =
+                            queue_item_file_size_bytes(&self.items[idx], local_path)
+                        {
+                            draw_meta_badge(
+                                ui,
+                                &human_bytes_ui(bytes),
+                                MetaBadgeKind::FileSize,
+                            );
+                        }
+                        if !video_codec.is_empty() {
+                            draw_meta_badge(
+                                ui,
+                                &video_codec.to_uppercase(),
+                                MetaBadgeKind::Codec,
+                            );
+                        }
+                        if let Some(fps) = item_fps {
+                            draw_meta_badge(
+                                ui,
+                                &format!("{fps:.2} fps"),
+                                MetaBadgeKind::FrameRate,
+                            );
+                        }
+                    }
                     draw_status_chip(ui, status);
                 });
                 let footer_color = match status {
@@ -453,10 +487,14 @@ impl PydlApp {
                     ItemStatus::Queued => status_color(ItemStatus::Queued),
                     ItemStatus::Downloading => status_color(ItemStatus::Downloading),
                 };
-                ui.add(
-                    egui::Label::new(RichText::new(&footer_status).small().color(footer_color))
+                if !footer_status.is_empty() {
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(&footer_status).small().color(footer_color),
+                        )
                         .wrap(),
-                );
+                    );
+                }
                 ui.set_width(inner_w);
                 if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
                     || (!show_saved_file_actions && removable)

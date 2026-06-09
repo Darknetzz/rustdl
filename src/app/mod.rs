@@ -1132,22 +1132,26 @@ impl PydlApp {
         let Some(idx) = self.item_idx(item_id) else {
             return;
         };
-        if self.items[idx].width.is_some() && self.items[idx].height.is_some() {
+        if self.items[idx].status != ItemStatus::Done {
             return;
         }
-        if self.items[idx].status != ItemStatus::Done {
+        if self.items[idx].width.is_some()
+            && self.items[idx].height.is_some()
+            && !self.items[idx].video_codec.is_empty()
+            && self.items[idx].fps.is_some()
+        {
             return;
         }
         let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) else {
             return;
         };
-        let path_str = path.to_string_lossy().to_string();
-        if let Some((w, h)) =
-            ytdlp::probe_video_resolution_with_path(&path_str, &self.settings.ffprobe_path)
-        {
-            self.items[idx].width = Some(w);
-            self.items[idx].height = Some(h);
-        }
+        crate::app_parsing::apply_local_media_probe(
+            &mut self.items[idx],
+            &path,
+            &self.settings.ffprobe_path,
+        );
+        self.queue_dirty = true;
+        self.schedule_queue_save();
     }
 
     pub(super) fn refresh_input_line_info(&mut self) {
@@ -1360,35 +1364,28 @@ impl PydlApp {
             return;
         };
         let item = self.items[idx].clone();
-        let msg = match self.probe_saved_file_streams(&item) {
+        let (msg, probe_media) = match self.probe_saved_file_streams(&item) {
             Ok((v, a)) => {
                 let summary = format!(
                     "Streams: {} video, {} audio",
                     if v { "has" } else { "no" },
                     if a { "has" } else { "no" },
                 );
-                if v {
-                    let path_str = self
-                        .find_downloaded_file_for_item(&item)
-                        .map(|(p, _)| p.to_string_lossy().to_string())
-                        .unwrap_or_default();
-                    if !path_str.is_empty() {
-                        if let Some((w, h)) = ytdlp::probe_video_resolution_with_path(
-                            &path_str,
-                            &self.settings.ffprobe_path,
-                        ) {
-                            self.items[idx].width = Some(w);
-                            self.items[idx].height = Some(h);
-                        }
-                    }
-                }
-                summary
+                (summary, v)
             }
-            Err(e) => format!("Check failed: {e}"),
+            Err(e) => (format!("Check failed: {e}"), false),
         };
-        self.items[idx].detail = msg.clone();
+        self.download_core_action(|core| {
+            if probe_media {
+                core.probe_saved_file_media_for_item(item_id);
+            }
+            if let Some(idx) = core.item_idx(item_id) {
+                core.items[idx].detail = msg.clone();
+                core.schedule_queue_save();
+                core.bump_generation();
+            }
+        });
         self.append_log(&format!("[item {item_id}] {msg}"));
-        self.schedule_queue_save();
     }
 
     /// Re-scan saved files for done/failed rows and mark failed when video or audio is missing (skipped in MP3 extraction mode).

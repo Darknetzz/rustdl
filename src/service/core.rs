@@ -727,6 +727,35 @@ impl DownloadCore {
         }
     }
 
+    /// ffprobe the saved download and store codec, fps, and resolution on the queue row.
+    pub fn probe_saved_file_media_for_item(&mut self, item_id: u64) {
+        if !self.has_ffprobe {
+            return;
+        }
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let output_dir = self.effective_output_dir();
+        let item = self.items[idx].clone();
+        let path = item
+            .local_path
+            .as_ref()
+            .and_then(|rel| crate::app::done_file_index::resolve_path_under_output(&output_dir, rel))
+            .or_else(|| {
+                self.done_file_index
+                    .find_path_for_queue_item(&output_dir, &item)
+                    .map(|(path, _)| path)
+            });
+        let Some(path) = path else {
+            return;
+        };
+        crate::app_parsing::apply_local_media_probe(
+            &mut self.items[idx],
+            &path,
+            &self.settings.ffprobe_path,
+        );
+    }
+
     pub fn download_extra_args_for_item(&self, item: &QueueItem) -> Vec<String> {
         crate::ytdlp_download_args::build_download_extra_args_for_item(
             &self.settings,

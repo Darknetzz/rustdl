@@ -10,6 +10,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- Done download cards: **Open** and **Folder** are grouped under a single **Open…** menu (same pattern as **URL…** and **Remove…**).
+- Done download cards show **file size**, **codec**, and **fps** as badges next to resolution (populated via ffprobe when a download finishes or when you click **Streams**).
+
 ### Fixed
 
 - GUI startup no longer blocks for several seconds on ffmpeg encoder smoke tests; the window appears immediately and encoder detection runs in the background when you open Video Converter.

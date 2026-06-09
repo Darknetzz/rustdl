@@ -1396,6 +1396,65 @@ impl<'a> ButtonGroup<'a> {
         })
     }
 
+    /// Open saved file and/or its containing folder (done downloads).
+    pub fn open_menu(
+        &mut self,
+        can_open_file: bool,
+        can_open_folder: bool,
+        open_file_clicked: &mut bool,
+        folder_clicked: &mut bool,
+    ) -> Response {
+        let compact = self.compact;
+        let label = format!("{} Open...", crate::ui_icons::OPEN_FILE);
+        self.add(|ui| {
+            if !can_open_file && !can_open_folder {
+                return grouped_success_button(ui, &label, false, compact)
+                    .on_disabled_hover_text("No saved file or output folder for this row");
+            }
+            let popup_id = ui.make_persistent_id("open_menu");
+            let button = if can_open_file {
+                grouped_success_button(ui, &label, true, compact)
+            } else {
+                grouped_secondary_button(ui, &label, true, compact)
+            };
+            if button.clicked() {
+                ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+            }
+            if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+                show_menu_popup(ui, popup_id, &button, |ui| {
+                    if can_open_file
+                        && ui
+                            .button(format!("{} Open", crate::ui_icons::OPEN_FILE))
+                            .on_hover_text("Open with the default app for this file type")
+                            .clicked()
+                    {
+                        *open_file_clicked = true;
+                    }
+                    if can_open_folder {
+                        let folder_hover = if can_open_file {
+                            "Show the file in Explorer / file manager"
+                        } else {
+                            "Open the output folder for this download"
+                        };
+                        if ui
+                            .button(format!("{} Folder", crate::ui_icons::REVEAL_FOLDER))
+                            .on_hover_text(folder_hover)
+                            .clicked()
+                        {
+                            *folder_clicked = true;
+                        }
+                    }
+                });
+            }
+            let trigger_hover = if can_open_file {
+                "Open file or show in folder"
+            } else {
+                "Open the output folder for this download"
+            };
+            button.on_hover_text(trigger_hover)
+        })
+    }
+
     /// Fused "Remove..." menu: queue row removal and optional on-disk file delete.
     pub fn remove_menu(
         &mut self,
