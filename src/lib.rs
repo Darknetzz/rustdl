@@ -26,6 +26,8 @@ pub mod ui_icons;
 pub mod win_drop_target;
 #[cfg(windows)]
 pub mod win_icon;
+#[cfg(windows)]
+pub mod win_window;
 pub mod ytdlp;
 pub mod ytdlp_download_args;
 

@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).
 - Docked video queue panel keeps its dragged height again (queue body is height-capped to the panel and uses the pre-responsive docked footer layout).
 
 ### Changed

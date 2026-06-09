@@ -803,7 +803,13 @@ impl PydlApp {
 
     /// Undock the queue when the main window is cramped; re-dock when it grows again.
     fn maybe_adjust_videos_dock_for_viewport(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.viewport().minimized == Some(true)) {
+            return;
+        }
         let size = crate::app_ui::main_viewport_size(ctx);
+        if size.x < 1.0 || size.y < 1.0 {
+            return;
+        }
         if self.settings.videos_docked {
             if crate::app_ui::viewport_too_small_for_docked_videos(size)
                 && !self.videos_dock_user_prefers_docked

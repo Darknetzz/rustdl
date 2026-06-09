@@ -12,7 +12,10 @@ impl eframe::App for PydlApp {
             core_sync::sync_core_to_app(&core, self);
         }
         #[cfg(windows)]
-        crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
+        {
+            crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
+            crate::win_window::maybe_restore_main_window(frame, ctx);
+        }
         #[cfg(not(windows))]
         let _ = frame;
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
