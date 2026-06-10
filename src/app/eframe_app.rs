@@ -105,21 +105,14 @@ impl eframe::App for PydlApp {
         }
 
         if self.settings.videos_docked {
-            let dock_init_id = egui::Id::new(VIDEOS_DOCK_PANEL_ID).with("height_init");
-            let needs_default = ctx.data(|d| d.get_temp::<f32>(dock_init_id).is_none());
-            let mut videos_dock = egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
+            egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                 .resizable(true)
+                .default_height(self.settings.videos_dock_height)
                 .height_range(180.0..=800.0)
-                .frame(dock_panel_horizontal_frame());
-            if needs_default {
-                videos_dock = videos_dock.default_height(self.settings.videos_dock_height);
-                ctx.data_mut(|d| {
-                    d.insert_temp(dock_init_id, self.settings.videos_dock_height);
+                .frame(dock_panel_horizontal_frame())
+                .show(ctx, |ui| {
+                    self.draw_docked_videos_panel(ui);
                 });
-            }
-            videos_dock.show(ctx, |ui| {
-                self.draw_docked_videos_panel(ui);
-            });
             patch_resizable_panel_state_height(ctx, VIDEOS_DOCK_PANEL_ID);
         } else {
             let log_docked = self.settings.logs_open && self.settings.logs_docked;

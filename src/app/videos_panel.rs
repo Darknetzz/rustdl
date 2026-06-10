@@ -8,8 +8,8 @@ use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
     draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
-    note_resizable_panel_height, persist_resizable_window_size, queue_footer_toolbar_reserve,
-    show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
+    note_resizable_panel_height, persist_resizable_window_size, show_mode_panel, status_color,
+    with_full_width, UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -24,8 +24,6 @@ const DOCKED_LOG_UNDER_VIDEOS_CHROME: f32 = 100.0;
 const UNDOCKED_DOCKED_LOG_CHROME: f32 = 100.0;
 /// Minimum scroll height for queue cards in the docked bottom panel.
 const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
-/// Footer chrome for the docked panel (wide; toolbar stays on one or two rows).
-const DOCKED_QUEUE_FOOTER_RESERVE: f32 = 64.0;
 const DOCKED_LOG_MIN_LINES_H: f32 = 48.0;
 const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
     left: 10.0,
@@ -44,33 +42,6 @@ struct VideosQueueLayout<'a> {
 impl VideosQueueLayout<'_> {
     fn is_docked(&self) -> bool {
         self.scroll_id.contains("dock")
-    }
-
-    fn min_list_height(&self) -> f32 {
-        if self.is_docked() {
-            DOCKED_QUEUE_LIST_MIN_H
-        } else {
-            80.0
-        }
-    }
-
-    fn bottom_reserve(&self, content_width: f32) -> f32 {
-        let log_bar = if self.dock_log {
-            DOCKED_LOG_UNDER_VIDEOS_CHROME
-        } else {
-            0.0
-        };
-        let log_lines_reserve = if self.dock_log {
-            self.log_dock_height.clamp(80.0, 480.0)
-        } else {
-            0.0
-        };
-        let toolbar = if self.is_docked() {
-            DOCKED_QUEUE_FOOTER_RESERVE
-        } else {
-            queue_footer_toolbar_reserve(content_width)
-        };
-        toolbar + log_bar + log_lines_reserve + 4.0
     }
 }
 
@@ -534,7 +505,6 @@ impl PydlApp {
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
-        let body_bottom = ui.max_rect().bottom();
 
         if !self.convert_mode {
             self.draw_queue_search_row(ui);
@@ -551,29 +521,58 @@ impl PydlApp {
             self.draw_download_batch_progress_row(ui);
         }
 
-        let w = content_width(ui).max(1.0);
-        let available_below = (body_bottom - ui.cursor().min.y).max(0.0);
-        let min_list = layout.min_list_height();
-        let footer_reserve = layout.bottom_reserve(w).min(available_below.max(0.0));
-        let mut list_h = (available_below - footer_reserve).max(0.0);
-        if list_h >= min_list || available_below >= footer_reserve + min_list {
-            list_h = list_h.max(min_list);
-        }
-        self.draw_queue_list_body(ui, list_h, layout.scroll_id, body_bottom);
-
-        ui.add_space(2.0);
-        self.draw_videos_footer_toolbar(ui, !layout.is_docked());
-
-        if layout.dock_log {
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(4.0);
-            let max_log = (body_bottom - ui.cursor().min.y - DOCKED_LOG_UNDER_VIDEOS_CHROME)
-                .max(DOCKED_LOG_MIN_LINES_H);
-            self.draw_docked_log_under_videos(ui, max_log);
+        let region_top = ui.cursor().min.y;
+        let region_h = (ui.max_rect().bottom() - region_top).max(0.0);
+        let region_w = content_width(ui).max(1.0);
+        if region_h <= 1.0 {
+            consume_remaining_ui_space(ui);
+            return;
         }
 
+        // Bottom-up: pin footer/log, give the card list whatever height remains.
+        ui.allocate_ui_with_layout(
+            egui::vec2(region_w, region_h),
+            egui::Layout::bottom_up(egui::Align::LEFT),
+            |ui| {
+                ui.set_width(region_w);
+                if layout.dock_log {
+                    let budget = ui.available_height().max(0.0);
+                    if budget > DOCKED_LOG_UNDER_VIDEOS_CHROME + DOCKED_LOG_MIN_LINES_H {
+                        let scroll_max = (budget - DOCKED_LOG_UNDER_VIDEOS_CHROME).clamp(
+                            DOCKED_LOG_MIN_LINES_H,
+                            layout.log_dock_height.clamp(80.0, 480.0),
+                        );
+                        self.draw_docked_log_under_videos(ui, scroll_max);
+                        ui.add_space(4.0);
+                        ui.separator();
+                        ui.add_space(6.0);
+                    }
+                }
+                self.draw_videos_footer_toolbar(ui, !layout.is_docked());
+                ui.add_space(2.0);
+                let list_h = ui.available_height().max(0.0);
+                self.draw_queue_list_body(
+                    ui,
+                    list_h,
+                    layout.scroll_id,
+                    ui.max_rect().bottom(),
+                );
+            },
+        );
         consume_remaining_ui_space(ui);
+    }
+
+    fn draw_videos_queue_in_available_region(
+        &mut self,
+        ui: &mut egui::Ui,
+        layout: VideosQueueLayout<'_>,
+        min_h: f32,
+    ) {
+        let body_h = ui.available_height().max(min_h);
+        let body_w = content_width(ui).max(1.0);
+        allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+            self.draw_videos_queue_body(ui, layout);
+        });
     }
 
     /// Compact strip when the queue lives in a floating window.
@@ -819,7 +818,7 @@ impl PydlApp {
         }
         consume_remaining_ui_space(ui);
         if self.settings.logs_open && self.settings.logs_docked {
-            note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, ui.max_rect().height());
+            note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, ui.clip_rect().height());
         }
         if !ui.ctx().input(|i| i.pointer.any_down()) {
             let saved_h = ui.clip_rect().height();
@@ -847,18 +846,19 @@ impl PydlApp {
             mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                self.draw_videos_queue_body(
+                self.draw_videos_queue_in_available_region(
                     ui,
                     VideosQueueLayout {
                         scroll_id: "rustdl_videos_dock_scroll",
                         dock_log,
                         log_dock_height: self.settings.log_dock_height,
                     },
+                    180.0,
                 );
             },
         );
         consume_remaining_ui_space(ui);
-        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, ui.max_rect().height());
+        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, ui.clip_rect().height());
         if !ui.ctx().input(|i| i.pointer.any_down()) {
             let saved_h = ui.clip_rect().height();
             if (saved_h - self.settings.videos_dock_height).abs() > 1.0 {
@@ -873,7 +873,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_videos_float_v4");
+        let window_id = egui::Id::new("rustdl_videos_float_v5");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let title = self.videos_window_title().to_owned();
@@ -900,6 +900,7 @@ impl PydlApp {
         let pointer_down = ctx.input(|i| i.pointer.any_down());
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
+            fill_allocated_rect(ui);
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
@@ -907,13 +908,14 @@ impl PydlApp {
                 mode_colors,
                 QUEUE_MODE_PANEL_MARGIN,
                 |ui| {
-                    self.draw_videos_queue_body(
+                    self.draw_videos_queue_in_available_region(
                         ui,
                         VideosQueueLayout {
-                            scroll_id: "rustdl_videos_float_v4",
+                            scroll_id: "rustdl_videos_float_v5",
                             dock_log: false,
                             log_dock_height: self.settings.log_dock_height,
                         },
+                        320.0,
                     );
                 },
             );
