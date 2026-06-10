@@ -916,15 +916,28 @@ pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
     h
 }
 
-/// Like [`remaining_ui_height`] but ignores unbounded `available_height()` from content-sized parents.
-pub fn bounded_ui_height(ui: &egui::Ui, min: f32) -> f32 {
-    let cap = remaining_ui_height(ui);
-    let avail = ui.available_height();
-    if avail.is_finite() && avail > 0.0 && avail < 50_000.0 {
-        avail.min(cap).max(min)
+/// Upper bound for layout math when egui reports unbounded parents (floating windows, first frame).
+const MAX_REASONABLE_UI_SPAN: f32 = 16_000.0;
+
+fn finite_ui_span(value: f32, fallback: f32) -> f32 {
+    if value.is_finite() && value > 0.0 {
+        value.min(MAX_REASONABLE_UI_SPAN)
     } else {
-        cap.max(min)
+        fallback.min(MAX_REASONABLE_UI_SPAN)
     }
+}
+
+/// Like [`remaining_ui_height`] but ignores unbounded `available_height()` from content-sized parents.
+pub fn bounded_ui_height(ui: &egui::Ui, min_h: f32) -> f32 {
+    let min_h = min_h.clamp(1.0, MAX_REASONABLE_UI_SPAN);
+    let cap = finite_ui_span(remaining_ui_height(ui), MAX_REASONABLE_UI_SPAN);
+    let avail = ui.available_height();
+    let h = if avail.is_finite() && avail > 0.0 && avail < MAX_REASONABLE_UI_SPAN {
+        avail.min(cap).max(min_h)
+    } else {
+        cap.max(min_h)
+    };
+    finite_ui_span(h, min_h)
 }
 
 /// Split remaining main-panel height between scrollable controls and a pinned footer.
@@ -1105,7 +1118,10 @@ pub fn allocate_top_down_rect<R>(
     size: egui::Vec2,
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
-    let size = egui::vec2(size.x.max(1.0), size.y.max(1.0));
+    let size = egui::vec2(
+        finite_ui_span(size.x, 1.0).max(1.0),
+        finite_ui_span(size.y, 1.0).max(1.0),
+    );
     let rect = egui::Rect::from_min_size(ui.cursor().min, size);
     ui.allocate_new_ui(
         egui::UiBuilder::new()

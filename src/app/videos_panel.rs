@@ -899,7 +899,8 @@ impl PydlApp {
         };
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            let body_h = bounded_ui_height(ui, 320.0);
+            let body_h =
+                bounded_ui_height(ui, self.settings.video_float_height.clamp(320.0, 1600.0));
             let body_w = content_width(ui).max(480.0);
             allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
                 fill_allocated_rect(ui);
