@@ -825,9 +825,9 @@ pub fn viewport_large_enough_to_redock_videos(size: egui::Vec2) -> bool {
 }
 
 /// [`egui::TopBottomPanel`] id for the docked video queue.
-pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v4";
+pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v5";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
-pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v4";
+pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v5";
 
 /// Use the parent's width without fixing height or locking horizontal resize.
 pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
@@ -877,7 +877,10 @@ pub fn patch_resizable_panel_state_height(ctx: &egui::Context, panel_id: &str) {
     if (state.rect.height() - height).abs() <= 0.5 {
         return;
     }
-    state.rect.max.y = state.rect.min.y + height;
+    state.rect = egui::Rect::from_min_size(
+        state.rect.min,
+        egui::vec2(state.rect.width().max(1.0), height),
+    );
     ctx.data_mut(|d| d.insert_persisted(id, state));
 }
 

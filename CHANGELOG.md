@@ -17,7 +17,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).
-- Docked and floating video queue panels are resizable again (bounded bottom-up layout prevents content overflow from fighting panel height; restored egui `PanelState` patching; new panel/window ids reset stale layout state).
+- Docked and floating video queue panels are resizable again (layout uses the panel/window clip height captured before shrink-wrap so dragged size persists after release; bottom-up queue body keeps footer pinned).
 
 ### Changed
 
