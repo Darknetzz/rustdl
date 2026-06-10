@@ -19,6 +19,7 @@ impl eframe::App for PydlApp {
         }
         #[cfg(not(windows))]
         let _ = frame;
+        self.ensure_main_viewport_visible(ctx);
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
         if let Some(text) = self.deferred_menu_paste_urls.take() {
             ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));

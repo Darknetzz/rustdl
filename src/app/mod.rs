@@ -247,6 +247,8 @@ pub struct PydlApp {
     videos_auto_undocked_for_size: bool,
     /// User chose docked layout (toolbar or Settings); skip auto-undock until they undock manually.
     videos_dock_user_prefers_docked: bool,
+    /// Frames elapsed since startup; used to recover invisible Wayland windows.
+    gui_startup_frames: u8,
 }
 
 impl PydlApp {
@@ -417,6 +419,7 @@ impl PydlApp {
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,
             videos_dock_user_prefers_docked: false,
+            gui_startup_frames: 0,
         };
         {
             let core = shared_core.lock();
@@ -802,6 +805,45 @@ impl PydlApp {
     }
 
     /// Undock the queue when the main window is cramped; re-dock when it grows again.
+    /// Wayland (and some embedded terminals) can leave the main window unmapped or 0×0.
+    /// Re-assert visibility/size for the first second after launch.
+    #[cfg(target_os = "linux")]
+    pub(super) fn ensure_main_viewport_visible(&mut self, ctx: &egui::Context) {
+        const STARTUP_FRAMES: u8 = 60;
+        if self.gui_startup_frames >= STARTUP_FRAMES {
+            return;
+        }
+        self.gui_startup_frames = self.gui_startup_frames.saturating_add(1);
+
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Decorations(true));
+
+        let size = crate::app_ui::main_viewport_size(ctx);
+        if size.x < 100.0 || size.y < 100.0 {
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
+                1280.0, 880.0,
+            )));
+        }
+
+        if self.gui_startup_frames <= 5 {
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(
+                egui::UserAttentionType::Informational,
+            ));
+        }
+
+        if self.gui_startup_frames == STARTUP_FRAMES && (size.x < 100.0 || size.y < 100.0) {
+            eprintln!(
+                "rustdl: main window still has no size ({size:?}). \
+                 Stop with `killall rustdl`, then launch from a system terminal \
+                 (not Cursor's integrated terminal)."
+            );
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub(super) fn ensure_main_viewport_visible(&mut self, _ctx: &egui::Context) {}
+
     fn maybe_adjust_videos_dock_for_viewport(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.viewport().minimized == Some(true)) {
             return;

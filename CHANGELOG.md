@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Linux: invisible GUI when launched from Cursor/VS Code or after an off-screen window restore — center on startup, skip saving window position, recover visibility for the first second, and exit cleanly when the window closes (stops zombie processes that only served the LAN web UI).
 - Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).
 - Docked and floating video queue panels are resizable again (layout uses the panel/window clip height captured before shrink-wrap so dragged size persists after release; bottom-up queue body keeps footer pinned).
 - Fixed crashes when opening the app or floating Videos / Convert queue window caused by invalid layout geometry in the queue scroll area (restored top-down queue layout; guard `allocate_top_down_rect` against non-finite cursor positions).

@@ -38,7 +38,7 @@ use eframe::egui;
 use tokio::runtime::Runtime;
 
 pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
-    let native_options = eframe::NativeOptions {
+    let mut native_options = eframe::NativeOptions {
         // Center on first launch so the window is easy to spot (especially on multi-monitor setups).
         centered: true,
         viewport: egui::ViewportBuilder::default()
@@ -50,6 +50,12 @@ pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
             .with_active(true),
         ..Default::default()
     };
+    // eframe only clamps restored window positions on Windows; off-screen restore on Linux
+    // can leave the window invisible. Always center instead of restoring position.
+    #[cfg(target_os = "linux")]
+    {
+        native_options.persist_window = false;
+    }
 
     eframe::run_native(
         "rustdl",
@@ -82,10 +88,28 @@ pub fn main_entry() {
     #[cfg(windows)]
     cli::detach_console_for_gui();
 
+    #[cfg(target_os = "linux")]
+    warn_if_embedded_ide_terminal();
+
     if let Err(e) = run_gui(runtime) {
         #[cfg(windows)]
         cli::reattach_console_for_error();
         eprintln!("Failed to run app: {e}");
         process::exit(1);
+    }
+
+    // Tokio / web-server threads can outlive eframe on some platforms unless we exit explicitly.
+    process::exit(0);
+}
+
+#[cfg(target_os = "linux")]
+fn warn_if_embedded_ide_terminal() {
+    let from_cursor = std::env::var_os("CURSOR_TRACE_ID").is_some()
+        || std::env::var_os("VSCODE_IPC_HOOK").is_some();
+    if from_cursor {
+        eprintln!(
+            "rustdl: launched from Cursor/VS Code terminal — if no window appears, \
+             use a system terminal (Alt+T) or run: killall rustdl && ./target/release/rustdl"
+        );
     }
 }
