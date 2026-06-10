@@ -858,7 +858,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_videos_float_v6");
+        let window_id = egui::Id::new("rustdl_videos_float_v7");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let title = self.videos_window_title().to_owned();
@@ -885,31 +885,25 @@ impl PydlApp {
         let pointer_down = ctx.input(|i| i.pointer.any_down());
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            let body_h =
-                finite_ui_span(ui.clip_rect().height(), self.settings.video_float_height).max(320.0);
-            let body_w =
-                finite_ui_span(ui.clip_rect().width(), self.settings.video_float_width).max(480.0);
-            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
-                fill_allocated_rect(ui);
-                let body_bottom = ui.max_rect().bottom();
-                let layout = VideosQueueLayout {
-                    scroll_id: "rustdl_videos_float_v6",
-                    dock_log: false,
-                    log_dock_height: self.settings.log_dock_height,
-                    body_bottom: Some(body_bottom),
-                };
-                Self::draw_mode_queue_panel(
-                    ui,
-                    &theme,
-                    av1,
-                    mode_colors,
-                    QUEUE_MODE_PANEL_MARGIN,
-                    |ui| {
-                        self.draw_videos_queue_body(ui, layout);
-                    },
-                );
-                consume_remaining_ui_space(ui);
-            });
+            fill_allocated_rect(ui);
+            // Pin at window scope (not inside the mode panel frame or viewport clip_rect).
+            let body_bottom = ui.max_rect().bottom();
+            let layout = VideosQueueLayout {
+                scroll_id: "rustdl_videos_float_v7",
+                dock_log: false,
+                log_dock_height: self.settings.log_dock_height,
+                body_bottom: Some(body_bottom),
+            };
+            Self::draw_mode_queue_panel(
+                ui,
+                &theme,
+                av1,
+                mode_colors,
+                QUEUE_MODE_PANEL_MARGIN,
+                |ui| {
+                    self.draw_videos_queue_body(ui, layout);
+                },
+            );
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
