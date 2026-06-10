@@ -829,11 +829,11 @@ pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v3";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
 pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v3";
 
-/// Use the parent's horizontal space without forcing a minimum height (that blocks resize).
+/// Use the parent's width without fixing height or locking horizontal resize.
 pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
     let w = ui.max_rect().width().max(1.0);
     let h = ui.max_rect().height().max(1.0);
-    ui.set_width(w);
+    ui.set_max_width(w);
     egui::vec2(w, h)
 }
 
@@ -850,6 +850,35 @@ pub fn consume_remaining_ui_space(ui: &mut egui::Ui) {
     }
     if size.x > 0.5 || size.y > 0.5 {
         ui.allocate_space(size);
+    }
+}
+
+/// Remember the panel's allocated height for [`patch_resizable_panel_state_height`].
+pub fn note_resizable_panel_height(ctx: &egui::Context, panel_id: &str, height: f32) {
+    if height.is_finite() && height >= 1.0 {
+        ctx.data_mut(|d| {
+            d.insert_temp(egui::Id::new(panel_id).with("allocated_h"), height);
+        });
+    }
+}
+
+/// egui stores [`egui::containers::panel::PanelState`] height from shrink-wrapped content; patch after show.
+pub fn patch_resizable_panel_state_height(ctx: &egui::Context, panel_id: &str) {
+    let id = egui::Id::new(panel_id);
+    let Some(height) = ctx.data(|d| d.get_temp::<f32>(id.with("allocated_h"))) else {
+        return;
+    };
+    if !height.is_finite() || height < 1.0 {
+        return;
+    }
+    if let Some(mut state) = egui::containers::panel::PanelState::load(ctx, id) {
+        if (state.rect.height() - height).abs() > 0.5 {
+            state.rect = egui::Rect::from_min_size(
+                state.rect.min,
+                egui::vec2(state.rect.width().max(1.0), height),
+            );
+            ctx.data_mut(|d| d.insert_persisted(id, state));
+        }
     }
 }
 

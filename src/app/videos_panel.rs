@@ -8,8 +8,8 @@ use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
     draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
-    persist_resizable_window_size, queue_footer_toolbar_reserve, show_mode_panel, status_color,
-    with_full_width,
+    note_resizable_panel_height, persist_resizable_window_size, queue_footer_toolbar_reserve,
+    show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -72,10 +72,6 @@ impl VideosQueueLayout<'_> {
         };
         toolbar + log_bar + log_lines_reserve + 4.0
     }
-}
-
-fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
-    (outer_h - margin.top - margin.bottom).max(80.0)
 }
 
 fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
@@ -821,6 +817,10 @@ impl PydlApp {
         if self.settings.logs_open && self.settings.logs_docked {
             self.draw_docked_log_only_section(ui);
         }
+        consume_remaining_ui_space(ui);
+        if self.settings.logs_open && self.settings.logs_docked {
+            note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, ui.max_rect().height());
+        }
         if !ui.ctx().input(|i| i.pointer.any_down()) {
             let saved_h = ui.clip_rect().height();
             if (saved_h - self.settings.undocked_footer_height).abs() > 1.0 {
@@ -832,8 +832,7 @@ impl PydlApp {
 
     /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        let panel_h = ui.clip_rect().height().max(180.0);
-        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
+        fill_allocated_rect(ui);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -848,22 +847,18 @@ impl PydlApp {
             mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                ui.set_max_height(body_h);
-                let inner_w = content_width(ui).max(1.0);
-                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
-                    self.draw_videos_queue_body(
-                        ui,
-                        VideosQueueLayout {
-                            scroll_id: "rustdl_videos_dock_scroll",
-                            dock_log,
-                            log_dock_height: self.settings.log_dock_height,
-                        },
-                    );
-                });
+                self.draw_videos_queue_body(
+                    ui,
+                    VideosQueueLayout {
+                        scroll_id: "rustdl_videos_dock_scroll",
+                        dock_log,
+                        log_dock_height: self.settings.log_dock_height,
+                    },
+                );
             },
         );
-        // egui persists panel height from content rect; claim leftover space at the panel root.
         consume_remaining_ui_space(ui);
+        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, ui.max_rect().height());
         if !ui.ctx().input(|i| i.pointer.any_down()) {
             let saved_h = ui.clip_rect().height();
             if (saved_h - self.settings.videos_dock_height).abs() > 1.0 {
@@ -905,7 +900,6 @@ impl PydlApp {
         let pointer_down = ctx.input(|i| i.pointer.any_down());
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            fill_allocated_rect(ui);
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
