@@ -919,7 +919,7 @@ pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
 /// Upper bound for layout math when egui reports unbounded parents (floating windows, first frame).
 const MAX_REASONABLE_UI_SPAN: f32 = 16_000.0;
 
-fn finite_ui_span(value: f32, fallback: f32) -> f32 {
+pub(crate) fn finite_ui_span(value: f32, fallback: f32) -> f32 {
     if value.is_finite() && value > 0.0 {
         value.min(MAX_REASONABLE_UI_SPAN)
     } else {
@@ -1134,7 +1134,10 @@ pub fn allocate_top_down_rect<R>(
 
 /// Vertical space from the cursor to a fixed bottom edge.
 pub fn height_to_bottom(ui: &egui::Ui, bottom_y: f32) -> f32 {
-    (bottom_y - ui.cursor().min.y).max(0.0)
+    if !bottom_y.is_finite() {
+        return 0.0;
+    }
+    finite_ui_span(bottom_y - ui.cursor().min.y, 0.0)
 }
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
