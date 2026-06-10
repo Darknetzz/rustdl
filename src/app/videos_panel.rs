@@ -10,7 +10,7 @@ use crate::app_ui::{
     draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
     finite_ui_span, note_resizable_panel_height, persist_resizable_window_size,
     queue_footer_toolbar_reserve, show_mode_panel, status_color, with_full_width,
-    UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -789,25 +789,32 @@ impl PydlApp {
 
     /// Pinned footer when the queue is undocked (`TopBottomPanel` body).
     pub(super) fn draw_queue_footer(&mut self, ui: &mut egui::Ui) {
-        let panel_h = ui.clip_rect().height().max(100.0);
-        let panel_w = ui.clip_rect().width().max(1.0);
-        allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
-            fill_allocated_rect(ui);
-            self.draw_videos_undocked_strip(ui);
-            if self.settings.logs_open && self.settings.logs_docked {
+        let log_docked = self.settings.logs_open && self.settings.logs_docked;
+        if log_docked {
+            let panel_h =
+                finite_ui_span(ui.clip_rect().height(), self.settings.undocked_footer_height)
+                    .max(180.0);
+            let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
+            allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
+                fill_allocated_rect(ui);
+                self.draw_videos_undocked_strip(ui);
                 self.draw_docked_log_only_section(ui);
-            }
+                consume_remaining_ui_space(ui);
+            });
             consume_remaining_ui_space(ui);
-        });
-        consume_remaining_ui_space(ui);
-        if self.settings.logs_open && self.settings.logs_docked {
             note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, panel_h);
-        }
-        if !ui.ctx().input(|i| i.pointer.any_down())
-            && (panel_h - self.settings.undocked_footer_height).abs() > 1.0
-        {
-            self.settings.undocked_footer_height = panel_h.clamp(100.0, 600.0);
-            self.persist_settings();
+            if !ui.ctx().input(|i| i.pointer.any_down())
+                && (panel_h - self.settings.undocked_footer_height).abs() > 1.0
+            {
+                self.settings.undocked_footer_height = panel_h.clamp(180.0, 600.0);
+                self.persist_settings();
+            }
+        } else {
+            with_full_width(ui, |ui| {
+                self.draw_videos_undocked_strip(ui);
+            });
+            let strip_h = ui.min_rect().height().max(UNDOCKED_VIDEOS_STRIP_H);
+            note_resizable_panel_height(ui.ctx(), UNDOCKED_FOOTER_PANEL_ID, strip_h);
         }
     }
 
@@ -858,7 +865,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_videos_float_v7");
+        let window_id = egui::Id::new("rustdl_videos_float_v8");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let title = self.videos_window_title().to_owned();
@@ -885,25 +892,32 @@ impl PydlApp {
         let pointer_down = ctx.input(|i| i.pointer.any_down());
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            fill_allocated_rect(ui);
-            // Pin at window scope (not inside the mode panel frame or viewport clip_rect).
-            let body_bottom = ui.max_rect().bottom();
-            let layout = VideosQueueLayout {
-                scroll_id: "rustdl_videos_float_v7",
-                dock_log: false,
-                log_dock_height: self.settings.log_dock_height,
-                body_bottom: Some(body_bottom),
-            };
-            Self::draw_mode_queue_panel(
-                ui,
-                &theme,
-                av1,
-                mode_colors,
-                QUEUE_MODE_PANEL_MARGIN,
-                |ui| {
-                    self.draw_videos_queue_body(ui, layout);
-                },
-            );
+            // Size from the window body (`max_rect`), not viewport `clip_rect`.
+            let body_h = finite_ui_span(ui.max_rect().height(), self.settings.video_float_height)
+                .max(320.0);
+            let body_w = finite_ui_span(ui.max_rect().width(), self.settings.video_float_width)
+                .max(480.0);
+            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+                fill_allocated_rect(ui);
+                let body_bottom = ui.max_rect().bottom();
+                let layout = VideosQueueLayout {
+                    scroll_id: "rustdl_videos_float_v8",
+                    dock_log: false,
+                    log_dock_height: self.settings.log_dock_height,
+                    body_bottom: Some(body_bottom),
+                };
+                Self::draw_mode_queue_panel(
+                    ui,
+                    &theme,
+                    av1,
+                    mode_colors,
+                    QUEUE_MODE_PANEL_MARGIN,
+                    |ui| {
+                        self.draw_videos_queue_body(ui, layout);
+                    },
+                );
+                consume_remaining_ui_space(ui);
+            });
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {

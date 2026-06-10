@@ -3,7 +3,7 @@ use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row,
     patch_resizable_panel_state_height, show_mode_panel, with_full_width,
-    UNDOCKED_FOOTER_PANEL_ID, VIDEOS_DOCK_PANEL_ID,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -116,17 +116,28 @@ impl eframe::App for PydlApp {
             patch_resizable_panel_state_height(ctx, VIDEOS_DOCK_PANEL_ID);
         } else {
             let log_docked = self.settings.logs_open && self.settings.logs_docked;
+            let (default_h, height_range, resizable) = if log_docked {
+                (
+                    self.settings.undocked_footer_height,
+                    180.0..=600.0,
+                    true,
+                )
+            } else {
+                (
+                    UNDOCKED_VIDEOS_STRIP_H,
+                    72.0..=140.0,
+                    false,
+                )
+            };
             egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
-                .resizable(log_docked)
-                .default_height(self.settings.undocked_footer_height)
-                .height_range(100.0..=600.0)
+                .resizable(resizable)
+                .default_height(default_h)
+                .height_range(height_range)
                 .frame(dock_panel_horizontal_frame())
                 .show(ctx, |ui| {
                     self.draw_queue_footer(ui);
                 });
-            if log_docked {
-                patch_resizable_panel_state_height(ctx, UNDOCKED_FOOTER_PANEL_ID);
-            }
+            patch_resizable_panel_state_height(ctx, UNDOCKED_FOOTER_PANEL_ID);
         }
 
         egui::CentralPanel::default()

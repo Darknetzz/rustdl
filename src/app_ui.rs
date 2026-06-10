@@ -827,7 +827,7 @@ pub fn viewport_large_enough_to_redock_videos(size: egui::Vec2) -> bool {
 /// [`egui::TopBottomPanel`] id for the docked video queue.
 pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v5";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
-pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v5";
+pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v6";
 
 /// Use the parent's width without fixing height or locking horizontal resize.
 pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
@@ -846,7 +846,14 @@ pub fn consume_remaining_ui_space(ui: &mut egui::Ui) {
         size.x = 0.0;
     }
     if !size.y.is_finite() || size.y < 0.0 {
-        size.y = 0.0;
+        size.y = remaining_ui_height(ui);
+    }
+    if size.y > MAX_REASONABLE_UI_SPAN {
+        size.y = remaining_ui_height(ui);
+    }
+    let to_bottom = (ui.max_rect().bottom() - ui.cursor().min.y).max(0.0);
+    if to_bottom.is_finite() && size.y > to_bottom {
+        size.y = to_bottom;
     }
     if size.x > 0.5 || size.y > 0.5 {
         ui.allocate_space(size);
@@ -947,7 +954,8 @@ pub struct MainColumnSplit {
     pub footer_height: f32,
 }
 
-const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
+/// Compact Videos strip in the main window when the queue is undocked (no docked log).
+pub const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 /// Header row, height slider, and filter toolbar above docked log lines.
 const DOCKED_LOG_CHROME_H: f32 = 100.0;
 
