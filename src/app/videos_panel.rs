@@ -38,6 +38,8 @@ struct VideosQueueLayout<'a> {
     scroll_id: &'a str,
     dock_log: bool,
     log_dock_height: f32,
+    /// Bottom edge of the allocated queue body (set by docked/float shell before the mode panel).
+    body_bottom: Option<f32>,
 }
 
 impl VideosQueueLayout<'_> {
@@ -495,11 +497,13 @@ impl PydlApp {
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
-        let body_bottom = if ui.max_rect().bottom().is_finite() {
-            ui.max_rect().bottom()
-        } else {
-            ui.clip_rect().bottom()
-        };
+        let body_bottom = layout.body_bottom.filter(|y| y.is_finite()).unwrap_or_else(|| {
+            if ui.max_rect().bottom().is_finite() {
+                ui.max_rect().bottom()
+            } else {
+                ui.clip_rect().bottom()
+            }
+        });
 
         if !self.convert_mode {
             self.draw_queue_search_row(ui);
@@ -818,14 +822,15 @@ impl PydlApp {
         let dl_color = self.settings.mode_downloader_color.clone();
         let convert_color = self.settings.mode_convert_color.clone();
         let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
-        let layout = VideosQueueLayout {
-            scroll_id: "rustdl_videos_dock_scroll",
-            dock_log,
-            log_dock_height: self.settings.log_dock_height,
-        };
-
         allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
             fill_allocated_rect(ui);
+            let body_bottom = ui.max_rect().bottom();
+            let layout = VideosQueueLayout {
+                scroll_id: "rustdl_videos_dock_scroll",
+                dock_log,
+                log_dock_height: self.settings.log_dock_height,
+                body_bottom: Some(body_bottom),
+            };
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
@@ -878,24 +883,33 @@ impl PydlApp {
             });
         }
         let pointer_down = ctx.input(|i| i.pointer.any_down());
-        let layout = VideosQueueLayout {
-            scroll_id: "rustdl_videos_float_v6",
-            dock_log: false,
-            log_dock_height: self.settings.log_dock_height,
-        };
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
-            fill_allocated_rect(ui);
-            Self::draw_mode_queue_panel(
-                ui,
-                &theme,
-                av1,
-                mode_colors,
-                QUEUE_MODE_PANEL_MARGIN,
-                |ui| {
-                    self.draw_videos_queue_body(ui, layout);
-                },
-            );
+            let body_h =
+                finite_ui_span(ui.clip_rect().height(), self.settings.video_float_height).max(320.0);
+            let body_w =
+                finite_ui_span(ui.clip_rect().width(), self.settings.video_float_width).max(480.0);
+            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+                fill_allocated_rect(ui);
+                let body_bottom = ui.max_rect().bottom();
+                let layout = VideosQueueLayout {
+                    scroll_id: "rustdl_videos_float_v6",
+                    dock_log: false,
+                    log_dock_height: self.settings.log_dock_height,
+                    body_bottom: Some(body_bottom),
+                };
+                Self::draw_mode_queue_panel(
+                    ui,
+                    &theme,
+                    av1,
+                    mode_colors,
+                    QUEUE_MODE_PANEL_MARGIN,
+                    |ui| {
+                        self.draw_videos_queue_body(ui, layout);
+                    },
+                );
+                consume_remaining_ui_space(ui);
+            });
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
