@@ -74,6 +74,10 @@ impl VideosQueueLayout<'_> {
     }
 }
 
+fn queue_panel_body_height(outer_h: f32, margin: egui::Margin) -> f32 {
+    (outer_h - margin.top - margin.bottom).max(80.0)
+}
+
 fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
     if scroll_id.contains("dock") {
         DOCKED_QUEUE_LIST_MIN_H
@@ -530,58 +534,6 @@ impl PydlApp {
         ui.add_space(2.0);
     }
 
-    /// Docked panel body: bottom-up layout pins footer/log so content never exceeds the panel height.
-    fn draw_videos_queue_body_docked(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
-        self.constrain_content(ui);
-        ui.spacing_mut().item_spacing.y = 3.0;
-        let body_bottom = ui.max_rect().bottom();
-
-        if !self.convert_mode {
-            self.draw_queue_search_row(ui);
-        }
-
-        if self.convert_mode {
-            if !self.convert_items.is_empty() {
-                self.draw_convert_queue_status_row(ui);
-                self.draw_convert_batch_progress_row(ui);
-                self.draw_convert_batch_summary_row(ui);
-            }
-        } else if !self.items.is_empty() {
-            self.draw_downloader_queue_status_row(ui);
-            self.draw_download_batch_progress_row(ui);
-        }
-
-        let region_top = ui.cursor().min.y;
-        let region_h = (body_bottom - region_top).max(0.0);
-        let region_w = content_width(ui).max(1.0);
-
-        ui.allocate_ui_with_layout(
-            egui::vec2(region_w, region_h),
-            egui::Layout::bottom_up(egui::Align::LEFT),
-            |ui| {
-                ui.set_width(region_w);
-                if layout.dock_log {
-                    let budget = ui.available_height().max(0.0);
-                    if budget > DOCKED_LOG_UNDER_VIDEOS_CHROME + DOCKED_LOG_MIN_LINES_H {
-                        let scroll_max = (budget - DOCKED_LOG_UNDER_VIDEOS_CHROME).clamp(
-                            DOCKED_LOG_MIN_LINES_H,
-                            layout.log_dock_height.clamp(80.0, 480.0),
-                        );
-                        self.draw_docked_log_under_videos(ui, scroll_max);
-                        ui.add_space(4.0);
-                        ui.separator();
-                        ui.add_space(6.0);
-                    }
-                }
-                self.draw_videos_footer_toolbar(ui, false);
-                ui.add_space(2.0);
-                let list_h = ui.available_height().max(0.0);
-                self.draw_queue_list_body(ui, list_h, layout.scroll_id, ui.max_rect().bottom());
-            },
-        );
-        consume_remaining_ui_space(ui);
-    }
-
     /// Status row, scrollable cards (top), toolbar (bottom); optional log under the toolbar when docked.
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_content(ui);
@@ -880,7 +832,8 @@ impl PydlApp {
 
     /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        fill_allocated_rect(ui);
+        let panel_h = ui.clip_rect().height().max(180.0);
+        let body_h = queue_panel_body_height(panel_h, QUEUE_MODE_PANEL_MARGIN);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -895,15 +848,18 @@ impl PydlApp {
             mode_colors,
             QUEUE_MODE_PANEL_MARGIN,
             |ui| {
-                fill_allocated_rect(ui);
-                self.draw_videos_queue_body_docked(
-                    ui,
-                    VideosQueueLayout {
-                        scroll_id: "rustdl_videos_dock_scroll",
-                        dock_log,
-                        log_dock_height: self.settings.log_dock_height,
-                    },
-                );
+                ui.set_max_height(body_h);
+                let inner_w = content_width(ui).max(1.0);
+                allocate_top_down_rect(ui, egui::vec2(inner_w, body_h), |ui| {
+                    self.draw_videos_queue_body(
+                        ui,
+                        VideosQueueLayout {
+                            scroll_id: "rustdl_videos_dock_scroll",
+                            dock_log,
+                            log_dock_height: self.settings.log_dock_height,
+                        },
+                    );
+                });
             },
         );
         // egui persists panel height from content rect; claim leftover space at the panel root.

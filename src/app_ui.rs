@@ -829,13 +829,12 @@ pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v3";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
 pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v3";
 
-/// Expand the current UI node to the parent's allocated rect (call at the start of panel/window bodies).
+/// Use the parent's horizontal space without forcing a minimum height (that blocks resize).
 pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
     let w = ui.max_rect().width().max(1.0);
     let h = ui.max_rect().height().max(1.0);
-    let size = egui::vec2(w, h);
-    ui.set_min_size(size);
-    size
+    ui.set_width(w);
+    egui::vec2(w, h)
 }
 
 /// Fill leftover space so resizable panels/windows keep their dragged size.
