@@ -1113,6 +1113,18 @@ pub fn constrain_content_width(ui: &mut egui::Ui, max_content_width: f32) -> f32
 }
 
 /// Allocate a top-down child region with an explicit size (avoids shrink-wrapped `max_rect`).
+fn layout_origin(ui: &egui::Ui) -> egui::Pos2 {
+    let cursor = ui.cursor().min;
+    if cursor.is_finite() {
+        return cursor;
+    }
+    let clip = ui.clip_rect().min;
+    if clip.is_finite() {
+        return clip;
+    }
+    ui.max_rect().min
+}
+
 pub fn allocate_top_down_rect<R>(
     ui: &mut egui::Ui,
     size: egui::Vec2,
@@ -1122,7 +1134,8 @@ pub fn allocate_top_down_rect<R>(
         finite_ui_span(size.x, 1.0).max(1.0),
         finite_ui_span(size.y, 1.0).max(1.0),
     );
-    let rect = egui::Rect::from_min_size(ui.cursor().min, size);
+    let origin = layout_origin(ui);
+    let rect = egui::Rect::from_min_size(origin, size);
     ui.allocate_new_ui(
         egui::UiBuilder::new()
             .max_rect(rect)
