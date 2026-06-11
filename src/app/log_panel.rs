@@ -6,9 +6,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, fill_allocated_rect, finite_ui_span,
-    height_to_bottom, left_button_row, persist_resizable_window_size, secondary_button,
+    allocate_top_down_rect, button_group, button_toolbar_wrapped,
+    compact_button_group, consume_remaining_ui_space, content_width, fill_allocated_rect,
+    finite_ui_span, height_to_bottom, left_button_row, persist_resizable_window_size,
+    secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -187,7 +188,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_log_float_v4");
+        let window_id = egui::Id::new("rustdl_log_float_v5");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let pointer_down = ctx.input(|i| i.pointer.any_down());
@@ -208,23 +209,16 @@ impl PydlApp {
         }
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            let body_h = finite_ui_span(ui.max_rect().height(), self.settings.log_float_height)
-                .max(260.0);
-            let body_w = finite_ui_span(ui.max_rect().width(), self.settings.log_float_width)
-                .max(400.0);
-            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
-                fill_allocated_rect(ui);
-                let body_bottom = ui.max_rect().bottom();
-                left_button_row(ui, |ui| {
-                    self.draw_log_dock_controls_compact(ui);
-                });
-                ui.add_space(2.0);
-                self.draw_activity_log_toolbar_inner(ui, true);
-                ui.add_space(2.0);
-                let scroll_h = height_to_bottom(ui, body_bottom).max(80.0);
-                self.draw_activity_log_lines_scroll(ui, scroll_h);
-                consume_remaining_ui_space(ui);
+            fill_allocated_rect(ui);
+            let body_bottom = ui.max_rect().bottom();
+            left_button_row(ui, |ui| {
+                self.draw_log_dock_controls_compact(ui);
             });
+            ui.add_space(2.0);
+            self.draw_activity_log_toolbar_inner(ui, true);
+            ui.add_space(2.0);
+            let scroll_h = finite_ui_span(height_to_bottom(ui, body_bottom), 80.0).max(80.0);
+            self.draw_activity_log_lines_scroll(ui, scroll_h);
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
@@ -394,11 +388,8 @@ impl PydlApp {
 
     /// Scrollable log lines only (toolbar is separate).
     pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
-        let mut scroll_h = scroll_h.max(60.0);
-        if !scroll_h.is_finite() {
-            scroll_h = bounded_ui_height(ui, 60.0);
-        }
-        let w = ui.available_width().max(1.0);
+        let scroll_h = finite_ui_span(scroll_h, 80.0).max(60.0);
+        let w = content_width(ui).max(1.0);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             ui.set_min_height(scroll_h);
             egui::Frame::dark_canvas(ui.style())

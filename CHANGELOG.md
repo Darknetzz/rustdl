@@ -30,6 +30,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Fixed the floating Videos / Convert queue window growing to fill the screen and snapping back on resize (size from window `max_rect`, not viewport `clip_rect`).
 - Fixed the main-window bottom strip taking half the window when the queue is undocked without a docked activity log (compact strip only; docked log keeps a resizable footer).
 - Fixed the About window being stuck in place (`.anchor()` makes egui windows immovable).
+- Fixed the floating Activity log window showing an empty panel (log lines area collapsed due to nested viewport sizing).
 
 ### Changed
 
