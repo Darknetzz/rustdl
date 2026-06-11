@@ -10,6 +10,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-12
+
+
 ### Added
 
 - **Organize downloads** — Settings presets for subfolders (flat, by uploader/channel, by playlist, by year/month) and filename styles (title + ID, date prefix, playlist index, title only), with quick preset buttons; optional post-download move into the same layout; advanced custom yt-dlp `-o` template still available. Per-item download profiles now apply organize rules to the output template as well.
@@ -336,7 +339,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 - README: CLI batch/dry-run, platform drag-and-drop deferral rationale for Linux/macOS.
 
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.7...dev
+[0.5.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.8...rustdl-v0.5.0
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.0...dev
 [0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7
 [0.4.6]: https://github.com/Darknetzz/rustdl/compare/db8b01f...b76f00b
 [0.4.5]: https://github.com/Darknetzz/rustdl/compare/1f4ab5a...db8b01f
