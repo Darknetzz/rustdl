@@ -42,6 +42,52 @@ fn settings_checkbox(ui: &mut egui::Ui, label: &str, value: &mut bool) -> bool {
     changed
 }
 
+fn organize_folder_label(value: &str) -> &'static str {
+    match value {
+        crate::download_organize::FOLDER_UPLOADER => "By uploader / channel",
+        crate::download_organize::FOLDER_PLAYLIST => "By playlist",
+        crate::download_organize::FOLDER_DATE_YM => "By year / month",
+        crate::download_organize::FOLDER_CUSTOM => "Custom",
+        _ => "Flat (output folder only)",
+    }
+}
+
+fn organize_filename_label(value: &str) -> &'static str {
+    match value {
+        crate::download_organize::FILENAME_DATE_TITLE_ID => "Upload date prefix",
+        crate::download_organize::FILENAME_PLAYLIST_INDEX_TITLE_ID => "Playlist index prefix",
+        crate::download_organize::FILENAME_TITLE_ONLY => "Title only",
+        crate::download_organize::FILENAME_CUSTOM => "Custom",
+        _ => "Title + video ID",
+    }
+}
+
+fn apply_organize_preset(settings: &mut AppSettings, preset: &str) {
+    use crate::download_organize::{
+        FILENAME_DATE_TITLE_ID, FILENAME_PLAYLIST_INDEX_TITLE_ID, FILENAME_TITLE_ID,
+        FOLDER_DATE_YM, FOLDER_FLAT, FOLDER_PLAYLIST, FOLDER_UPLOADER,
+    };
+    match preset {
+        "flat" => {
+            settings.download_organize_folder = FOLDER_FLAT.to_owned();
+            settings.download_organize_filename = FILENAME_TITLE_ID.to_owned();
+        }
+        "uploader" => {
+            settings.download_organize_folder = FOLDER_UPLOADER.to_owned();
+            settings.download_organize_filename = FILENAME_TITLE_ID.to_owned();
+        }
+        "playlist" => {
+            settings.download_organize_folder = FOLDER_PLAYLIST.to_owned();
+            settings.download_organize_filename = FILENAME_PLAYLIST_INDEX_TITLE_ID.to_owned();
+        }
+        "date" => {
+            settings.download_organize_folder = FOLDER_DATE_YM.to_owned();
+            settings.download_organize_filename = FILENAME_DATE_TITLE_ID.to_owned();
+        }
+        _ => {}
+    }
+}
+
 fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
     match preset {
         "compact" => {
@@ -761,17 +807,158 @@ impl PydlApp {
                             }
                         });
                         ui.separator();
+                        ui.label(RichText::new("Organize downloads").strong());
+                        ui.label(
+                            "Folder layout and filenames are passed to yt-dlp as the -o template.",
+                        );
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "organize_presets", |g| {
+                                if g
+                                    .secondary("Flat", true)
+                                    .clicked()
+                                {
+                                    apply_organize_preset(&mut self.settings, "flat");
+                                    changed = true;
+                                }
+                                if g
+                                    .secondary("By channel", true)
+                                    .clicked()
+                                {
+                                    apply_organize_preset(&mut self.settings, "uploader");
+                                    changed = true;
+                                }
+                                if g
+                                    .secondary("Playlist", true)
+                                    .clicked()
+                                {
+                                    apply_organize_preset(&mut self.settings, "playlist");
+                                    changed = true;
+                                }
+                                if g
+                                    .secondary("By date", true)
+                                    .clicked()
+                                {
+                                    apply_organize_preset(&mut self.settings, "date");
+                                    changed = true;
+                                }
+                            });
+                        });
+                        let organize_custom = crate::download_organize::uses_custom_template(
+                            &self.settings,
+                        );
+                        settings_form_grid(ui, "dl_organize", |ui| {
+                            ui.label("Folder layout");
+                            egui::ComboBox::from_id_salt("settings_organize_folder")
+                                .selected_text(organize_folder_label(
+                                    &self.settings.download_organize_folder,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in [
+                                        (
+                                            crate::download_organize::FOLDER_FLAT,
+                                            "Flat (output folder only)",
+                                        ),
+                                        (
+                                            crate::download_organize::FOLDER_UPLOADER,
+                                            "By uploader / channel",
+                                        ),
+                                        (
+                                            crate::download_organize::FOLDER_PLAYLIST,
+                                            "By playlist",
+                                        ),
+                                        (
+                                            crate::download_organize::FOLDER_DATE_YM,
+                                            "By year / month",
+                                        ),
+                                        (crate::download_organize::FOLDER_CUSTOM, "Custom"),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.download_organize_folder,
+                                                v.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                            ui.label("Filename style");
+                            egui::ComboBox::from_id_salt("settings_organize_filename")
+                                .selected_text(organize_filename_label(
+                                    &self.settings.download_organize_filename,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in [
+                                        (
+                                            crate::download_organize::FILENAME_TITLE_ID,
+                                            "Title + video ID",
+                                        ),
+                                        (
+                                            crate::download_organize::FILENAME_DATE_TITLE_ID,
+                                            "Upload date prefix",
+                                        ),
+                                        (
+                                            crate::download_organize::FILENAME_PLAYLIST_INDEX_TITLE_ID,
+                                            "Playlist index prefix",
+                                        ),
+                                        (
+                                            crate::download_organize::FILENAME_TITLE_ONLY,
+                                            "Title only",
+                                        ),
+                                        (crate::download_organize::FILENAME_CUSTOM, "Custom"),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.download_organize_filename,
+                                                v.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                            if organize_custom {
+                                ui.label("Custom output template (-o)");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.output_filename_template,
+                                        )
+                                        .hint_text(crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE),
+                                    )
+                                    .changed();
+                                ui.end_row();
+                            }
+                            changed |= settings_checkbox(
+                                ui,
+                                "After download, move files into organize layout",
+                                &mut self.settings.post_download_organize,
+                            );
+                            ui.label("Example path");
+                            ui.label(
+                                crate::download_organize::example_output_path(
+                                    &self.settings,
+                                    &self.output_dir,
+                                ),
+                            );
+                            ui.end_row();
+                        });
+                        if self.settings.download_organize_filename
+                            == crate::download_organize::FILENAME_TITLE_ONLY
+                        {
+                            ui.colored_label(
+                                LOG_COLOR_WARN,
+                                "Title-only filenames may make it harder to match Done downloads \
+                                 after restart.",
+                            );
+                        }
+                        ui.separator();
                         ui.label(RichText::new("Output and quality").strong());
                         settings_form_grid(ui, "dl_output_quality", |ui| {
-                            ui.label("Output filename template (-o)");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(
-                                        &mut self.settings.output_filename_template,
-                                    )
-                                    .hint_text(crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE),
-                                )
-                                .changed();
+                            ui.label("Effective -o template");
+                            ui.label(crate::ytdlp_download_args::output_filename_template(
+                                &self.settings,
+                            ));
                             ui.end_row();
                             ui.label("Quality preset");
                             egui::ComboBox::from_id_salt("settings_quality_preset")

@@ -211,6 +211,101 @@ function initWebTheme() {
   else applyWebTheme("dark");
 }
 
+const ORGANIZE_FOLDER_PREFIX = {
+  flat: "",
+  uploader: "%(uploader)s/",
+  playlist: "%(playlist_title)s/",
+  date_ym: "%(upload_date>%Y)s/%(upload_date>%m)s/",
+};
+
+const ORGANIZE_FILENAME_SUFFIX = {
+  title_id: "%(title)s [%(id)s].%(ext)s",
+  date_title_id: "%(upload_date)s - %(title)s [%(id)s].%(ext)s",
+  playlist_index_title_id: "%(playlist_index)03d - %(title)s [%(id)s].%(ext)s",
+  title_only: "%(title)s.%(ext)s",
+};
+
+function usesCustomOrganizeTemplate(settings) {
+  return (
+    settings.download_organize_folder === "custom" ||
+    settings.download_organize_filename === "custom"
+  );
+}
+
+function composeOutputTemplate(settings) {
+  if (usesCustomOrganizeTemplate(settings)) {
+    const t = (settings.output_filename_template || "").trim();
+    return t || "%(title)s [%(id)s].%(ext)s";
+  }
+  const folder = settings.download_organize_folder || "flat";
+  const filename = settings.download_organize_filename || "title_id";
+  const prefix = ORGANIZE_FOLDER_PREFIX[folder] || "";
+  const suffix = ORGANIZE_FILENAME_SUFFIX[filename] || ORGANIZE_FILENAME_SUFFIX.title_id;
+  return `${prefix}${suffix}`;
+}
+
+function exampleOrganizePath(settings) {
+  const dir = (settings.output_dir || "").trim() || "Downloads";
+  if (usesCustomOrganizeTemplate(settings)) {
+    const rel = composeOutputTemplate(settings)
+      .replace("%(title)s", "Example Video")
+      .replace("%(id)s", "abc123")
+      .replace("%(ext)s", "mp4")
+      .replace("%(uploader)s", "Example Channel")
+      .replace("%(playlist_title)s", "My Playlist")
+      .replace("%(playlist_index)03d", "001")
+      .replace("%(upload_date)s", "20240115")
+      .replace("%(upload_date>%Y)s", "2024")
+      .replace("%(upload_date>%m)s", "01");
+    return `${dir}/${rel}`;
+  }
+  const parts = [];
+  const folder = settings.download_organize_folder || "flat";
+  if (folder === "uploader") parts.push("Example Channel");
+  else if (folder === "playlist") parts.push("My Playlist");
+  else if (folder === "date_ym") parts.push("2024", "01");
+  const filename = settings.download_organize_filename || "title_id";
+  let name = "Example Video [abc123].mp4";
+  if (filename === "date_title_id") name = "20240115 - Example Video [abc123].mp4";
+  else if (filename === "playlist_index_title_id") name = "001 - Example Video [abc123].mp4";
+  else if (filename === "title_only") name = "Example Video.mp4";
+  parts.push(name);
+  return `${dir}/${parts.join("/")}`;
+}
+
+function applyOrganizePreset(settings, preset) {
+  if (preset === "flat") {
+    settings.download_organize_folder = "flat";
+    settings.download_organize_filename = "title_id";
+  } else if (preset === "uploader") {
+    settings.download_organize_folder = "uploader";
+    settings.download_organize_filename = "title_id";
+  } else if (preset === "playlist") {
+    settings.download_organize_folder = "playlist";
+    settings.download_organize_filename = "playlist_index_title_id";
+  } else if (preset === "date") {
+    settings.download_organize_folder = "date_ym";
+    settings.download_organize_filename = "date_title_id";
+  }
+}
+
+function updateOrganizeUi(settings) {
+  const custom = usesCustomOrganizeTemplate(settings || {});
+  const wrap = document.getElementById("wrap-output-template");
+  if (wrap) wrap.classList.toggle("hidden", !custom);
+  const ex = document.getElementById("organize-example-path");
+  if (ex && settings) ex.textContent = `Example: ${exampleOrganizePath(settings)}`;
+  const eff = document.getElementById("effective-output-template");
+  if (eff && settings) eff.textContent = composeOutputTemplate(settings);
+  const warn = document.getElementById("organize-title-only-warn");
+  if (warn && settings) {
+    warn.classList.toggle(
+      "hidden",
+      settings.download_organize_filename !== "title_only",
+    );
+  }
+}
+
 function applyLayoutPreset(settings, preset) {
   if (preset === "compact") {
     settings.card_list_layout = true;
@@ -635,6 +730,20 @@ function updateDownloadControlButtons(data) {
         : canStart
           ? `Start ${ready} ready download(s)`
           : "No ready items to download";
+
+  const retryFailedBtn = document.getElementById("btn-retry-failed");
+  if (retryFailedBtn) {
+    const failed = s.failed || 0;
+    const canRetryFailed = !isShuttingDown && failed > 0 && cachedHasYtDlp;
+    retryFailedBtn.disabled = !canRetryFailed;
+    retryFailedBtn.title = isShuttingDown
+      ? "Unavailable while shutting down"
+      : failed === 0
+        ? "No failed downloads"
+        : !cachedHasYtDlp
+          ? "yt-dlp not available (check Settings or Refresh tools)"
+          : `Retry ${failed} failed download(s) that still have a URL`;
+  }
 }
 
 function updateQuitButtonState() {
@@ -2051,7 +2160,10 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-output-dir", s.output_dir);
   setVal("set-yt-dlp-path", s.yt_dlp_path);
 
+  setVal("set-organize-folder", s.download_organize_folder || "flat");
+  setVal("set-organize-filename", s.download_organize_filename || "title_id");
   setVal("set-output-template", s.output_filename_template);
+  setCheck("set-post-organize", s.post_download_organize);
   setVal("set-quality", s.quality_preset);
   setVal("set-quality-custom", s.quality_format_custom);
   setVal("set-merge-container", s.merge_container);
@@ -2098,6 +2210,7 @@ function populateSettingsForm(s, commandPreview) {
 
   document.getElementById("command-preview").textContent = commandPreview || "";
   updateQualityCustomVisibility();
+  updateOrganizeUi(s);
 }
 
 function collectSettingsForm(base) {
@@ -2125,7 +2238,10 @@ function collectSettingsForm(base) {
   s.yt_dlp_path = document.getElementById("set-yt-dlp-path").value;
   s.active_profile = document.getElementById("set-active-profile").value;
 
+  s.download_organize_folder = document.getElementById("set-organize-folder").value;
+  s.download_organize_filename = document.getElementById("set-organize-filename").value;
   s.output_filename_template = document.getElementById("set-output-template").value;
+  s.post_download_organize = document.getElementById("set-post-organize").checked;
   s.quality_preset = document.getElementById("set-quality").value;
   s.quality_format_custom = document.getElementById("set-quality-custom").value;
   s.merge_container = document.getElementById("set-merge-container").value;
@@ -2293,6 +2409,11 @@ document.getElementById("btn-resume").onclick = async () => {
   await refreshAll();
 };
 
+document.getElementById("btn-retry-failed")?.addEventListener("click", async () => {
+  await api("/api/downloads/retry-failed", { method: "POST" });
+  await refreshAll();
+});
+
 document.getElementById("btn-about-brand")?.addEventListener("click", () => openAboutDialog());
 document.getElementById("btn-about-close")?.addEventListener("click", () => {
   document.getElementById("about-dialog")?.close();
@@ -2332,6 +2453,29 @@ document.querySelectorAll(".settings-tab").forEach((btn) => {
 });
 
 document.getElementById("set-quality").onchange = updateQualityCustomVisibility;
+
+function onOrganizeFieldChange() {
+  if (!cachedSettings) return;
+  const draft = collectSettingsForm(cachedSettings);
+  updateOrganizeUi(draft);
+}
+
+["set-organize-folder", "set-organize-filename", "set-output-template", "set-output-dir"].forEach(
+  (id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", onOrganizeFieldChange);
+    if (el) el.addEventListener("change", onOrganizeFieldChange);
+  },
+);
+
+document.querySelectorAll(".organize-preset-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    if (!cachedSettings) return;
+    const draft = collectSettingsForm(cachedSettings);
+    applyOrganizePreset(draft, btn.dataset.organize);
+    populateSettingsForm(draft, document.getElementById("command-preview")?.textContent || "");
+  });
+});
 
 document.getElementById("btn-apply-profile").onclick = () => {
   const name = document.getElementById("set-active-profile").value;

@@ -10,12 +10,18 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- **Organize downloads** — Settings presets for subfolders (flat, by uploader/channel, by playlist, by year/month) and filename styles (title + ID, date prefix, playlist index, title only), with quick preset buttons; optional post-download move into the same layout; advanced custom yt-dlp `-o` template still available. Per-item download profiles now apply organize rules to the output template as well.
+- **Retry all failed** on the downloader queue footer (docked and floating Videos window), command palette, and LAN web UI — retries every failed row that still has a URL (same as each card's **Retry**).
+
 ### Changed
 
 - GitHub Releases created from pushed tags now include the matching `CHANGELOG.md` section (release notes from `[Unreleased]` before finalize, or the dated version section after `release.ps1` / `release.sh`).
 
 ### Fixed
 
+- Windows: yt-dlp/ffmpeg subprocess spawn no longer fails with “The request is not supported” (os error 50) after the GUI detaches its console window.
 - Linux: invisible GUI when launched from Cursor/VS Code or after an off-screen window restore — center on startup, skip saving window position, recover visibility for the first second, and exit cleanly when the window closes (stops zombie processes that only served the LAN web UI).
 - Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).
 - Docked and floating video queue panels are resizable again (layout uses the panel/window clip height captured before shrink-wrap so dragged size persists after release; bottom-up queue body keeps footer pinned).

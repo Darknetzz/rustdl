@@ -9,6 +9,8 @@ use crate::pkg_version;
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
 
+type DownloadJob = (u64, String, Arc<AtomicBool>, Vec<String>, String);
+
 fn remove_embed_thumbnail_arg(args: &[String]) -> Vec<String> {
     args.iter()
         .filter(|arg| !arg.eq_ignore_ascii_case("--embed-thumbnail"))
@@ -154,15 +156,14 @@ pub(crate) fn spawn_download_worker(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     output_dir: String,
-    output_filename_template: String,
     yt_bin: String,
     ffmpeg_path: String,
-    urls: Vec<(u64, String, Arc<AtomicBool>, Vec<String>)>,
+    urls: Vec<DownloadJob>,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        for (item_id, target_url, cancel_flag, extra_args) in urls {
+        for (item_id, target_url, cancel_flag, extra_args, output_filename_template) in urls {
             if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                 try_send_ui(
                     &bus,

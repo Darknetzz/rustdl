@@ -444,6 +444,19 @@ fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
         });
     let (expected_size_bytes, expected_size_approx) = estimate_preview_size(entry);
     let (width, height) = estimate_preview_resolution(entry);
+    let playlist_title = entry
+        .get("playlist_title")
+        .or_else(|| entry.get("playlist"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let playlist_index = entry
+        .get("playlist_index")
+        .and_then(Value::as_u64)
+        .map(|n| n as u32);
+    let upload_date = entry
+        .get("upload_date")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     VideoPreview {
         video_id: entry
             .get("id")
@@ -464,6 +477,9 @@ fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
                     .and_then(Value::as_str)
                     .map(str::to_owned)
             }),
+        playlist_title,
+        playlist_index,
+        upload_date,
         width,
         height,
         expected_size_bytes,

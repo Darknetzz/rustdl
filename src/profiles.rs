@@ -27,6 +27,12 @@ pub struct DownloadProfileFields {
     pub quality_format_custom: String,
     pub merge_container: String,
     pub output_filename_template: String,
+    #[serde(default = "default_profile_organize_folder")]
+    pub download_organize_folder: String,
+    #[serde(default = "default_profile_organize_filename")]
+    pub download_organize_filename: String,
+    #[serde(default)]
+    pub post_download_organize: bool,
     pub yt_download_archive: String,
     pub yt_proxy: String,
     pub yt_sponsorblock_remove: bool,
@@ -43,6 +49,14 @@ pub struct DownloadProfileFields {
 
 fn default_profile_verify_output() -> bool {
     true
+}
+
+fn default_profile_organize_folder() -> String {
+    crate::download_organize::FOLDER_FLAT.to_owned()
+}
+
+fn default_profile_organize_filename() -> String {
+    crate::download_organize::FILENAME_TITLE_ID.to_owned()
 }
 
 impl Default for DownloadProfileFields {
@@ -65,6 +79,9 @@ impl Default for DownloadProfileFields {
             quality_format_custom: String::new(),
             merge_container: "default".to_owned(),
             output_filename_template: crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned(),
+            download_organize_folder: default_profile_organize_folder(),
+            download_organize_filename: default_profile_organize_filename(),
+            post_download_organize: false,
             yt_download_archive: String::new(),
             yt_proxy: String::new(),
             yt_sponsorblock_remove: false,
@@ -106,6 +123,9 @@ impl DownloadProfile {
         settings.quality_format_custom = f.quality_format_custom.clone();
         settings.merge_container = f.merge_container.clone();
         settings.output_filename_template = f.output_filename_template.clone();
+        settings.download_organize_folder = f.download_organize_folder.clone();
+        settings.download_organize_filename = f.download_organize_filename.clone();
+        settings.post_download_organize = f.post_download_organize;
         settings.yt_download_archive = f.yt_download_archive.clone();
         settings.yt_proxy = f.yt_proxy.clone();
         settings.yt_sponsorblock_remove = f.yt_sponsorblock_remove;
@@ -139,6 +159,9 @@ impl DownloadProfile {
                 quality_format_custom: settings.quality_format_custom.clone(),
                 merge_container: settings.merge_container.clone(),
                 output_filename_template: settings.output_filename_template.clone(),
+                download_organize_folder: settings.download_organize_folder.clone(),
+                download_organize_filename: settings.download_organize_filename.clone(),
+                post_download_organize: settings.post_download_organize,
                 yt_download_archive: settings.yt_download_archive.clone(),
                 yt_proxy: settings.yt_proxy.clone(),
                 yt_sponsorblock_remove: settings.yt_sponsorblock_remove,

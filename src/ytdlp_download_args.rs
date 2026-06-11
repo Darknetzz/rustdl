@@ -2,7 +2,8 @@ use std::io::Write;
 use std::path::Path;
 
 use crate::app_parsing::split_cli_like;
-use crate::config::{AppSettings, DEFAULT_OUTPUT_FILENAME_TEMPLATE};
+use crate::config::AppSettings;
+use crate::download_organize::compose_output_template;
 use crate::models::QueueItem;
 use crate::profiles::{find_profile, ProfileStore};
 use crate::ytdlp;
@@ -28,12 +29,22 @@ pub fn quality_format_args(settings: &AppSettings) -> Vec<String> {
 }
 
 pub fn output_filename_template(settings: &AppSettings) -> String {
-    let template = settings.output_filename_template.trim();
-    if template.is_empty() {
-        DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned()
-    } else {
-        template.to_owned()
+    compose_output_template(settings)
+}
+
+/// Builds the output template for a queue row, honoring optional per-item profile overrides.
+pub fn output_filename_template_for_item(
+    settings: &AppSettings,
+    profile_store: &ProfileStore,
+    item: &QueueItem,
+) -> String {
+    let mut effective = settings.clone();
+    if let Some(name) = item.profile_override.as_deref() {
+        if let Some(profile) = find_profile(profile_store, name.trim()) {
+            profile.apply_to(&mut effective);
+        }
     }
+    compose_output_template(&effective)
 }
 
 /// Retry flags, cookies, user extra args, quality, merge format, and postprocessors.
@@ -287,8 +298,30 @@ mod tests {
         s.output_filename_template = String::new();
         assert_eq!(
             output_filename_template(&s),
-            DEFAULT_OUTPUT_FILENAME_TEMPLATE
+            crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE
         );
+    }
+
+    #[test]
+    fn output_template_for_item_profile_override() {
+        use crate::profiles::{builtin_profiles, ProfileStore};
+        let mut s = base_settings();
+        s.download_organize_folder = crate::download_organize::FOLDER_UPLOADER.to_owned();
+        let store = ProfileStore {
+            user_profiles: vec![],
+        };
+        let item = QueueItem {
+            profile_override: Some("Audio only".to_owned()),
+            ..Default::default()
+        };
+        let prof = builtin_profiles()
+            .into_iter()
+            .find(|p| p.name == "Audio only")
+            .unwrap();
+        let tpl_with_profile = output_filename_template_for_item(&s, &store, &item);
+        let mut s2 = s.clone();
+        prof.apply_to(&mut s2);
+        assert_eq!(tpl_with_profile, compose_output_template(&s2));
     }
 
     #[test]

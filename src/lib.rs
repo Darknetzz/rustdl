@@ -9,6 +9,7 @@ pub mod app_ui;
 pub mod cli;
 pub mod config;
 pub mod convert_state;
+pub mod download_organize;
 pub mod disk_space;
 pub mod domain;
 pub mod external_tools;
@@ -38,7 +39,9 @@ use eframe::egui;
 use tokio::runtime::Runtime;
 
 pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
-    let mut native_options = eframe::NativeOptions {
+    // eframe only clamps restored window positions on Windows; off-screen restore on Linux
+    // can leave the window invisible. Always center instead of restoring position.
+    let native_options = eframe::NativeOptions {
         // Center on first launch so the window is easy to spot (especially on multi-monitor setups).
         centered: true,
         viewport: egui::ViewportBuilder::default()
@@ -48,14 +51,10 @@ pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
             .with_inner_size([1280.0, 880.0])
             .with_min_inner_size(app_ui::VIEWPORT_MIN_INNER)
             .with_active(true),
+        #[cfg(target_os = "linux")]
+        persist_window: false,
         ..Default::default()
     };
-    // eframe only clamps restored window positions on Windows; off-screen restore on Linux
-    // can leave the window invisible. Always center instead of restoring position.
-    #[cfg(target_os = "linux")]
-    {
-        native_options.persist_window = false;
-    }
 
     eframe::run_native(
         "rustdl",

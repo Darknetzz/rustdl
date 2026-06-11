@@ -49,6 +49,10 @@ const COMMANDS: &[PaletteCommand] = &[
         keywords: "resume continue",
     },
     PaletteCommand {
+        label: "Retry all failed",
+        keywords: "retry failed download again",
+    },
+    PaletteCommand {
         label: "Toggle activity log",
         keywords: "log show hide activity",
     },
@@ -173,6 +177,7 @@ impl PydlApp {
             "Start downloads" => self.start_downloads(),
             "Pause downloads" => self.pause_all_downloads(),
             "Resume downloads" => self.resume_all_downloads(),
+            "Retry all failed" => self.retry_failed_items(),
             "Toggle activity log" => {
                 self.settings.logs_open = !self.settings.logs_open;
                 self.persist_settings();

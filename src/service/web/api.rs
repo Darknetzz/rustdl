@@ -238,6 +238,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/downloads/resume", post(downloads_resume))
         .route("/api/downloads/cancel/:id", post(downloads_cancel))
         .route("/api/downloads/redownload/:id", post(downloads_redownload))
+        .route("/api/downloads/retry-failed", post(downloads_retry_failed))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route("/api/profiles", get(profiles_list))
@@ -638,6 +639,12 @@ async fn downloads_redownload(
             }),
         )),
     }
+}
+
+async fn downloads_retry_failed(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.retry_failed_items();
+    StatusCode::OK
 }
 
 async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {

@@ -179,7 +179,8 @@ Presets update current settings immediately, and you can still tweak any individ
 | Write auto subtitles | Download auto-generated subtitles | `--write-auto-subs` |
 | Cookies | Netscape `cookies.txt` path or browser name for `--cookies-from-browser` (e.g. `firefox`) | `--cookies` / `--cookies-from-browser` |
 | Impersonate browser | `--impersonate` target (e.g. `chrome`) for cookie-backed sites | `--impersonate` |
-| Output filename template | yt-dlp output template (default includes title and id) | `-o` template |
+| Organize downloads | Folder layout and filename presets (flat, channel, playlist, date; title + ID, etc.); optional post-download move; custom `-o` template when needed | `-o` template |
+| Output filename template | Advanced custom yt-dlp output template (used when Organize is set to Custom) | `-o` template |
 | Download archive | Skip already-archived videos; file path written by `--download-archive` | `--download-archive` |
 | Proxy | HTTP/HTTPS/SOCKS proxy URL | `--proxy` |
 | Speed limit | Max download rate (e.g. `500K`, `1M`) | `--limit-rate` |

@@ -22,7 +22,7 @@ use crate::service::background_spawn;
 use crate::transcode::EncoderChoice;
 use crate::ytdlp;
 use crate::ytdlp_download_args::{
-    build_redownload_extra_args, metadata_extra_args, output_filename_template,
+    build_redownload_extra_args, metadata_extra_args, output_filename_template_for_item,
     remove_video_ids_from_download_archive,
 };
 use crossbeam_channel::{unbounded, Receiver, Sender};
@@ -766,6 +766,67 @@ impl DownloadCore {
         )
     }
 
+    pub fn effective_settings_for_item(&self, item: &QueueItem) -> crate::config::AppSettings {
+        let mut effective = self.settings.clone();
+        if let Some(name) = item.profile_override.as_deref() {
+            if let Some(profile) = crate::profiles::find_profile(&self.profile_store, name.trim())
+            {
+                profile.apply_to(&mut effective);
+            }
+        }
+        effective
+    }
+
+    /// Move a finished download into the organize layout when enabled; logs warnings on failure.
+    pub fn apply_post_download_organize_for_item(&mut self, item_id: u64) {
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let item = self.items[idx].clone();
+        let settings = self.effective_settings_for_item(&item);
+        if !settings.post_download_organize || crate::download_organize::uses_custom_template(&settings)
+        {
+            return;
+        }
+        let output_dir = self.effective_output_dir();
+        let source = item
+            .local_path
+            .as_ref()
+            .and_then(|p| {
+                crate::domain::done_file_index::resolve_path_under_output(&output_dir, p)
+            })
+            .or_else(|| {
+                self.done_file_index
+                    .find_path_for_queue_item(&output_dir, &item)
+                    .map(|(p, _)| p)
+            });
+        let Some(source) = source else {
+            return;
+        };
+        let mut item_mut = self.items[idx].clone();
+        match crate::download_organize::apply_post_download_organize(
+            &output_dir,
+            &settings,
+            &mut item_mut,
+            &source,
+        ) {
+            Ok(Some(path)) => {
+                self.items[idx].local_path = item_mut.local_path.clone();
+                self.done_file_index.force_refresh();
+                self.append_log(&format!(
+                    "[item {item_id}] Organized download → {}",
+                    path
+                ));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                self.append_log(&format!(
+                    "[item {item_id}] Post-download organize failed: {e:#}"
+                ));
+            }
+        }
+    }
+
     /// Reorders Ready (Idle) items by drag-and-drop; returns false when ids are invalid.
     pub fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) -> bool {
         if dragged_id == target_id {
@@ -1082,11 +1143,12 @@ impl DownloadCore {
         }
         let yt_dlp_bin = self.yt_dlp_bin();
         let ffmpeg_bin = self.ffmpeg_bin();
-        let output_template = output_filename_template(&self.settings);
         let output_dir = self.effective_output_dir();
+        let profile_store = self.profile_store.clone();
 
         for ids in groups.into_iter().filter(|g| !g.is_empty()) {
             self.queue_running += 1;
+            let settings = self.settings.clone();
             let urls: Vec<_> = ids
                 .iter()
                 .filter_map(|iid| {
@@ -1103,14 +1165,15 @@ impl DownloadCore {
                     } else {
                         self.download_extra_args_for_item(&item)
                     };
-                    Some((*iid, target_url, cancel_flag, extra))
+                    let template =
+                        output_filename_template_for_item(&settings, &profile_store, &item);
+                    Some((*iid, target_url, cancel_flag, extra, template))
                 })
                 .collect();
             background_spawn::spawn_download_worker(
                 &self.runtime,
                 &self.ui_event_bus(),
                 output_dir.clone(),
-                output_template.clone(),
                 yt_dlp_bin.clone(),
                 ffmpeg_bin.clone(),
                 urls,

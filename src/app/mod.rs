@@ -248,6 +248,7 @@ pub struct PydlApp {
     /// User chose docked layout (toolbar or Settings); skip auto-undock until they undock manually.
     videos_dock_user_prefers_docked: bool,
     /// Frames elapsed since startup; used to recover invisible Wayland windows.
+    #[cfg(target_os = "linux")]
     gui_startup_frames: u8,
 }
 
@@ -419,6 +420,7 @@ impl PydlApp {
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,
             videos_dock_user_prefers_docked: false,
+            #[cfg(target_os = "linux")]
             gui_startup_frames: 0,
         };
         {

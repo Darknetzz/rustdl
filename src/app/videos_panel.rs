@@ -174,6 +174,19 @@ impl PydlApp {
             });
         });
         draw(ui, "dl_queue_maint", &mut |g| {
+            if self.status_failed > 0
+                && g
+                    .warning(
+                        &format!("{} Retry all failed", ui_icons::RETRY),
+                        true,
+                    )
+                    .on_hover_text(
+                        "Retry every failed download that still has a URL (same as each card's Retry download).",
+                    )
+                    .clicked()
+            {
+                self.retry_failed_items();
+            }
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),
@@ -283,6 +296,19 @@ impl PydlApp {
                     import_queue = true;
                 }
             });
+            if self.status_failed > 0
+                && g
+                    .warning(
+                        &format!("{} Retry all failed", ui_icons::RETRY),
+                        true,
+                    )
+                    .on_hover_text(
+                        "Retry every failed download that still has a URL (same as each card's Retry download).",
+                    )
+                    .clicked()
+            {
+                self.retry_failed_items();
+            }
             if g
                 .warning(
                     &format!("{} Re-check saved files", ui_icons::RECHECK),

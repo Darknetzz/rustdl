@@ -28,8 +28,17 @@ pub struct CliWebOnlyOptions {
 /// Drop the console window when starting the egui UI (Explorer / shortcut launch).
 #[cfg(windows)]
 pub fn detach_console_for_gui() {
-    use windows_sys::Win32::System::Console::FreeConsole;
+    use windows_sys::Win32::Foundation::HANDLE;
+    use windows_sys::Win32::System::Console::{
+        FreeConsole, SetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+    };
     unsafe {
+        // FreeConsole does not clear stdin/stdout/stderr; inherited invalid handles make
+        // Command::spawn fail with os error 50 ("The request is not supported").
+        let null_handle: HANDLE = 0;
+        let _ = SetStdHandle(STD_INPUT_HANDLE, null_handle);
+        let _ = SetStdHandle(STD_OUTPUT_HANDLE, null_handle);
+        let _ = SetStdHandle(STD_ERROR_HANDLE, null_handle);
         let _ = FreeConsole();
     }
 }

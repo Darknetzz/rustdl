@@ -215,6 +215,15 @@ pub struct AppSettings {
     /// yt-dlp output filename template (`-o`).
     #[serde(default = "default_output_filename_template")]
     pub output_filename_template: String,
+    /// Subfolder layout: `flat`, `uploader`, `playlist`, `date_ym`, or `custom`.
+    #[serde(default = "default_download_organize_folder")]
+    pub download_organize_folder: String,
+    /// Filename style: `title_id`, `date_title_id`, `playlist_index_title_id`, `title_only`, or `custom`.
+    #[serde(default = "default_download_organize_filename")]
+    pub download_organize_filename: String,
+    /// After download, move files into the organize layout when presets are active.
+    #[serde(default)]
+    pub post_download_organize: bool,
     /// Quality preset: `best`, `1080p`, `720p`, `audio`, or `custom`.
     #[serde(default = "default_quality_preset")]
     pub quality_preset: String,
@@ -322,6 +331,14 @@ fn default_theme() -> String {
 
 fn default_output_filename_template() -> String {
     DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned()
+}
+
+fn default_download_organize_folder() -> String {
+    crate::download_organize::FOLDER_FLAT.to_owned()
+}
+
+fn default_download_organize_filename() -> String {
+    crate::download_organize::FILENAME_TITLE_ID.to_owned()
 }
 
 fn default_quality_preset() -> String {
@@ -489,6 +506,9 @@ impl Default for AppSettings {
             settings_tab: default_settings_tab(),
             theme: default_theme(),
             output_filename_template: default_output_filename_template(),
+            download_organize_folder: default_download_organize_folder(),
+            download_organize_filename: default_download_organize_filename(),
+            post_download_organize: false,
             quality_preset: default_quality_preset(),
             quality_format_custom: String::new(),
             merge_container: default_merge_container(),
@@ -658,6 +678,14 @@ pub fn load_settings() -> AppSettings {
     };
     if cfg.output_filename_template.trim().is_empty() {
         cfg.output_filename_template = default_output_filename_template();
+    }
+    cfg.download_organize_folder =
+        crate::download_organize::normalize_organize_folder(&cfg.download_organize_folder);
+    cfg.download_organize_filename =
+        crate::download_organize::normalize_organize_filename(&cfg.download_organize_filename);
+    if crate::download_organize::template_implies_custom_mode(&cfg.output_filename_template) {
+        cfg.download_organize_folder = crate::download_organize::FOLDER_CUSTOM.to_owned();
+        cfg.download_organize_filename = crate::download_organize::FILENAME_CUSTOM.to_owned();
     }
     let qp = cfg.quality_preset.trim().to_ascii_lowercase();
     cfg.quality_preset = match qp.as_str() {

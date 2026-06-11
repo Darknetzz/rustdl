@@ -78,6 +78,7 @@
           <input type="search" id="queue-search" class="queue-search-input" placeholder="Title, URL, uploader…" autocomplete="off" />
         </label>
         <span class="hint">Queue:</span>
+        <button type="button" id="btn-retry-failed" class="secondary" data-icon="refresh" disabled title="No failed downloads">Retry all failed</button>
         <div class="btn-group" role="group" aria-label="Clear queue" id="queue-clear-menu"></div>
       </div>
       <div id="queue" class="queue"></div>
@@ -231,8 +232,41 @@
             </div>
           </div>
 
+          <h3>Organize downloads</h3>
+          <p class="hint">Folder layout and filenames are passed to yt-dlp as the -o template.</p>
+          <div class="btn-group layout-preset-row" role="group" aria-label="Organize presets">
+            <button type="button" class="secondary organize-preset-btn" data-organize="flat">Flat</button>
+            <button type="button" class="secondary organize-preset-btn" data-organize="uploader">By channel</button>
+            <button type="button" class="secondary organize-preset-btn" data-organize="playlist">Playlist</button>
+            <button type="button" class="secondary organize-preset-btn" data-organize="date">By date</button>
+          </div>
+          <label>Folder layout
+            <select id="set-organize-folder">
+              <option value="flat">Flat (output folder only)</option>
+              <option value="uploader">By uploader / channel</option>
+              <option value="playlist">By playlist</option>
+              <option value="date_ym">By year / month</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label>Filename style
+            <select id="set-organize-filename">
+              <option value="title_id">Title + video ID</option>
+              <option value="date_title_id">Upload date prefix</option>
+              <option value="playlist_index_title_id">Playlist index prefix</option>
+              <option value="title_only">Title only</option>
+              <option value="custom">Custom</option>
+            </select>
+          </label>
+          <label id="wrap-output-template" class="hidden">Custom output template (-o)
+            <input type="text" id="set-output-template" />
+          </label>
+          <label class="check"><input type="checkbox" id="set-post-organize" /> After download, move files into organize layout</label>
+          <p id="organize-example-path" class="hint" aria-live="polite"></p>
+          <p id="organize-title-only-warn" class="hint hidden" style="color: var(--warn, #c9a227);">Title-only filenames may make it harder to match Done downloads after restart.</p>
+
           <h3>Output and quality</h3>
-          <label>Output filename template (-o) <input type="text" id="set-output-template" /></label>
+          <p class="hint">Effective -o template: <code id="effective-output-template"></code></p>
           <label>Quality preset
             <select id="set-quality">
               <option value="best">Best</option>

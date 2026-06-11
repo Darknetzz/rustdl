@@ -403,6 +403,7 @@ impl super::core::DownloadCore {
             self.done_file_index.force_refresh();
             self.refresh_done_file_lookup();
             self.bind_local_path_for_item(item_id);
+            self.apply_post_download_organize_for_item(item_id);
             if let Some(msg) = self.verify_done_item_streams(item_id) {
                 completed = false;
                 final_detail = msg;
