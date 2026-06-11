@@ -1409,6 +1409,10 @@ impl PydlApp {
         self.add_current_url = Some(line.clone());
         self.update_status();
         self.schedule_queue_save();
+        self.mark_queue_dirty();
+        self.append_log(&format!("Refetching metadata for {line}"));
+        let shared = self.shared_core.clone();
+        core_sync::push_app_to_core(self, &shared);
         let yt_dlp_bin = self.yt_dlp_bin();
         let metadata_args = self.metadata_extra_args();
         background_spawn::spawn_url_resolve_pipeline(

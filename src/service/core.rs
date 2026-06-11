@@ -466,6 +466,13 @@ impl DownloadCore {
         self.generation = self.generation.saturating_add(1);
     }
 
+    /// Keeps monotonic item IDs when reusing an existing row (e.g. Refetch metadata).
+    pub fn bump_item_id_floor(&mut self, used_id: u64) {
+        if self.next_item_id <= used_id {
+            self.next_item_id = used_id.saturating_add(1);
+        }
+    }
+
     pub fn bump_settings_generation(&mut self) {
         self.settings_generation = self.settings_generation.saturating_add(1);
     }

@@ -285,8 +285,6 @@ impl super::core::DownloadCore {
         if keys.is_empty() {
             self.append_log(&format!("No new videos found for: {source_line}"));
             if rows.is_empty() {
-                let iid = self.next_item_id;
-                self.next_item_id += 1;
                 let item = QueueItem {
                     item_id: iid,
                     source_line: source_line.clone(),
@@ -296,20 +294,29 @@ impl super::core::DownloadCore {
                     status: ItemStatus::Idle,
                     ..Default::default()
                 };
+                self.bump_item_id_floor(iid);
                 self.items.insert(0, item);
             } else {
                 self.append_log(&format!("Already in queue (duplicate): {source_line}"));
             }
         } else {
-            for pv in keys {
-                let iid = self.next_item_id;
-                self.next_item_id += 1;
-                if let Some(ref err) = pv.error {
-                    self.append_log(&format!("[item {iid}] Metadata fetch failed: {err}"));
+            for (n, pv) in keys.into_iter().enumerate() {
+                let assign_iid = if n == 0 {
+                    iid
+                } else {
+                    let id = self.next_item_id;
+                    self.next_item_id += 1;
+                    id
+                };
+                if n == 0 {
+                    self.bump_item_id_floor(assign_iid);
                 }
-                let item = QueueItem::from_preview(iid, pv);
+                if let Some(ref err) = pv.error {
+                    self.append_log(&format!("[item {assign_iid}] Metadata fetch failed: {err}"));
+                }
+                let item = QueueItem::from_preview(assign_iid, pv);
                 self.items.insert(0, item);
-                prefetch.push(iid);
+                prefetch.push(assign_iid);
             }
         }
         self.rebuild_item_index();
