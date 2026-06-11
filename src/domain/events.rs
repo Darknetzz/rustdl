@@ -65,7 +65,13 @@ pub enum UiEvent {
     UpdateCheckDone {
         latest_version: Option<String>,
         release_url: Option<String>,
+        download_url: Option<String>,
         has_update: bool,
+        message: String,
+    },
+    UpdateDownloadDone {
+        ok: bool,
+        pending_path: Option<std::path::PathBuf>,
         message: String,
     },
     ThumbnailFetched {

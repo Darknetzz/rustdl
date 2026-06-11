@@ -72,16 +72,38 @@ impl PydlApp {
                         button_group(ui, "about_updates", |g| {
                             if g.secondary(
                                 &format!("{} Check for updates", ui_icons::UPDATE_CHECK),
-                                !self.update_check_in_progress,
+                                !self.update_check_in_progress && !self.update_download_in_progress,
                             )
                             .clicked()
                             {
                                 self.start_update_check();
                             }
-                            if self.update_has_update
+                            if self.update_pending_path.is_some()
                                 && g.success(
                                     &format!(
-                                        "{} Update now (open release page)",
+                                        "{} Restart to apply update",
+                                        ui_icons::UPDATE_OPEN
+                                    ),
+                                    !self.update_download_in_progress,
+                                )
+                                .clicked()
+                            {
+                                self.apply_pending_update_and_exit();
+                            }
+                            else if self.update_has_update
+                                && self.update_download_url.is_some()
+                                && g.success(
+                                    &format!("{} Download update", ui_icons::UPDATE_OPEN),
+                                    !self.update_download_in_progress,
+                                )
+                                .clicked()
+                            {
+                                self.start_update_download();
+                            }
+                            else if self.update_has_update
+                                && g.success(
+                                    &format!(
+                                        "{} Open release page",
                                         ui_icons::UPDATE_OPEN
                                     ),
                                     true,
@@ -92,7 +114,7 @@ impl PydlApp {
                             }
                         });
                     });
-                    if self.update_check_in_progress {
+                    if self.update_check_in_progress || self.update_download_in_progress {
                         ui.spinner();
                     }
                 });
@@ -104,11 +126,11 @@ impl PydlApp {
                     );
                 }
                 if let Some(latest) = &self.update_latest_version {
-                    ui.label(format!("Latest release: {latest}"));
+                    ui.label(format!("Latest GitHub release: {latest}"));
                 }
                 ui.label(
                     RichText::new(
-                        "Updater behavior: opens the latest release page for safe manual install.",
+                        "Checks Darknetzz/rustdl on GitHub. On Windows, Download update fetches rustdl.exe and Restart replaces the running binary.",
                     )
                     .small()
                     .color(Color32::GRAY),

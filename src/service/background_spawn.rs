@@ -37,23 +37,60 @@ pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, bus: &UiEventBus, client: re
     let rt = rt.clone();
     rt.spawn(async move {
         let result = crate::app::update_check::check_latest_release_async(&client).await;
-        let (latest_version, release_url, has_update, message) = match result {
-            Ok((latest, url, newer)) => {
+        let (latest_version, release_url, download_url, has_update, message) = match result {
+            Ok((latest, url, asset_url, newer)) => {
                 let msg = if newer {
-                    format!("Update available: {latest}")
+                    if asset_url.is_some() {
+                        format!("Update available: {latest} (download from GitHub releases)")
+                    } else {
+                        format!("Update available: {latest} (open release page to download)")
+                    }
                 } else {
                     format!("You are up to date ({})", pkg_version::VERSION)
                 };
-                (Some(latest), Some(url), newer, msg)
+                (Some(latest), Some(url), asset_url, newer, msg)
             }
-            Err(e) => (None, None, false, format!("Update check failed: {e}")),
+            Err(e) => (None, None, None, false, format!("Update check failed: {e}")),
         };
         try_send_ui(
             &bus,
             UiEvent::UpdateCheckDone {
                 latest_version,
                 release_url,
+                download_url,
                 has_update,
+                message,
+            },
+        );
+    });
+}
+
+pub(crate) fn spawn_update_download(
+    rt: &Arc<Runtime>,
+    bus: &UiEventBus,
+    client: reqwest::Client,
+    download_url: String,
+    version: String,
+) {
+    let bus = bus.clone();
+    let rt = rt.clone();
+    rt.spawn(async move {
+        let result =
+            crate::app::update_check::download_release_asset_async(&client, &download_url, &version)
+                .await;
+        let (ok, pending_path, message) = match result {
+            Ok(path) => (
+                true,
+                Some(path),
+                "Update downloaded. Restart rustdl to apply.".to_owned(),
+            ),
+            Err(e) => (false, None, format!("Update download failed: {e}")),
+        };
+        try_send_ui(
+            &bus,
+            UiEvent::UpdateDownloadDone {
+                ok,
+                pending_path,
                 message,
             },
         );

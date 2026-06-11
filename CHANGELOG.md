@@ -10,6 +10,14 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- About **Check for updates** no longer fails with HTTP 404 when GitHub has releases but `/releases/latest` is empty; release tags like `rustdl-v0.5.0` are parsed correctly for version comparison.
+
+### Added
+
+- About **Download update** (Windows) fetches `rustdl.exe` from the latest GitHub release; **Restart to apply update** swaps the running binary and relaunches.
+
 ## [0.5.0] - 2026-06-12
 
 

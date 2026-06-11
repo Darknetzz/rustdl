@@ -190,8 +190,11 @@ pub struct PydlApp {
     /// Avoid repeating desktop notifications for the same idle spell.
     session_complete_notified: bool,
     update_check_in_progress: bool,
+    update_download_in_progress: bool,
     update_latest_version: Option<String>,
     update_release_url: Option<String>,
+    update_download_url: Option<String>,
+    update_pending_path: Option<std::path::PathBuf>,
     update_has_update: bool,
     update_status_text: String,
     convert_mode: bool,
@@ -382,8 +385,11 @@ impl PydlApp {
             downloads_paused: false,
             session_complete_notified: false,
             update_check_in_progress: false,
+            update_download_in_progress: false,
             update_latest_version: None,
             update_release_url: None,
+            update_download_url: None,
+            update_pending_path: None,
             update_has_update: false,
             update_status_text: String::new(),
             convert_mode,
@@ -481,6 +487,7 @@ impl PydlApp {
             || self.status_active > 0
             || self.queue_running > 0
             || self.update_check_in_progress
+            || self.update_download_in_progress
             || !self.thumbnail_inflight.is_empty()
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
@@ -1078,8 +1085,49 @@ impl PydlApp {
             return;
         }
         self.update_check_in_progress = true;
-        self.update_status_text = "Checking for updates...".to_owned();
+        self.update_pending_path = None;
+        self.update_status_text = "Checking GitHub releases...".to_owned();
         background_spawn::spawn_update_check(&self.runtime, &self.ui_bus, self.http_client.clone());
+    }
+
+    fn start_update_download(&mut self) {
+        if self.update_download_in_progress {
+            return;
+        }
+        let (Some(url), Some(version)) = (
+            self.update_download_url.clone(),
+            self.update_latest_version.clone(),
+        ) else {
+            self.open_release_url();
+            return;
+        };
+        self.update_download_in_progress = true;
+        self.update_pending_path = None;
+        self.update_status_text = format!("Downloading rustdl {version}...");
+        background_spawn::spawn_update_download(
+            &self.runtime,
+            &self.ui_bus,
+            self.http_client.clone(),
+            url,
+            version,
+        );
+    }
+
+    fn apply_pending_update_and_exit(&mut self) {
+        let Some(path) = self.update_pending_path.clone() else {
+            self.append_log("No downloaded update is ready to apply.");
+            return;
+        };
+        match crate::app::update_check::schedule_apply_downloaded_update(&path) {
+            Ok(()) => {
+                self.append_log("Applying update and restarting rustdl...");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                self.update_status_text = e.clone();
+                self.append_log(&e);
+            }
+        }
     }
 
     fn open_release_url(&mut self) {

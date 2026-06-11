@@ -52,13 +52,29 @@ impl PydlApp {
                 UiEvent::UpdateCheckDone {
                     latest_version,
                     release_url,
+                    download_url,
                     has_update,
                     message,
                 } => {
                     self.update_check_in_progress = false;
                     self.update_latest_version = latest_version;
                     self.update_release_url = release_url;
+                    self.update_download_url = download_url;
                     self.update_has_update = has_update;
+                    self.update_status_text = message;
+                    if !has_update {
+                        self.update_pending_path = None;
+                    }
+                }
+                UiEvent::UpdateDownloadDone {
+                    ok,
+                    pending_path,
+                    message,
+                } => {
+                    self.update_download_in_progress = false;
+                    if ok {
+                        self.update_pending_path = pending_path;
+                    }
                     self.update_status_text = message;
                 }
                 UiEvent::ThumbnailFetched { item_id, image } => {
