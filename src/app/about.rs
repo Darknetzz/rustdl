@@ -91,7 +91,7 @@ impl PydlApp {
                                 self.apply_pending_update_and_exit();
                             }
                             else if self.update_has_update
-                                && self.update_download_url.is_some()
+                                && self.update_download_asset.is_some()
                                 && g.success(
                                     &format!("{} Download update", ui_icons::UPDATE_OPEN),
                                     !self.update_download_in_progress,
@@ -130,7 +130,9 @@ impl PydlApp {
                 }
                 ui.label(
                     RichText::new(
-                        "Checks Darknetzz/rustdl on GitHub. On Windows, Download update fetches rustdl.exe and Restart replaces the running binary.",
+                        "Checks GitHub releases for Darknetzz/rustdl. Private repos need a token in \
+                         Settings → Shared. On Windows, Download update fetches rustdl.exe and Restart \
+                         replaces the running binary.",
                     )
                     .small()
                     .color(Color32::GRAY),

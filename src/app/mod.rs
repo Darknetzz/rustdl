@@ -193,7 +193,7 @@ pub struct PydlApp {
     update_download_in_progress: bool,
     update_latest_version: Option<String>,
     update_release_url: Option<String>,
-    update_download_url: Option<String>,
+    update_download_asset: Option<crate::app::update_check::PlatformReleaseAsset>,
     update_pending_path: Option<std::path::PathBuf>,
     update_has_update: bool,
     update_status_text: String,
@@ -388,7 +388,7 @@ impl PydlApp {
             update_download_in_progress: false,
             update_latest_version: None,
             update_release_url: None,
-            update_download_url: None,
+            update_download_asset: None,
             update_pending_path: None,
             update_has_update: false,
             update_status_text: String::new(),
@@ -1087,15 +1087,21 @@ impl PydlApp {
         self.update_check_in_progress = true;
         self.update_pending_path = None;
         self.update_status_text = "Checking GitHub releases...".to_owned();
-        background_spawn::spawn_update_check(&self.runtime, &self.ui_bus, self.http_client.clone());
+        let github_token = crate::config::resolve_github_token(&self.settings);
+        background_spawn::spawn_update_check(
+            &self.runtime,
+            &self.ui_bus,
+            self.http_client.clone(),
+            github_token,
+        );
     }
 
     fn start_update_download(&mut self) {
         if self.update_download_in_progress {
             return;
         }
-        let (Some(url), Some(version)) = (
-            self.update_download_url.clone(),
+        let (Some(asset), Some(version)) = (
+            self.update_download_asset.clone(),
             self.update_latest_version.clone(),
         ) else {
             self.open_release_url();
@@ -1104,12 +1110,14 @@ impl PydlApp {
         self.update_download_in_progress = true;
         self.update_pending_path = None;
         self.update_status_text = format!("Downloading rustdl {version}...");
+        let github_token = crate::config::resolve_github_token(&self.settings);
         background_spawn::spawn_update_download(
             &self.runtime,
             &self.ui_bus,
             self.http_client.clone(),
-            url,
+            asset,
             version,
+            github_token,
         );
     }
 

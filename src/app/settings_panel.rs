@@ -451,6 +451,26 @@ impl PydlApp {
                             ui.end_row();
                         });
                         ui.separator();
+                        ui.label(RichText::new("GitHub releases").strong());
+                        ui.label(
+                            RichText::new(
+                                "Personal access token for About → Check for updates when the repository is private. \
+                                 Read access to repository contents is enough. You can also set RUSTDL_GITHUB_TOKEN.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        settings_form_grid(ui, "shared_github", |ui| {
+                            ui.label("GitHub token");
+                            let resp = ui.add(
+                                egui::TextEdit::singleline(&mut self.settings.github_token)
+                                    .password(true)
+                                    .hint_text("ghp_… or github_pat_…"),
+                            );
+                            changed |= resp.changed();
+                            ui.end_row();
+                        });
+                        ui.separator();
                         ui.label(RichText::new("Settings portability").strong());
                         left_button_row(ui, |ui| {
                             let mut export_settings = false;

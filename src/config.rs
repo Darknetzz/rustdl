@@ -269,6 +269,9 @@ pub struct AppSettings {
     /// Bearer / `X-Rustdl-Token` value required for API access.
     #[serde(default)]
     pub web_auth_token: String,
+    /// GitHub personal access token for in-app update checks (required when the repo is private).
+    #[serde(default)]
+    pub github_token: String,
     /// Last queue search filter text (Downloader queue panel / web UI).
     #[serde(default)]
     pub queue_search: String,
@@ -307,6 +310,23 @@ pub fn session_restore_auto_load(preference: &str) -> bool {
 
 pub fn session_restore_discard_on_startup(preference: &str) -> bool {
     preference.trim().eq_ignore_ascii_case("never")
+}
+
+/// GitHub token for release API calls: settings field, then `RUSTDL_GITHUB_TOKEN`, then `GITHUB_TOKEN`.
+pub fn resolve_github_token(settings: &AppSettings) -> Option<String> {
+    let from_settings = settings.github_token.trim();
+    if !from_settings.is_empty() {
+        return Some(from_settings.to_owned());
+    }
+    for var in ["RUSTDL_GITHUB_TOKEN", "GITHUB_TOKEN"] {
+        if let Ok(value) = std::env::var(var) {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_owned());
+            }
+        }
+    }
+    None
 }
 
 /// Generates a random token when enabling the web UI for the first time.
@@ -524,6 +544,7 @@ impl Default for AppSettings {
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
+            github_token: String::new(),
             queue_search: String::new(),
             log_filter: default_log_filter(),
             session_restore_preference: default_session_restore_preference(),

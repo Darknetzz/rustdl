@@ -52,16 +52,28 @@ impl PydlApp {
                 UiEvent::UpdateCheckDone {
                     latest_version,
                     release_url,
-                    download_url,
+                    download_browser_url,
+                    download_api_url,
                     has_update,
                     message,
                 } => {
                     self.update_check_in_progress = false;
                     self.update_latest_version = latest_version;
                     self.update_release_url = release_url;
-                    self.update_download_url = download_url;
+                    self.update_download_asset = download_browser_url.map(|browser_download_url| {
+                        crate::app::update_check::PlatformReleaseAsset {
+                            browser_download_url,
+                            api_url: download_api_url.unwrap_or_default(),
+                        }
+                    });
                     self.update_has_update = has_update;
-                    self.update_status_text = message;
+                    self.update_status_text = if message.starts_with("GitHub returned")
+                        || message.starts_with("No published")
+                    {
+                        format!("Update check failed: {message}")
+                    } else {
+                        message
+                    };
                     if !has_update {
                         self.update_pending_path = None;
                     }

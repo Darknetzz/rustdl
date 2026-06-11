@@ -32,32 +32,50 @@ fn should_retry_without_embed_thumbnail(extra_args: &[String], err_text: &str) -
         || msg.contains("conversion failed")
 }
 
-pub(crate) fn spawn_update_check(rt: &Arc<Runtime>, bus: &UiEventBus, client: reqwest::Client) {
+pub(crate) fn spawn_update_check(
+    rt: &Arc<Runtime>,
+    bus: &UiEventBus,
+    client: reqwest::Client,
+    github_token: Option<String>,
+) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        let result = crate::app::update_check::check_latest_release_async(&client).await;
-        let (latest_version, release_url, download_url, has_update, message) = match result {
-            Ok((latest, url, asset_url, newer)) => {
+        let token_ref = github_token.as_deref();
+        let result =
+            crate::app::update_check::check_latest_release_async(&client, token_ref).await;
+        let (
+            latest_version,
+            release_url,
+            download_browser_url,
+            download_api_url,
+            has_update,
+            message,
+        ) = match result {
+            Ok((latest, url, asset, newer)) => {
+                let (browser, api) = asset
+                    .map(|a| (Some(a.browser_download_url), Some(a.api_url)))
+                    .unwrap_or((None, None));
                 let msg = if newer {
-                    if asset_url.is_some() {
-                        format!("Update available: {latest} (download from GitHub releases)")
+                    if browser.is_some() {
+                        format!("Update available: {latest}")
                     } else {
                         format!("Update available: {latest} (open release page to download)")
                     }
                 } else {
                     format!("You are up to date ({})", pkg_version::VERSION)
                 };
-                (Some(latest), Some(url), asset_url, newer, msg)
+                (Some(latest), Some(url), browser, api, newer, msg)
             }
-            Err(e) => (None, None, None, false, format!("Update check failed: {e}")),
+            Err(e) => (None, None, None, None, false, e),
         };
         try_send_ui(
             &bus,
             UiEvent::UpdateCheckDone {
                 latest_version,
                 release_url,
-                download_url,
+                download_browser_url,
+                download_api_url,
                 has_update,
                 message,
             },
@@ -69,22 +87,27 @@ pub(crate) fn spawn_update_download(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     client: reqwest::Client,
-    download_url: String,
+    asset: crate::app::update_check::PlatformReleaseAsset,
     version: String,
+    github_token: Option<String>,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
-        let result =
-            crate::app::update_check::download_release_asset_async(&client, &download_url, &version)
-                .await;
+        let result = crate::app::update_check::download_release_asset_async(
+            &client,
+            &asset,
+            &version,
+            github_token.as_deref(),
+        )
+        .await;
         let (ok, pending_path, message) = match result {
             Ok(path) => (
                 true,
                 Some(path),
                 "Update downloaded. Restart rustdl to apply.".to_owned(),
             ),
-            Err(e) => (false, None, format!("Update download failed: {e}")),
+            Err(e) => (false, None, e),
         };
         try_send_ui(
             &bus,

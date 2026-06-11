@@ -13,10 +13,12 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - About **Check for updates** no longer fails with HTTP 404 when GitHub has releases but `/releases/latest` is empty; release tags like `rustdl-v0.5.0` are parsed correctly for version comparison.
+- **Check for updates** on **private GitHub repositories**: optional **GitHub releases token** in Settings → Shared (or `RUSTDL_GITHUB_TOKEN`); clearer 404 message when the repo is private and no token is configured.
 
 ### Added
 
 - About **Download update** (Windows) fetches `rustdl.exe` from the latest GitHub release; **Restart to apply update** swaps the running binary and relaunches.
+- Settings → Shared → **GitHub token** for authenticated release API access (private repos).
 
 ## [0.5.0] - 2026-06-12
 
