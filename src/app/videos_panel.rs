@@ -107,6 +107,10 @@ impl PydlApp {
         let mut cancel_all_ready = false;
         let mut cancel_all_remove = false;
         let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
+        let has_idle_ready = self
+            .items
+            .iter()
+            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
         let draw = |ui: &mut egui::Ui,
                     id: &str,
                     add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
@@ -117,6 +121,16 @@ impl PydlApp {
             }
         };
         draw(ui, "dl_queue_transport", &mut |g| {
+            if has_idle_ready
+                && g
+                    .success(
+                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                        true,
+                    )
+                    .clicked()
+            {
+                self.start_downloads();
+            }
             if self.downloads_paused {
                 if g.success(
                     &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
@@ -235,6 +249,10 @@ impl PydlApp {
         let mut cancel_all_ready = false;
         let mut cancel_all_remove = false;
         let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
+        let has_idle_ready = self
+            .items
+            .iter()
+            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
                 compact_button_group(ui, "dl_queue_actions", |g| add(g));
@@ -243,6 +261,16 @@ impl PydlApp {
             }
         };
         draw(ui, &mut |g| {
+            if has_idle_ready
+                && g
+                    .success(
+                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                        true,
+                    )
+                    .clicked()
+            {
+                self.start_downloads();
+            }
             if self.downloads_paused {
                 if g.success(
                     &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
