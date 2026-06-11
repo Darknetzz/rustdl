@@ -176,11 +176,17 @@ try {
     }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+    $notesFile = Join-Path $RepoRoot 'release-notes.md'
+    & (Join-Path $PSScriptRoot 'extract_release_notes.ps1') -Tag $tag -OutFile $notesFile
+
     Write-Host ''
     Write-Host "Created commit and tag $tag."
+    Write-Host "Release notes: $notesFile (gitignored temp file for gh release create)"
     Write-Host 'Next:'
     Write-Host "  git push $Remote dev"
     Write-Host "  git push $Remote $tag"
+    Write-Host "  .\scripts\build_binary.ps1"
+    Write-Host "  gh release create $tag --title `"rustdl $version`" --notes-file release-notes.md target\release\rustdl.exe"
 
     if ($Push) {
         git push $Remote dev

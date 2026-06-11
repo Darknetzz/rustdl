@@ -219,8 +219,12 @@ else
   git tag -a "$tag" -m "rustdl ${version}"
 fi
 
+notes_file="${repo_root}/release-notes.md"
+./scripts/extract_release_notes.sh CHANGELOG.md "$tag" >"$notes_file"
+
 echo
 echo "Created commit and tag $tag."
+echo "Release notes: $notes_file (gitignored temp file for gh release create)"
 
 if [[ "$do_push" -eq 1 ]]; then
   git push "$remote" dev
@@ -230,4 +234,6 @@ else
   echo "Next:"
   echo "  git push $remote dev"
   echo "  git push $remote $tag"
+  echo "  ./scripts/build_binary.sh"
+  echo "  gh release create $tag --title \"rustdl $version\" --notes-file release-notes.md target/release/rustdl"
 fi

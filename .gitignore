@@ -9,3 +9,4 @@ venv/
 .env
 *.log
 target/
+release-notes.md
