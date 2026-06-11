@@ -1,10 +1,9 @@
+# Disabled for automatic runs — build with scripts/build_binary.ps1|.sh and publish with gh locally.
+# Manual dispatch only — does not run on tag push.
 name: release
 
 on:
-  push:
-    tags:
-      - "rustdl-v*"
-      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write

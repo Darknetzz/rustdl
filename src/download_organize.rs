@@ -21,7 +21,14 @@ pub const FILENAME_TITLE_ONLY: &str = "title_only";
 pub const FILENAME_CUSTOM: &str = "custom";
 
 const SIDECAR_EXTENSIONS: &[&str] = &[
-    "info.json", "description", "annotations.xml", "meta.json", "vtt", "srt", "ass", "lrc",
+    "info.json",
+    "description",
+    "annotations.xml",
+    "meta.json",
+    "vtt",
+    "srt",
+    "ass",
+    "lrc",
 ];
 
 /// Default preset template: flat folder + title with id.
@@ -142,9 +149,7 @@ pub fn example_output_path(settings: &AppSettings, output_dir: &str) -> String {
         }
         let name = match settings.download_organize_filename.as_str() {
             FILENAME_DATE_TITLE_ID => "20240115 - Example Video [abc123].mp4".to_owned(),
-            FILENAME_PLAYLIST_INDEX_TITLE_ID => {
-                "001 - Example Video [abc123].mp4".to_owned()
-            }
+            FILENAME_PLAYLIST_INDEX_TITLE_ID => "001 - Example Video [abc123].mp4".to_owned(),
             FILENAME_TITLE_ONLY => "Example Video.mp4".to_owned(),
             _ => "Example Video [abc123].mp4".to_owned(),
         };
@@ -308,12 +313,9 @@ fn sidecar_paths_for_stem(parent: &Path, stem: &str) -> Vec<PathBuf> {
         .map(|e| e.path())
         .filter(|p| {
             p.is_file()
-                && p.file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| {
-                        n.starts_with(&prefix)
-                            && SIDECAR_EXTENSIONS.iter().any(|ext| n.ends_with(ext))
-                    })
+                && p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                    n.starts_with(&prefix) && SIDECAR_EXTENSIONS.iter().any(|ext| n.ends_with(ext))
+                })
         })
         .collect()
 }
@@ -334,32 +336,17 @@ pub fn apply_post_download_organize(
     }
     let target = unique_target_path(target);
     if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).with_context(|| {
-            format!("create organize folder {}", parent.to_string_lossy())
-        })?;
+        fs::create_dir_all(parent)
+            .with_context(|| format!("create organize folder {}", parent.to_string_lossy()))?;
     }
-    fs::rename(source, &target).with_context(|| {
-        format!(
-            "move {} -> {}",
-            source.display(),
-            target.display()
-        )
-    })?;
+    fs::rename(source, &target)
+        .with_context(|| format!("move {} -> {}", source.display(), target.display()))?;
     let old_parent = source.parent().unwrap_or(Path::new(output_dir));
-    let old_stem = source
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
-    let new_stem = target
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("");
+    let old_stem = source.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+    let new_stem = target.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     let new_parent = target.parent().unwrap_or(Path::new(output_dir));
     for sidecar in sidecar_paths_for_stem(old_parent, old_stem) {
-        let fname = sidecar
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let fname = sidecar.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let suffix = fname.strip_prefix(&format!("{old_stem}.")).unwrap_or(fname);
         let dest = new_parent.join(format!("{new_stem}.{suffix}"));
         if sidecar != dest {
@@ -386,10 +373,7 @@ mod tests {
     #[test]
     fn compose_flat_title_id() {
         let s = base_settings();
-        assert_eq!(
-            compose_output_template(&s),
-            "%(title)s [%(id)s].%(ext)s"
-        );
+        assert_eq!(compose_output_template(&s), "%(title)s [%(id)s].%(ext)s");
     }
 
     #[test]
@@ -428,10 +412,7 @@ mod tests {
         let mut s = base_settings();
         s.download_organize_folder = FOLDER_CUSTOM.to_owned();
         s.output_filename_template = "%(channel)s/%(title)s.%(ext)s".to_owned();
-        assert_eq!(
-            compose_output_template(&s),
-            "%(channel)s/%(title)s.%(ext)s"
-        );
+        assert_eq!(compose_output_template(&s), "%(channel)s/%(title)s.%(ext)s");
     }
 
     #[test]

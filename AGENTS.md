@@ -41,13 +41,14 @@ cargo run -- --download URL  # headless download
 cargo check                  # fast compile check when exe is locked
 ```
 
-Before a PR, match CI (`.github/workflows/ci.yml`):
+Before a PR, run the local CI script (GitHub Actions workflows are manual-only to avoid runner cost):
 
-```bash
-cargo fmt --all -- --check
-cargo clippy --all-targets --all-features -- -D warnings
-cargo test --all-targets --all-features
-```
+| Platform | Command |
+|----------|---------|
+| Windows (PowerShell) | `.\scripts\ci_local.ps1` |
+| Linux / macOS | `./scripts/ci_local.sh` |
+
+Includes `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`. Pass `-SkipDeny` / `-SkipAudit` (or `--skip-deny` / `--skip-audit`) to skip the optional tools.
 
 MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 
@@ -108,7 +109,7 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 
    Default is **patch** (`0.4.6` → `0.4.7`). Skip bumps for trivial fixes and non-user-facing work.
 
-   **Tag on every bump:** the bump scripts create an annotated tag `rustdl-vX.Y.Z` on `HEAD` when that commit already contains the new `Cargo.toml` version. After a manual version edit, commit first, then run `.\scripts\bump_version.ps1 -TagOnly` or `./scripts/bump_version.sh --tag-only`. **Do not push** `rustdl-v*` tags until release day (push triggers `.github/workflows/release.yml`). `release.ps1` / `release.sh` move an existing bump tag to the release commit with `-f`.
+   **Tag on every bump:** the bump scripts create an annotated tag `rustdl-vX.Y.Z` on `HEAD` when that commit already contains the new `Cargo.toml` version. After a manual version edit, commit first, then run `.\scripts\bump_version.ps1 -TagOnly` or `./scripts/bump_version.sh --tag-only`. **Do not push** `rustdl-v*` tags until release day. `release.ps1` / `release.sh` move an existing bump tag to the release commit with `-f`.
 
 3. **Before opening a PR** → run CI checks locally (see **Running and testing locally**).
 
@@ -165,32 +166,13 @@ The script runs `cargo fmt --check`, `clippy`, and `test` unless you pass `-Skip
 4. Commit on `dev` (`release: vX.Y.Z`).
 5. `git tag rustdl-vX.Y.Z` then `git push github dev` and `git push github rustdl-vX.Y.Z`.
 
-After the tag push, `.github/workflows/release.yml` builds Linux / Windows / macOS binaries and opens a GitHub Release. Mirror to GitLab separately if needed (`git push gitlab dev --tags`).
+Build release binaries locally (`.\scripts\build_binary.ps1` / `./scripts/build_binary.sh`); publish with `gh release create` / `gh release upload` if desired. Mirror to GitLab separately if needed (`git push gitlab dev --tags`).
 
 **First release / missing older tags:** compare links use `rustdl-vPREV...rustdl-vX.Y.Z`. If `rustdl-vPREV` was never pushed (this repo had changelog-only versions before tagging), either backfill that tag on the old release commit or accept that the compare URL works only after both tags exist.
 
-### Release workflow (`.github/workflows/release.yml`)
+### GitHub Actions (optional, manual only)
 
-Triggered by pushing a tag matching `rustdl-v*` or `v*`.
-
-| Job | What it does |
-|-----|----------------|
-| **build** (matrix) | `cargo build --release` for `x86_64-unknown-linux-gnu`, `x86_64-pc-windows-msvc`, `x86_64-apple-darwin`, `aarch64-apple-darwin`; uploads `rustdl` / `rustdl.exe` artifacts. |
-| **release** | Downloads artifacts; builds release notes from `CHANGELOG.md` at the tag via `scripts/extract_release_notes.sh` (dated `## [X.Y.Z]` section, or `## [Unreleased]` if that section is not present yet); creates or updates a GitHub Release with title `rustdl X.Y.Z` and attaches all binaries. |
-
-Requires `contents: write` on the repo. Pushing any `rustdl-v*` / `v*` tag triggers this workflow (including bump tags if you push them early).
-
-### CI workflow (`.github/workflows/ci.yml`)
-
-Runs on pushes to `dev` and on pull requests:
-
-| Job | Checks |
-|-----|--------|
-| **test-linux** | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`; on `dev` pushes only: `cargo deny`, `cargo audit`. |
-| **test-windows** | `cargo clippy`, `cargo test`. |
-| **test-macos** | `cargo clippy`, `cargo test`. |
-
-Fix clippy/fmt/test failures before tagging a release.
+`.github/workflows/ci.yml` and `.github/workflows/release.yml` are **`workflow_dispatch` only** (no runs on push, PR, or tag) to avoid GitHub runner cost. Use `scripts/ci_local.ps1` / `ci_local.sh` and local build/release scripts instead. Workflows remain in the repo for emergency manual runs from the GitHub Actions UI if needed.
 
 ## Agent conventions
 

@@ -7,10 +7,10 @@ use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
     compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
-    draw_status_dot, fill_allocated_rect, height_to_bottom, left_button_row,
-    finite_ui_span, note_resizable_panel_height, persist_resizable_window_size,
-    queue_footer_toolbar_reserve, show_mode_panel, status_color, with_full_width,
-    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    draw_status_dot, fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
+    note_resizable_panel_height, persist_resizable_window_size, queue_footer_toolbar_reserve,
+    show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
@@ -86,8 +86,7 @@ impl PydlApp {
     fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32, scroll_id: &str) {
         let min_h = queue_list_min_scroll_h(scroll_id);
         let cap = bounded_ui_height(ui, min_h).max(min_h);
-        let scroll_h = finite_ui_span(scroll_h, min_h)
-            .clamp(min_h, cap);
+        let scroll_h = finite_ui_span(scroll_h, min_h).clamp(min_h, cap);
         let w = content_width(ui).max(1.0);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             ui.set_min_height(scroll_h);
@@ -523,13 +522,16 @@ impl PydlApp {
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
-        let body_bottom = layout.body_bottom.filter(|y| y.is_finite()).unwrap_or_else(|| {
-            if ui.max_rect().bottom().is_finite() {
-                ui.max_rect().bottom()
-            } else {
-                ui.clip_rect().bottom()
-            }
-        });
+        let body_bottom = layout
+            .body_bottom
+            .filter(|y| y.is_finite())
+            .unwrap_or_else(|| {
+                if ui.max_rect().bottom().is_finite() {
+                    ui.max_rect().bottom()
+                } else {
+                    ui.clip_rect().bottom()
+                }
+            });
 
         if !self.convert_mode {
             self.draw_queue_search_row(ui);
@@ -556,10 +558,8 @@ impl PydlApp {
         } else {
             0.0
         };
-        let bottom_reserve = queue_footer_toolbar_reserve(content_width(ui))
-            + log_bar
-            + log_lines_reserve
-            + 4.0;
+        let bottom_reserve =
+            queue_footer_toolbar_reserve(content_width(ui)) + log_bar + log_lines_reserve + 4.0;
         let min_list = queue_list_min_scroll_h(layout.scroll_id);
         let list_h = (height_to_bottom(ui, body_bottom) - bottom_reserve).max(min_list);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id);
@@ -817,9 +817,11 @@ impl PydlApp {
     pub(super) fn draw_queue_footer(&mut self, ui: &mut egui::Ui) {
         let log_docked = self.settings.logs_open && self.settings.logs_docked;
         if log_docked {
-            let panel_h =
-                finite_ui_span(ui.clip_rect().height(), self.settings.undocked_footer_height)
-                    .max(180.0);
+            let panel_h = finite_ui_span(
+                ui.clip_rect().height(),
+                self.settings.undocked_footer_height,
+            )
+            .max(180.0);
             let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
             allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
                 fill_allocated_rect(ui);
@@ -919,10 +921,10 @@ impl PydlApp {
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 6.0;
             // Size from the window body (`max_rect`), not viewport `clip_rect`.
-            let body_h = finite_ui_span(ui.max_rect().height(), self.settings.video_float_height)
-                .max(320.0);
-            let body_w = finite_ui_span(ui.max_rect().width(), self.settings.video_float_width)
-                .max(480.0);
+            let body_h =
+                finite_ui_span(ui.max_rect().height(), self.settings.video_float_height).max(320.0);
+            let body_w =
+                finite_ui_span(ui.max_rect().width(), self.settings.video_float_width).max(480.0);
             allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
                 fill_allocated_rect(ui);
                 let body_bottom = ui.max_rect().bottom();

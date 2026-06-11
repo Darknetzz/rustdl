@@ -6,10 +6,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    allocate_top_down_rect, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, content_width, fill_allocated_rect,
-    finite_ui_span, height_to_bottom, left_button_row, persist_resizable_window_size,
-    secondary_button,
+    allocate_top_down_rect, button_group, button_toolbar_wrapped, compact_button_group,
+    consume_remaining_ui_space, content_width, fill_allocated_rect, finite_ui_span,
+    height_to_bottom, left_button_row, persist_resizable_window_size, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};

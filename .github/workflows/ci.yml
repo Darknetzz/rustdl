@@ -1,9 +1,9 @@
+# Disabled for automatic runs (use scripts/ci_local.ps1 or scripts/ci_local.sh locally).
+# Manual dispatch only — does not run on push/PR.
 name: ci
 
 on:
-  push:
-    branches: [dev]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   test-linux:

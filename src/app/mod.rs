@@ -823,9 +823,7 @@ impl PydlApp {
 
         let size = crate::app_ui::main_viewport_size(ctx);
         if size.x < 100.0 || size.y < 100.0 {
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                1280.0, 880.0,
-            )));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(1280.0, 880.0)));
         }
 
         if self.gui_startup_frames <= 5 {

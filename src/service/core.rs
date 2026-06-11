@@ -769,8 +769,7 @@ impl DownloadCore {
     pub fn effective_settings_for_item(&self, item: &QueueItem) -> crate::config::AppSettings {
         let mut effective = self.settings.clone();
         if let Some(name) = item.profile_override.as_deref() {
-            if let Some(profile) = crate::profiles::find_profile(&self.profile_store, name.trim())
-            {
+            if let Some(profile) = crate::profiles::find_profile(&self.profile_store, name.trim()) {
                 profile.apply_to(&mut effective);
             }
         }
@@ -784,7 +783,8 @@ impl DownloadCore {
         };
         let item = self.items[idx].clone();
         let settings = self.effective_settings_for_item(&item);
-        if !settings.post_download_organize || crate::download_organize::uses_custom_template(&settings)
+        if !settings.post_download_organize
+            || crate::download_organize::uses_custom_template(&settings)
         {
             return;
         }
@@ -792,9 +792,7 @@ impl DownloadCore {
         let source = item
             .local_path
             .as_ref()
-            .and_then(|p| {
-                crate::domain::done_file_index::resolve_path_under_output(&output_dir, p)
-            })
+            .and_then(|p| crate::domain::done_file_index::resolve_path_under_output(&output_dir, p))
             .or_else(|| {
                 self.done_file_index
                     .find_path_for_queue_item(&output_dir, &item)
@@ -813,10 +811,7 @@ impl DownloadCore {
             Ok(Some(path)) => {
                 self.items[idx].local_path = item_mut.local_path.clone();
                 self.done_file_index.force_refresh();
-                self.append_log(&format!(
-                    "[item {item_id}] Organized download → {}",
-                    path
-                ));
+                self.append_log(&format!("[item {item_id}] Organized download → {}", path));
             }
             Ok(None) => {}
             Err(e) => {
