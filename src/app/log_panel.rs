@@ -7,8 +7,8 @@ use regex::Regex;
 
 use crate::app_ui::{
     allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, fill_allocated_rect, height_to_bottom,
-    left_button_row, persist_resizable_window_size, secondary_button,
+    compact_button_group, consume_remaining_ui_space, fill_allocated_rect, finite_ui_span,
+    height_to_bottom, left_button_row, persist_resizable_window_size, secondary_button,
 };
 use crate::theme::{log_bg, text_hint, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -187,7 +187,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_log_float_v3");
+        let window_id = egui::Id::new("rustdl_log_float_v4");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let pointer_down = ctx.input(|i| i.pointer.any_down());
@@ -208,16 +208,23 @@ impl PydlApp {
         }
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            fill_allocated_rect(ui);
-            let body_bottom = ui.max_rect().bottom();
-            left_button_row(ui, |ui| {
-                self.draw_log_dock_controls_compact(ui);
+            let body_h = finite_ui_span(ui.max_rect().height(), self.settings.log_float_height)
+                .max(260.0);
+            let body_w = finite_ui_span(ui.max_rect().width(), self.settings.log_float_width)
+                .max(400.0);
+            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+                fill_allocated_rect(ui);
+                let body_bottom = ui.max_rect().bottom();
+                left_button_row(ui, |ui| {
+                    self.draw_log_dock_controls_compact(ui);
+                });
+                ui.add_space(2.0);
+                self.draw_activity_log_toolbar_inner(ui, true);
+                ui.add_space(2.0);
+                let scroll_h = height_to_bottom(ui, body_bottom).max(80.0);
+                self.draw_activity_log_lines_scroll(ui, scroll_h);
+                consume_remaining_ui_space(ui);
             });
-            ui.add_space(2.0);
-            self.draw_activity_log_toolbar_inner(ui, true);
-            ui.add_space(2.0);
-            let scroll_h = height_to_bottom(ui, body_bottom).max(80.0);
-            self.draw_activity_log_lines_scroll(ui, scroll_h);
             consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
@@ -297,7 +304,7 @@ impl PydlApp {
                 button_group(ui, "log_clear", |g| add(g));
             }
         };
-        let mut row = |ui: &mut egui::Ui| {
+        let row = |ui: &mut egui::Ui| {
             draw(ui, &mut |g| {
                 if g.danger(&format!("{} Clear log", ui_icons::CLEAR_LOG), true)
                     .clicked()
@@ -369,11 +376,7 @@ impl PydlApp {
                 }
             });
         };
-        if compact {
-            row(ui);
-        } else {
-            button_toolbar_wrapped(ui, row);
-        }
+        button_toolbar_wrapped(ui, row);
     }
 
     /// Docked under the video queue: placement row, height slider, filter/actions, then lines.

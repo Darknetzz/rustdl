@@ -21,6 +21,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Floating **Activity log** window: toolbar controls stay in one wrapped row at the top again, and log lines fill the remaining window height (same explicit body sizing as the floating Videos window).
 - Windows: yt-dlp/ffmpeg subprocess spawn no longer fails with “The request is not supported” (os error 50) after the GUI detaches its console window.
 - Linux: invisible GUI when launched from Cursor/VS Code or after an off-screen window restore — center on startup, skip saving window position, recover visibility for the first second, and exit cleanly when the window closes (stops zombie processes that only served the LAN web UI).
 - Windows: restoring the main window from the taskbar after minimizing works again (native `ShowWindow` fallback when winit leaves the HWND iconic).
