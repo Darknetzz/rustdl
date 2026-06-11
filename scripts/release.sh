@@ -158,8 +158,7 @@ if ! unreleased_has_content; then
 fi
 
 if git rev-parse "$tag" >/dev/null 2>&1; then
-  echo "Tag already exists: $tag" >&2
-  exit 1
+  echo "Tag $tag exists (from version bump); will move to the release commit."
 fi
 
 branch="$(git rev-parse --abbrev-ref HEAD)"

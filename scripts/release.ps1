@@ -110,7 +110,7 @@ try {
 
     $existingTag = git tag -l $tag 2>$null
     if ($existingTag) {
-        throw "Tag already exists: $tag"
+        Write-Host "Tag $tag exists (from version bump); will move to the release commit."
     }
 
     $branch = git rev-parse --abbrev-ref HEAD
