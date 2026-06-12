@@ -18,6 +18,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Video Converter **CPU threads** auto (`0`) now splits ~75% of logical cores across parallel jobs (max 4 threads per encode) instead of letting each ffmpeg process use every core.
 
+### Fixed
+
+- Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
+
 ## [0.5.2] - 2026-06-12
 
 ### Fixed

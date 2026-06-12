@@ -19,6 +19,43 @@ use crate::ytdlp;
 
 use super::core::SharedCore;
 
+/// Minimum interval between full-queue UI syncs for a single convert progress stream.
+const CONVERT_PROGRESS_BUMP_MIN_SECS: f64 = 0.25;
+
+fn unix_now_secs() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
+fn should_bump_convert_progress(
+    throttle: &mut std::collections::HashMap<u64, (f64, f32)>,
+    item_id: u64,
+    percent: Option<f32>,
+    force: bool,
+) -> bool {
+    if force {
+        if let Some(p) = percent {
+            throttle.insert(item_id, (unix_now_secs(), p));
+        }
+        return true;
+    }
+    let now = unix_now_secs();
+    let (last_t, last_pct) = throttle.get(&item_id).copied().unwrap_or((-1_000.0, -1.0));
+    if now - last_t >= CONVERT_PROGRESS_BUMP_MIN_SECS {
+        throttle.insert(item_id, (now, percent.unwrap_or(last_pct)));
+        return true;
+    }
+    if let Some(p) = percent {
+        if (p - last_pct).abs() >= 1.0 {
+            throttle.insert(item_id, (now, p));
+            return true;
+        }
+    }
+    false
+}
+
 pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
     runtime.spawn(async move {
         let mut rx = {
@@ -191,8 +228,16 @@ impl super::core::DownloadCore {
             }
             it.detail = detail;
         }
-        self.update_convert_status();
-        self.bump_generation();
+        let force_bump = value == "end";
+        if should_bump_convert_progress(
+            &mut self.convert_progress_throttle,
+            item_id,
+            percent,
+            force_bump,
+        ) {
+            self.update_convert_status();
+            self.bump_generation();
+        }
     }
 
     fn handle_convert_media_probed(
@@ -261,6 +306,7 @@ impl super::core::DownloadCore {
         }
         self.convert_duration_ms.remove(&item_id);
         self.convert_progress_state.remove(&item_id);
+        self.convert_progress_throttle.remove(&item_id);
         if !ok && !convert_detail_is_user_cancellation(&detail) {
             self.append_log(&format!("[convert {item_id}] {detail}"));
         }
@@ -270,6 +316,7 @@ impl super::core::DownloadCore {
     }
 
     fn handle_convert_batch_done(&mut self) {
+        self.convert_progress_throttle.clear();
         self.convert_running = false;
         for item in &mut self.convert_items {
             if matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading) {

@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tokio::runtime::Runtime;
-use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 use crate::domain::events::{try_send_ui, UiEvent, UiEventBus};
 use crate::models::VideoPreview;
@@ -597,31 +597,40 @@ pub(crate) fn spawn_convert_worker(
             &cfg.target_codec,
         );
         let parallel = parallel.clamp(1, 6);
-        let semaphore = Arc::new(Semaphore::new(parallel));
-        let mut handles = Vec::with_capacity(jobs.len());
-        for (item_id, input, output_path) in jobs {
+        let mut jobs = jobs.into_iter();
+        let mut join_set = JoinSet::new();
+
+        let mut spawn_next = |join_set: &mut JoinSet<()>| -> bool {
             if cancel_flag.load(Ordering::Relaxed) {
-                continue;
+                return false;
             }
+            let Some((item_id, input, output_path)) = jobs.next() else {
+                return false;
+            };
             let item = transcode::ConvertPlanItem {
                 input: std::path::PathBuf::from(input.source_path),
                 output: std::path::PathBuf::from(output_path),
-            };
-            let permit = semaphore.clone().acquire_owned().await;
-            let Ok(permit) = permit else {
-                break;
             };
             let bus = bus.clone();
             let cfg = cfg.clone();
             let enc = enc.clone();
             let cancel_flag = cancel_flag.clone();
-            handles.push(tokio::spawn(async move {
-                let _permit = permit;
+            join_set.spawn(async move {
                 run_convert_job(&bus, &cfg, &enc, &cancel_flag, item_id, item).await;
-            }));
+            });
+            true
+        };
+
+        for _ in 0..parallel {
+            if !spawn_next(&mut join_set) {
+                break;
+            }
         }
-        for handle in handles {
-            let _ = handle.await;
+
+        while let Some(_res) = join_set.join_next().await {
+            if !spawn_next(&mut join_set) && join_set.is_empty() {
+                break;
+            }
         }
         let _ = try_send_ui(&bus, UiEvent::ConvertBatchDone);
     });

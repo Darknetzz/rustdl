@@ -194,6 +194,8 @@ pub struct DownloadCore {
     pub done_file_index: DoneFileIndex,
     pub done_lookup_truncation_logged: bool,
     pub download_log_throttle: HashMap<u64, f64>,
+    /// Last UI sync bump per convert item: `(unix_secs, percent)`.
+    pub convert_progress_throttle: HashMap<u64, (f64, f32)>,
     /// Thumbnail image bytes shared between the desktop GUI and LAN `/api/thumbnail` proxy.
     pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
@@ -329,6 +331,7 @@ impl DownloadCore {
             done_file_index: DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             download_log_throttle: HashMap::new(),
+            convert_progress_throttle: HashMap::new(),
             thumbnail_cache: HashMap::new(),
             generation: 1,
             settings_generation: 1,

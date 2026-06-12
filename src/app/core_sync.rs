@@ -153,6 +153,25 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
     }
 }
 
+fn convert_item_mirror_changed(
+    app_it: &crate::models::ConvertQueueItem,
+    core_it: &crate::models::ConvertQueueItem,
+) -> bool {
+    app_it.status != core_it.status
+        || (app_it.percent - core_it.percent).abs() > f32::EPSILON
+        || app_it.detail != core_it.detail
+        || app_it.source_path != core_it.source_path
+        || app_it.output_path != core_it.output_path
+        || app_it.video_codec != core_it.video_codec
+        || app_it.width != core_it.width
+        || app_it.height != core_it.height
+        || app_it.fps != core_it.fps
+        || app_it.bitrate_bps != core_it.bitrate_bps
+        || app_it.input_bytes != core_it.input_bytes
+        || app_it.output_bytes != core_it.output_bytes
+        || app_it.source_missing != core_it.source_missing
+}
+
 fn sync_convert_from_core(
     core: &DownloadCore,
     app: &mut PydlApp,
@@ -182,7 +201,9 @@ fn sync_convert_from_core(
             .collect();
         for app_it in app.convert_items.iter_mut() {
             if let Some(core_it) = core_by_id.get(&app_it.item_id) {
-                *app_it = (*core_it).clone();
+                if convert_item_mirror_changed(app_it, core_it) {
+                    *app_it = (*core_it).clone();
+                }
             }
         }
     } else {
