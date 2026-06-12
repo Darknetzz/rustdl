@@ -188,7 +188,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_log_float_v7");
+        let window_id = egui::Id::new("rustdl_log_float_v8");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let pointer_down = ctx.input(|i| i.pointer.any_down());
@@ -209,16 +209,11 @@ impl PydlApp {
         }
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            let body_h = finite_ui_span(
-                ui.clip_rect().height().max(ui.max_rect().height()),
-                self.settings.log_float_height,
-            )
-            .max(260.0);
-            let body_w = finite_ui_span(
-                ui.clip_rect().width().max(ui.max_rect().width()),
-                self.settings.log_float_width,
-            )
-            .max(400.0);
+            // Size from the window body (`max_rect`), not viewport `clip_rect`.
+            let body_h =
+                finite_ui_span(ui.max_rect().height(), self.settings.log_float_height).max(260.0);
+            let body_w =
+                finite_ui_span(ui.max_rect().width(), self.settings.log_float_width).max(400.0);
             allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
                 egui::Frame::dark_canvas(ui.style())
                     .fill(BG_CANVAS)
