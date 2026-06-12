@@ -95,7 +95,7 @@ body.theme-light {
     justify-content: flex-start;
   }
 
-  .queue {
+  .queue-group-body {
     grid-template-columns: 1fr !important;
   }
 
@@ -586,15 +586,65 @@ button.danger:disabled,
 
 .add-feedback.ok { color: var(--ok); }
 
-/* Queue: tile grid like egui card view */
+/* Queue: collapsible status groups (cards tile inside each group body) */
 .queue {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.queue-group {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.queue-group-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.35rem 0.15rem 0.25rem;
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.queue-group-summary::-webkit-details-marker {
+  display: none;
+}
+
+.queue-group-summary::before {
+  content: "▸";
+  font-size: 0.75rem;
+  color: var(--hint);
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.queue-group[open] > .queue-group-summary::before {
+  transform: rotate(90deg);
+}
+
+.queue-group-body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 0.85rem;
   align-items: start;
+  padding-top: 0.65rem;
 }
 
-.queue.list-layout {
+.queue.list-layout,
+.queue-group-body.list-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.queue.list-layout .queue-group-body {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -1310,7 +1360,7 @@ body.shutdown-mode .shutdown-screen {
 }
 
 @media (max-width: 400px) {
-  .queue { grid-template-columns: 1fr; }
+  .queue-group-body { grid-template-columns: 1fr; }
   .card { max-width: none; }
 }
 

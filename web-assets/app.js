@@ -1,5 +1,8 @@
 const TOKEN_KEY = "rustdl_web_token";
 const WEB_THEME_KEY = "rustdl_web_theme";
+const QUEUE_GROUP_COLLAPSED_KEY = "rustdl_web_queue_groups";
+const DOWNLOAD_QUEUE_GROUPS = ["Active", "Ready", "Issues", "Done", "Resolving"];
+const CONVERT_QUEUE_GROUPS = ["Active", "Ready", "Failed", "Skipped", "Done"];
 
 let cachedSettings = null;
 let logLinesCache = [];
@@ -1701,6 +1704,178 @@ function renderQueueCardListRow(item, settings) {
   return card;
 }
 
+function loadQueueGroupCollapsed() {
+  try {
+    const raw = localStorage.getItem(QUEUE_GROUP_COLLAPSED_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveQueueGroupCollapsed(state) {
+  try {
+    localStorage.setItem(QUEUE_GROUP_COLLAPSED_KEY, JSON.stringify(state));
+  } catch {
+    /* ignore */
+  }
+}
+
+function queueGroupStorageKey(mode, label) {
+  return `${mode}:${label}`;
+}
+
+function queueGroupSlug(label) {
+  switch (label) {
+    case "Active":
+      return "downloading";
+    case "Ready":
+      return "idle";
+    case "Issues":
+    case "Failed":
+      return "failed";
+    case "Done":
+      return "done";
+    case "Resolving":
+      return "resolving";
+    case "Skipped":
+      return "skipped";
+    default:
+      return "idle";
+  }
+}
+
+function downloadQueueGroup(item) {
+  switch (item.status) {
+    case "Queued":
+    case "Downloading":
+      return "Active";
+    case "Failed":
+      return "Issues";
+    case "Idle":
+      return item.error ? "Issues" : "Ready";
+    case "Done":
+      return "Done";
+    case "Resolving":
+      return "Resolving";
+    default:
+      return "Ready";
+  }
+}
+
+function downloadQueueGroupDefaultOpen(label, ctx) {
+  if (ctx.statusFilter) return true;
+  const s = ctx.status || {};
+  if (label === "Done") {
+    if (ctx.totalItems > 30) return false;
+    return (
+      (s.done || 0) > 0 &&
+      (s.active || 0) === 0 &&
+      (s.queued || 0) === 0 &&
+      (s.ready || 0) === 0 &&
+      (s.resolving || 0) === 0
+    );
+  }
+  if (label === "Ready") return ctx.totalItems <= 12;
+  if (label === "Issues") return true;
+  if (label === "Active" || label === "Resolving") return !ctx.searchQuery;
+  return true;
+}
+
+function convertQueueGroupDefaultOpen(label) {
+  if (label === "Done" || label === "Ready") return false;
+  if (label === "Failed" || label === "Skipped") return true;
+  return true;
+}
+
+function sortDownloadGroupItems(label, items) {
+  if (label === "Ready") {
+    return [...items].sort(
+      (a, b) => (a.sort_order || a.item_id || 0) - (b.sort_order || b.item_id || 0)
+    );
+  }
+  if (label === "Done") {
+    return [...items].sort(
+      (a, b) => (b.completed_at || 0) - (a.completed_at || 0)
+    );
+  }
+  return items;
+}
+
+function appendCollapsibleQueueGroup(root, label, items, options) {
+  const { settings, renderItem, defaultOpen, collapsedState, listLayout, mode } = options;
+  const details = document.createElement("details");
+  details.className = "queue-group";
+  details.dataset.group = label;
+
+  const storageKey = queueGroupStorageKey(mode, label);
+  const persisted = collapsedState[storageKey];
+  details.open = persisted === undefined ? defaultOpen : !persisted;
+
+  const summary = document.createElement("summary");
+  summary.className = `queue-group-summary status-${queueGroupSlug(label)}`;
+  summary.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="queue-group-label">${escapeHtml(
+    label
+  )} (${items.length})</span>`;
+  details.appendChild(summary);
+
+  const body = document.createElement("div");
+  body.className = "queue-group-body" + (listLayout ? " list-layout" : "");
+  for (const item of items) {
+    body.appendChild(renderItem(item, settings));
+  }
+  details.appendChild(body);
+
+  details.addEventListener("toggle", () => {
+    if (details.open) {
+      delete collapsedState[storageKey];
+    } else {
+      collapsedState[storageKey] = true;
+    }
+    saveQueueGroupCollapsed(collapsedState);
+  });
+
+  root.appendChild(details);
+}
+
+function renderGroupedQueue(root, items, options) {
+  const {
+    settings,
+    groupFn,
+    groupOrder,
+    renderItem,
+    defaultOpenCtx,
+    mode,
+    defaultOpenFn,
+    sortGroupItems,
+  } = options;
+  const collapsedState = loadQueueGroupCollapsed();
+  const listLayout = !!settings.card_list_layout;
+  const buckets = new Map();
+  for (const item of items) {
+    const label = groupFn(item);
+    if (!buckets.has(label)) buckets.set(label, []);
+    buckets.get(label).push(item);
+  }
+  for (const label of groupOrder) {
+    const group = buckets.get(label);
+    if (!group?.length) continue;
+    const sorted = sortGroupItems ? sortGroupItems(label, group) : group;
+    const defaultOpen = defaultOpenFn(label, {
+      ...defaultOpenCtx,
+      totalItems: items.length,
+    });
+    appendCollapsibleQueueGroup(root, label, sorted, {
+      settings,
+      renderItem,
+      defaultOpen,
+      collapsedState,
+      listLayout,
+      mode,
+    });
+  }
+}
+
 function findQueueCard(itemId) {
   return document.querySelector(`#queue [data-item-id="${itemId}"]`);
 }
@@ -1761,12 +1936,21 @@ async function refreshQueue(force = false) {
     root.appendChild(empty);
     return;
   }
-  for (const item of items) {
-    const card = settings.card_list_layout
-      ? renderQueueCardListRow(item, settings)
-      : renderQueueCard(item, settings);
-    root.appendChild(card);
-  }
+  renderGroupedQueue(root, items, {
+    settings,
+    groupFn: downloadQueueGroup,
+    groupOrder: DOWNLOAD_QUEUE_GROUPS,
+    renderItem: (item, s) =>
+      s.card_list_layout ? renderQueueCardListRow(item, s) : renderQueueCard(item, s),
+    defaultOpenCtx: {
+      status: lastStatusPayload?.status,
+      searchQuery,
+      statusFilter: queueStatusFilter,
+    },
+    mode: "dl",
+    defaultOpenFn: downloadQueueGroupDefaultOpen,
+    sortGroupItems: sortDownloadGroupItems,
+  });
 }
 
 async function cancelItem(id) {
@@ -2986,17 +3170,16 @@ async function refreshConvert() {
     root.appendChild(empty);
     return;
   }
-  for (const label of ["Active", "Ready", "Failed", "Skipped", "Done"]) {
-    const group = data.items.filter((it) => convertGroup(it) === label);
-    if (!group.length) continue;
-    const header = document.createElement("h3");
-    header.className = "convert-group-header";
-    header.textContent = `${label} (${group.length})`;
-    root.appendChild(header);
-    for (const item of group) {
-      root.appendChild(renderConvertCard(item, showThumbnails));
-    }
-  }
+  renderGroupedQueue(root, data.items, {
+    settings: { card_list_layout: false, show_thumbnails: showThumbnails },
+    groupFn: convertGroup,
+    groupOrder: CONVERT_QUEUE_GROUPS,
+    renderItem: (item, s) => renderConvertCard(item, s.show_thumbnails !== false),
+    defaultOpenCtx: {},
+    mode: "cv",
+    defaultOpenFn: (label) => convertQueueGroupDefaultOpen(label),
+    sortGroupItems: null,
+  });
 }
 
 async function convertScan() {

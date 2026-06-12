@@ -19,6 +19,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **Start downloads** in the floating Videos window footer (and docked Videos panel footer), matching the main downloader toolbar.
+- LAN web UI: downloader and convert queues use **collapsible status groups** (Active, Ready, Issues, Done, …) like the desktop app; expand/collapse state is remembered in the browser.
 - About **Download update** (Windows) fetches `rustdl.exe` from the latest GitHub release; **Restart to apply update** swaps the running binary and relaunches.
 - Settings → Shared → **GitHub token** for authenticated release API access (private repos).
 
