@@ -141,7 +141,7 @@ struct QueueResponse {
 
 #[derive(Serialize)]
 pub(super) struct ApiErrorBody {
-    error: String,
+    pub error: String,
 }
 
 #[derive(Deserialize)]
