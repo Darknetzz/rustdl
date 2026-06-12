@@ -7,6 +7,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
 
 use crate::app::background_spawn;
 use crate::app_parsing::human_bytes_ui;
@@ -82,6 +83,7 @@ impl DownloadCore {
         background_spawn::spawn_convert_media_probe(
             &self.runtime,
             &self.ui_event_bus(),
+            self.convert_probe_semaphore.clone(),
             item_id,
             file_path,
             self.settings.ffprobe_path.clone(),
@@ -202,10 +204,12 @@ impl DownloadCore {
                 height: None,
                 fps: None,
                 bitrate_bps: None,
+                source_missing: !plan_item.input.is_file(),
             });
             added += 1;
         }
         if added > 0 {
+            self.update_convert_status();
             self.schedule_convert_queue_save();
             self.bump_generation();
         }
@@ -298,6 +302,7 @@ impl DownloadCore {
             self.convert_cancel_flag.clone(),
         );
         self.append_log("Convert: batch started.");
+        self.update_convert_status();
         self.schedule_convert_queue_save();
         self.bump_generation();
     }
@@ -327,6 +332,7 @@ impl DownloadCore {
         self.append_log(&format!(
             "Convert: reset {count} skipped item(s) to ready. Adjust settings if needed, then start the batch."
         ));
+        self.update_convert_status();
         self.bump_generation();
     }
 
@@ -343,16 +349,27 @@ impl DownloadCore {
         self.convert_duration_ms.clear();
         self.convert_progress_state.clear();
         self.clear_convert_queue_persistence();
+        self.update_convert_status();
         self.bump_generation();
     }
 
     // --- persistence ---
 
     pub fn schedule_convert_queue_save(&mut self) {
-        self.flush_convert_queue_to_disk();
+        self.convert_save_deadline = Some(Instant::now() + Duration::from_millis(400));
+    }
+
+    pub fn maybe_flush_convert_queue_save(&mut self) {
+        if let Some(deadline) = self.convert_save_deadline {
+            if Instant::now() >= deadline {
+                self.convert_save_deadline = None;
+                self.flush_convert_queue_to_disk();
+            }
+        }
     }
 
     pub fn flush_convert_queue_to_disk(&mut self) {
+        self.convert_save_deadline = None;
         if !self.settings.convert_remember_queue {
             return;
         }

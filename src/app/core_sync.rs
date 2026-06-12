@@ -95,15 +95,7 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
 
     app.downloads_paused = core.downloads_paused;
     app.session_complete_notified = core.session_complete_notified;
-    app.convert_input_paths = core.convert_input_paths.clone();
-    app.convert_items = core.convert_items.clone();
-    app.convert_running = core.convert_running;
-    app.convert_media_inflight = core.convert_media_inflight.clone();
-    app.convert_encoder_choice = core.convert_encoder_choice.clone();
-    app.convert_encoder_detect_key = core.convert_encoder_detect_key.clone();
-    if app.convert_encoder_choice.is_some() {
-        app.convert_encoder_detection_inflight = false;
-    }
+    app.convert_save_deadline = core.convert_save_deadline;
 }
 
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
@@ -159,14 +151,76 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
         }
         app.ensure_downloader_thumbnails();
     }
-    app.ensure_convert_thumbnails();
+}
+
+fn sync_convert_from_core(
+    core: &DownloadCore,
+    app: &mut PydlApp,
+    previous_convert_ids: &HashSet<u64>,
+) {
+    if app.convert_input_paths != core.convert_input_paths {
+        app.convert_input_paths = core.convert_input_paths.clone();
+    }
+    app.convert_running = core.convert_running;
+    app.convert_media_inflight = core.convert_media_inflight.clone();
+    app.convert_encoder_choice = core.convert_encoder_choice.clone();
+    app.convert_encoder_detect_key = core.convert_encoder_detect_key.clone();
+    if app.convert_encoder_choice.is_some() {
+        app.convert_encoder_detection_inflight = false;
+    }
+    app.convert_status_counts = core.convert_status_counts;
+    app.convert_batch_summary = core.convert_batch_summary;
+    app.convert_batch_progress = core.convert_batch_progress;
+
+    let app_ids: HashSet<u64> = app.convert_items.iter().map(|it| it.item_id).collect();
+    let core_ids: HashSet<u64> = core.convert_items.iter().map(|it| it.item_id).collect();
+    if app_ids == core_ids && app.convert_items.len() == core.convert_items.len() {
+        let core_by_id: std::collections::HashMap<u64, &crate::models::ConvertQueueItem> = core
+            .convert_items
+            .iter()
+            .map(|it| (it.item_id, it))
+            .collect();
+        for app_it in app.convert_items.iter_mut() {
+            if let Some(core_it) = core_by_id.get(&app_it.item_id) {
+                *app_it = (*core_it).clone();
+            }
+        }
+    } else {
+        app.convert_items = core.convert_items.clone();
+    }
+    app.rebuild_convert_item_index();
+
+    if app.settings.show_thumbnails {
+        let new_item_ids: Vec<u64> = app
+            .convert_items
+            .iter()
+            .filter(|it| !previous_convert_ids.contains(&it.item_id))
+            .map(|it| it.item_id)
+            .collect();
+        for item_id in new_item_ids {
+            if let Some(idx) = app.convert_item_idx(item_id) {
+                let path = app.convert_items[idx].source_path.clone();
+                if !app.convert_items[idx].source_missing {
+                    app.queue_convert_local_thumbnail(
+                        item_id,
+                        std::path::PathBuf::from(path),
+                        app.settings.ffmpeg_path.clone(),
+                    );
+                }
+            }
+        }
+        app.ensure_convert_thumbnails();
+    }
 }
 
 pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
     let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
+    let previous_convert_ids: HashSet<u64> =
+        app.convert_items.iter().map(|it| it.item_id).collect();
     sync_shared_fields_from_core(core, app);
     if core.generation != app.core_generation {
         sync_queue_from_core(core, app, &previous_item_ids);
+        sync_convert_from_core(core, app, &previous_convert_ids);
         app.core_generation = core.generation;
     }
 }
@@ -179,7 +233,7 @@ pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ItemStatus, QueueItem};
+    use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 
@@ -223,4 +277,5 @@ mod tests {
         mirror.bump_generation();
         assert_eq!(mirror.items.len(), 1);
     }
+
 }

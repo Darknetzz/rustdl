@@ -275,6 +275,8 @@ pub fn reset_convert_item_to_ready(item: &mut ConvertQueueItem) {
 }
 
 pub fn normalize_restored_convert_item(item: &mut ConvertQueueItem) {
+    item.source_missing =
+        crate::convert_state::convert_source_path_missing(&item.source_path);
     match item.status {
         ItemStatus::Done => {}
         ItemStatus::Failed if convert_detail_is_user_cancellation(&item.detail) => {

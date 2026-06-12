@@ -20,6 +20,12 @@ impl PydlApp {
         }
     }
 
+    pub(super) fn maybe_flush_convert_queue_save(&mut self) {
+        let mut core = self.shared_core.lock();
+        core.maybe_flush_convert_queue_save();
+        self.convert_save_deadline = core.convert_save_deadline;
+    }
+
     pub(super) fn flush_queue_to_disk(&mut self) {
         self.queue_save_deadline = None;
         if let Err(err) = save_queue_items(&self.items) {

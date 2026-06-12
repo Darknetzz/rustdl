@@ -6,11 +6,34 @@
 //! 2. Restore/import 200-item queue, list layout, Done group expanded.
 //! 3. Active download with log autoscroll and multiple workers.
 //!
-//! Slow frames (>8ms) log to stderr for `process_events` and `draw_grouped_cards`.
+//! Slow frames (>8ms) log to stderr for `process_events`, `draw_grouped_cards`, and
+//! `draw_convert_grouped_cards`.
 
 use rustdl::app_state::{
     compute_status_counts, compute_transfer_totals, rebuild_item_index_map, synthetic_queue_items,
 };
+use rustdl::convert_state::{
+    compute_convert_status_counts, rebuild_convert_item_index_map, synthetic_convert_items,
+};
+
+#[test]
+fn synthetic_200_convert_status_counts() {
+    let items = synthetic_convert_items(200);
+    let counts = compute_convert_status_counts(&items);
+    assert_eq!(
+        counts.ready + counts.queued + counts.running + counts.done + counts.skipped + counts.failed,
+        200
+    );
+}
+
+#[test]
+fn synthetic_200_convert_index_rebuild() {
+    let items = synthetic_convert_items(200);
+    let map = rebuild_convert_item_index_map(&items);
+    assert_eq!(map.len(), 200);
+    assert_eq!(map.get(&1), Some(&0));
+    assert_eq!(map.get(&200), Some(&199));
+}
 
 #[test]
 fn synthetic_200_item_status_counts() {

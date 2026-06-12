@@ -12,7 +12,6 @@ use crate::app_ui::{
     show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
     UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
-use crate::convert_state::compute_convert_batch_progress;
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
@@ -785,7 +784,7 @@ impl PydlApp {
     }
 
     pub(super) fn draw_convert_batch_progress_row(&self, ui: &mut egui::Ui) {
-        let progress = compute_convert_batch_progress(&self.convert_items);
+        let progress = self.convert_batch_progress;
         if progress.is_empty() {
             return;
         }

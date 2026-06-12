@@ -10,6 +10,12 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-12
+
+### Fixed
+
+- Video Converter UI stays responsive when bulk-adding or encoding large queues: incremental queue sync, capped ffprobe/thumbnail concurrency, debounced queue saves, and virtualized list rows for big batches.
+
 ## [0.5.1] - 2026-06-12
 
 

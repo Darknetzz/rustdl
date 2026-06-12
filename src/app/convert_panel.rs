@@ -8,9 +8,8 @@ use crate::app_ui::{
 };
 use crate::config::AppSettings;
 use crate::convert_state::{
-    compute_convert_batch_summary, convert_batch_totals_grew, convert_item_is_skipped,
-    convert_item_status_label, convert_item_will_skip_already_target, convert_skip_hint_label,
-    convert_source_path_missing, format_convert_batch_saved_line,
+    convert_batch_totals_grew, convert_item_is_skipped, convert_item_status_label,
+    convert_item_will_skip_already_target, convert_skip_hint_label, format_convert_batch_saved_line,
 };
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::service::DownloadCore;
@@ -261,16 +260,32 @@ impl PydlApp {
     /// refreshes the GUI mirror fields from it. The editable textarea is pushed in first so the
     /// core sees the latest paths, then read back (a scan trims the lines it consumed).
     pub(super) fn convert_core_action(&mut self, f: impl FnOnce(&mut DownloadCore)) {
-        {
+        let mirror = {
             let mut core = self.shared_core.lock();
             core.convert_input_paths = self.convert_input_paths.clone();
             f(&mut core);
-            self.convert_input_paths = core.convert_input_paths.clone();
-            self.convert_items = core.convert_items.clone();
-            self.convert_running = core.convert_running;
-            self.convert_media_inflight = core.convert_media_inflight.clone();
-            self.core_generation = core.generation;
-        }
+            (
+                core.convert_input_paths.clone(),
+                core.convert_items.clone(),
+                core.convert_status_counts,
+                core.convert_batch_summary,
+                core.convert_batch_progress,
+                core.convert_running,
+                core.convert_media_inflight.clone(),
+                core.convert_save_deadline,
+                core.generation,
+            )
+        };
+        self.convert_input_paths = mirror.0;
+        self.convert_items = mirror.1;
+        self.rebuild_convert_item_index();
+        self.convert_status_counts = mirror.2;
+        self.convert_batch_summary = mirror.3;
+        self.convert_batch_progress = mirror.4;
+        self.convert_running = mirror.5;
+        self.convert_media_inflight = mirror.6;
+        self.convert_save_deadline = mirror.7;
+        self.core_generation = mirror.8;
         self.ensure_convert_thumbnails();
     }
 
@@ -485,7 +500,18 @@ impl PydlApp {
                     });
                     return;
                 }
+                let profile = std::env::var("RUSTDL_PROFILE").ok().as_deref() == Some("1");
+                let t0 = profile.then(std::time::Instant::now);
                 self.draw_convert_grouped_cards(ui);
+                if let Some(t0) = t0 {
+                    let ms = t0.elapsed().as_secs_f64() * 1000.0;
+                    if ms > 8.0 {
+                        eprintln!(
+                            "rustdl profile: draw_convert_grouped_cards {} items in {ms:.1}ms",
+                            self.convert_items.len()
+                        );
+                    }
+                }
             });
     }
 
@@ -536,9 +562,8 @@ impl PydlApp {
                 .collect();
             if label == "Active" {
                 ids.sort_by_key(|id| {
-                    self.convert_items
-                        .iter()
-                        .find(|it| it.item_id == *id)
+                    self.convert_item_idx(*id)
+                        .and_then(|idx| self.convert_items.get(idx))
                         .map(|it| match it.status {
                             ItemStatus::Downloading => (0, it.item_id),
                             ItemStatus::Queued => (1, it.item_id),
@@ -569,13 +594,36 @@ impl PydlApp {
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
-                for item_id in &ids {
-                    let Some(it) = self.convert_items.iter().find(|x| x.item_id == *item_id) else {
-                        continue;
-                    };
-                    ui.group(|ui| {
-                        self.draw_convert_queue_card(ui, it);
-                    });
+                if self.effective_convert_list_layout() {
+                    const LIST_ROW_H: f32 = 118.0;
+                    let row_count = ids.len().max(1);
+                    let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
+                    egui::ScrollArea::vertical()
+                        .id_salt(format!("rustdl_convert_list_{label}"))
+                        .max_height(max_h)
+                        .auto_shrink([false, true])
+                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
+                            for row in row_range {
+                                if let Some(item_id) = ids.get(row) {
+                                    if let Some(idx) = self.convert_item_idx(*item_id) {
+                                        let it = self.convert_items[idx].clone();
+                                        ui.group(|ui| {
+                                            self.draw_convert_queue_card(ui, &it);
+                                        });
+                                    }
+                                }
+                            }
+                        });
+                } else {
+                    for item_id in &ids {
+                        let Some(idx) = self.convert_item_idx(*item_id) else {
+                            continue;
+                        };
+                        let it = self.convert_items[idx].clone();
+                        ui.group(|ui| {
+                            self.draw_convert_queue_card(ui, &it);
+                        });
+                    }
                 }
             });
             if scroll_here {
@@ -594,36 +642,13 @@ impl PydlApp {
             };
             ui.label(RichText::new(heading).color(text_muted(&self.settings.theme)));
             let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
-            let ready = self
-                .convert_items
-                .iter()
-                .filter(|i| i.status == ItemStatus::Idle)
-                .count();
-            let queued = self
-                .convert_items
-                .iter()
-                .filter(|i| i.status == ItemStatus::Queued)
-                .count();
-            let running = self
-                .convert_items
-                .iter()
-                .filter(|i| i.status == ItemStatus::Downloading)
-                .count();
-            let done = self
-                .convert_items
-                .iter()
-                .filter(|i| i.status == ItemStatus::Done && !convert_item_is_skipped(i))
-                .count();
-            let skipped = self
-                .convert_items
-                .iter()
-                .filter(|i| convert_item_is_skipped(i))
-                .count();
-            let failed = self
-                .convert_items
-                .iter()
-                .filter(|i| i.status == ItemStatus::Failed)
-                .count();
+            let counts = self.convert_status_counts;
+            let ready = counts.ready;
+            let queued = counts.queued;
+            let running = counts.running;
+            let done = counts.done;
+            let skipped = counts.skipped;
+            let failed = counts.failed;
             if ready > 0 {
                 parts.push(("ready", ready, status_color(ItemStatus::Idle)));
             }
@@ -677,7 +702,7 @@ impl PydlApp {
     }
 
     pub(super) fn draw_convert_batch_summary_row(&self, ui: &mut egui::Ui) {
-        let batch = compute_convert_batch_summary(&self.convert_items);
+        let batch = self.convert_batch_summary;
         if batch.completed == 0 && batch.pending_count == 0 {
             return;
         }
@@ -776,7 +801,7 @@ impl PydlApp {
                             egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
                             Color32::WHITE,
                         );
-                    } else if convert_source_path_missing(&it.source_path) {
+                    } else if it.source_missing {
                         ui.allocate_new_ui(egui::UiBuilder::new().max_rect(thumb_rect), |ui| {
                             ui.centered_and_justified(|ui| {
                                 draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);

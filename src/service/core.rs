@@ -8,7 +8,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::app_parsing::normalize_restored_item;
-use crate::app_state::{self, StatusCounts, TransferTotals, UrlLineFilterStats};
+use crate::app_state::{self, BatchProgress, StatusCounts, TransferTotals, UrlLineFilterStats};
+use crate::convert_state::{
+    compute_convert_batch_progress, compute_convert_batch_summary, compute_convert_status_counts,
+    rebuild_convert_item_index_map, ConvertBatchSummary, ConvertStatusCounts,
+};
 use crate::config::{
     load_activity_log, load_convert_queue_snapshot, load_queue_items, load_settings,
     save_activity_log, save_queue_items, save_settings, trim_activity_log, AppSettings,
@@ -28,6 +32,7 @@ use crate::ytdlp_download_args::{
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
 
 pub type SharedCore = Arc<Mutex<DownloadCore>>;
@@ -207,6 +212,12 @@ pub struct DownloadCore {
     pub convert_duration_ms: HashMap<u64, u64>,
     pub convert_progress_state: HashMap<u64, HashMap<String, String>>,
     pub convert_media_inflight: HashSet<u64>,
+    pub convert_item_index_by_id: HashMap<u64, usize>,
+    pub convert_status_counts: ConvertStatusCounts,
+    pub convert_batch_summary: ConvertBatchSummary,
+    pub convert_batch_progress: BatchProgress,
+    pub convert_save_deadline: Option<Instant>,
+    pub convert_probe_semaphore: Arc<Semaphore>,
     pub convert_encoder_choice: Option<EncoderChoice>,
     pub convert_encoder_detect_key: String,
 
@@ -330,6 +341,12 @@ impl DownloadCore {
             convert_duration_ms: HashMap::new(),
             convert_progress_state: HashMap::new(),
             convert_media_inflight: HashSet::new(),
+            convert_item_index_by_id: HashMap::new(),
+            convert_status_counts: ConvertStatusCounts::default(),
+            convert_batch_summary: ConvertBatchSummary::default(),
+            convert_batch_progress: BatchProgress::default(),
+            convert_save_deadline: None,
+            convert_probe_semaphore: Arc::new(Semaphore::new(4)),
             convert_encoder_choice: None,
             convert_encoder_detect_key: String::new(),
             shutdown_pending: false,
@@ -338,6 +355,7 @@ impl DownloadCore {
         };
         core.rebuild_item_index();
         core.update_status();
+        core.update_convert_status();
         core.invalidate_queue_caches();
         core.refresh_deps();
         core.refresh_done_file_lookup();
@@ -371,6 +389,7 @@ impl DownloadCore {
         self.convert_next_item_id = convert_next_item_id;
         self.rebuild_item_index();
         self.update_status();
+        self.update_convert_status();
         self.invalidate_queue_caches();
         self.refresh_done_file_lookup();
         self.queue_convert_restored_assets();
@@ -453,6 +472,21 @@ impl DownloadCore {
     pub fn update_status(&mut self) {
         self.status_counts = crate::app_state::compute_status_counts(&self.items);
         self.sync_status_fields_from_counts();
+    }
+
+    pub fn rebuild_convert_item_index(&mut self) {
+        self.convert_item_index_by_id = rebuild_convert_item_index_map(&self.convert_items);
+    }
+
+    pub fn convert_item_idx(&self, item_id: u64) -> Option<usize> {
+        self.convert_item_index_by_id.get(&item_id).copied()
+    }
+
+    pub fn update_convert_status(&mut self) {
+        self.convert_status_counts = compute_convert_status_counts(&self.convert_items);
+        self.convert_batch_summary = compute_convert_batch_summary(&self.convert_items);
+        self.convert_batch_progress = compute_convert_batch_progress(&self.convert_items);
+        self.rebuild_convert_item_index();
     }
 
     pub fn set_item_status_at(&mut self, idx: usize, new: ItemStatus) {

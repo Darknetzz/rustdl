@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use crate::app_parsing::{human_bytes_ui, reset_convert_item_to_ready};
+use std::collections::HashMap;
+
 use crate::app_state::BatchProgress;
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{codec_matches_target, normalize_target_codec, target_codec_label};
@@ -32,6 +34,74 @@ pub fn reset_skipped_convert_items(items: &mut [ConvertQueueItem]) -> usize {
 pub fn convert_source_path_missing(source_path: &str) -> bool {
     let p = Path::new(source_path.trim());
     !p.is_file()
+}
+
+/// Per-status counters for the converter queue (includes skipped as a Done subset).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ConvertStatusCounts {
+    pub ready: usize,
+    pub queued: usize,
+    pub running: usize,
+    pub done: usize,
+    pub skipped: usize,
+    pub failed: usize,
+}
+
+pub fn compute_convert_status_counts(items: &[ConvertQueueItem]) -> ConvertStatusCounts {
+    let mut counts = ConvertStatusCounts::default();
+    for item in items {
+        if convert_item_is_skipped(item) {
+            counts.skipped += 1;
+            continue;
+        }
+        match item.status {
+            ItemStatus::Idle => counts.ready += 1,
+            ItemStatus::Queued => counts.queued += 1,
+            ItemStatus::Downloading => counts.running += 1,
+            ItemStatus::Done => counts.done += 1,
+            ItemStatus::Failed => counts.failed += 1,
+            ItemStatus::Resolving => {}
+        }
+    }
+    counts
+}
+
+pub fn rebuild_convert_item_index_map(items: &[ConvertQueueItem]) -> HashMap<u64, usize> {
+    let mut map = HashMap::with_capacity(items.len());
+    for (idx, item) in items.iter().enumerate() {
+        map.insert(item.item_id, idx);
+    }
+    map
+}
+
+/// Synthetic converter rows for performance regression tests.
+pub fn synthetic_convert_items(count: usize) -> Vec<ConvertQueueItem> {
+    (0..count)
+        .map(|i| {
+            let item_id = (i + 1) as u64;
+            ConvertQueueItem {
+                item_id,
+                source_path: format!(r"C:\videos\clip_{item_id}.mp4"),
+                output_path: format!(r"C:\out\clip_{item_id}.mkv"),
+                status: match i % 5 {
+                    0 => ItemStatus::Idle,
+                    1 => ItemStatus::Queued,
+                    2 => ItemStatus::Downloading,
+                    3 => ItemStatus::Done,
+                    _ => ItemStatus::Failed,
+                },
+                percent: if i % 5 == 2 { 42.0 } else { 0.0 },
+                detail: String::new(),
+                input_bytes: 1_000_000,
+                output_bytes: if i % 5 == 3 {
+                    Some(400_000)
+                } else {
+                    None
+                },
+                ..Default::default()
+            }
+        })
+        .collect()
 }
 
 /// Pending row that will be skipped at encode time (already target codec, re-encode disabled).

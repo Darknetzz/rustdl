@@ -28,6 +28,15 @@ impl PydlApp {
         self.item_index_by_id.get(&item_id).copied()
     }
 
+    pub(super) fn rebuild_convert_item_index(&mut self) {
+        self.convert_item_index_by_id =
+            crate::convert_state::rebuild_convert_item_index_map(&self.convert_items);
+    }
+
+    pub(super) fn convert_item_idx(&self, item_id: u64) -> Option<usize> {
+        self.convert_item_index_by_id.get(&item_id).copied()
+    }
+
     pub(super) fn rebuild_dedupe_keys_cache(&mut self) {
         self.cached_dedupe_keys = app_state::rebuild_dedupe_keys_set(&self.items);
     }

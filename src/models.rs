@@ -242,6 +242,9 @@ pub struct ConvertQueueItem {
     pub height: Option<u32>,
     pub fps: Option<f32>,
     pub bitrate_bps: Option<u64>,
+    /// Cached at enqueue/probe time so the UI does not stat paths every frame.
+    #[serde(default)]
+    pub source_missing: bool,
 }
 
 impl Default for ConvertQueueItem {
@@ -260,6 +263,7 @@ impl Default for ConvertQueueItem {
             height: None,
             fps: None,
             bitrate_bps: None,
+            source_missing: false,
         }
     }
 }

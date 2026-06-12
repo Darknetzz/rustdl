@@ -9,7 +9,9 @@ use tokio::sync::broadcast::error::RecvError;
 use crate::app_parsing::{
     convert_detail_is_user_cancellation, parse_speed_eta, reset_convert_item_to_ready,
 };
-use crate::convert_state::{format_convert_progress_detail, format_convert_saved_detail};
+use crate::convert_state::{
+    convert_source_path_missing, format_convert_progress_detail, format_convert_saved_detail,
+};
 use crate::domain::events::is_throttled_download_log_line;
 use crate::domain::UiEvent;
 use crate::models::{ItemStatus, QueueItem};
@@ -36,6 +38,7 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
                             item_id,
                         );
                     }
+                    core.lock().maybe_flush_convert_queue_save();
                 }
                 Err(RecvError::Lagged(_)) => {}
                 Err(RecvError::Closed) => break,
@@ -116,6 +119,7 @@ impl super::core::DownloadCore {
                 it.detail = line.to_owned();
             }
             self.append_log(&format!("[convert {item_id}] {line}"));
+            self.update_convert_status();
             self.bump_generation();
             return;
         }
@@ -126,6 +130,7 @@ impl super::core::DownloadCore {
                     it.detail = line.chars().take(160).collect();
                 }
                 self.append_log(&format!("[convert {item_id}] {line}"));
+                self.update_convert_status();
                 self.bump_generation();
             }
             return;
@@ -184,6 +189,7 @@ impl super::core::DownloadCore {
             }
             it.detail = detail;
         }
+        self.update_convert_status();
         self.bump_generation();
     }
 
@@ -199,10 +205,14 @@ impl super::core::DownloadCore {
             it.height = media.height;
             it.fps = media.fps;
             it.bitrate_bps = media.bitrate_bps;
+            if it.video_codec.is_empty() {
+                it.source_missing = convert_source_path_missing(&it.source_path);
+            }
         }
         if let Some(ms) = media.duration_ms.filter(|ms| *ms > 0) {
             self.convert_duration_ms.insert(item_id, ms);
         }
+        self.update_convert_status();
         self.schedule_convert_queue_save();
         self.bump_generation();
     }
@@ -250,6 +260,7 @@ impl super::core::DownloadCore {
         if !ok && !convert_detail_is_user_cancellation(&detail) {
             self.append_log(&format!("[convert {item_id}] {detail}"));
         }
+        self.update_convert_status();
         self.schedule_convert_queue_save();
         self.bump_generation();
     }
@@ -261,7 +272,9 @@ impl super::core::DownloadCore {
                 reset_convert_item_to_ready(item);
             }
         }
-        self.schedule_convert_queue_save();
+        self.update_convert_status();
+        self.convert_save_deadline = None;
+        self.flush_convert_queue_to_disk();
         self.bump_generation();
     }
 

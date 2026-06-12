@@ -98,10 +98,17 @@ impl PydlApp {
                     self.pending_thumbnail_uploads.push_back((item_id, image));
                 }
                 // Convert queue state lives on DownloadCore (applied in service::core_events); the GUI
-                // mirrors it via sync_core_to_app each frame. Here we only need to keep repainting
-                // while a transcode is active so progress updates are visible promptly.
-                UiEvent::ConvertLine { .. }
-                | UiEvent::ConvertDuration { .. }
+                // mirrors it via sync_core_to_app each frame. Repaint on meaningful progress only.
+                UiEvent::ConvertLine { line, .. } => {
+                    if line.starts_with("progress=")
+                        || line.starts_with("starting with ")
+                        || line.starts_with("skip_reason=")
+                        || line.starts_with("dry-run:")
+                    {
+                        ctx.request_repaint();
+                    }
+                }
+                UiEvent::ConvertDuration { .. }
                 | UiEvent::ConvertMediaProbed { .. }
                 | UiEvent::ConvertDone { .. }
                 | UiEvent::ConvertBatchDone => {

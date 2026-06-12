@@ -4,7 +4,6 @@ use eframe::egui;
 use image::imageops::FilterType;
 
 use crate::app::done_file_index::resolve_path_under_output;
-use crate::convert_state::convert_source_path_missing;
 use crate::models::ItemStatus;
 
 use super::queue_cache::{THUMBNAIL_DECODE_MAX_WIDTH, THUMBNAIL_QUEUE_SOFT_CAP};
@@ -182,6 +181,7 @@ impl PydlApp {
             &self.runtime,
             &self.ui_bus,
             &self.shared_core,
+            self.thumb_semaphore.clone(),
             item_id,
             file_path,
             ffmpeg_path,
@@ -195,20 +195,27 @@ impl PydlApp {
             return;
         }
         let ffmpeg_path = self.settings.ffmpeg_path.clone();
-        let pending: Vec<(u64, PathBuf)> = self
+        let mut pending: Vec<(u8, u64, PathBuf)> = self
             .convert_items
             .iter()
             .filter(|it| {
-                !self.textures.contains_key(&it.item_id)
+                !it.source_missing
+                    && !self.textures.contains_key(&it.item_id)
                     && !self.thumbnail_inflight.contains(&it.item_id)
+                    && !self.thumbnail_attempted.contains(&it.item_id)
             })
-            .map(|it| (it.item_id, PathBuf::from(&it.source_path)))
+            .map(|it| {
+                let pri = match it.status {
+                    ItemStatus::Downloading | ItemStatus::Queued => 0,
+                    ItemStatus::Idle => 1,
+                    ItemStatus::Done | ItemStatus::Failed => 2,
+                    _ => 3,
+                };
+                (pri, it.item_id, PathBuf::from(&it.source_path))
+            })
             .collect();
-        for (item_id, path) in pending {
-            if convert_source_path_missing(path.to_string_lossy().as_ref()) {
-                self.thumbnail_attempted.insert(item_id);
-                continue;
-            }
+        pending.sort_by_key(|(p, id, _)| (*p, *id));
+        for (_, item_id, path) in pending.into_iter().take(THUMBNAIL_QUEUE_SOFT_CAP) {
             self.queue_convert_local_thumbnail(item_id, path, ffmpeg_path.clone());
         }
     }

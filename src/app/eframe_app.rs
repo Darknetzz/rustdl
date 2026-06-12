@@ -28,6 +28,7 @@ impl eframe::App for PydlApp {
             ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
         }
         self.maybe_flush_queue_save();
+        self.maybe_flush_convert_queue_save();
         self.maybe_flush_log_save();
         self.process_events(ctx);
         #[cfg(windows)]

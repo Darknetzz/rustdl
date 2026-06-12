@@ -202,6 +202,10 @@ pub struct PydlApp {
     convert_input_paths: String,
     /// Mirror of `DownloadCore::convert_items` (the core owns the Convert queue).
     convert_items: Vec<ConvertQueueItem>,
+    convert_item_index_by_id: HashMap<u64, usize>,
+    convert_status_counts: crate::convert_state::ConvertStatusCounts,
+    convert_batch_summary: crate::convert_state::ConvertBatchSummary,
+    convert_batch_progress: crate::app_state::BatchProgress,
     /// Mirror of `DownloadCore::convert_media_inflight` (drives the "probing" badge).
     convert_media_inflight: HashSet<u64>,
     /// Mirror of `DownloadCore::convert_running`.
@@ -219,6 +223,8 @@ pub struct PydlApp {
     thumb_semaphore: Arc<Semaphore>,
     /// When set, queue JSON is written after this instant (debounced).
     queue_save_deadline: Option<Instant>,
+    /// Mirror of core debounced convert queue persistence.
+    convert_save_deadline: Option<Instant>,
 
     /// Last egui time we appended a throttled noisy download line per item (see `events.rs`).
     download_log_throttle: HashMap<u64, f64>,
@@ -395,6 +401,10 @@ impl PydlApp {
             convert_mode,
             convert_input_paths: restored_convert_input,
             convert_items: Vec::new(),
+            convert_item_index_by_id: HashMap::new(),
+            convert_status_counts: crate::convert_state::ConvertStatusCounts::default(),
+            convert_batch_summary: crate::convert_state::ConvertBatchSummary::default(),
+            convert_batch_progress: crate::app_state::BatchProgress::default(),
             convert_media_inflight: HashSet::new(),
             convert_running: false,
             convert_encoder_choice: None,
@@ -405,6 +415,7 @@ impl PydlApp {
             http_client,
             thumb_semaphore,
             queue_save_deadline: None,
+            convert_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
@@ -492,10 +503,20 @@ impl PydlApp {
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
             || self.queue_save_deadline.is_some()
+            || self.convert_save_deadline.is_some()
             || input_summary_hold_active;
         if busy {
             // Cap idle repaint rate during heavy background work to reduce full UI passes.
-            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / 30.0));
+            let hz = if self.convert_running
+                && !self.add_in_progress
+                && self.status_active == 0
+                && self.queue_running == 0
+            {
+                15.0
+            } else {
+                30.0
+            };
+            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / hz));
         }
     }
 
@@ -522,6 +543,11 @@ impl PydlApp {
     pub(super) fn effective_card_list_layout(&self) -> bool {
         const AUTO_LIST_THRESHOLD: usize = 50;
         self.settings.card_list_layout || self.items.len() > AUTO_LIST_THRESHOLD
+    }
+
+    pub(super) fn effective_convert_list_layout(&self) -> bool {
+        const AUTO_LIST_THRESHOLD: usize = 50;
+        self.settings.card_list_layout || self.convert_items.len() > AUTO_LIST_THRESHOLD
     }
 
     pub(super) fn item_matches_history_filter(&self, item: &QueueItem) -> bool {

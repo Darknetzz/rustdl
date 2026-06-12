@@ -339,6 +339,7 @@ pub(crate) fn spawn_convert_local_thumbnail(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     shared_core: &crate::service::SharedCore,
+    thumb_semaphore: Arc<tokio::sync::Semaphore>,
     item_id: u64,
     file_path: std::path::PathBuf,
     ffmpeg_path: String,
@@ -350,6 +351,17 @@ pub(crate) fn spawn_convert_local_thumbnail(
         file_path.to_string_lossy().as_ref(),
     );
     rt.spawn(async move {
+        let permit = thumb_semaphore.acquire_owned().await;
+        let Ok(_permit) = permit else {
+            let _ = try_send_ui(
+                &bus,
+                UiEvent::ThumbnailFetched {
+                    item_id,
+                    image: None,
+                },
+            );
+            return;
+        };
         let outcome = tokio::task::spawn_blocking(move || {
             let png = transcode::extract_thumbnail_png_bytes(&file_path, &ffmpeg_path)?;
             let image = crate::app::thumbnails::decode_thumbnail_image(png.clone());
@@ -374,6 +386,7 @@ pub(crate) fn spawn_convert_local_thumbnail(
 pub(crate) fn spawn_convert_media_probe(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
+    probe_semaphore: Arc<tokio::sync::Semaphore>,
     item_id: u64,
     file_path: std::path::PathBuf,
     ffprobe_path: String,
@@ -381,6 +394,10 @@ pub(crate) fn spawn_convert_media_probe(
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
+        let permit = probe_semaphore.acquire_owned().await;
+        let Ok(_permit) = permit else {
+            return;
+        };
         let media = tokio::task::spawn_blocking(move || {
             transcode::probe_input_media(&file_path, &ffprobe_path)
         })
