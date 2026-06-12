@@ -2383,6 +2383,7 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-convert-preset", s.convert_size_preset);
   setVal("set-convert-min-shrink", s.convert_min_shrink_percent);
   setVal("set-convert-cpu-threads", s.convert_cpu_threads ?? 0);
+  setVal("set-convert-parallel", s.convert_parallel ?? 1);
   setVal("set-convert-encoder-override", s.convert_encoder_override);
   setCheck("set-convert-recursive", s.convert_recursive);
   setCheck("set-convert-dry-run", s.convert_dry_run);
@@ -2467,6 +2468,8 @@ function collectSettingsForm(base) {
     parseFloat(document.getElementById("set-convert-min-shrink").value) || 0;
   s.convert_cpu_threads =
     parseInt(document.getElementById("set-convert-cpu-threads").value, 10) || 0;
+  s.convert_parallel =
+    parseInt(document.getElementById("set-convert-parallel").value, 10) || 1;
   s.convert_encoder_override = document.getElementById("set-convert-encoder-override").value;
   s.convert_recursive = document.getElementById("set-convert-recursive").checked;
   s.convert_dry_run = document.getElementById("set-convert-dry-run").checked;
@@ -2484,6 +2487,7 @@ function collectSettingsForm(base) {
   s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
   s.convert_min_shrink_percent = Math.min(95, Math.max(0, s.convert_min_shrink_percent));
   s.convert_cpu_threads = Math.max(0, s.convert_cpu_threads);
+  s.convert_parallel = Math.min(6, Math.max(1, s.convert_parallel));
   const allowedPriority = new Set(["normal", "below_normal", "idle"]);
   if (!allowedPriority.has(s.subprocess_priority)) s.subprocess_priority = "normal";
   s.worker_count = Math.min(6, Math.max(1, s.worker_count));

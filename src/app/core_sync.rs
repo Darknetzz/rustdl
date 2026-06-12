@@ -233,7 +233,7 @@ pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{ConvertQueueItem, ItemStatus, QueueItem};
+    use crate::models::{ItemStatus, QueueItem};
     use std::sync::Arc;
     use tokio::runtime::Runtime;
 

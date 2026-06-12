@@ -114,7 +114,8 @@ impl super::core::DownloadCore {
 
     fn handle_convert_line(&mut self, item_id: u64, line: &str) {
         if line.starts_with("starting with ") || line.starts_with("skip_reason=") {
-            if let Some(it) = self.convert_items.iter_mut().find(|x| x.item_id == item_id) {
+            if let Some(idx) = self.convert_item_idx(item_id) {
+                let it = &mut self.convert_items[idx];
                 it.status = ItemStatus::Downloading;
                 it.detail = line.to_owned();
             }
@@ -126,8 +127,8 @@ impl super::core::DownloadCore {
 
         let Some((key, value)) = line.split_once('=') else {
             if line.starts_with("dry-run:") {
-                if let Some(it) = self.convert_items.iter_mut().find(|x| x.item_id == item_id) {
-                    it.detail = line.chars().take(160).collect();
+                if let Some(idx) = self.convert_item_idx(item_id) {
+                    self.convert_items[idx].detail = line.chars().take(160).collect();
                 }
                 self.append_log(&format!("[convert {item_id}] {line}"));
                 self.update_convert_status();
@@ -182,7 +183,8 @@ impl super::core::DownloadCore {
             percent,
         );
 
-        if let Some(it) = self.convert_items.iter_mut().find(|x| x.item_id == item_id) {
+        if let Some(idx) = self.convert_item_idx(item_id) {
+            let it = &mut self.convert_items[idx];
             it.status = ItemStatus::Downloading;
             if let Some(p) = percent {
                 it.percent = p;
@@ -199,7 +201,8 @@ impl super::core::DownloadCore {
         media: crate::transcode::ConvertInputMedia,
     ) {
         self.convert_media_inflight.remove(&item_id);
-        if let Some(it) = self.convert_items.iter_mut().find(|x| x.item_id == item_id) {
+        if let Some(idx) = self.convert_item_idx(item_id) {
+            let it = &mut self.convert_items[idx];
             it.video_codec = media.codec;
             it.width = media.width;
             it.height = media.height;
@@ -224,7 +227,8 @@ impl super::core::DownloadCore {
         detail: String,
         final_output_path: Option<String>,
     ) {
-        if let Some(it) = self.convert_items.iter_mut().find(|x| x.item_id == item_id) {
+        if let Some(idx) = self.convert_item_idx(item_id) {
+            let it = &mut self.convert_items[idx];
             if !ok && convert_detail_is_user_cancellation(&detail) {
                 reset_convert_item_to_ready(it);
             } else {

@@ -1515,6 +1515,17 @@ impl PydlApp {
                             }
                             changed |= cpu_slider_changed;
                             ui.end_row();
+                            ui.label("Parallel conversions");
+                            changed |= ui
+                                .add(
+                                    egui::Slider::new(&mut self.settings.convert_parallel, 1..=6)
+                                        .integer(),
+                                )
+                                .on_hover_text(
+                                    "Number of ffmpeg transcodes to run at once during a batch.",
+                                )
+                                .changed();
+                            ui.end_row();
                             ui.label("Encoder override");
                             egui::ComboBox::from_id_salt("settings_convert_encoder")
                                 .selected_text(if self.settings.convert_encoder_override.is_empty() {
@@ -1701,6 +1712,7 @@ impl PydlApp {
                 self.settings.convert_cpu_threads =
                     self.settings.convert_cpu_threads.clamp(1, max_cpus);
             }
+            self.settings.convert_parallel = self.settings.convert_parallel.clamp(1, 6);
             self.settings.subprocess_priority =
                 crate::external_tools::subprocess_priority_storage_value(
                     crate::external_tools::normalize_subprocess_priority(

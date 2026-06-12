@@ -294,12 +294,14 @@ impl DownloadCore {
         }
 
         self.convert_running = true;
+        let parallel = self.settings.convert_parallel.clamp(1, 6);
         background_spawn::spawn_convert_worker(
             &self.runtime,
             &self.ui_event_bus(),
             cfg,
             jobs,
             self.convert_cancel_flag.clone(),
+            parallel,
         );
         self.append_log("Convert: batch started.");
         self.update_convert_status();

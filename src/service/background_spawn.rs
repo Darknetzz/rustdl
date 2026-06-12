@@ -1,7 +1,8 @@
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use tokio::runtime::Runtime;
+use tokio::sync::Semaphore;
 
 use crate::domain::events::{try_send_ui, UiEvent, UiEventBus};
 use crate::models::VideoPreview;
@@ -409,12 +410,183 @@ pub(crate) fn spawn_convert_media_probe(
     });
 }
 
+async fn run_convert_job(
+    bus: &UiEventBus,
+    cfg: &ConvertConfig,
+    enc: &transcode::EncoderChoice,
+    cancel_flag: &Arc<AtomicBool>,
+    item_id: u64,
+    item: transcode::ConvertPlanItem,
+) {
+    if let Some(ms) = transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
+        let _ = try_send_ui(
+            bus,
+            UiEvent::ConvertDuration {
+                item_id,
+                duration_ms: ms,
+            },
+        );
+    }
+    let _ = try_send_ui(
+        bus,
+        UiEvent::ConvertLine {
+            item_id,
+            line: format!("starting with {} ({})", enc.encoder, enc.hw_type),
+        },
+    );
+    let item_for_primary = item.clone();
+    let res = tokio::task::spawn_blocking({
+        let cfg = cfg.clone();
+        let bus = bus.clone();
+        let enc = enc.clone();
+        let cancel_flag = cancel_flag.clone();
+        move || {
+            transcode::run_single(
+                &item_for_primary,
+                &cfg,
+                &enc,
+                Some(cancel_flag),
+                |line| {
+                    let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
+                },
+            )
+        }
+    })
+    .await;
+    match res {
+        Ok(Ok(final_path)) => {
+            let _ = try_send_ui(
+                bus,
+                UiEvent::ConvertDone {
+                    item_id,
+                    ok: true,
+                    detail: "Completed".to_owned(),
+                    final_output_path: Some(final_path.to_string_lossy().into_owned()),
+                },
+            );
+        }
+        Ok(Err(e)) => {
+            let err_text = e.to_string();
+            if err_text.to_ascii_lowercase().starts_with("skipped") {
+                let _ = try_send_ui(
+                    bus,
+                    UiEvent::ConvertDone {
+                        item_id,
+                        ok: true,
+                        detail: err_text,
+                        final_output_path: None,
+                    },
+                );
+                return;
+            }
+            // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
+            let cpu_name = transcode::cpu_encoder_for_target(&cfg.target_codec);
+            if enc.encoder != cpu_name && enc.hw_type != "cpu" {
+                let _ = try_send_ui(
+                    bus,
+                    UiEvent::ConvertLine {
+                        item_id,
+                        line: format!(
+                            "encoder {} failed; retrying with {}",
+                            enc.encoder, cpu_name
+                        ),
+                    },
+                );
+                let cpu_enc = transcode::EncoderChoice {
+                    encoder: cpu_name,
+                    codec: transcode::normalize_target_codec(&cfg.target_codec),
+                    hw_type: "cpu",
+                };
+                let retry = tokio::task::spawn_blocking({
+                    let cfg = cfg.clone();
+                    let bus = bus.clone();
+                    let item = item.clone();
+                    let cancel_flag = cancel_flag.clone();
+                    move || {
+                        transcode::run_single(
+                            &item,
+                            &cfg,
+                            &cpu_enc,
+                            Some(cancel_flag),
+                            |line| {
+                                let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
+                            },
+                        )
+                    }
+                })
+                .await;
+                match retry {
+                    Ok(Ok(final_path)) => {
+                        let _ = try_send_ui(
+                            bus,
+                            UiEvent::ConvertDone {
+                                item_id,
+                                ok: true,
+                                detail: "Completed (CPU fallback)".to_owned(),
+                                final_output_path: Some(final_path.to_string_lossy().into_owned()),
+                            },
+                        );
+                    }
+                    Ok(Err(retry_err)) => {
+                        let _ = try_send_ui(
+                            bus,
+                            UiEvent::ConvertDone {
+                                item_id,
+                                ok: false,
+                                detail: format!(
+                                    "Primary encoder failed: {err_text}\nCPU fallback failed: {retry_err}"
+                                ),
+                                final_output_path: None,
+                            },
+                        );
+                    }
+                    Err(retry_join_err) => {
+                        let _ = try_send_ui(
+                            bus,
+                            UiEvent::ConvertDone {
+                                item_id,
+                                ok: false,
+                                detail: format!(
+                                    "Primary encoder failed: {err_text}\nCPU fallback task failed: {retry_join_err}"
+                                ),
+                                final_output_path: None,
+                            },
+                        );
+                    }
+                }
+                return;
+            }
+            let _ = try_send_ui(
+                bus,
+                UiEvent::ConvertDone {
+                    item_id,
+                    ok: false,
+                    detail: err_text,
+                    final_output_path: None,
+                },
+            );
+        }
+        Err(e) => {
+            let _ = try_send_ui(
+                bus,
+                UiEvent::ConvertDone {
+                    item_id,
+                    ok: false,
+                    detail: format!("worker failed: {e}"),
+                    final_output_path: None,
+                },
+            );
+        }
+    }
+}
+
 pub(crate) fn spawn_convert_worker(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     cfg: ConvertConfig,
     jobs: Vec<(u64, ConvertInput, String)>,
     cancel_flag: Arc<AtomicBool>,
+    parallel: usize,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
@@ -424,179 +596,32 @@ pub(crate) fn spawn_convert_worker(
             &cfg.encoder_override,
             &cfg.target_codec,
         );
+        let parallel = parallel.clamp(1, 6);
+        let semaphore = Arc::new(Semaphore::new(parallel));
+        let mut handles = Vec::with_capacity(jobs.len());
         for (item_id, input, output_path) in jobs {
-            if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            if cancel_flag.load(Ordering::Relaxed) {
                 continue;
             }
             let item = transcode::ConvertPlanItem {
                 input: std::path::PathBuf::from(input.source_path),
                 output: std::path::PathBuf::from(output_path),
             };
-            if let Some(ms) = transcode::input_duration_ms(&item.input, &cfg.ffprobe_path) {
-                let _ = try_send_ui(
-                    &bus,
-                    UiEvent::ConvertDuration {
-                        item_id,
-                        duration_ms: ms,
-                    },
-                );
-            }
-            let _ = try_send_ui(
-                &bus,
-                UiEvent::ConvertLine {
-                    item_id,
-                    line: format!("starting with {} ({})", enc.encoder, enc.hw_type),
-                },
-            );
-            let item_for_primary = item.clone();
-            let res = tokio::task::spawn_blocking({
-                let cfg = cfg.clone();
-                let bus = bus.clone();
-                let enc = enc.clone();
-                let cancel_flag = cancel_flag.clone();
-                move || {
-                    transcode::run_single(
-                        &item_for_primary,
-                        &cfg,
-                        &enc,
-                        Some(cancel_flag),
-                        |line| {
-                            let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
-                        },
-                    )
-                }
-            })
-            .await;
-            match res {
-                Ok(Ok(final_path)) => {
-                    let _ = try_send_ui(
-                        &bus,
-                        UiEvent::ConvertDone {
-                            item_id,
-                            ok: true,
-                            detail: "Completed".to_owned(),
-                            final_output_path: Some(final_path.to_string_lossy().into_owned()),
-                        },
-                    );
-                }
-                Ok(Err(e)) => {
-                    let err_text = e.to_string();
-                    if err_text.to_ascii_lowercase().starts_with("skipped") {
-                        let _ = try_send_ui(
-                            &bus,
-                            UiEvent::ConvertDone {
-                                item_id,
-                                ok: true,
-                                detail: err_text,
-                                final_output_path: None,
-                            },
-                        );
-                        continue;
-                    }
-                    // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
-                    let cpu_name = transcode::cpu_encoder_for_target(&cfg.target_codec);
-                    if enc.encoder != cpu_name && enc.hw_type != "cpu" {
-                        let _ = try_send_ui(
-                            &bus,
-                            UiEvent::ConvertLine {
-                                item_id,
-                                line: format!(
-                                    "encoder {} failed; retrying with {}",
-                                    enc.encoder, cpu_name
-                                ),
-                            },
-                        );
-                        let cpu_enc = transcode::EncoderChoice {
-                            encoder: cpu_name,
-                            codec: transcode::normalize_target_codec(&cfg.target_codec),
-                            hw_type: "cpu",
-                        };
-                        let retry = tokio::task::spawn_blocking({
-                            let cfg = cfg.clone();
-                            let bus = bus.clone();
-                            let item = item.clone();
-                            let cancel_flag = cancel_flag.clone();
-                            move || {
-                                transcode::run_single(
-                                    &item,
-                                    &cfg,
-                                    &cpu_enc,
-                                    Some(cancel_flag),
-                                    |line| {
-                                        let _ =
-                                            try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
-                                    },
-                                )
-                            }
-                        })
-                        .await;
-                        match retry {
-                            Ok(Ok(final_path)) => {
-                                let _ = try_send_ui(
-                                    &bus,
-                                    UiEvent::ConvertDone {
-                                        item_id,
-                                        ok: true,
-                                        detail: "Completed (CPU fallback)".to_owned(),
-                                        final_output_path: Some(
-                                            final_path.to_string_lossy().into_owned(),
-                                        ),
-                                    },
-                                );
-                                continue;
-                            }
-                            Ok(Err(retry_err)) => {
-                                let _ = try_send_ui(
-                                    &bus,
-                                    UiEvent::ConvertDone {
-                                        item_id,
-                                        ok: false,
-                                        detail: format!(
-                                            "Primary encoder failed: {err_text}\nCPU fallback failed: {retry_err}"
-                                        ),
-                                        final_output_path: None,
-                                    },
-                                );
-                                continue;
-                            }
-                            Err(retry_join_err) => {
-                                let _ = try_send_ui(
-                                    &bus,
-                                    UiEvent::ConvertDone {
-                                        item_id,
-                                        ok: false,
-                                        detail: format!(
-                                            "Primary encoder failed: {err_text}\nCPU fallback task failed: {retry_join_err}"
-                                        ),
-                                        final_output_path: None,
-                                    },
-                                );
-                                continue;
-                            }
-                        }
-                    }
-                    let _ = try_send_ui(
-                        &bus,
-                        UiEvent::ConvertDone {
-                            item_id,
-                            ok: false,
-                            detail: err_text,
-                            final_output_path: None,
-                        },
-                    );
-                }
-                Err(e) => {
-                    let _ = try_send_ui(
-                        &bus,
-                        UiEvent::ConvertDone {
-                            item_id,
-                            ok: false,
-                            detail: format!("worker failed: {e}"),
-                            final_output_path: None,
-                        },
-                    );
-                }
-            }
+            let permit = semaphore.clone().acquire_owned().await;
+            let Ok(permit) = permit else {
+                break;
+            };
+            let bus = bus.clone();
+            let cfg = cfg.clone();
+            let enc = enc.clone();
+            let cancel_flag = cancel_flag.clone();
+            handles.push(tokio::spawn(async move {
+                let _permit = permit;
+                run_convert_job(&bus, &cfg, &enc, &cancel_flag, item_id, item).await;
+            }));
+        }
+        for handle in handles {
+            let _ = handle.await;
         }
         let _ = try_send_ui(&bus, UiEvent::ConvertBatchDone);
     });

@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
+
 ## [0.5.2] - 2026-06-12
 
 ### Fixed

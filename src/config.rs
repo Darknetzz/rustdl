@@ -263,6 +263,9 @@ pub struct AppSettings {
     /// FFmpeg thread limit for converter encodes (`0` = ffmpeg default / all cores).
     #[serde(default, alias = "av1_cpu_threads")]
     pub convert_cpu_threads: u32,
+    /// Number of ffmpeg transcodes to run at once during a convert batch (`1..=6`).
+    #[serde(default = "default_convert_parallel")]
+    pub convert_parallel: usize,
     /// yt-dlp / ffmpeg child process priority: `normal`, `below_normal`, or `idle`.
     #[serde(default = "default_subprocess_priority")]
     pub subprocess_priority: String,
@@ -447,6 +450,10 @@ fn default_subprocess_priority() -> String {
     "normal".to_owned()
 }
 
+fn default_convert_parallel() -> usize {
+    1
+}
+
 fn default_convert_max_width() -> u32 {
     1920
 }
@@ -552,6 +559,7 @@ impl Default for AppSettings {
             active_profile: default_active_profile(),
             convert_encoder_override: String::new(),
             convert_cpu_threads: 0,
+            convert_parallel: default_convert_parallel(),
             subprocess_priority: default_subprocess_priority(),
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
@@ -694,6 +702,7 @@ pub fn load_settings() -> AppSettings {
     if cfg.convert_cpu_threads > 0 {
         cfg.convert_cpu_threads = cfg.convert_cpu_threads.clamp(1, max_cpus);
     }
+    cfg.convert_parallel = cfg.convert_parallel.clamp(1, 6);
     cfg.subprocess_priority = crate::external_tools::subprocess_priority_storage_value(
         crate::external_tools::normalize_subprocess_priority(&cfg.subprocess_priority),
     )
