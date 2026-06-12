@@ -87,7 +87,11 @@ fn platform_asset_names() -> &'static [&'static str] {
     }
     #[cfg(target_os = "macos")]
     {
-        &["rustdl-aarch64-apple-darwin", "rustdl-x86_64-apple-darwin", "rustdl"]
+        &[
+            "rustdl-aarch64-apple-darwin",
+            "rustdl-x86_64-apple-darwin",
+            "rustdl",
+        ]
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
@@ -150,9 +154,7 @@ fn github_request(
     url: &str,
     github_token: Option<&str>,
 ) -> reqwest::RequestBuilder {
-    let mut req = client
-        .get(url)
-        .header("User-Agent", "rustdl-update-check");
+    let mut req = client.get(url).header("User-Agent", "rustdl-update-check");
     if let Some(token) = github_token.filter(|value| !value.trim().is_empty()) {
         req = req.header("Authorization", format!("Bearer {}", token.trim()));
     }
@@ -246,7 +248,8 @@ pub(crate) async fn download_release_asset_async(
 #[cfg(windows)]
 pub(crate) fn schedule_apply_downloaded_update(downloaded: &Path) -> Result<(), String> {
     let current = std::env::current_exe().map_err(|e| e.to_string())?;
-    let script_path = std::env::temp_dir().join(format!("rustdl-apply-update-{}.ps1", std::process::id()));
+    let script_path =
+        std::env::temp_dir().join(format!("rustdl-apply-update-{}.ps1", std::process::id()));
     let downloaded = downloaded.display().to_string().replace('\'', "''");
     let current = current.display().to_string().replace('\'', "''");
     let script_path_ps = script_path.display().to_string().replace('\'', "''");
@@ -276,14 +279,18 @@ Remove-Item -LiteralPath '{script_path_ps}' -Force -ErrorAction SilentlyContinue
         "-File",
         &script_path.to_string_lossy(),
     ]);
-    cmd.spawn().map_err(|e| format!("Failed to start updater: {e}"))?;
+    cmd.spawn()
+        .map_err(|e| format!("Failed to start updater: {e}"))?;
     Ok(())
 }
 
 #[cfg(not(windows))]
 pub(crate) fn schedule_apply_downloaded_update(downloaded: &Path) -> Result<(), String> {
     let _ = downloaded;
-    Err("In-app install is only supported on Windows; open the release page to update manually.".to_owned())
+    Err(
+        "In-app install is only supported on Windows; open the release page to update manually."
+            .to_owned(),
+    )
 }
 
 pub(crate) fn detect_github_repo() -> (String, String) {

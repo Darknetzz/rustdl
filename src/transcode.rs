@@ -347,7 +347,10 @@ fn append_cpu_thread_args(cmd: &mut Command, enc: &EncoderChoice, cpu_threads: u
             cmd.args(["-svtav1-params", &format!("lp={threads_s}")]);
         }
         "libx265" => {
-            cmd.args(["-x265-params", &format!("pools={threads_s}:frame-threads=1")]);
+            cmd.args([
+                "-x265-params",
+                &format!("pools={threads_s}:frame-threads=1"),
+            ]);
         }
         _ => {}
     }
@@ -912,7 +915,8 @@ where
     if let Some(threads) = effective_cpu_threads(cfg.cpu_threads) {
         cmd.arg("-threads").arg(threads.to_string());
     }
-    cmd.arg("-i").arg(&plan.input)
+    cmd.arg("-i")
+        .arg(&plan.input)
         .arg("-vf")
         .arg(vf)
         .arg("-c:v")

@@ -809,9 +809,9 @@ impl PydlApp {
                     ui.horizontal_wrapped(|ui| {
                         ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
                         for id in &ids {
-                            let idx = self.item_idx(*id).or_else(|| {
-                                self.items.iter().position(|it| it.item_id == *id)
-                            });
+                            let idx = self
+                                .item_idx(*id)
+                                .or_else(|| self.items.iter().position(|it| it.item_id == *id));
                             if let Some(idx) = idx {
                                 self.draw_card(ui, idx, allow_reorder);
                             }

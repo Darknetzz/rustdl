@@ -122,12 +122,11 @@ impl PydlApp {
         };
         draw(ui, "dl_queue_transport", &mut |g| {
             if has_idle_ready
-                && g
-                    .success(
-                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                        true,
-                    )
-                    .clicked()
+                && g.success(
+                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                    true,
+                )
+                .clicked()
             {
                 self.start_downloads();
             }
@@ -262,12 +261,11 @@ impl PydlApp {
         };
         draw(ui, &mut |g| {
             if has_idle_ready
-                && g
-                    .success(
-                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                        true,
-                    )
-                    .clicked()
+                && g.success(
+                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                    true,
+                )
+                .clicked()
             {
                 self.start_downloads();
             }

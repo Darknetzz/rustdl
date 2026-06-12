@@ -42,8 +42,7 @@ pub(crate) fn spawn_update_check(
     let rt = rt.clone();
     rt.spawn(async move {
         let token_ref = github_token.as_deref();
-        let result =
-            crate::app::update_check::check_latest_release_async(&client, token_ref).await;
+        let result = crate::app::update_check::check_latest_release_async(&client, token_ref).await;
         let (
             latest_version,
             release_url,

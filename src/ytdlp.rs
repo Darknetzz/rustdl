@@ -867,10 +867,7 @@ where
     };
     let output_template = format!("{output_dir}/{template}");
     let mut cmd = TokioCommand::new(resolve_executable(yt_dlp_path, "yt-dlp"));
-    apply_subprocess_launch_tokio(
-        &mut cmd,
-        normalize_subprocess_priority(subprocess_priority),
-    );
+    apply_subprocess_launch_tokio(&mut cmd, normalize_subprocess_priority(subprocess_priority));
     cmd.arg("--newline")
         .arg("--progress-template")
         .arg(format!(

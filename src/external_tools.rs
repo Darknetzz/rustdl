@@ -86,7 +86,10 @@ pub fn apply_subprocess_launch(cmd: &mut Command, priority: SubprocessPriority) 
     let _ = priority;
 }
 
-pub fn apply_subprocess_launch_tokio(cmd: &mut tokio::process::Command, priority: SubprocessPriority) {
+pub fn apply_subprocess_launch_tokio(
+    cmd: &mut tokio::process::Command,
+    priority: SubprocessPriority,
+) {
     #[cfg(windows)]
     {
         cmd.creation_flags(subprocess_creation_flags(priority));
@@ -137,7 +140,10 @@ mod tests {
             normalize_subprocess_priority("below-normal"),
             SubprocessPriority::BelowNormal
         );
-        assert_eq!(normalize_subprocess_priority("idle"), SubprocessPriority::Idle);
+        assert_eq!(
+            normalize_subprocess_priority("idle"),
+            SubprocessPriority::Idle
+        );
         assert_eq!(
             normalize_subprocess_priority("unknown"),
             SubprocessPriority::Normal
