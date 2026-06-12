@@ -979,6 +979,131 @@ fn human_bytes(bytes: u64) -> String {
     }
 }
 
+pub struct FlatPlaylistPreview {
+    pub title: Option<String>,
+    pub urls: Vec<String>,
+}
+
+/// Lists playlist/channel entries without fetching full metadata (`--flat-playlist -J`).
+pub fn flat_playlist_preview(
+    yt_dlp_path: &str,
+    url: &str,
+    cap: usize,
+) -> anyhow::Result<FlatPlaylistPreview> {
+    use anyhow::Context;
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        anyhow::bail!("URL required");
+    }
+    let bin = resolve_executable(yt_dlp_path, "yt-dlp");
+    let mut cmd = Command::new(&bin);
+    no_console_window(&mut cmd);
+    cmd.args([
+        "-J",
+        "--flat-playlist",
+        "--no-warnings",
+        "--skip-download",
+        trimmed,
+    ]);
+    let output = cmd
+        .output()
+        .with_context(|| format!("failed to spawn {bin}"))?;
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        anyhow::bail!(if err.is_empty() {
+            "yt-dlp flat playlist failed".to_owned()
+        } else {
+            err
+        });
+    }
+    let root: Value = serde_json::from_slice(&output.stdout).context("invalid yt-dlp JSON")?;
+    let title = root
+        .get("title")
+        .or_else(|| root.get("playlist_title"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let limit = cap.max(1);
+    let mut urls = Vec::new();
+    if let Some(entries) = root.get("entries").and_then(Value::as_array) {
+        for e in entries.iter().take(limit) {
+            if let Some(u) = entry_webpage_url(e) {
+                urls.push(u);
+            }
+        }
+    } else if let Some(u) = entry_webpage_url(&root) {
+        urls.push(u);
+    }
+    Ok(FlatPlaylistPreview { title, urls })
+}
+
+fn entry_webpage_url(entry: &Value) -> Option<String> {
+    entry
+        .get("webpage_url")
+        .or_else(|| entry.get("url"))
+        .and_then(Value::as_str)
+        .map(str::to_owned)
+        .filter(|s| s.starts_with("http"))
+}
+
+pub struct CookieHealthResult {
+    pub ok: bool,
+    pub message: String,
+}
+
+/// Best-effort metadata probe to validate cookies / impersonate settings.
+pub fn cookie_health_probe(
+    yt_dlp_path: &str,
+    test_url: &str,
+    cookies: &str,
+    impersonate: &str,
+) -> CookieHealthResult {
+    if cookies.trim().is_empty() {
+        return CookieHealthResult {
+            ok: false,
+            message: "No cookies configured.".to_owned(),
+        };
+    }
+    let bin = resolve_executable(yt_dlp_path, "yt-dlp");
+    let mut cmd = Command::new(&bin);
+    no_console_window(&mut cmd);
+    cmd.args(["--no-warnings", "--skip-download", "--print", "title"]);
+    for arg in cookie_args_from_setting(cookies) {
+        cmd.arg(arg);
+    }
+    if !impersonate.trim().is_empty() {
+        cmd.args(["--impersonate", impersonate.trim()]);
+    }
+    cmd.arg(test_url);
+    match cmd.output() {
+        Ok(o) if o.status.success() => {
+            let title = String::from_utf8_lossy(&o.stdout).trim().to_owned();
+            CookieHealthResult {
+                ok: !title.is_empty(),
+                message: if title.is_empty() {
+                    "Cookies accepted but no title returned.".to_owned()
+                } else {
+                    format!("OK — resolved title: {title}")
+                },
+            }
+        }
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_owned();
+            CookieHealthResult {
+                ok: false,
+                message: if err.is_empty() {
+                    "Cookie probe failed.".to_owned()
+                } else {
+                    err
+                },
+            }
+        }
+        Err(e) => CookieHealthResult {
+            ok: false,
+            message: format!("Could not run yt-dlp: {e}"),
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1150,17 +1275,15 @@ mod tests {
 
     #[test]
     fn format_download_card_detail_skips_progress_spam() {
-        assert!(format_download_card_detail(
-            "progress:98.4%|236700648|NA|240516070.39999998"
-        )
-        .is_none());
+        assert!(
+            format_download_card_detail("progress:98.4%|236700648|NA|240516070.39999998").is_none()
+        );
         assert!(format_download_card_detail(
             "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
         )
         .is_none());
         assert_eq!(
-            format_download_card_detail("[FixupM3u8] Fixing MPEG-TS in MP4 container")
-                .as_deref(),
+            format_download_card_detail("[FixupM3u8] Fixing MPEG-TS in MP4 container").as_deref(),
             Some("[FixupM3u8] Fixing MPEG-TS in MP4 container")
         );
     }

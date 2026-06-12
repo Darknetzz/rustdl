@@ -9,14 +9,14 @@ use std::time::{Duration, Instant};
 
 use crate::app_parsing::normalize_restored_item;
 use crate::app_state::{self, BatchProgress, StatusCounts, TransferTotals, UrlLineFilterStats};
-use crate::convert_state::{
-    compute_convert_batch_progress, compute_convert_batch_summary, compute_convert_status_counts,
-    rebuild_convert_item_index_map, ConvertBatchSummary, ConvertStatusCounts,
-};
 use crate::config::{
     load_activity_log, load_convert_queue_snapshot, load_queue_items, load_settings,
     save_activity_log, save_queue_items, save_settings, trim_activity_log, AppSettings,
     ConvertQueueSnapshot,
+};
+use crate::convert_state::{
+    compute_convert_batch_progress, compute_convert_batch_summary, compute_convert_status_counts,
+    rebuild_convert_item_index_map, ConvertBatchSummary, ConvertStatusCounts,
 };
 use crate::domain::done_file_index::{DoneFileIndex, DONE_LOOKUP_MAX_ENTRIES};
 use crate::domain::events::{UiEvent, UiEventBus};
@@ -32,8 +32,8 @@ use crate::ytdlp_download_args::{
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 use tokio::runtime::Runtime;
-use tokio::sync::Semaphore;
 use tokio::sync::broadcast;
+use tokio::sync::Semaphore;
 
 pub type SharedCore = Arc<Mutex<DownloadCore>>;
 
@@ -1614,6 +1614,232 @@ impl DownloadCore {
             "ffmpeg": tool_json("ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, &self.settings.ffmpeg_path),
             "ffprobe": tool_json("ffprobe", self.has_ffprobe, &self.ffprobe_version, &self.settings.ffprobe_path),
         })
+    }
+
+    pub fn set_item_download_overrides(
+        &mut self,
+        item_id: u64,
+        format_override: Option<String>,
+        profile_override: Option<String>,
+    ) -> bool {
+        let Some(idx) = self.item_idx(item_id) else {
+            return false;
+        };
+        self.items[idx].format_override = format_override.filter(|s| !s.trim().is_empty());
+        self.items[idx].profile_override = profile_override.filter(|s| !s.trim().is_empty());
+        self.schedule_queue_save();
+        self.bump_generation();
+        true
+    }
+
+    pub fn refetch_item_metadata(&mut self, item_id: u64) -> Result<(), String> {
+        if self.add_in_progress {
+            return Err(
+                "Wait for the current metadata batch to finish before refetching.".to_owned(),
+            );
+        }
+        if !self.has_yt_dlp {
+            self.refresh_deps();
+            return Err("yt-dlp not found (check PATH or Settings executable path).".to_owned());
+        }
+        let Some(idx) = self.item_idx(item_id) else {
+            return Err("Item not found.".to_owned());
+        };
+        if self.items[idx].status != ItemStatus::Idle {
+            return Err("Refetch is only available for Ready rows.".to_owned());
+        }
+        let line = self.items[idx].source_line.clone();
+        if line.trim().is_empty() {
+            return Err("No source URL on this row.".to_owned());
+        }
+        self.pending_resolve_ids.insert(line.clone(), item_id);
+        self.items[idx] = QueueItem::pending_metadata(item_id, line.clone());
+        self.add_in_progress = true;
+        self.add_total_urls = 1;
+        self.add_processed_urls = 0;
+        self.add_current_url = Some(line.clone());
+        self.update_status();
+        self.invalidate_queue_caches();
+        self.flush_queue_to_disk();
+        self.bump_generation();
+        self.append_log(&format!("Refetching metadata for {line}"));
+        background_spawn::spawn_url_resolve_pipeline(
+            &self.runtime,
+            &self.ui_event_bus(),
+            self.yt_dlp_bin(),
+            self.metadata_extra_args(),
+            self.settings.playlist_preview_cap,
+            vec![line],
+        );
+        Ok(())
+    }
+
+    fn probe_saved_file_streams(&self, item: &QueueItem) -> Result<(bool, bool), String> {
+        if !self.has_ffprobe {
+            return Err("ffprobe not found (Settings → Executables).".to_owned());
+        }
+        if item.video_id.trim().is_empty() {
+            return Err("No video id; cannot match a file in the output folder.".to_owned());
+        }
+        let output_dir = self.effective_output_dir();
+        let path = item
+            .local_path
+            .as_ref()
+            .and_then(|rel| {
+                crate::domain::done_file_index::resolve_path_under_output(&output_dir, rel)
+            })
+            .or_else(|| {
+                self.done_file_index
+                    .find_path_for_queue_item(&output_dir, item)
+                    .map(|(p, _)| p)
+            });
+        let Some(path) = path else {
+            return Err("No matching file in the output folder.".to_owned());
+        };
+        let path_str = path.to_string_lossy().to_string();
+        ytdlp::probe_video_audio_stream_presence(&path_str, &self.settings.ffprobe_path).ok_or_else(
+            || {
+                "ffprobe failed or could not parse output. Check the file and ffprobe path."
+                    .to_owned()
+            },
+        )
+    }
+
+    fn streams_incomplete_message(has_video: bool, has_audio: bool) -> Option<String> {
+        if !has_video && !has_audio {
+            Some("File has neither video nor audio streams according to ffprobe.".to_owned())
+        } else if !has_video {
+            Some(
+                "Download has audio only (no video stream). Try yt-dlp -f \"bv*+ba/b\" with ffmpeg merge, or check available formats (-F)."
+                    .to_owned(),
+            )
+        } else if !has_audio {
+            Some(
+                "Download has video but no audio stream. Try a different format or merge (bestvideo+bestaudio)."
+                    .to_owned(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn verify_streams_for_item(&mut self, item_id: u64) -> Result<String, String> {
+        let Some(idx) = self.item_idx(item_id) else {
+            return Err("Item not found.".to_owned());
+        };
+        let item = self.items[idx].clone();
+        let msg = match self.probe_saved_file_streams(&item) {
+            Ok((v, a)) => {
+                self.probe_saved_file_media_for_item(item_id);
+                format!(
+                    "Verify: {} video, {} audio",
+                    if v { "has" } else { "no" },
+                    if a { "has" } else { "no" },
+                )
+            }
+            Err(e) => format!("Check failed: {e}"),
+        };
+        if let Some(idx) = self.item_idx(item_id) {
+            self.items[idx].detail = msg.clone();
+            self.schedule_queue_save();
+            self.bump_generation();
+        }
+        self.append_log(&format!("[item {item_id}] {msg}"));
+        Ok(msg)
+    }
+
+    pub fn recheck_all_saved_downloads(&mut self) {
+        if !self.has_ffprobe {
+            self.append_log("Cannot re-check saved files: ffprobe not found.");
+            return;
+        }
+        if self.settings.ffmpeg_extract_audio_mp3 {
+            self.append_log("Skipping re-check: MP3 extraction mode is enabled.");
+            return;
+        }
+        self.refresh_done_file_lookup();
+        let ids: Vec<u64> = self
+            .items
+            .iter()
+            .filter(|it| matches!(it.status, ItemStatus::Done | ItemStatus::Failed))
+            .map(|it| it.item_id)
+            .collect();
+        let mut issues = 0usize;
+        for item_id in ids {
+            let Some(idx) = self.item_idx(item_id) else {
+                continue;
+            };
+            let item = self.items[idx].clone();
+            if item.video_id.trim().is_empty() {
+                continue;
+            }
+            if self.probe_saved_file_streams(&item).is_err() {
+                continue;
+            }
+            let probe = self.probe_saved_file_streams(&item);
+            let fail_msg = match probe {
+                Ok((v, a)) => Self::streams_incomplete_message(v, a),
+                Err(e) => Some(e),
+            };
+            if let Some(msg) = fail_msg {
+                if let Some(idx) = self.item_idx(item_id) {
+                    self.set_item_status_at(idx, ItemStatus::Failed);
+                    self.items[idx].detail = msg.clone();
+                    issues += 1;
+                    self.append_log(&format!("[item {item_id}] Re-check: {msg}"));
+                }
+            }
+        }
+        self.update_status();
+        self.schedule_queue_save();
+        self.bump_generation();
+        self.append_log(&format!(
+            "Re-checked saved files: {issues} item(s) marked failed (missing stream or probe error)."
+        ));
+    }
+
+    pub fn bulk_retry_items(&mut self, item_ids: &[u64]) -> usize {
+        let mut count = 0usize;
+        for &id in item_ids {
+            let Some(idx) = self.item_idx(id) else {
+                continue;
+            };
+            if self.items[idx].status != ItemStatus::Failed {
+                continue;
+            }
+            if self.redownload_item_id(id).is_ok() {
+                count += 1;
+            }
+        }
+        if count > 0 {
+            self.bump_generation();
+        }
+        count
+    }
+
+    pub fn save_profile_from_settings(&mut self, name: &str) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() {
+            return Err("profile name required".to_owned());
+        }
+        if crate::profiles::builtin_profiles()
+            .iter()
+            .any(|p| p.name == name)
+        {
+            return Err("cannot overwrite a built-in profile name".to_owned());
+        }
+        let profile = crate::profiles::DownloadProfile::from_settings(name, &self.settings, false);
+        crate::profiles::save_user_profile(&mut self.profile_store, profile)
+            .map_err(|e| format!("{e:#}"))?;
+        self.settings.active_profile = name.to_owned();
+        self.persist_settings();
+        self.append_log(&format!("Saved profile: {name}"));
+        self.bump_generation();
+        Ok(())
+    }
+
+    pub fn start_downloads_from_queue(&mut self) {
+        self.start_downloads();
     }
 }
 

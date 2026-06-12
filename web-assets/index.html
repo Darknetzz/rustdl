@@ -65,6 +65,7 @@
       <div class="row add-panel-actions btn-toolbar">
         <div class="btn-group" role="group" aria-label="Add URLs">
           <button type="button" id="btn-add" class="primary" data-icon="add">Add URLs</button>
+          <button type="button" id="btn-playlist-preview" class="secondary" data-icon="playlist_play" title="Preview playlist/channel entries">Playlist preview</button>
           <button type="button" id="btn-clear-url-input" class="secondary" data-icon="clear_all" title="Clear the URL text box">Clear input</button>
         </div>
       </div>
@@ -79,6 +80,9 @@
           <input type="search" id="queue-search" class="queue-search-input" placeholder="Title, URL, uploader…" autocomplete="off" />
         </label>
         <span class="hint">Queue:</span>
+        <button type="button" id="btn-bulk-remove" class="secondary danger" data-icon="remove" disabled title="Remove selected items">Remove selected</button>
+        <button type="button" id="btn-bulk-retry" class="secondary" data-icon="refresh" disabled title="Retry selected failed items">Retry selected</button>
+        <button type="button" id="btn-recheck-files" class="secondary" data-icon="fact_check" title="Re-check all saved downloads with ffprobe">Re-check files</button>
         <button type="button" id="btn-retry-failed" class="secondary" data-icon="refresh" disabled title="No failed downloads">Retry all failed</button>
         <div class="btn-group" role="group" aria-label="Clear queue" id="queue-clear-menu"></div>
       </div>
@@ -89,6 +93,14 @@
       <div class="row log-header">
         <h2>Activity log</h2>
         <div class="btn-group" role="group" aria-label="Log controls">
+          <label class="log-filter-label">Filter
+            <select id="log-filter" title="Activity log filter">
+              <option value="all">All</option>
+              <option value="important">Important</option>
+              <option value="errors">Errors</option>
+            </select>
+          </label>
+          <button type="button" id="btn-export-log" class="secondary" data-icon="download" title="Download activity log">Export log</button>
           <button type="button" id="btn-expand-log" class="secondary" title="Expand or collapse log panel">Expand log</button>
           <button type="button" id="btn-clear-log" class="secondary" data-icon="clear_all">Clear log</button>
         </div>
@@ -108,6 +120,8 @@
           <div class="btn-group" role="group" aria-label="Convert batch controls">
             <button type="button" id="btn-convert-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
             <button type="button" id="btn-convert-start" class="primary" data-icon="play_arrow">Start Convert batch</button>
+            <button type="button" id="btn-convert-pause" class="secondary" data-icon="pause" disabled title="No Convert batch is running">Pause</button>
+            <button type="button" id="btn-convert-resume" class="secondary" data-icon="play_arrow" disabled title="Convert batch is not paused">Resume</button>
             <button type="button" id="btn-convert-cancel" class="danger" data-icon="stop" disabled title="No Convert batch is running">Cancel</button>
           </div>
           <div class="btn-group" role="group" aria-label="Convert queue">
@@ -227,11 +241,18 @@
           <label>yt-dlp path <input type="text" id="set-yt-dlp-path" placeholder="yt-dlp or full path" /></label>
 
           <h3>Download profile</h3>
-          <div class="row">
+          <div class="row profile-row">
             <label>Active profile
               <select id="set-active-profile"></select>
             </label>
             <button type="button" id="btn-apply-profile" class="secondary" data-icon="check">Apply profile</button>
+          </div>
+          <div class="row profile-manage-row">
+            <button type="button" id="btn-profile-save" class="secondary" data-icon="save">Save as profile…</button>
+            <button type="button" id="btn-profile-rename" class="secondary" data-icon="edit">Rename profile</button>
+            <button type="button" id="btn-profile-delete" class="secondary danger" data-icon="delete">Delete profile</button>
+            <button type="button" id="btn-profile-export" class="secondary" data-icon="download">Export profiles</button>
+            <button type="button" id="btn-profile-import" class="secondary" data-icon="upload">Import profiles</button>
           </div>
           <div class="preset-row">
             <span class="hint">Presets:</span>

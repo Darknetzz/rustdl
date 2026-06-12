@@ -93,11 +93,7 @@ pub fn synthetic_convert_items(count: usize) -> Vec<ConvertQueueItem> {
                 percent: if i % 5 == 2 { 42.0 } else { 0.0 },
                 detail: String::new(),
                 input_bytes: 1_000_000,
-                output_bytes: if i % 5 == 3 {
-                    Some(400_000)
-                } else {
-                    None
-                },
+                output_bytes: if i % 5 == 3 { Some(400_000) } else { None },
                 ..Default::default()
             }
         })

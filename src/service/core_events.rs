@@ -299,6 +299,9 @@ impl super::core::DownloadCore {
                     } else {
                         it.detail = detail.clone();
                     }
+                    let source = it.source_path.clone();
+                    let out = it.output_path.clone();
+                    self.apply_convert_post_encode_actions(&source, &out);
                 } else {
                     it.detail = detail.clone();
                 }

@@ -298,6 +298,42 @@ pub async fn run_headless_enqueue(urls: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+pub async fn run_headless_start_queue() -> Result<()> {
+    let rt = Arc::new(tokio::runtime::Runtime::new()?);
+    let (service, _rx) = RustdlService::new(rt.clone());
+    let core = service.shared_core();
+    {
+        let mut c = core.lock();
+        c.start_downloads();
+    }
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let c = core.lock();
+        if c.status_active == 0 && c.status_queued == 0 && !c.add_in_progress {
+            break;
+        }
+    }
+    Ok(())
+}
+
+pub async fn run_headless_convert_batch() -> Result<()> {
+    let rt = Arc::new(tokio::runtime::Runtime::new()?);
+    let (service, _rx) = RustdlService::new(rt.clone());
+    let core = service.shared_core();
+    {
+        let mut c = core.lock();
+        c.start_convert_batch();
+    }
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let c = core.lock();
+        if !c.convert_running {
+            break;
+        }
+    }
+    Ok(())
+}
+
 pub fn parse_cli_enqueue_args(args: &[String]) -> Result<String> {
     let mut source = None;
     let mut i = 0;
@@ -460,6 +496,22 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
                 process::exit(2);
             }
         },
+        "--start-queue" => {
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            if let Err(e) = rt.block_on(run_headless_start_queue()) {
+                eprintln!("Start queue failed: {e:#}");
+                process::exit(1);
+            }
+            true
+        }
+        "--convert-batch" => {
+            let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
+            if let Err(e) = rt.block_on(run_headless_convert_batch()) {
+                eprintln!("Convert batch failed: {e:#}");
+                process::exit(1);
+            }
+            true
+        }
         s if s.starts_with('-') => {
             eprintln!("Unknown option: {s}");
             eprintln!("Try `rustdl --help`.");
@@ -483,6 +535,8 @@ fn print_help() {
     println!("  rustdl --enqueue URL|@file|-   Append URLs to the saved download queue");
     println!("  rustdl --download URL [OPTS]    Headless download (no GUI)");
     println!("  rustdl --web-only [OPTS]        Headless LAN web UI (no GUI)");
+    println!("  rustdl --start-queue            Start persisted download queue and wait");
+    println!("  rustdl --convert-batch          Start persisted convert batch and wait");
     println!("  rustdl --list-profiles          List download profile names");
     println!("  rustdl [OPTIONS]\n");
     println!("Options:");

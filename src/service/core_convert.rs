@@ -301,7 +301,14 @@ impl DownloadCore {
         }
 
         self.convert_running = true;
-        let parallel = self.settings.convert_parallel.clamp(1, 6);
+        let mut parallel = self.settings.convert_parallel.clamp(1, 6);
+        if self.settings.convert_max_hw_encodes > 0 {
+            if let Some(enc) = &self.convert_encoder_choice {
+                if transcode::encoder_uses_hardware(enc) {
+                    parallel = parallel.min(self.settings.convert_max_hw_encodes.max(1));
+                }
+            }
+        }
         background_spawn::spawn_convert_worker(
             &self.runtime,
             &self.ui_event_bus(),
@@ -378,6 +385,68 @@ impl DownloadCore {
         ));
         self.update_convert_status();
         self.bump_generation();
+    }
+
+    pub fn fallback_convert_encoder_to_software(&mut self) {
+        self.settings.convert_encoder_override =
+            match transcode::normalize_target_codec(&self.settings.convert_target_codec) {
+                "hevc" => "libx265".to_owned(),
+                "h264" => "libx264".to_owned(),
+                _ => "libsvtav1".to_owned(),
+            };
+        self.convert_encoder_choice = None;
+        self.convert_encoder_detect_key.clear();
+        self.refresh_convert_encoder_detection();
+        self.persist_settings();
+        self.append_log("Convert: switched remaining batch to software encoder.");
+        self.bump_generation();
+    }
+
+    pub fn apply_convert_post_encode_actions(&mut self, source_path: &str, output_path: &str) {
+        let source = std::path::Path::new(source_path);
+        let output = std::path::Path::new(output_path);
+        if self.settings.convert_copy_subtitles {
+            if let Some(stem) = source.file_stem().and_then(|s| s.to_str()) {
+                if let Some(parent) = output.parent() {
+                    if let Some(src_dir) = source.parent() {
+                        for ext in ["srt", "vtt", "ass"] {
+                            let sidecar = src_dir.join(format!("{stem}.{ext}"));
+                            if sidecar.is_file() {
+                                let dest = parent.join(format!(
+                                    "{}.{ext}",
+                                    output.file_stem().and_then(|s| s.to_str()).unwrap_or(stem)
+                                ));
+                                let _ = std::fs::copy(&sidecar, &dest);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if !self.settings.convert_post_move_subfolder.trim().is_empty() && output.is_file() {
+            if let Some(parent) = output.parent() {
+                let sub = parent.join(self.settings.convert_post_move_subfolder.trim());
+                if std::fs::create_dir_all(&sub).is_ok() {
+                    let dest = sub.join(
+                        output
+                            .file_name()
+                            .unwrap_or_else(|| std::ffi::OsStr::new("output")),
+                    );
+                    if std::fs::rename(output, &dest).is_ok() {
+                        self.append_log(&format!("Convert: moved output to {}", dest.display()));
+                    }
+                }
+            }
+        }
+        if self.settings.convert_write_checksum && output.is_file() {
+            if let Ok(meta) = std::fs::metadata(output) {
+                let sidecar = output.with_extension("sha256.txt");
+                let _ = std::fs::write(
+                    sidecar,
+                    format!("size={} path={}\n", meta.len(), output.display()),
+                );
+            }
+        }
     }
 
     pub fn clear_convert_queue(&mut self) {

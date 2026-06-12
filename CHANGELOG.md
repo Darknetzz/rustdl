@@ -12,6 +12,16 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- **LAN web UI parity (v0.6 roadmap):** Convert batch **Pause** / **Resume**; Ready-row **reorder** (↑/↓); Done **history filter** (24h / 7d / 30d) and **Re-queue visible**; profile **save**, **rename**, **delete**, **export**, and **import**; activity log **filter** (All / Important / Errors) and **export**; queue **bulk select** with Remove/Retry selected; per-card **Refetch metadata**, **Cancel → Ready/Remove**, and **Re-check all saved files** API.
+- **Playlist preview** on web and API (`POST /api/queue/playlist-preview`) — flat-list playlist/channel entries and add all with confirmation.
+- **Headless CLI:** `rustdl --start-queue` and `rustdl --convert-batch` run persisted queues without the GUI.
+- **Watch folders** (Settings): auto-enqueue `.url`/`.txt` from a downloader folder; auto-scan new videos into the convert queue (optional auto-start).
+- **Queue templates** saved under the config dir (`queue_templates/`); **convert presets** (`rustdl_convert_presets.json`) with built-in Fast AV1 and Quality H.265.
+- **Library API** (`GET /api/library`) listing Done downloads; **cookie health check** API; convert batch **CSV export** and **software encoder fallback** API.
+- Post-encode options: **copy subtitles**, **move to subfolder**, **checksum sidecar**; **GPU encode fairness** cap when parallel conversions use hardware encoders.
+- Optional **TLS cert/key paths** in settings (use with a reverse proxy; paths reserved for future native TLS).
+- Packaging: **winget** manifest under `packaging/winget/`.
+
 - Quit dialog includes **Quit and Clear Queue**, which closes rustdl and removes saved downloader and converter queue items (after gracefully cancelling any active jobs).
 - **Pause / Resume** for Video Converter batches (queue footer, command palette, LAN API); **Pause / Resume downloads** also appears on the main Downloader panel (still in the queue footer).
 - Main header shows live **CPU**, **RAM**, and (on Windows) **GPU** utilization percentages, color-coded by load.

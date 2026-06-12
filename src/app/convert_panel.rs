@@ -9,7 +9,8 @@ use crate::app_ui::{
 use crate::config::AppSettings;
 use crate::convert_state::{
     convert_batch_totals_grew, convert_item_is_skipped, convert_item_status_label,
-    convert_item_will_skip_already_target, convert_skip_hint_label, format_convert_batch_saved_line,
+    convert_item_will_skip_already_target, convert_skip_hint_label,
+    format_convert_batch_saved_line,
 };
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::service::DownloadCore;
@@ -645,12 +646,7 @@ impl PydlApp {
                     default_open,
                 )
                 .show_header(ui, |ui| {
-                    status_dot_with_label(
-                        ui,
-                        &header_text,
-                        group_color,
-                        true,
-                    );
+                    status_dot_with_label(ui, &header_text, group_color, true);
                 });
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);

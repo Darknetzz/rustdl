@@ -142,6 +142,16 @@ pub fn spawn_web_server_at(
     if auth_token.trim().is_empty() {
         return Err(WebServerStartError::EmptyToken);
     }
+    {
+        let c = core.lock();
+        if !c.settings.web_tls_cert_path.trim().is_empty()
+            || !c.settings.web_tls_key_path.trim().is_empty()
+        {
+            eprintln!(
+                "rustdl: web TLS paths are configured; bind plain HTTP and terminate TLS with a reverse proxy (see README LAN notes)."
+            );
+        }
+    }
 
     let state = ApiState::new(core.clone());
     if let Some(tx) = process_exit {

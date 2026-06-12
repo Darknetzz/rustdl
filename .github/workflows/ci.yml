@@ -28,19 +28,19 @@ jobs:
         run: cargo test --all-targets --all-features
 
       - name: Install cargo-deny
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'workflow_dispatch'
         run: cargo install cargo-deny --locked
 
       - name: cargo deny
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'workflow_dispatch'
         run: cargo deny check
 
       - name: Install cargo-audit
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'workflow_dispatch'
         run: cargo install cargo-audit --locked
 
       - name: cargo audit
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'workflow_dispatch'
         run: cargo audit
 
   test-windows:

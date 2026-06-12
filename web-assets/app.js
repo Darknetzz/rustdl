@@ -1,6 +1,7 @@
 const TOKEN_KEY = "rustdl_web_token";
 const WEB_THEME_KEY = "rustdl_web_theme";
 const QUEUE_GROUP_COLLAPSED_KEY = "rustdl_web_queue_groups";
+const DONE_HISTORY_FILTER_KEY = "rustdl_web_done_history_days";
 const DOWNLOAD_QUEUE_GROUPS = ["Active", "Ready", "Issues", "Done", "Resolving"];
 const CONVERT_QUEUE_GROUPS = ["Active", "Ready", "Failed", "Skipped", "Done"];
 
@@ -8,6 +9,10 @@ let cachedSettings = null;
 let logLinesCache = [];
 /** @type {string | null} */
 let queueStatusFilter = null;
+/** @type {Set<number>} */
+let selectedQueueIds = new Set();
+/** @type {number | null} done history filter in days; null = all time */
+let doneHistoryFilterDays = loadDoneHistoryFilter();
 let queueSearchSaveTimer = null;
 let logExpanded = false;
 
@@ -66,21 +71,101 @@ function shouldAutoscrollLog() {
   return (cachedSettings || {}).autoscroll_log !== false;
 }
 
+function logMessageBody(line) {
+  const { body } = splitLogLine(line);
+  return body || line;
+}
+
+function isLogErrorLine(body) {
+  const lower = body.toLowerCase();
+  return (
+    lower.includes("error") ||
+    lower.includes("failed") ||
+    lower.includes("failure") ||
+    lower.includes("missing") ||
+    lower.includes("denied") ||
+    lower.includes("not found")
+  );
+}
+
+function logFilterAccepts(line, filter) {
+  const body = logMessageBody(line);
+  if (filter === "errors") return isLogErrorLine(body);
+  if (filter === "important") {
+    const lower = body.toLowerCase();
+    return (
+      isLogErrorLine(body) ||
+      lower.includes("metadata fetch failed") ||
+      lower.includes("download failed") ||
+      lower.includes("starting") ||
+      lower.includes("started") ||
+      lower.includes("completed") ||
+      lower.includes("done") ||
+      lower.includes("queue") ||
+      lower.includes("convert") ||
+      lower.includes("skipped") ||
+      lower.includes("skip_reason")
+    );
+  }
+  return true;
+}
+
+function currentLogFilter() {
+  const sel = document.getElementById("log-filter");
+  if (sel && sel.value) return sel.value;
+  return (cachedSettings || {}).log_filter || "all";
+}
+
 function renderLogView() {
   const log = document.getElementById("log-view");
   if (!log) return;
   const relative = !!(cachedSettings || {}).log_relative_time;
+  const filter = currentLogFilter();
+  const filtered = logLinesCache.filter((l) => logFilterAccepts(l, filter));
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
   if (!logLinesCache.length) {
     log.textContent = "Activity from rustdl will appear here (downloads, converts, settings changes).";
     log.classList.add("log-empty");
+  } else if (!filtered.length) {
+    log.textContent = `No log lines match the "${filter}" filter.`;
+    log.classList.add("log-empty");
   } else {
     log.classList.remove("log-empty");
-    log.textContent = logLinesCache.map((l) => formatLogLineDisplay(l, relative)).join("\n");
+    log.textContent = filtered.map((l) => formatLogLineDisplay(l, relative)).join("\n");
   }
   if (shouldAutoscrollLog() || atBottom) {
     log.scrollTop = log.scrollHeight;
   }
+}
+
+function loadDoneHistoryFilter() {
+  try {
+    const raw = localStorage.getItem(DONE_HISTORY_FILTER_KEY);
+    if (raw === "all" || raw === null || raw === "") return null;
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveDoneHistoryFilter(days) {
+  doneHistoryFilterDays = days;
+  try {
+    if (days == null) localStorage.removeItem(DONE_HISTORY_FILTER_KEY);
+    else localStorage.setItem(DONE_HISTORY_FILTER_KEY, String(days));
+  } catch {
+    /* ignore */
+  }
+}
+
+function itemMatchesDoneHistory(item) {
+  if (item.status !== "Done") return true;
+  if (doneHistoryFilterDays == null) return true;
+  const completedAt = item.completed_at || 0;
+  if (!completedAt) return true;
+  const cutoff = Math.floor(Date.now() / 1000) - doneHistoryFilterDays * 86400;
+  return completedAt >= cutoff;
 }
 
 function applyWebTheme(theme) {
@@ -1360,6 +1445,146 @@ function createCardActionBar() {
   return { bar, group };
 }
 
+async function reorderQueueItem(draggedId, targetId) {
+  const res = await api("/api/queue/reorder", {
+    method: "POST",
+    body: JSON.stringify({ dragged_id: draggedId, target_id: targetId }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Could not reorder queue item."));
+  }
+  await refreshQueue(true);
+}
+
+async function requeueDoneItems(itemIds) {
+  const res = await api("/api/queue/requeue", {
+    method: "POST",
+    body: JSON.stringify({ item_ids: itemIds }),
+  });
+  if (!res.ok) throw new Error("Re-queue failed.");
+  const data = await res.json();
+  await refreshAll();
+  return data.requeued || 0;
+}
+
+async function refetchQueueItem(id) {
+  const res = await api(`/api/queue/refetch/${id}`, { method: "POST" });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Metadata refetch failed."));
+  }
+  await refreshAll();
+}
+
+async function cancelItemWithAction(id, postAction) {
+  const res = await api(`/api/downloads/cancel/${id}`, {
+    method: "POST",
+    body: JSON.stringify({ post_action: postAction }),
+  });
+  if (!res.ok) throw new Error("Cancel failed.");
+  await refreshAll();
+}
+
+async function setItemOverrides(id, formatOverride, profileOverride) {
+  const res = await api(`/api/queue/${id}/overrides`, {
+    method: "POST",
+    body: JSON.stringify({
+      format_override: formatOverride || null,
+      profile_override: profileOverride || null,
+    }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Could not update overrides."));
+  await refreshQueue(true);
+}
+
+function appendReadyReorderButtons(group, item, readyItems) {
+  const idx = readyItems.findIndex((it) => it.item_id === item.item_id);
+  if (idx < 0) return;
+  if (idx > 0) {
+    const up = document.createElement("button");
+    up.type = "button";
+    up.className = "secondary icon-only";
+    up.title = "Move up";
+    setButtonLabel(up, ICON.arrowUpward, "↑");
+    up.onclick = () =>
+      reorderQueueItem(item.item_id, readyItems[idx - 1].item_id).catch((e) =>
+        alert(e.message || String(e))
+      );
+    group.appendChild(up);
+  }
+  if (idx < readyItems.length - 1) {
+    const down = document.createElement("button");
+    down.type = "button";
+    down.className = "secondary icon-only";
+    down.title = "Move down";
+    setButtonLabel(down, ICON.arrowDownward, "↓");
+    down.onclick = () =>
+      reorderQueueItem(item.item_id, readyItems[idx + 1].item_id).catch((e) =>
+        alert(e.message || String(e))
+      );
+    group.appendChild(down);
+  }
+}
+
+function appendRefetchButton(group, item) {
+  const slug = statusSlug(item.status);
+  if (slug !== "idle" || !item.error) return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  setButtonLabel(btn, ICON.refresh, "Refetch");
+  btn.onclick = () => refetchQueueItem(item.item_id).catch((e) => alert(e.message || String(e)));
+  group.appendChild(btn);
+}
+
+function appendCancelMenuButton(group, item) {
+  if (!canCancel(item)) return;
+  const menu = document.createElement("details");
+  menu.className = "btn-menu";
+  const trigger = document.createElement("summary");
+  trigger.className = "btn-menu-trigger warning";
+  setButtonLabel(trigger, ICON.stop, "Cancel…");
+  menu.appendChild(trigger);
+  const panel = document.createElement("div");
+  panel.className = "btn-menu-panel";
+  const readyBtn = document.createElement("button");
+  readyBtn.type = "button";
+  readyBtn.className = "btn-menu-item";
+  setButtonLabel(readyBtn, ICON.replay, "Cancel → Ready");
+  readyBtn.onclick = (e) => {
+    e.preventDefault();
+    menu.open = false;
+    cancelItemWithAction(item.item_id, "ready").catch((err) => alert(err.message || String(err)));
+  };
+  panel.appendChild(readyBtn);
+  const removeBtn = document.createElement("button");
+  removeBtn.type = "button";
+  removeBtn.className = "btn-menu-item danger";
+  setButtonLabel(removeBtn, ICON.remove, "Cancel → Remove");
+  removeBtn.onclick = (e) => {
+    e.preventDefault();
+    menu.open = false;
+    cancelItemWithAction(item.item_id, "remove").catch((err) => alert(err.message || String(err)));
+  };
+  panel.appendChild(removeBtn);
+  menu.appendChild(panel);
+  group.appendChild(menu);
+}
+
+function appendSelectionCheckbox(card, item) {
+  const wrap = document.createElement("label");
+  wrap.className = "card-select";
+  const cb = document.createElement("input");
+  cb.type = "checkbox";
+  cb.checked = selectedQueueIds.has(item.item_id);
+  cb.onchange = () => {
+    if (cb.checked) selectedQueueIds.add(item.item_id);
+    else selectedQueueIds.delete(item.item_id);
+    updateBulkSelectionUi();
+  };
+  wrap.appendChild(cb);
+  card.insertBefore(wrap, card.firstChild);
+}
+
 function appendPlayButton(actions, item, thumb) {
   if (!item.playable) return;
   const play = document.createElement("button");
@@ -1564,17 +1789,19 @@ function appendRedownloadButton(actions, item) {
   actions.appendChild(btn);
 }
 
-function renderQueueCard(item, settings) {
+function renderQueueCard(item, settings, ctx) {
   const s = settings || {};
   const showThumbnails = s.show_thumbnails !== false;
   const compact = !!s.compact_cards;
   const hideSubtitle = !!s.hide_card_subtitle;
   const slug = statusSlug(item.status);
   const highlightDone = slug === "done" && !item.error;
+  const readyItems = (ctx && ctx.readyItems) || [];
 
   const card = document.createElement("article");
   card.className = "card" + (compact ? " compact" : "") + (highlightDone ? " card-done-highlight" : "");
   card.dataset.itemId = String(item.item_id);
+  appendSelectionCheckbox(card, item);
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -1666,14 +1893,11 @@ function renderQueueCard(item, settings) {
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
   appendUrlMenuButton(group, item);
-  if (canCancel(item)) {
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "warning";
-    setButtonLabel(cancel, ICON.stop, "Cancel");
-    cancel.onclick = () => cancelItem(item.item_id);
-    group.appendChild(cancel);
+  appendRefetchButton(group, item);
+  if (slug === "idle" && !item.error) {
+    appendReadyReorderButtons(group, item, readyItems);
   }
+  appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
@@ -1683,13 +1907,15 @@ function renderQueueCard(item, settings) {
   return card;
 }
 
-function renderQueueCardListRow(item, settings) {
+function renderQueueCardListRow(item, settings, ctx) {
   const s = settings || {};
   const showThumbnails = s.show_thumbnails !== false;
   const slug = statusSlug(item.status);
+  const readyItems = (ctx && ctx.readyItems) || [];
   const card = document.createElement("article");
   card.className = "card";
   card.dataset.itemId = String(item.item_id);
+  appendSelectionCheckbox(card, item);
 
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
@@ -1725,14 +1951,11 @@ function renderQueueCardListRow(item, settings) {
   const { bar: actions, group } = createCardActionBar();
   appendPlayButton(group, item, thumb);
   appendUrlMenuButton(group, item);
-  if (canCancel(item)) {
-    const cancel = document.createElement("button");
-    cancel.type = "button";
-    cancel.className = "warning";
-    setButtonLabel(cancel, ICON.stop, "Cancel");
-    cancel.onclick = () => cancelItem(item.item_id);
-    group.appendChild(cancel);
+  appendRefetchButton(group, item);
+  if (slug === "idle" && !item.error) {
+    appendReadyReorderButtons(group, item, readyItems);
   }
+  appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
@@ -1841,7 +2064,8 @@ function sortDownloadGroupItems(label, items) {
 }
 
 function appendCollapsibleQueueGroup(root, label, items, options) {
-  const { settings, renderItem, defaultOpen, collapsedState, listLayout, mode } = options;
+  const { settings, renderItem, defaultOpen, collapsedState, listLayout, mode, groupExtras } =
+    options;
   const details = document.createElement("details");
   details.className = "queue-group";
   details.dataset.group = label;
@@ -1855,6 +2079,57 @@ function appendCollapsibleQueueGroup(root, label, items, options) {
   summary.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span class="queue-group-label">${escapeHtml(
     label
   )} (${items.length})</span>`;
+
+  if (label === "Done" && groupExtras) {
+    const tools = document.createElement("span");
+    tools.className = "queue-group-tools";
+    const histLabel = document.createElement("label");
+    histLabel.className = "queue-group-history";
+    histLabel.textContent = "History: ";
+    const histSel = document.createElement("select");
+    histSel.title = "Filter Done items by completion time";
+    for (const [val, text] of [
+      ["all", "All time"],
+      ["1", "Last 24h"],
+      ["7", "Last 7 days"],
+      ["30", "Last 30 days"],
+    ]) {
+      const opt = document.createElement("option");
+      opt.value = val;
+      opt.textContent = text;
+      if (
+        (val === "all" && doneHistoryFilterDays == null) ||
+        (val !== "all" && doneHistoryFilterDays === parseInt(val, 10))
+      ) {
+        opt.selected = true;
+      }
+      histSel.appendChild(opt);
+    }
+    histSel.onchange = (e) => {
+      e.stopPropagation();
+      const v = histSel.value;
+      saveDoneHistoryFilter(v === "all" ? null : parseInt(v, 10));
+      refreshQueue(true);
+    };
+    histSel.onclick = (e) => e.stopPropagation();
+    histLabel.appendChild(histSel);
+    tools.appendChild(histLabel);
+    const requeueBtn = document.createElement("button");
+    requeueBtn.type = "button";
+    requeueBtn.className = "secondary queue-group-action";
+    setButtonLabel(requeueBtn, ICON.replay, "Re-queue visible");
+    requeueBtn.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const ids = items.map((it) => it.item_id);
+      requeueDoneItems(ids).then((n) => {
+        if (n > 0) appendLogLine(`Re-queued ${n} done item(s) from web UI.`);
+      }).catch((err) => alert(err.message || String(err)));
+    };
+    tools.appendChild(requeueBtn);
+    summary.appendChild(tools);
+  }
+
   details.appendChild(summary);
 
   const body = document.createElement("div");
@@ -1886,6 +2161,7 @@ function renderGroupedQueue(root, items, options) {
     mode,
     defaultOpenFn,
     sortGroupItems,
+    groupExtras,
   } = options;
   const collapsedState = loadQueueGroupCollapsed();
   const listLayout = !!settings.card_list_layout;
@@ -1910,6 +2186,7 @@ function renderGroupedQueue(root, items, options) {
       collapsedState,
       listLayout,
       mode,
+      groupExtras,
     });
   }
 }
@@ -1963,8 +2240,15 @@ async function refreshQueue(force = false) {
   const searchInput = document.getElementById("queue-search");
   const searchQuery = searchInput ? searchInput.value : settings.queue_search || "";
   const items = (data.items || []).filter(
-    (item) => itemMatchesSearch(item, searchQuery) && itemMatchesStatusFilter(item, queueStatusFilter)
+    (item) =>
+      itemMatchesSearch(item, searchQuery) &&
+      itemMatchesStatusFilter(item, queueStatusFilter) &&
+      itemMatchesDoneHistory(item)
   );
+  const readyItems = (data.items || [])
+    .filter((item) => downloadQueueGroup(item) === "Ready" && itemMatchesSearch(item, searchQuery))
+    .sort((a, b) => (a.sort_order || a.item_id || 0) - (b.sort_order || b.item_id || 0));
+  const cardCtx = { readyItems };
   if (!items.length) {
     const empty = document.createElement("p");
     empty.className = "hint";
@@ -1979,7 +2263,9 @@ async function refreshQueue(force = false) {
     groupFn: downloadQueueGroup,
     groupOrder: DOWNLOAD_QUEUE_GROUPS,
     renderItem: (item, s) =>
-      s.card_list_layout ? renderQueueCardListRow(item, s) : renderQueueCard(item, s),
+      s.card_list_layout
+        ? renderQueueCardListRow(item, s, cardCtx)
+        : renderQueueCard(item, s, cardCtx),
     defaultOpenCtx: {
       status: lastStatusPayload?.status,
       searchQuery,
@@ -1988,7 +2274,9 @@ async function refreshQueue(force = false) {
     mode: "dl",
     defaultOpenFn: downloadQueueGroupDefaultOpen,
     sortGroupItems: sortDownloadGroupItems,
+    groupExtras: true,
   });
+  updateBulkSelectionUi();
 }
 
 async function cancelItem(id) {
@@ -2356,6 +2644,8 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-autoscroll-log", s.autoscroll_log);
   setCheck("set-log-relative", s.log_relative_time);
   setVal("set-log-max", s.log_max_chars);
+  const logFilterEl = document.getElementById("log-filter");
+  if (logFilterEl) logFilterEl.value = s.log_filter || "all";
   syncModeColorControls(
     "set-mode-downloader-color",
     "set-mode-downloader-hex",
@@ -2447,6 +2737,7 @@ function collectSettingsForm(base) {
   s.autoscroll_log = document.getElementById("set-autoscroll-log").checked;
   s.log_relative_time = document.getElementById("set-log-relative").checked;
   s.log_max_chars = parseInt(document.getElementById("set-log-max").value, 10) || 28000;
+  s.log_filter = document.getElementById("log-filter")?.value || "all";
   s.mode_downloader_color = readModeColorField(
     "set-mode-downloader-color",
     "set-mode-downloader-hex",
@@ -2617,6 +2908,45 @@ document.getElementById("btn-add").onclick = async () => {
   clearTimeout(autoAddTimer);
   await flushAutoAddFromInput();
 };
+
+document.getElementById("btn-playlist-preview")?.addEventListener("click", async () => {
+  const input = document.getElementById("url-input");
+  const lines = (input?.value || "")
+    .split(/\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const url = lines[0];
+  if (!url) {
+    alert("Paste a playlist or channel URL first.");
+    return;
+  }
+  try {
+    const res = await api("/api/queue/playlist-preview", {
+      method: "POST",
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) throw new Error(await readApiError(res, "Playlist preview failed."));
+    const data = await res.json();
+    const title = data.title ? `"${data.title}"` : "This playlist";
+    if (!data.count) {
+      alert("No entries found (single video or empty playlist).");
+      return;
+    }
+    if (
+      confirm(
+        `${title} has ${data.count} video(s) (up to cap). Add all to the queue?`
+      )
+    ) {
+      await api("/api/queue", {
+        method: "POST",
+        body: JSON.stringify({ urls: data.urls }),
+      });
+      await refreshAll();
+    }
+  } catch (e) {
+    alert(e.message || String(e));
+  }
+});
 
 document.getElementById("btn-clear-url-input").onclick = () => clearUrlInput();
 
@@ -3190,11 +3520,21 @@ async function refreshConvert() {
   renderNavbarStatus();
 
   const startBtn = document.getElementById("btn-convert-start");
+  const pauseBtn = document.getElementById("btn-convert-pause");
+  const resumeBtn = document.getElementById("btn-convert-resume");
   const cancelBtn = document.getElementById("btn-convert-cancel");
   const retrySkippedBtn = document.getElementById("btn-convert-retry-skipped");
   const readyCount = data.items.filter((it) => it.status === "Idle").length;
   const skippedCount = data.items.filter((it) => it.skipped).length;
   if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
+  if (pauseBtn) {
+    pauseBtn.disabled = !data.running || data.paused;
+    pauseBtn.title = data.running && !data.paused ? "Pause the running Convert batch" : "Convert batch is not running or already paused";
+  }
+  if (resumeBtn) {
+    resumeBtn.disabled = !data.running || !data.paused;
+    resumeBtn.title = data.running && data.paused ? "Resume the paused Convert batch" : "Convert batch is not paused";
+  }
   if (cancelBtn) {
     cancelBtn.disabled = !data.running;
     cancelBtn.title = data.running
@@ -3254,6 +3594,16 @@ async function convertCancel() {
   await refreshConvert();
 }
 
+async function convertPause() {
+  await api("/api/convert/pause", { method: "POST" });
+  await refreshConvert();
+}
+
+async function convertResume() {
+  await api("/api/convert/resume", { method: "POST" });
+  await refreshConvert();
+}
+
 async function convertClear() {
   if (!confirm("Clear the entire Convert queue?")) return;
   await api("/api/convert/clear", { method: "POST" });
@@ -3265,17 +3615,180 @@ async function convertRetrySkipped() {
   await refreshConvert();
 }
 
+async function profileDelete() {
+  const name = document.getElementById("set-active-profile")?.value;
+  if (!name || !confirm(`Delete profile "${name}"?`)) return;
+  const res = await api("/api/profiles/delete", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Could not delete profile."));
+  await reloadProfilesAndSettings();
+}
+
+async function profileRename() {
+  const oldName = document.getElementById("set-active-profile")?.value;
+  const newName = prompt("New profile name:", oldName);
+  if (!newName || !oldName || newName.trim() === oldName) return;
+  const res = await api("/api/profiles/rename", {
+    method: "POST",
+    body: JSON.stringify({ old_name: oldName, new_name: newName.trim() }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Could not rename profile."));
+  await reloadProfilesAndSettings();
+}
+
+async function profileSaveAs() {
+  const name = prompt("Save current settings as profile:");
+  if (!name || !name.trim()) return;
+  const res = await api("/api/profiles/save", {
+    method: "POST",
+    body: JSON.stringify({ name: name.trim() }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Could not save profile."));
+  await reloadProfilesAndSettings();
+}
+
+async function profileExport() {
+  const res = await api("/api/profiles/export");
+  if (!res.ok) throw new Error("Export failed.");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rustdl_profiles.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function profileImport() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    const res = await api("/api/profiles/import", {
+      method: "POST",
+      body: text,
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error(await readApiError(res, "Import failed."));
+    await reloadProfilesAndSettings();
+  };
+  input.click();
+}
+
+async function reloadProfilesAndSettings() {
+  const [settingsRes, profilesRes] = await Promise.all([
+    api("/api/settings"),
+    api("/api/profiles"),
+  ]);
+  const settingsData = await settingsRes.json();
+  cachedSettings = settingsData.settings;
+  populateSettingsForm(settingsData.settings, settingsData.command_preview);
+  populateProfiles(await profilesRes.json());
+  await refreshAll();
+}
+
+function updateBulkSelectionUi() {
+  const n = selectedQueueIds.size;
+  const removeBtn = document.getElementById("btn-bulk-remove");
+  const retryBtn = document.getElementById("btn-bulk-retry");
+  if (removeBtn) removeBtn.disabled = n === 0;
+  if (retryBtn) retryBtn.disabled = n === 0;
+}
+
+async function bulkRemoveSelected() {
+  if (!selectedQueueIds.size) return;
+  if (!confirm(`Remove ${selectedQueueIds.size} selected item(s) from the queue?`)) return;
+  for (const id of [...selectedQueueIds]) {
+    await api(`/api/queue/${id}`, { method: "DELETE" });
+  }
+  selectedQueueIds.clear();
+  updateBulkSelectionUi();
+  await refreshAll();
+}
+
+async function bulkRetrySelected() {
+  if (!selectedQueueIds.size) return;
+  const res = await api("/api/queue/bulk-retry", {
+    method: "POST",
+    body: JSON.stringify({ item_ids: [...selectedQueueIds] }),
+  });
+  if (!res.ok) throw new Error("Bulk retry failed.");
+  selectedQueueIds.clear();
+  updateBulkSelectionUi();
+  await refreshAll();
+}
+
+async function recheckAllSavedFiles() {
+  const res = await api("/api/queue/recheck-saved", { method: "POST" });
+  if (!res.ok) throw new Error(await readApiError(res, "Re-check failed."));
+  await refreshAll();
+}
+
+function exportActivityLog() {
+  const filter = currentLogFilter();
+  const lines = logLinesCache.filter((l) => logFilterAccepts(l, filter));
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rustdl_activity_log.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 document.querySelectorAll(".nav-btn").forEach((btn) => {
   btn.onclick = () => setView(btn.dataset.view);
 });
 document.getElementById("btn-convert-scan").onclick = () => convertScan().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-start").onclick = () => convertStart().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-pause").onclick = () => convertPause().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-resume").onclick = () => convertResume().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-cancel").onclick = () => convertCancel().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-clear").onclick = () => convertClear().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-retry-skipped").onclick = () =>
   convertRetrySkipped().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-settings").onclick = () =>
   openSettingsDialog().then(() => switchSettingsTab("convert")).catch(console.error);
+document.getElementById("btn-profile-delete")?.addEventListener("click", () =>
+  profileDelete().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-profile-rename")?.addEventListener("click", () =>
+  profileRename().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-profile-save")?.addEventListener("click", () =>
+  profileSaveAs().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-profile-export")?.addEventListener("click", () =>
+  profileExport().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-profile-import")?.addEventListener("click", () =>
+  profileImport().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-bulk-remove")?.addEventListener("click", () =>
+  bulkRemoveSelected().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-bulk-retry")?.addEventListener("click", () =>
+  bulkRetrySelected().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-recheck-files")?.addEventListener("click", () =>
+  recheckAllSavedFiles().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-export-log")?.addEventListener("click", exportActivityLog);
+document.getElementById("log-filter")?.addEventListener("change", async (e) => {
+  renderLogView();
+  if (!cachedSettings) return;
+  const patch = { ...cachedSettings, log_filter: e.target.value };
+  const res = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({ patch: { log_filter: e.target.value } }),
+  });
+  if (res.ok) cachedSettings = patch;
+});
 
 applyStaticButtonIcons();
 

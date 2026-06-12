@@ -34,6 +34,7 @@ impl eframe::App for PydlApp {
         self.maybe_flush_convert_queue_save();
         self.maybe_flush_log_save();
         self.process_events(ctx);
+        self.poll_watch_folders();
         #[cfg(windows)]
         {
             self.maybe_install_win_browser_drop_target(frame);

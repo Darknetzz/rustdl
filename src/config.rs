@@ -299,6 +299,43 @@ pub struct AppSettings {
     /// Video Converter mode panel tint / accent (`#rrggbb`); empty = default purple.
     #[serde(default, alias = "mode_convert_bg", alias = "mode_av1_color")]
     pub mode_convert_color: String,
+    /// Optional folder to watch for new `.url` / `.txt` files to auto-enqueue.
+    #[serde(default)]
+    pub watch_folder_path: String,
+    #[serde(default)]
+    pub watch_folder_enabled: bool,
+    /// Optional folder to watch for new video files to auto-scan into convert queue.
+    #[serde(default)]
+    pub convert_watch_folder_path: String,
+    #[serde(default)]
+    pub convert_watch_folder_enabled: bool,
+    /// After encode: move output into this subfolder under the output directory (empty = skip).
+    #[serde(default)]
+    pub convert_post_move_subfolder: String,
+    /// After encode: copy sidecar subtitle files next to output.
+    #[serde(default)]
+    pub convert_copy_subtitles: bool,
+    /// After encode: write a SHA-256 sidecar file.
+    #[serde(default)]
+    pub convert_write_checksum: bool,
+    /// Audio extract mode for converter: `none`, `flac`, `aac`, or `opus`.
+    #[serde(default = "default_convert_audio_extract")]
+    pub convert_audio_extract: String,
+    /// Subtitle handling: `none`, `soft`, or `burn`.
+    #[serde(default)]
+    pub convert_subtitle_mode: String,
+    /// Max concurrent hardware encodes when parallel conversions > 1 (`0` = unlimited).
+    #[serde(default)]
+    pub convert_max_hw_encodes: usize,
+    /// Optional TLS certificate path for LAN web UI (requires `web_tls_key_path`).
+    #[serde(default)]
+    pub web_tls_cert_path: String,
+    /// Optional TLS private key path for LAN web UI.
+    #[serde(default)]
+    pub web_tls_key_path: String,
+    /// Scheduled download start time (`HH:MM` local); empty = disabled.
+    #[serde(default)]
+    pub scheduled_download_start: String,
 }
 
 fn default_web_bind_address() -> String {
@@ -307,6 +344,10 @@ fn default_web_bind_address() -> String {
 
 fn default_log_filter() -> String {
     "all".to_owned()
+}
+
+fn default_convert_audio_extract() -> String {
+    "none".to_owned()
 }
 
 fn default_session_restore_preference() -> String {
@@ -571,6 +612,19 @@ impl Default for AppSettings {
             max_content_width: 0.0,
             mode_downloader_color: String::new(),
             mode_convert_color: String::new(),
+            watch_folder_path: String::new(),
+            watch_folder_enabled: false,
+            convert_watch_folder_path: String::new(),
+            convert_watch_folder_enabled: false,
+            convert_post_move_subfolder: String::new(),
+            convert_copy_subtitles: false,
+            convert_write_checksum: false,
+            convert_audio_extract: default_convert_audio_extract(),
+            convert_subtitle_mode: String::new(),
+            convert_max_hw_encodes: 0,
+            web_tls_cert_path: String::new(),
+            web_tls_key_path: String::new(),
+            scheduled_download_start: String::new(),
         }
     }
 }

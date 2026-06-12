@@ -109,13 +109,11 @@ pub fn draw_disk_space_progress_bar(
     ))
 }
 
-fn draw_usage_stat_label(
-    ui: &mut egui::Ui,
-    name: &str,
-    percent: Option<f32>,
-    muted: Color32,
-) {
-    let text = format!("{name} {}", crate::system_usage::format_usage_percent(percent));
+fn draw_usage_stat_label(ui: &mut egui::Ui, name: &str, percent: Option<f32>, muted: Color32) {
+    let text = format!(
+        "{name} {}",
+        crate::system_usage::format_usage_percent(percent)
+    );
     let color = percent
         .map(crate::system_usage::usage_level_color)
         .unwrap_or(muted);

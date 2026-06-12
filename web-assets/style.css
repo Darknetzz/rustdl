@@ -1507,3 +1507,65 @@ body.view-convert .card-progress-fill:not([class*="status-"]) {
 .card-progress-fill.status-skipped { background: var(--skipped); }
 .status-badge.status-skipped { color: var(--skipped); border-color: rgba(255, 167, 38, 0.35); }
 .status-badge.status-skipped .status-dot { background: var(--skipped); }
+
+.queue-group-summary {
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+}
+
+.queue-group-tools {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.queue-group-history select {
+  font-size: 0.78rem;
+  margin-left: 0.25rem;
+}
+
+.queue-group-action {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.card-select {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  z-index: 2;
+}
+
+.card {
+  position: relative;
+}
+
+.log-filter-label select {
+  font-size: 0.85rem;
+}
+
+.profile-manage-row {
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 720px) {
+  .queue-toolbar,
+  .convert-actions,
+  .add-panel-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .queue-group-body {
+    grid-template-columns: 1fr;
+  }
+  .card {
+    max-width: none;
+  }
+  main {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}

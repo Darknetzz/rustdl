@@ -217,6 +217,7 @@ pub struct PydlApp {
     /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
     convert_encoder_choice: Option<crate::transcode::EncoderChoice>,
     convert_encoder_detect_key: String,
+    watch_folder_state: crate::watch_folder::WatchFolderState,
     convert_encoder_detection_inflight: bool,
 
     done_file_index: done_file_index::DoneFileIndex,
@@ -417,6 +418,7 @@ impl PydlApp {
             convert_paused: false,
             convert_encoder_choice: None,
             convert_encoder_detect_key: String::new(),
+            watch_folder_state: crate::watch_folder::WatchFolderState::new(),
             convert_encoder_detection_inflight: false,
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
@@ -1424,6 +1426,39 @@ impl PydlApp {
         ));
     }
 
+    pub(super) fn poll_watch_folders(&mut self) {
+        if self.settings.watch_folder_enabled {
+            let path = self.settings.watch_folder_path.trim();
+            if !path.is_empty() {
+                let urls = self
+                    .watch_folder_state
+                    .poll_downloader_folder(std::path::Path::new(path));
+                if !urls.is_empty() {
+                    self.download_core_action(|core| {
+                        let _ = core.queue_urls_for_resolve(urls);
+                    });
+                }
+            }
+        }
+        if self.settings.convert_watch_folder_enabled {
+            let path = self.settings.convert_watch_folder_path.trim();
+            if !path.is_empty() {
+                let paths = self
+                    .watch_folder_state
+                    .poll_convert_folder(std::path::Path::new(path));
+                let auto_start = self.settings.convert_auto_start_on_add;
+                if !paths.is_empty() {
+                    self.download_core_action(|core| {
+                        core.scan_convert_paths_into_queue(&paths);
+                        if auto_start {
+                            core.start_convert_batch();
+                        }
+                    });
+                }
+            }
+        }
+    }
+
     /// Re-run yt-dlp metadata for this row (same URL), replacing the card when resolve completes.
     pub(super) fn retry_metadata_item_id(&mut self, item_id: u64) {
         if self.add_in_progress {
@@ -1550,50 +1585,7 @@ impl PydlApp {
 
     /// Re-scan saved files for done/failed rows and mark failed when video or audio is missing (skipped in MP3 extraction mode).
     fn recheck_all_saved_downloads(&mut self) {
-        if !self.has_ffprobe {
-            self.append_log("Cannot re-check saved files: ffprobe not found.");
-            return;
-        }
-        if self.settings.ffmpeg_extract_audio_mp3 {
-            self.append_log("Skipping re-check: MP3 extraction mode is enabled.");
-            return;
-        }
-        self.refresh_done_file_lookup();
-        let ids: Vec<u64> = self
-            .items
-            .iter()
-            .filter(|it| matches!(it.status, ItemStatus::Done | ItemStatus::Failed))
-            .map(|it| it.item_id)
-            .collect();
-        let mut issues = 0usize;
-        for item_id in ids {
-            let Some(idx) = self.item_idx(item_id) else {
-                continue;
-            };
-            let item = self.items[idx].clone();
-            if item.video_id.trim().is_empty() {
-                continue;
-            }
-            if self.find_downloaded_file_for_item(&item).is_none() {
-                continue;
-            }
-            let probe = self.probe_saved_file_streams(&item);
-            let fail_msg = match probe {
-                Ok((v, a)) => Self::streams_incomplete_message(v, a),
-                Err(e) => Some(e),
-            };
-            if let Some(msg) = fail_msg {
-                self.set_item_status_at(idx, ItemStatus::Failed);
-                self.items[idx].detail = msg.clone();
-                issues += 1;
-                self.append_log(&format!("[item {item_id}] Re-check: {msg}"));
-            }
-        }
-        self.update_status();
-        self.schedule_queue_save();
-        self.append_log(&format!(
-            "Re-checked saved files: {issues} item(s) marked failed (missing stream or probe error)."
-        ));
+        self.download_core_action(|core| core.recheck_all_saved_downloads());
     }
 
     #[cfg(windows)]
@@ -1926,10 +1918,7 @@ impl PydlApp {
         let convert_ids: Vec<u64> = self.convert_items.iter().map(|it| it.item_id).collect();
         self.download_core_action(|core| core.clear_all_queues_for_exit());
         self.convert_input_paths.clear();
-        for id in downloader_ids
-            .into_iter()
-            .chain(convert_ids.into_iter())
-        {
+        for id in downloader_ids.into_iter().chain(convert_ids.into_iter()) {
             self.textures.remove(&id);
             self.thumbnail_inflight.remove(&id);
             self.thumbnail_attempted.remove(&id);

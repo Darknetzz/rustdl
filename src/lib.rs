@@ -8,6 +8,7 @@ pub mod app_state;
 pub mod app_ui;
 pub mod cli;
 pub mod config;
+pub mod convert_presets;
 pub mod convert_state;
 pub mod disk_space;
 pub mod domain;
@@ -17,6 +18,7 @@ pub mod http_client;
 pub mod models;
 pub mod pkg_version;
 pub mod profiles;
+pub mod queue_templates;
 pub(crate) mod service;
 pub mod system_usage;
 pub mod theme;
@@ -24,6 +26,7 @@ pub mod thumbnail_store;
 pub mod time_format;
 pub mod transcode;
 pub mod ui_icons;
+pub mod watch_folder;
 #[cfg(windows)]
 pub mod win_drop_target;
 #[cfg(windows)]

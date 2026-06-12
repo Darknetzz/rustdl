@@ -120,9 +120,7 @@ impl WindowsGpuUsage {
 
         let mut query = 0isize;
         let mut counter = 0isize;
-        let path = windows_sys::core::w!(
-            "\\GPU Engine(*engtype_3D)\\Utilization Percentage"
-        );
+        let path = windows_sys::core::w!("\\GPU Engine(*engtype_3D)\\Utilization Percentage");
         let mut active = false;
         unsafe {
             if PdhOpenQueryW(std::ptr::null(), 0, &mut query) == 0
@@ -147,7 +145,7 @@ impl WindowsGpuUsage {
         }
         use windows_sys::Win32::System::Performance::{
             PdhCollectQueryData, PdhGetFormattedCounterArrayW, PDH_CSTATUS_VALID_DATA,
-            PDH_FMT_DOUBLE, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_MORE_DATA,
+            PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_MORE_DATA,
         };
 
         unsafe {
@@ -223,17 +221,8 @@ mod tests {
     #[test]
     fn usage_level_color_thresholds() {
         use eframe::egui::Color32;
-        assert_eq!(
-            usage_level_color(50.0),
-            Color32::from_rgb(129, 199, 132)
-        );
-        assert_eq!(
-            usage_level_color(80.0),
-            Color32::from_rgb(255, 167, 38)
-        );
-        assert_eq!(
-            usage_level_color(95.0),
-            Color32::from_rgb(229, 57, 53)
-        );
+        assert_eq!(usage_level_color(50.0), Color32::from_rgb(129, 199, 132));
+        assert_eq!(usage_level_color(80.0), Color32::from_rgb(255, 167, 38));
+        assert_eq!(usage_level_color(95.0), Color32::from_rgb(229, 57, 53));
     }
 }

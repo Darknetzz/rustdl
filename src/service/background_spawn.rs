@@ -441,15 +441,9 @@ async fn run_convert_job(
         let enc = enc.clone();
         let cancel_flag = cancel_flag.clone();
         move || {
-            transcode::run_single(
-                &item_for_primary,
-                &cfg,
-                &enc,
-                Some(cancel_flag),
-                |line| {
-                    let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
-                },
-            )
+            transcode::run_single(&item_for_primary, &cfg, &enc, Some(cancel_flag), |line| {
+                let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
+            })
         }
     })
     .await;
@@ -486,10 +480,7 @@ async fn run_convert_job(
                     bus,
                     UiEvent::ConvertLine {
                         item_id,
-                        line: format!(
-                            "encoder {} failed; retrying with {}",
-                            enc.encoder, cpu_name
-                        ),
+                        line: format!("encoder {} failed; retrying with {}", enc.encoder, cpu_name),
                     },
                 );
                 let cpu_enc = transcode::EncoderChoice {
@@ -503,15 +494,9 @@ async fn run_convert_job(
                     let item = item.clone();
                     let cancel_flag = cancel_flag.clone();
                     move || {
-                        transcode::run_single(
-                            &item,
-                            &cfg,
-                            &cpu_enc,
-                            Some(cancel_flag),
-                            |line| {
-                                let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
-                            },
-                        )
+                        transcode::run_single(&item, &cfg, &cpu_enc, Some(cancel_flag), |line| {
+                            let _ = try_send_ui(&bus, UiEvent::ConvertLine { item_id, line });
+                        })
                     }
                 })
                 .await;

@@ -21,7 +21,12 @@ fn synthetic_200_convert_status_counts() {
     let items = synthetic_convert_items(200);
     let counts = compute_convert_status_counts(&items);
     assert_eq!(
-        counts.ready + counts.queued + counts.running + counts.done + counts.skipped + counts.failed,
+        counts.ready
+            + counts.queued
+            + counts.running
+            + counts.done
+            + counts.skipped
+            + counts.failed,
         200
     );
 }

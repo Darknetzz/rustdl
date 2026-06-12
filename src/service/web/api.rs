@@ -140,7 +140,7 @@ struct QueueResponse {
 }
 
 #[derive(Serialize)]
-struct ApiErrorBody {
+pub(super) struct ApiErrorBody {
     error: String,
 }
 
@@ -228,17 +228,54 @@ struct ProfileRenameBody {
     new_name: String,
 }
 
+#[derive(Deserialize)]
+struct ProfileSaveBody {
+    name: String,
+}
+
+#[derive(Deserialize)]
+struct CancelDownloadBody {
+    #[serde(default)]
+    post_action: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ItemOverridesBody {
+    format_override: Option<String>,
+    profile_override: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct BulkItemIdsBody {
+    item_ids: Vec<u64>,
+}
+
+#[derive(Deserialize)]
+struct PlaylistPreviewBody {
+    url: String,
+}
+
 pub fn api_router(state: ApiState) -> Router {
     let protected = Router::new()
         .route("/api/status", get(status))
         .route("/api/queue", get(queue_list))
         .route("/api/queue", post(queue_add))
-        .route("/api/queue/:id", axum::routing::delete(queue_remove))
         .route("/api/queue/clear", post(queue_clear))
         .route("/api/queue/reorder", post(queue_reorder))
         .route("/api/queue/export", get(queue_export))
         .route("/api/queue/import", post(queue_import))
         .route("/api/queue/requeue", post(queue_requeue))
+        .route("/api/queue/bulk-retry", post(queue_bulk_retry))
+        .route("/api/queue/recheck-saved", post(queue_recheck_saved))
+        .route("/api/queue/refetch/:id", post(queue_refetch))
+        .route("/api/queue/playlist-preview", post(queue_playlist_preview))
+        .route("/api/queue/import-file", post(queue_import_multipart))
+        .route("/api/queue/templates", get(queue_templates_list))
+        .route("/api/queue/templates", post(queue_templates_save))
+        .route("/api/queue/:id/overrides", post(queue_item_overrides))
+        .route("/api/queue/:id/verify", post(queue_verify_streams))
+        .route("/api/queue/:id", axum::routing::delete(queue_remove))
+        .route("/api/library", get(library_list))
         .route(
             "/api/queue/:id/file",
             axum::routing::delete(queue_delete_file),
@@ -256,6 +293,10 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/profiles/apply", post(profiles_apply))
         .route("/api/profiles/delete", post(profiles_delete))
         .route("/api/profiles/rename", post(profiles_rename))
+        .route("/api/profiles/save", post(profiles_save))
+        .route("/api/profiles/export", get(profiles_export))
+        .route("/api/profiles/import", post(profiles_import))
+        .route("/api/tools/cookie-check", post(tools_cookie_check))
         .route("/api/tools/refresh", post(tools_refresh))
         .route("/api/logs", get(logs_get))
         .route("/api/shutdown", post(app_shutdown))
@@ -444,6 +485,67 @@ async fn profiles_rename(
     Ok(StatusCode::OK)
 }
 
+async fn profiles_save(
+    State(st): State<ApiState>,
+    Json(body): Json<ProfileSaveBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    c.save_profile_from_settings(body.name.trim())
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiErrorBody { error: e })))?;
+    Ok(StatusCode::OK)
+}
+
+async fn profiles_export(State(st): State<ApiState>) -> impl IntoResponse {
+    let c = st.core.lock();
+    let body = serde_json::to_string_pretty(&c.profile_store).unwrap_or_else(|_| "{}".to_owned());
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/json; charset=utf-8",
+        )],
+        body,
+    )
+}
+
+async fn profiles_import(
+    State(st): State<ApiState>,
+    body: String,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let imported: crate::profiles::ProfileStore = serde_json::from_str(&body).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("invalid profiles JSON: {e}"),
+            }),
+        )
+    })?;
+    let mut c = st.core.lock();
+    for p in imported.user_profiles {
+        if !p.builtin {
+            let _ = crate::profiles::save_user_profile(&mut c.profile_store, p);
+        }
+    }
+    c.bump_generation();
+    Ok(StatusCode::OK)
+}
+
+async fn tools_cookie_check(
+    State(st): State<ApiState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ApiErrorBody>)> {
+    let c = st.core.lock();
+    let test_url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    let result = crate::ytdlp::cookie_health_probe(
+        &c.yt_dlp_bin(),
+        test_url,
+        &c.settings.yt_dlp_cookies,
+        &c.settings.yt_dlp_impersonate,
+    );
+    Ok(Json(serde_json::json!({
+        "ok": result.ok,
+        "message": result.message,
+    })))
+}
+
 async fn tools_refresh(State(st): State<ApiState>) -> Json<serde_json::Value> {
     let mut c = st.core.lock();
     c.refresh_deps();
@@ -609,6 +711,175 @@ async fn queue_requeue(
     Json(QueueRequeueResponse { requeued })
 }
 
+async fn queue_bulk_retry(
+    State(st): State<ApiState>,
+    Json(body): Json<BulkItemIdsBody>,
+) -> Json<QueueRequeueResponse> {
+    let mut c = st.core.lock();
+    let requeued = c.bulk_retry_items(&body.item_ids);
+    Json(QueueRequeueResponse { requeued })
+}
+
+async fn queue_recheck_saved(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.recheck_all_saved_downloads();
+    StatusCode::OK
+}
+
+async fn queue_refetch(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    c.refetch_item_metadata(id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiErrorBody { error: e })))?;
+    Ok(StatusCode::OK)
+}
+
+async fn queue_item_overrides(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    Json(body): Json<ItemOverridesBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    if c.set_item_download_overrides(id, body.format_override, body.profile_override) {
+        Ok(StatusCode::OK)
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "Item not found.".to_owned(),
+            }),
+        ))
+    }
+}
+
+#[derive(Serialize)]
+struct VerifyStreamsResponse {
+    message: String,
+}
+
+async fn queue_verify_streams(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+) -> Result<Json<VerifyStreamsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    let message = c
+        .verify_streams_for_item(id)
+        .map_err(|e| (StatusCode::BAD_REQUEST, Json(ApiErrorBody { error: e })))?;
+    Ok(Json(VerifyStreamsResponse { message }))
+}
+
+#[derive(Serialize)]
+struct PlaylistPreviewResponse {
+    count: usize,
+    urls: Vec<String>,
+    title: Option<String>,
+}
+
+async fn queue_playlist_preview(
+    State(st): State<ApiState>,
+    Json(body): Json<PlaylistPreviewBody>,
+) -> Result<Json<PlaylistPreviewResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let c = st.core.lock();
+    let preview = ytdlp::flat_playlist_preview(
+        &c.yt_dlp_bin(),
+        body.url.trim(),
+        c.settings.playlist_preview_cap,
+    )
+    .map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("{e:#}"),
+            }),
+        )
+    })?;
+    Ok(Json(PlaylistPreviewResponse {
+        count: preview.urls.len(),
+        urls: preview.urls,
+        title: preview.title,
+    }))
+}
+
+async fn queue_import_multipart(
+    State(st): State<ApiState>,
+    body: String,
+) -> Result<Json<AddUrlsResponse>, StatusCode> {
+    let lines: Vec<String> = body
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .map(str::to_owned)
+        .collect();
+    queue_add(State(st), Json(AddUrlsBody { urls: lines })).await
+}
+
+#[derive(Serialize)]
+struct LibraryEntry {
+    item_id: u64,
+    title: String,
+    uploader: Option<String>,
+    completed_at: Option<u64>,
+    local_path: Option<String>,
+    video_id: String,
+}
+
+#[derive(Serialize)]
+struct LibraryResponse {
+    items: Vec<LibraryEntry>,
+}
+
+async fn library_list(State(st): State<ApiState>) -> Json<LibraryResponse> {
+    let c = st.core.lock();
+    let items = c
+        .snapshot_queue()
+        .into_iter()
+        .filter(|it| it.status == crate::models::ItemStatus::Done)
+        .map(|it| LibraryEntry {
+            item_id: it.item_id,
+            title: it.title.clone(),
+            uploader: it.uploader.clone(),
+            completed_at: it.completed_at,
+            local_path: it.local_path.clone(),
+            video_id: it.video_id.clone(),
+        })
+        .collect();
+    Json(LibraryResponse { items })
+}
+
+#[derive(Deserialize)]
+struct QueueTemplateSaveBody {
+    name: String,
+}
+
+async fn queue_templates_list(State(st): State<ApiState>) -> Json<serde_json::Value> {
+    let names = crate::queue_templates::list_queue_templates();
+    let c = st.core.lock();
+    let _ = c;
+    Json(serde_json::json!({ "templates": names }))
+}
+
+async fn queue_templates_save(
+    State(st): State<ApiState>,
+    Json(body): Json<QueueTemplateSaveBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let c = st.core.lock();
+    let template = crate::queue_templates::queue_template_from_items(
+        body.name.trim(),
+        &c.snapshot_queue(),
+    );
+    crate::queue_templates::save_queue_template(&template).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiErrorBody {
+                error: format!("{e:#}"),
+            }),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
 async fn queue_delete_file(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
     let mut c = st.core.lock();
     if c.delete_item_file_on_disk(id) {
@@ -642,9 +913,24 @@ async fn downloads_resume(State(st): State<ApiState>) -> StatusCode {
     StatusCode::OK
 }
 
-async fn downloads_cancel(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
+async fn downloads_cancel(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    body: Option<Json<CancelDownloadBody>>,
+) -> StatusCode {
+    let post_action = body
+        .as_ref()
+        .and_then(|b| b.post_action.as_deref())
+        .map(|s| {
+            if s.eq_ignore_ascii_case("remove") {
+                CancelPostAction::Remove
+            } else {
+                CancelPostAction::Ready
+            }
+        })
+        .unwrap_or(CancelPostAction::Ready);
     let mut c = st.core.lock();
-    c.request_cancel_item(id, CancelPostAction::Ready);
+    c.request_cancel_item(id, post_action);
     StatusCode::OK
 }
 

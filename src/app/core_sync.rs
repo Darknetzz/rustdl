@@ -301,5 +301,4 @@ mod tests {
         mirror.bump_generation();
         assert_eq!(mirror.items.len(), 1);
     }
-
 }

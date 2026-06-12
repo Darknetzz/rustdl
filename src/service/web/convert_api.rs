@@ -3,6 +3,7 @@
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
@@ -14,7 +15,7 @@ use crate::convert_state::{
 use crate::models::ConvertQueueItem;
 use crate::transcode::{encoder_indicator_label, encoder_uses_hardware, target_codec_label};
 
-use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiState, BatchProgressJson};
+use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiErrorBody, ApiState, BatchProgressJson};
 
 #[derive(Serialize)]
 struct ConvertItemView {
@@ -73,6 +74,13 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/resume", post(convert_resume))
         .route("/api/convert/clear", post(convert_clear))
         .route("/api/convert/retry-skipped", post(convert_retry_skipped))
+        .route(
+            "/api/convert/fallback-software",
+            post(convert_fallback_software),
+        )
+        .route("/api/convert/presets", get(convert_presets_list))
+        .route("/api/convert/presets/apply", post(convert_presets_apply))
+        .route("/api/convert/export-summary", get(convert_export_summary))
         .route("/api/convert/thumbnail/:id", get(convert_thumbnail))
 }
 
@@ -188,6 +196,87 @@ async fn convert_retry_skipped(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.retry_skipped_convert_items();
     StatusCode::OK
+}
+
+async fn convert_fallback_software(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.fallback_convert_encoder_to_software();
+    StatusCode::OK
+}
+
+#[derive(Deserialize)]
+struct ConvertPresetApplyBody {
+    name: String,
+}
+
+async fn convert_presets_list(_st: State<ApiState>) -> Json<serde_json::Value> {
+    let store = crate::convert_presets::load_convert_presets();
+    let mut names: Vec<String> = crate::convert_presets::builtin_convert_presets()
+        .into_iter()
+        .map(|p| p.name)
+        .collect();
+    for p in store.presets {
+        if !names.iter().any(|n| n == &p.name) {
+            names.push(p.name);
+        }
+    }
+    Json(serde_json::json!({ "presets": names }))
+}
+
+async fn convert_presets_apply(
+    State(st): State<ApiState>,
+    Json(body): Json<ConvertPresetApplyBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let name = body.name.trim();
+    let preset = crate::convert_presets::builtin_convert_presets()
+        .into_iter()
+        .find(|p| p.name == name)
+        .or_else(|| {
+            crate::convert_presets::load_convert_presets()
+                .presets
+                .into_iter()
+                .find(|p| p.name == name)
+        })
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "preset not found".to_owned(),
+            }),
+        ))?;
+    let mut c = st.core.lock();
+    preset.fields.apply_to(&mut c.settings);
+    c.persist_settings();
+    c.bump_generation();
+    Ok(StatusCode::OK)
+}
+
+async fn convert_export_summary(State(st): State<ApiState>) -> impl IntoResponse {
+    let c = st.core.lock();
+    let mut lines =
+        vec!["item_id,source_path,output_path,status,input_bytes,output_bytes".to_owned()];
+    for it in &c.convert_items {
+        lines.push(format!(
+            "{},{},{},{},{},{}",
+            it.item_id,
+            csv_escape(&it.source_path),
+            csv_escape(&it.output_path),
+            it.status.as_str(),
+            it.input_bytes,
+            it.output_bytes.unwrap_or(0),
+        ));
+    }
+    (
+        [(axum::http::header::CONTENT_TYPE, "text/csv; charset=utf-8")],
+        lines.join("\n"),
+    )
+}
+
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
 }
 
 async fn convert_thumbnail(

@@ -1,0 +1,21 @@
+# Example winget manifest for rustdl (submit via winget-pkgs PR).
+PackageIdentifier: Darknetzz.rustdl
+PackageVersion: 0.6.0
+PackageLocale: en-US
+Publisher: Darknetzz
+PackageName: rustdl
+License: MIT
+ShortDescription: Desktop GUI for yt-dlp with Video Converter and LAN web UI
+Moniker: rustdl
+Tags:
+  - yt-dlp
+  - downloader
+  - ffmpeg
+Installers:
+  - Architecture: x64
+    InstallerType: portable
+    InstallerUrl: https://github.com/Darknetzz/rustdl/releases/download/rustdl-v0.6.0/rustdl.exe
+    InstallerSha256: PLACEHOLDER
+    PortableCommandAlias:
+      - DisplayName: rustdl
+        Command: rustdl.exe
