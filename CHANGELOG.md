@@ -16,7 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - **Check for updates** on **private GitHub repositories**: optional **GitHub releases token** in Settings → Shared (or `RUSTDL_GITHUB_TOKEN`); clearer 404 message when the repo is private and no token is configured.
 - **Refetch** on queue cards with metadata errors did nothing (resolve state was not synced to the download core before yt-dlp ran).
 - Downloader queue **card layout** fills each row with multiple preview cards again (wrapped grid) instead of stacking one card per line; list layout is only used when enabled in Settings or for very large queues.
-- Floating **Activity log** window: toolbar and log lines use the same explicit top-down body sizing as the floating Videos window (fixes empty panel and controls drifting to the middle).
+- Floating **Activity log** window: match the docked log panel layout (pinned body, explicit scroll height, `horizontal_wrapped` toolbar) so controls stay at the top and log lines fill the rest.
 
 ### Added
 
