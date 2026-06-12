@@ -130,6 +130,15 @@ pub fn executable_exists(custom_path: &str, default_exe: &str) -> bool {
     which(default_exe).is_some()
 }
 
+pub fn resolve_executable(custom_path: &str, default_exe: &str) -> String {
+    let trimmed = custom_path.trim();
+    if trimmed.is_empty() {
+        default_exe.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,14 +157,5 @@ mod tests {
             normalize_subprocess_priority("unknown"),
             SubprocessPriority::Normal
         );
-    }
-}
-
-pub fn resolve_executable(custom_path: &str, default_exe: &str) -> String {
-    let trimmed = custom_path.trim();
-    if trimmed.is_empty() {
-        default_exe.to_owned()
-    } else {
-        trimmed.to_owned()
     }
 }
