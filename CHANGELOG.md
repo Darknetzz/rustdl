@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- Main header shows live **CPU**, **RAM**, and (on Windows) **GPU** utilization percentages, color-coded by load.
 - Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
 
 ### Changed

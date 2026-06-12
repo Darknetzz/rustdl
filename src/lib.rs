@@ -18,6 +18,7 @@ pub mod models;
 pub mod pkg_version;
 pub mod profiles;
 pub(crate) mod service;
+pub mod system_usage;
 pub mod theme;
 pub mod thumbnail_store;
 pub mod time_format;

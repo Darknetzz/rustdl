@@ -109,6 +109,55 @@ pub fn draw_disk_space_progress_bar(
     ))
 }
 
+fn draw_usage_stat_label(
+    ui: &mut egui::Ui,
+    name: &str,
+    percent: Option<f32>,
+    muted: Color32,
+) {
+    let text = format!("{name} {}", crate::system_usage::format_usage_percent(percent));
+    let color = percent
+        .map(crate::system_usage::usage_level_color)
+        .unwrap_or(muted);
+    let hover = percent
+        .map(|v| format!("{name} utilization: {v:.1}%"))
+        .unwrap_or_else(|| format!("{name} utilization: measuring…"));
+    ui.add(
+        egui::Label::new(header_status_rich(text).color(color).strong())
+            .sense(egui::Sense::hover())
+            .selectable(false),
+    )
+    .on_hover_text(hover);
+}
+
+/// CPU / RAM / GPU utilization chips for the main header (polled in the background).
+pub fn draw_system_usage_header(
+    ui: &mut egui::Ui,
+    usage: &crate::system_usage::SystemUsageSnapshot,
+    theme: &str,
+) {
+    let muted = text_muted(theme);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        draw_usage_stat_label(ui, "CPU", usage.cpu_percent, muted);
+        ui.label(
+            RichText::new("·")
+                .size(HEADER_STATUS_FONT_SIZE)
+                .color(muted),
+        );
+        draw_usage_stat_label(ui, "RAM", usage.ram_percent, muted);
+        #[cfg(windows)]
+        {
+            ui.label(
+                RichText::new("·")
+                    .size(HEADER_STATUS_FONT_SIZE)
+                    .color(muted),
+            );
+            draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
+        }
+    });
+}
+
 pub fn status_color(s: ItemStatus) -> Color32 {
     match s {
         ItemStatus::Resolving => Color32::from_rgb(120, 144, 156),

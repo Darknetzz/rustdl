@@ -238,6 +238,7 @@ pub struct PydlApp {
     /// Cached free/total space for the output folder volume.
     output_disk_space: Option<crate::disk_space::DiskSpace>,
     output_disk_space_polled_at: Option<Instant>,
+    system_usage: crate::system_usage::SystemUsageMonitor,
     #[cfg(windows)]
     win_browser_drop_queue: Arc<Mutex<Vec<crate::win_drop_target::WinDropPayload>>>,
     #[cfg(windows)]
@@ -421,6 +422,7 @@ impl PydlApp {
             last_done_lookup_poll: None,
             output_disk_space: None,
             output_disk_space_polled_at: None,
+            system_usage: crate::system_usage::SystemUsageMonitor::new(),
             deferred_menu_paste_urls: None,
             deferred_menu_paste_output_dir: None,
             #[cfg(windows)]
@@ -788,6 +790,18 @@ impl PydlApp {
         }
         self.output_disk_space = crate::disk_space::query_disk_space(&self.output_dir);
         self.output_disk_space_polled_at = Some(now);
+    }
+
+    fn poll_system_usage(&mut self) {
+        self.system_usage.maybe_poll();
+    }
+
+    pub(super) fn draw_system_usage(&self, ui: &mut egui::Ui) {
+        crate::app_ui::draw_system_usage_header(
+            ui,
+            &self.system_usage.snapshot(),
+            &self.settings.theme,
+        );
     }
 
     pub(super) fn persist_settings(&mut self) {

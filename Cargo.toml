@@ -32,6 +32,7 @@ rfd = "0.15"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 shlex = "1"
+sysinfo = { version = "0.33", default-features = false, features = ["system"] }
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "process", "io-util", "macros", "fs", "signal"] }
 tokio-util = { version = "0.7", features = ["io"] }
 url = "2"
@@ -59,6 +60,7 @@ windows-sys = { version = "0.52", features = [
     "Win32_System_DataExchange",
     "Win32_System_Memory",
     "Win32_System_Ole",
+    "Win32_System_Performance",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }

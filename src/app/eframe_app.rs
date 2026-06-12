@@ -52,6 +52,8 @@ impl eframe::App for PydlApp {
         }
         self.poll_done_file_lookup();
         self.poll_output_disk_space();
+        self.poll_system_usage();
+        ctx.request_repaint_after(std::time::Duration::from_millis(1500));
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
             if !self.add_in_progress && now >= deadline {
@@ -625,6 +627,7 @@ impl PydlApp {
         );
         draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, compact);
         draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, compact);
+        self.draw_system_usage(ui);
         self.draw_output_disk_space(ui);
     }
 
