@@ -18,7 +18,7 @@ use super::{log_line_color, CancelPostAction, PydlApp, LOG_COLOR_ERROR, LOG_COLO
 
 impl PydlApp {
     pub(super) fn draw_card(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
-        if self.settings.card_list_layout {
+        if self.effective_card_list_layout() {
             self.draw_card_list(ui, idx, allow_reorder);
             return;
         }
@@ -784,11 +784,8 @@ impl PydlApp {
             });
             let (_toggle, header_inner, _) = header.body(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
-                let use_list_layout = self.effective_card_list_layout()
-                    || ids.len() > 24
-                    || (label == "Ready" && ids.len() > 12);
-                if use_list_layout {
-                    let allow_reorder = label == "Ready";
+                let allow_reorder = label == "Ready";
+                if self.effective_card_list_layout() {
                     const LIST_ROW_H: f32 = 42.0;
                     let row_count = ids.len().max(1);
                     let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
@@ -801,54 +798,25 @@ impl PydlApp {
                             for row in row_range {
                                 if let Some(item_id) = ids.get(row) {
                                     if let Some(idx) = self.item_idx(*item_id) {
-                                        self.draw_card(ui, idx, allow_reorder);
+                                        self.draw_card_list(ui, idx, allow_reorder);
                                     }
                                 }
                             }
                         });
                 } else {
-                    const HORIZONTAL_CARD_CAP: usize = 24;
-                    let visible_ids: &[u64] = if ids.len() > HORIZONTAL_CARD_CAP {
-                        &ids[..HORIZONTAL_CARD_CAP]
-                    } else {
-                        &ids
-                    };
                     let row_width = ui.available_width().max(1.0);
-                    let card_h = if self.settings.compact_cards {
-                        240.0
-                    } else {
-                        360.0
-                    };
-                    egui::ScrollArea::horizontal()
-                        .id_salt(format!("rustdl_cards_{label}"))
-                        .auto_shrink([false, false])
-                        .max_width(row_width)
-                        .max_height(card_h + 16.0)
-                        .animated(true)
-                        .drag_to_scroll(true)
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                                for id in visible_ids {
-                                    let idx = self.item_idx(*id).or_else(|| {
-                                        self.items.iter().position(|it| it.item_id == *id)
-                                    });
-                                    if let Some(idx) = idx {
-                                        self.draw_card(ui, idx, false);
-                                    }
-                                }
+                    ui.set_width(row_width);
+                    ui.horizontal_wrapped(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                        for id in &ids {
+                            let idx = self.item_idx(*id).or_else(|| {
+                                self.items.iter().position(|it| it.item_id == *id)
                             });
-                        });
-                    if ids.len() > HORIZONTAL_CARD_CAP {
-                        ui.label(
-                            RichText::new(format!(
-                                "Showing first {HORIZONTAL_CARD_CAP} of {} — switch to list layout in Settings or reduce queue size.",
-                                ids.len()
-                            ))
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                    }
+                            if let Some(idx) = idx {
+                                self.draw_card(ui, idx, allow_reorder);
+                            }
+                        }
+                    });
                 }
             });
             if scroll_here {
