@@ -420,6 +420,18 @@ impl PydlApp {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Session").strong());
             if ui
+                .checkbox(
+                    &mut self.settings.convert_recursive,
+                    "Recursive folder scan",
+                )
+                .on_hover_text(
+                    "When enabled, scanning a folder also includes supported videos in subfolders.",
+                )
+                .changed()
+            {
+                self.persist_settings();
+            }
+            if ui
                 .checkbox(&mut self.settings.convert_dry_run, "Dry run this batch")
                 .changed()
             {
