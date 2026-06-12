@@ -14,6 +14,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
 
+### Changed
+
+- Video Converter **CPU threads** auto (`0`) now splits ~75% of logical cores across parallel jobs (max 4 threads per encode) instead of letting each ffmpeg process use every core.
+
 ## [0.5.2] - 2026-06-12
 
 ### Fixed

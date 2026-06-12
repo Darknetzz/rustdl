@@ -1507,7 +1507,7 @@ impl PydlApp {
                                         }),
                                 )
                                 .on_hover_text(format!(
-                                    "Limit ffmpeg decode/encode threads (0 = auto, up to {max_cpus} cores)."
+                                    "Limit ffmpeg decode/encode threads per job (0 = auto: ~75% of cores split across parallel jobs, up to 4 per job; manual max {max_cpus})."
                                 ))
                                 .changed();
                             if cpu_slider_changed {

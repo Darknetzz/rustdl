@@ -47,7 +47,10 @@ impl DownloadCore {
             size_preset: self.settings.convert_size_preset.clone(),
             min_shrink_percent: self.settings.convert_min_shrink_percent,
             encoder_override: self.settings.convert_encoder_override.clone(),
-            cpu_threads: self.settings.convert_cpu_threads,
+            cpu_threads: transcode::resolve_convert_cpu_threads(
+                self.settings.convert_cpu_threads,
+                self.settings.convert_parallel,
+            ),
             subprocess_priority: self.settings.subprocess_priority.clone(),
         }
     }

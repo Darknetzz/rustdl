@@ -328,6 +328,23 @@ fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) 
     format!("{scale},setsar=1")
 }
 
+/// Per-job ffmpeg thread cap when CPU threads is left on auto (`0`).
+const CONVERT_AUTO_THREADS_PER_JOB_CAP: u32 = 4;
+
+/// Resolves stored converter CPU-thread setting into a per-transcode thread budget.
+///
+/// `0` (auto) uses ~75% of logical CPUs split across parallel jobs, capped per job so
+/// multiple encodes do not each claim every core (or GPU session).
+pub fn resolve_convert_cpu_threads(configured: u32, parallel: usize) -> u32 {
+    let parallel = parallel.clamp(1, 6) as u32;
+    let cpus = logical_cpu_count();
+    if configured > 0 {
+        return configured.clamp(1, cpus);
+    }
+    let budget = cpus.saturating_mul(3).saturating_div(4).max(1);
+    (budget / parallel).max(1).min(CONVERT_AUTO_THREADS_PER_JOB_CAP)
+}
+
 pub fn effective_cpu_threads(configured: u32) -> Option<u32> {
     if configured == 0 {
         None
@@ -1027,6 +1044,25 @@ mod tests {
     #[test]
     fn effective_cpu_threads_zero_means_auto() {
         assert_eq!(effective_cpu_threads(0), None);
+    }
+
+    #[test]
+    fn resolve_convert_cpu_threads_auto_splits_parallel_jobs() {
+        let cpus = logical_cpu_count();
+        let single = resolve_convert_cpu_threads(0, 1);
+        assert!(single >= 1);
+        assert!(single <= CONVERT_AUTO_THREADS_PER_JOB_CAP);
+        if cpus >= 8 {
+            assert!(single <= cpus / 2);
+        }
+        let dual = resolve_convert_cpu_threads(0, 2);
+        assert!(dual <= single);
+        assert!(dual >= 1);
+    }
+
+    #[test]
+    fn resolve_convert_cpu_threads_honors_explicit_value() {
+        assert_eq!(resolve_convert_cpu_threads(6, 3), 6);
     }
 
     #[test]
