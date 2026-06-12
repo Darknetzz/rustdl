@@ -411,7 +411,9 @@ impl super::core::DownloadCore {
             it.speed_text = speed;
             it.eta_text = eta;
         }
-        it.detail = line.chars().take(160).collect();
+        if let Some(detail) = ytdlp::format_download_card_detail(line) {
+            it.detail = detail.chars().take(160).collect();
+        }
         if let Some(raw) = ytdlp::parse_output_path_from_download_log_line(line) {
             let raw = raw.to_string_lossy();
             if let Some(path) =

@@ -262,7 +262,7 @@ impl PydlApp {
                         pb
                     },
                 );
-                if detail_h > 0.0 {
+                if detail_h > 0.0 && !detail.trim().is_empty() {
                     let detail_short = ellipsize(&detail, 64);
                     let detail_color = log_line_color(&detail);
                     ui.add_sized(
@@ -270,7 +270,6 @@ impl PydlApp {
                         egui::Label::new(
                             RichText::new(detail_short)
                                 .small()
-                                .monospace()
                                 .color(detail_color),
                         )
                         .wrap(),

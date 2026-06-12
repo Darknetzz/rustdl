@@ -479,11 +479,6 @@ impl PydlApp {
         button_toolbar_wrapped(ui, |ui| self.draw_video_queue_controls_inner(ui, false));
     }
 
-    /// Compact dock/undock control for the queue footer (single row with action buttons).
-    fn draw_video_queue_controls_compact(&mut self, ui: &mut egui::Ui) {
-        self.draw_video_queue_controls_inner(ui, true);
-    }
-
     /// Window/panel chrome (dock, hide) and queue batch actions.
     fn draw_videos_footer_toolbar(&mut self, ui: &mut egui::Ui, wrapped: bool) {
         let heading = if self.convert_mode {
@@ -491,12 +486,14 @@ impl PydlApp {
         } else {
             "Videos"
         };
+        // Convert batch controls are primary actions — use full-size grouped buttons in the footer.
+        let compact_footer = !self.convert_mode;
         if wrapped {
             button_toolbar_wrapped(ui, |ui| {
                 ui.label(RichText::new(heading).strong());
-                self.draw_video_queue_controls_compact(ui);
+                self.draw_video_queue_controls_inner(ui, compact_footer);
                 if self.convert_mode {
-                    self.draw_convert_queue_action_groups(ui, true);
+                    self.draw_convert_queue_action_groups(ui, compact_footer);
                 } else {
                     self.draw_downloader_queue_action_groups(ui, true);
                 }
@@ -504,11 +501,11 @@ impl PydlApp {
         } else {
             left_button_row(ui, |ui| {
                 ui.label(RichText::new(heading).strong());
-                self.draw_video_queue_controls_compact(ui);
+                self.draw_video_queue_controls_inner(ui, compact_footer);
             });
             left_button_row(ui, |ui| {
                 if self.convert_mode {
-                    self.draw_convert_queue_action_groups(ui, true);
+                    self.draw_convert_queue_action_groups(ui, compact_footer);
                 } else {
                     self.draw_downloader_queue_action_fused(ui, true);
                 }

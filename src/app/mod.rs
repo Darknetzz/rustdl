@@ -235,6 +235,7 @@ pub struct PydlApp {
     /// Context-menu Paste: clipboard injected at start of next frame (see `attach_paste_context_menu`).
     deferred_menu_paste_urls: Option<String>,
     deferred_menu_paste_output_dir: Option<String>,
+    deferred_menu_paste_convert_paths: Option<String>,
     /// Decoded thumbnails waiting for `load_texture` (bounded per frame).
     pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
@@ -431,6 +432,7 @@ impl PydlApp {
             system_usage: crate::system_usage::SystemUsageMonitor::new(),
             deferred_menu_paste_urls: None,
             deferred_menu_paste_output_dir: None,
+            deferred_menu_paste_convert_paths: None,
             #[cfg(windows)]
             win_browser_drop_queue: Arc::new(Mutex::new(Vec::new())),
             #[cfg(windows)]

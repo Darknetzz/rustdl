@@ -442,10 +442,14 @@ impl PydlApp {
         });
         // The buffer is mirrored to DownloadCore each frame (see core_sync); persistence happens
         // there on scan / exit, so no per-keystroke save is needed here.
-        ui.add_sized(
+        let convert_paths_edit = ui.add_sized(
             [ui.available_width(), 90.0],
             egui::TextEdit::multiline(&mut self.convert_input_paths)
-                .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder"),
+                .hint_text("D:\\Videos\\movie.mkv\nD:\\Videos\\Folder — paste or drop paths"),
+        );
+        super::attach_paste_context_menu(
+            &convert_paths_edit,
+            &mut self.deferred_menu_paste_convert_paths,
         );
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new("Session").strong());

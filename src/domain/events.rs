@@ -109,7 +109,11 @@ pub enum UiEvent {
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
 pub fn is_throttled_download_log_line(line: &str) -> bool {
-    let l = line.to_ascii_lowercase();
+    let trimmed = line.trim();
+    if trimmed.starts_with(crate::ytdlp::PROGRESS_PREFIX) {
+        return true;
+    }
+    let l = trimmed.to_ascii_lowercase();
     (l.contains("[download]") && (l.contains('%') || l.contains("frag"))) || l.contains("[merger]")
 }
 
@@ -123,10 +127,16 @@ mod tests {
             "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
         ));
         assert!(is_throttled_download_log_line(
+            "progress:98.4%|236700648|NA|240516070.39999998"
+        ));
+        assert!(is_throttled_download_log_line(
             "[Merger] Merging formats into mkv"
         ));
         assert!(!is_throttled_download_log_line(
             "ERROR: unable to download video"
+        ));
+        assert!(!is_throttled_download_log_line(
+            "[FixupM3u8] Fixing MPEG-TS in MP4 container"
         ));
     }
 }

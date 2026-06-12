@@ -27,6 +27,9 @@ impl eframe::App for PydlApp {
         if let Some(text) = self.deferred_menu_paste_output_dir.take() {
             ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
         }
+        if let Some(text) = self.deferred_menu_paste_convert_paths.take() {
+            ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
+        }
         self.maybe_flush_queue_save();
         self.maybe_flush_convert_queue_save();
         self.maybe_flush_log_save();

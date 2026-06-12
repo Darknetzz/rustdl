@@ -17,6 +17,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Main header shows live **CPU**, **RAM**, and (on Windows) **GPU** utilization percentages, color-coded by load.
 - LAN web UI top bar shows the same live **CPU**, **RAM**, and (on Windows) **GPU** utilization from `/api/status`.
 - Top bar activity badge **pulses** while downloading, converting, resolving, or otherwise busy (idle and paused stay static).
+- Convert queue footer uses full-size batch controls (Start / Pause / Cancel / Retry / Clear) instead of compact buttons.
+- Video Converter input paths field supports right-click **Paste** (same context menu as the downloader URL box).
 - Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
 
 ### Changed
@@ -28,6 +30,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Download queue cards no longer show raw `progress:` pipe data under the progress bar; only meaningful yt-dlp status lines (e.g. merge/fixup phases) appear there.
 - Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
 - Starting a Video Converter batch no longer overwrites `rustdl_config.json` with stale settings from the background core (GUI settings are synced before the batch starts).
 

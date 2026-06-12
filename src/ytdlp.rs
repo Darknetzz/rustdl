@@ -817,6 +817,29 @@ pub fn parse_progress_line(line: &str) -> (Option<f32>, Option<String>) {
     (pct, size)
 }
 
+/// yt-dlp progress lines that should not replace the card detail text (footer already shows stats).
+pub fn is_download_progress_spam_line(line: &str) -> bool {
+    let clean = line.trim();
+    if clean.starts_with(PROGRESS_PREFIX) {
+        return true;
+    }
+    let lower = clean.to_ascii_lowercase();
+    (lower.starts_with("[download]") && (lower.contains('%') || lower.contains("frag")))
+        || lower.starts_with("[merger]")
+}
+
+/// Returns card detail text for a yt-dlp stdout/stderr line, or `None` for progress spam.
+pub fn format_download_card_detail(line: &str) -> Option<String> {
+    if is_download_progress_spam_line(line) {
+        return None;
+    }
+    let clean = line.trim();
+    if clean.is_empty() {
+        return None;
+    }
+    Some(clean.to_owned())
+}
+
 fn push_line_tail(deque: &mut VecDeque<String>, line: String) {
     if deque.len() >= STDERR_TAIL_LINES {
         deque.pop_front();
@@ -1123,6 +1146,23 @@ mod tests {
             parse_progress_line("[download] 73.1% of 12.3 MiB at 1.2 MiB/s ETA 00:12");
         assert_eq!(pct, Some(73.1));
         assert_eq!(size.as_deref(), Some("12.3MiB"));
+    }
+
+    #[test]
+    fn format_download_card_detail_skips_progress_spam() {
+        assert!(format_download_card_detail(
+            "progress:98.4%|236700648|NA|240516070.39999998"
+        )
+        .is_none());
+        assert!(format_download_card_detail(
+            "[download]  45.2% of   12.34MiB at  1.00MiB/s ETA 00:05"
+        )
+        .is_none());
+        assert_eq!(
+            format_download_card_detail("[FixupM3u8] Fixing MPEG-TS in MP4 container")
+                .as_deref(),
+            Some("[FixupM3u8] Fixing MPEG-TS in MP4 container")
+        );
     }
 
     #[test]
