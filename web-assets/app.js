@@ -6,6 +6,8 @@ const DOWNLOAD_QUEUE_GROUPS = ["Active", "Ready", "Issues", "Done", "Resolving"]
 const CONVERT_QUEUE_GROUPS = ["Active", "Ready", "Failed", "Skipped", "Done"];
 
 let cachedSettings = null;
+/** True when this browser was accepted without an API token (IP whitelist). */
+let ipAuthBypass = false;
 let logLinesCache = [];
 /** @type {string | null} */
 let queueStatusFilter = null;
@@ -528,6 +530,18 @@ function token() {
   return localStorage.getItem(TOKEN_KEY) || "";
 }
 
+function apiAuthOptional() {
+  return !!token() || ipAuthBypass;
+}
+
+/** Append token query param when the client uses token auth. */
+function apiUrlWithAuth(path) {
+  const t = token();
+  if (!t) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}token=${encodeURIComponent(t)}`;
+}
+
 function headers() {
   const h = { "Content-Type": "application/json" };
   const t = token();
@@ -573,7 +587,7 @@ function showAuthPanel(statusText) {
 }
 
 function thumbFailurePlaceholder(reason, cacheKey) {
-  if (reason === "no_token" || !token()) {
+  if ((reason === "no_token" || !token()) && !ipAuthBypass) {
     return "Save API token to load thumbnails";
   }
   if (reason === "unauthorized") {
@@ -586,7 +600,7 @@ function thumbFailurePlaceholder(reason, cacheKey) {
 }
 
 function convertThumbFailurePlaceholder(reason, key) {
-  if (reason === "no_token" || !token()) {
+  if ((reason === "no_token" || !token()) && !ipAuthBypass) {
     return "Save API token to load thumbnails";
   }
   if (reason === "unauthorized") {
@@ -1388,7 +1402,7 @@ function stopActiveMedia() {
 }
 
 function mediaStreamUrl(itemId) {
-  return `/api/media/${itemId}?token=${encodeURIComponent(token())}`;
+  return apiUrlWithAuth(`/api/media/${itemId}`);
 }
 
 function toggleCardMedia(item, thumb) {
@@ -1596,9 +1610,8 @@ function appendPlayButton(actions, item, thumb) {
 }
 
 function thumbnailApiUrl(itemId) {
-  const t = token();
-  if (!t) return null;
-  return `/api/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
+  if (!apiAuthOptional()) return null;
+  return apiUrlWithAuth(`/api/thumbnail/${itemId}`);
 }
 
 function revealThumbImage(img, placeholder, cacheKey) {
@@ -2562,8 +2575,8 @@ function handleSseEvent(data) {
 
 function connectSse() {
   const t = token();
-  if (!t) return;
-  const es = new EventSource(`/api/events?token=${encodeURIComponent(t)}`);
+  const url = t ? `/api/events?token=${encodeURIComponent(t)}` : "/api/events";
+  const es = new EventSource(url);
   es.onopen = () => {
     sseConnected = true;
     if (refreshIntervalId != null) {
@@ -2723,6 +2736,15 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-convert-rename-original", s.convert_rename_original);
   setCheck("set-convert-remember-queue", s.convert_remember_queue);
 
+  setCheck("set-web-ui-enabled", s.web_ui_enabled);
+  setVal("set-web-bind-address", s.web_bind_address || "0.0.0.0:8765");
+  const whitelistEl = document.getElementById("set-web-ip-whitelist");
+  if (whitelistEl) {
+    whitelistEl.value = Array.isArray(s.web_auth_ip_whitelist)
+      ? s.web_auth_ip_whitelist.join("\n")
+      : "";
+  }
+
   document.getElementById("command-preview").textContent = commandPreview || "";
   updateQualityCustomVisibility();
   updateOrganizeUi(s);
@@ -2812,6 +2834,14 @@ function collectSettingsForm(base) {
   s.convert_rename_original = document.getElementById("set-convert-rename-original").checked;
   s.convert_remember_queue = document.getElementById("set-convert-remember-queue").checked;
 
+  s.web_ui_enabled = document.getElementById("set-web-ui-enabled").checked;
+  s.web_bind_address =
+    document.getElementById("set-web-bind-address").value.trim() || "0.0.0.0:8765";
+  s.web_auth_ip_whitelist = (document.getElementById("set-web-ip-whitelist")?.value || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
   s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
   s.convert_min_shrink_percent = Math.min(95, Math.max(0, s.convert_min_shrink_percent));
@@ -2831,6 +2861,7 @@ function switchSettingsTab(name) {
   document.getElementById("settings-tab-shared").hidden = name !== "shared";
   document.getElementById("settings-tab-downloader").hidden = name !== "downloader";
   document.getElementById("settings-tab-convert").hidden = name !== "convert";
+  document.getElementById("settings-tab-webui").hidden = name !== "webui";
 }
 
 async function openSettingsDialog() {
@@ -3137,9 +3168,8 @@ function convertThumbKey(item) {
 }
 
 function convertThumbnailUrl(itemId) {
-  const t = token();
-  if (!t) return null;
-  return `/api/convert/thumbnail/${itemId}?token=${encodeURIComponent(t)}`;
+  if (!apiAuthOptional()) return null;
+  return apiUrlWithAuth(`/api/convert/thumbnail/${itemId}`);
 }
 
 function revealconvertThumbImage(img, placeholder, key) {
@@ -3860,6 +3890,22 @@ document.addEventListener("keydown", (e) => {
 
 document.body.classList.add("view-downloader");
 
+async function tryConnectWithoutToken() {
+  try {
+    const res = await fetch("/api/status");
+    if (!res.ok) return false;
+    ipAuthBypass = true;
+    showApp();
+    refreshAll().catch(() => {});
+    connectSse();
+    startStatusPoll();
+    startFallbackPolling();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 if (token()) {
   document.getElementById("token-input").value = token();
   showApp();
@@ -3867,4 +3913,6 @@ if (token()) {
   connectSse();
   startStatusPoll();
   startFallbackPolling();
+} else {
+  tryConnectWithoutToken();
 }

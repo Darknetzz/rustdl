@@ -1586,6 +1586,35 @@ impl PydlApp {
                                 )
                                 .changed();
                             ui.end_row();
+                            ui.label("IP whitelist");
+                            ui.vertical(|ui| {
+                                ui.label(
+                                    RichText::new(
+                                        "Optional. One IP or CIDR per line; matching clients skip the API token.",
+                                    )
+                                    .small()
+                                    .color(ui.visuals().weak_text_color()),
+                                );
+                                let mut whitelist_body =
+                                    self.settings.web_auth_ip_whitelist.join("\n");
+                                if ui
+                                    .add(
+                                        egui::TextEdit::multiline(&mut whitelist_body)
+                                            .desired_rows(4)
+                                            .hint_text("127.0.0.1\n192.168.1.0/24"),
+                                    )
+                                    .changed()
+                                {
+                                    self.settings.web_auth_ip_whitelist = whitelist_body
+                                        .lines()
+                                        .map(str::trim)
+                                        .filter(|line| !line.is_empty())
+                                        .map(str::to_owned)
+                                        .collect();
+                                    changed = true;
+                                }
+                            });
+                            ui.end_row();
                         });
                         {
                             let show_token_id = ui.id().with("web_token_visible");

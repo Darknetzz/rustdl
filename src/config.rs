@@ -278,6 +278,9 @@ pub struct AppSettings {
     /// Bearer / `X-Rustdl-Token` value required for API access.
     #[serde(default)]
     pub web_auth_token: String,
+    /// Client IPs or CIDR ranges that may use the web API without a token (e.g. `192.168.1.0/24`).
+    #[serde(default)]
+    pub web_auth_ip_whitelist: Vec<String>,
     /// GitHub personal access token for in-app update checks (required when the repo is private).
     #[serde(default)]
     pub github_token: String,
@@ -605,6 +608,7 @@ impl Default for AppSettings {
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
+            web_auth_ip_whitelist: Vec::new(),
             github_token: String::new(),
             queue_search: String::new(),
             log_filter: default_log_filter(),

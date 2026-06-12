@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Json, Response};
@@ -48,10 +48,6 @@ impl ApiState {
     pub fn set_process_exit_notifier(&self, tx: tokio::sync::oneshot::Sender<()>) {
         *self.process_exit.lock() = Some(tx);
     }
-}
-
-fn expected_token(st: &ApiState) -> String {
-    st.core.lock().settings.web_auth_token.clone()
 }
 
 #[derive(Serialize)]
@@ -201,11 +197,6 @@ struct LogsResponse {
     lines: Vec<String>,
 }
 
-#[derive(Deserialize)]
-struct TokenQuery {
-    token: Option<String>,
-}
-
 #[derive(Serialize)]
 struct ProfilesResponse {
     active: String,
@@ -307,8 +298,14 @@ pub fn api_router(state: ApiState) -> Router {
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
-                let expected = expected_token(&st);
-                auth::require_token(expected, req, next).await
+                let (expected, whitelist) = {
+                    let c = st.core.lock();
+                    (
+                        c.settings.web_auth_token.clone(),
+                        c.settings.web_auth_ip_whitelist.clone(),
+                    )
+                };
+                auth::require_auth(expected, whitelist, req, next).await
             },
         ))
         .with_state(state.clone());
@@ -1015,18 +1012,7 @@ async fn app_shutdown(State(st): State<ApiState>) -> StatusCode {
 
 async fn events_sse(
     State(st): State<ApiState>,
-    Query(q): Query<TokenQuery>,
-    headers: axum::http::HeaderMap,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, StatusCode> {
-    let expected = expected_token(&st);
-    let ok = auth::token_matches(&expected, q.token.as_deref())
-        || headers
-            .get(auth::AUTH_HEADER)
-            .and_then(|v| v.to_str().ok())
-            .is_some_and(|t| auth::token_matches(&expected, Some(t)));
-    if !ok {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
     let rx = {
         let c = st.core.lock();
         c.subscribe_events()
@@ -1248,6 +1234,32 @@ mod tests {
                 )
                 .await
                 .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn queue_list_with_whitelisted_ip() {
+        use std::net::SocketAddr;
+
+        use axum::extract::ConnectInfo;
+
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        {
+            let mut c = state.core.lock();
+            c.settings.web_auth_ip_whitelist = vec!["127.0.0.1".to_owned()];
+        }
+        rt.block_on(async move {
+            let app = api_router(state);
+            let mut request = Request::builder()
+                .uri("/api/queue")
+                .body(Body::empty())
+                .unwrap();
+            request
+                .extensions_mut()
+                .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 12345))));
+            let response = app.oneshot(request).await.unwrap();
             assert_eq!(response.status(), StatusCode::OK);
         });
     }

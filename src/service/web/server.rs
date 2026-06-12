@@ -174,7 +174,10 @@ pub fn spawn_web_server_at(
                 return;
             }
         };
-        let serve = axum::serve(listener, app);
+        let serve = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        );
         tokio::select! {
             _ = serve => {},
             _ = shutdown_rx => {},

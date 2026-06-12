@@ -170,6 +170,7 @@
           <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
           <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
           <button type="button" class="settings-tab" data-tab="convert" data-icon="bolt" role="tab">Convert</button>
+          <button type="button" class="settings-tab" data-tab="webui" data-icon="language" role="tab">Web UI</button>
         </div>
       </div>
       <div class="settings-scroll">
@@ -390,6 +391,17 @@
           <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
           <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
           <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>
+        </div>
+
+        <div id="settings-tab-webui" class="settings-panel" role="tabpanel" hidden>
+          <h3>LAN access</h3>
+          <p class="hint">HTTP on your local network with token auth by default. Whitelisted IPs can use the web UI without pasting a token.</p>
+          <label class="check"><input type="checkbox" id="set-web-ui-enabled" /> Enable web UI (restart rustdl to apply bind changes)</label>
+          <label>Bind address <input type="text" id="set-web-bind-address" placeholder="0.0.0.0:8765" /></label>
+          <label>IP whitelist
+            <textarea id="set-web-ip-whitelist" rows="4" placeholder="127.0.0.1&#10;192.168.1.0/24" spellcheck="false"></textarea>
+          </label>
+          <p class="hint">One IP or CIDR per line. Matching clients skip the API token (full API access). Other clients still need the token from the desktop app.</p>
         </div>
       </div>
       <div class="dialog-actions">

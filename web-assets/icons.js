@@ -34,6 +34,7 @@ const ICON = {
   check: "check",
   contentCopy: "content_copy",
   link: "link",
+  language: "language",
   openInNew: "open_in_new",
   schedule: "schedule",
   playlist_play: "playlist_play",
