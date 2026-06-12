@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- **Pause / Resume** for Video Converter batches (queue footer, command palette, LAN API); **Pause / Resume downloads** also appears on the main Downloader panel (still in the queue footer).
 - Main header shows live **CPU**, **RAM**, and (on Windows) **GPU** utilization percentages, color-coded by load.
 - Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
 

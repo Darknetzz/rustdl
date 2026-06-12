@@ -49,6 +49,14 @@ const COMMANDS: &[PaletteCommand] = &[
         keywords: "resume continue",
     },
     PaletteCommand {
+        label: "Pause Convert batch",
+        keywords: "pause hold stop convert encode",
+    },
+    PaletteCommand {
+        label: "Resume Convert batch",
+        keywords: "resume continue convert encode",
+    },
+    PaletteCommand {
         label: "Retry all failed",
         keywords: "retry failed download again",
     },
@@ -177,6 +185,12 @@ impl PydlApp {
             "Start downloads" => self.start_downloads(),
             "Pause downloads" => self.pause_all_downloads(),
             "Resume downloads" => self.resume_all_downloads(),
+            "Pause Convert batch" => {
+                self.convert_core_action(|core| core.pause_convert_batch());
+            }
+            "Resume Convert batch" => {
+                self.convert_core_action(|core| core.resume_convert_batch());
+            }
             "Retry all failed" => self.retry_failed_items(),
             "Toggle activity log" => {
                 self.settings.logs_open = !self.settings.logs_open;

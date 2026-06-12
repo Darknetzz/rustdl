@@ -46,6 +46,7 @@ struct ConvertSummaryJson {
 struct ConvertQueueResponse {
     items: Vec<ConvertItemView>,
     running: bool,
+    paused: bool,
     input_paths: String,
     encoder: Option<ConvertEncoderJson>,
     has_ffmpeg: bool,
@@ -68,6 +69,8 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/scan", post(convert_scan))
         .route("/api/convert/start", post(convert_start))
         .route("/api/convert/cancel", post(convert_cancel))
+        .route("/api/convert/pause", post(convert_pause))
+        .route("/api/convert/resume", post(convert_resume))
         .route("/api/convert/clear", post(convert_clear))
         .route("/api/convert/retry-skipped", post(convert_retry_skipped))
         .route("/api/convert/thumbnail/:id", get(convert_thumbnail))
@@ -112,6 +115,7 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
     Json(ConvertQueueResponse {
         items,
         running: c.convert_running,
+        paused: c.convert_paused,
         input_paths: c.convert_input_paths.clone(),
         encoder,
         has_ffmpeg: c.has_ffmpeg,
@@ -159,6 +163,18 @@ async fn convert_start(State(st): State<ApiState>) -> StatusCode {
 async fn convert_cancel(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.cancel_convert_batch();
+    StatusCode::OK
+}
+
+async fn convert_pause(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.pause_convert_batch();
+    StatusCode::OK
+}
+
+async fn convert_resume(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.resume_convert_batch();
     StatusCode::OK
 }
 
