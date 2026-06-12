@@ -23,6 +23,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Packaging: **winget** manifest under `packaging/winget/`.
 
 - **Web UI IP whitelist:** Settings → Web UI (desktop and LAN **Web UI** settings tab) — list IPs or CIDR ranges that may use the LAN web UI without an API token.
+- **Converter queue card actions:** **Open** (file / show in folder) on desktop and LAN web UI; web UI also adds **Play** for browser-streamable sources and outputs (`/api/convert/media`, `/api/convert/:id/open`).
 - Quit dialog includes **Quit and Clear Queue**, which closes rustdl and removes saved downloader and converter queue items (after gracefully cancelling any active jobs).
 - **Pause / Resume** for Video Converter batches (queue footer, command palette, LAN API); **Pause / Resume downloads** also appears on the main Downloader panel (still in the queue footer).
 - Main header shows live **CPU**, **RAM**, and (on Windows) **GPU** utilization percentages, color-coded by load.

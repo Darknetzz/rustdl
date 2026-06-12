@@ -36,6 +36,84 @@ pub fn convert_source_path_missing(source_path: &str) -> bool {
     !p.is_file()
 }
 
+/// Local file / folder targets for Open actions (desktop GUI and LAN web UI).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ConvertOpenTargets {
+    pub file: Option<std::path::PathBuf>,
+    pub folder: Option<std::path::PathBuf>,
+}
+
+/// Prefer encoded output when done; otherwise the source file; folder-only when files are missing.
+pub fn convert_item_open_targets(item: &ConvertQueueItem) -> ConvertOpenTargets {
+    let mut out = ConvertOpenTargets::default();
+    let done = item.status == ItemStatus::Done && !convert_item_is_skipped(item);
+
+    if done {
+        let output = Path::new(item.output_path.trim());
+        if output.is_file() {
+            out.file = Some(output.to_path_buf());
+            out.folder = output.parent().map(|p| p.to_path_buf());
+            return out;
+        }
+    }
+
+    let source = Path::new(item.source_path.trim());
+    if !item.source_missing && source.is_file() {
+        out.file = Some(source.to_path_buf());
+        out.folder = source.parent().map(|p| p.to_path_buf());
+        return out;
+    }
+
+    if done {
+        if let Some(parent) = Path::new(item.output_path.trim()).parent() {
+            if parent.is_dir() {
+                out.folder = Some(parent.to_path_buf());
+                return out;
+            }
+        }
+    }
+
+    if let Some(parent) = source.parent() {
+        if parent.is_dir() {
+            out.folder = Some(parent.to_path_buf());
+        }
+    }
+    out
+}
+
+/// Path to stream in the LAN web UI (output when done, else source).
+pub fn convert_item_playable_path(item: &ConvertQueueItem) -> Option<std::path::PathBuf> {
+    let path = convert_item_open_targets(item).file?;
+    if local_path_is_streamable(&path) {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+/// `video` or `audio` when the path uses a browser-streamable container.
+pub fn convert_item_playable_kind(item: &ConvertQueueItem) -> Option<&'static str> {
+    let path = convert_item_playable_path(item)?;
+    local_path_playable_kind(&path)
+}
+
+fn local_path_is_streamable(path: &Path) -> bool {
+    local_path_playable_kind(path).is_some()
+}
+
+fn local_path_playable_kind(path: &Path) -> Option<&'static str> {
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "mp4" | "webm" | "mkv" | "mov" | "m4v" | "avi" => Some("video"),
+        "mp3" | "m4a" | "opus" | "ogg" | "flac" | "wav" | "aac" => Some("audio"),
+        _ => None,
+    }
+}
+
 /// Per-status counters for the converter queue (includes skipped as a Done subset).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ConvertStatusCounts {
@@ -361,6 +439,40 @@ mod tests {
         assert!(convert_item_will_skip_already_target(&item, false, "av1"));
         assert!(!convert_item_will_skip_already_target(&item, true, "av1"));
         assert!(!convert_item_will_skip_already_target(&item, false, "hevc"));
+    }
+
+    #[test]
+    fn open_targets_prefers_output_when_done() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let src = dir.path().join("in.mkv");
+        let out = dir.path().join("out.mp4");
+        std::fs::write(&src, b"x").unwrap();
+        std::fs::write(&out, b"y").unwrap();
+        let item = ConvertQueueItem {
+            status: ItemStatus::Done,
+            source_path: src.display().to_string(),
+            output_path: out.display().to_string(),
+            ..Default::default()
+        };
+        let targets = convert_item_open_targets(&item);
+        assert_eq!(targets.file.as_deref(), Some(out.as_path()));
+    }
+
+    #[test]
+    fn playable_path_uses_source_when_not_done() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let src = dir.path().join("clip.mp4");
+        std::fs::write(&src, b"x").unwrap();
+        let item = ConvertQueueItem {
+            status: ItemStatus::Idle,
+            source_path: src.display().to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            convert_item_playable_path(&item).as_deref(),
+            Some(src.as_path())
+        );
+        assert_eq!(convert_item_playable_kind(&item), Some("video"));
     }
 
     #[test]

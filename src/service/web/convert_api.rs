@@ -2,7 +2,7 @@
 //! endpoints work identically in windowed and `--web-only` (headless) modes.
 
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::convert_state::{
     compute_convert_batch_progress, compute_convert_batch_summary, convert_item_is_skipped,
+    convert_item_open_targets, convert_item_playable_kind, convert_item_playable_path,
     convert_item_status_label, convert_item_will_skip_already_target,
 };
 use crate::models::ConvertQueueItem;
@@ -25,6 +26,11 @@ struct ConvertItemView {
     skipped: bool,
     will_skip_target: bool,
     probing: bool,
+    can_open_file: bool,
+    can_open_folder: bool,
+    playable: bool,
+    media_kind: Option<String>,
+    media_filename: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -82,6 +88,8 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/presets/apply", post(convert_presets_apply))
         .route("/api/convert/export-summary", get(convert_export_summary))
         .route("/api/convert/thumbnail/:id", get(convert_thumbnail))
+        .route("/api/convert/media/:id", get(convert_media))
+        .route("/api/convert/:id/open", post(convert_open))
 }
 
 async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse> {
@@ -96,16 +104,30 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
     let items = c
         .convert_items
         .iter()
-        .map(|item| ConvertItemView {
-            status_label: convert_item_status_label(item),
-            skipped: convert_item_is_skipped(item),
-            will_skip_target: convert_item_will_skip_already_target(
-                item,
-                reencode_target,
-                &target_codec,
-            ),
-            probing: c.convert_media_inflight.contains(&item.item_id),
-            item: item.clone(),
+        .map(|item| {
+            let targets = convert_item_open_targets(item);
+            let media_path = convert_item_playable_path(item);
+            let media_filename = media_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .map(str::to_owned);
+            ConvertItemView {
+                status_label: convert_item_status_label(item),
+                skipped: convert_item_is_skipped(item),
+                will_skip_target: convert_item_will_skip_already_target(
+                    item,
+                    reencode_target,
+                    &target_codec,
+                ),
+                probing: c.convert_media_inflight.contains(&item.item_id),
+                can_open_file: targets.file.is_some(),
+                can_open_folder: targets.folder.is_some(),
+                playable: media_path.is_some(),
+                media_kind: convert_item_playable_kind(item).map(str::to_owned),
+                media_filename,
+                item: item.clone(),
+            }
         })
         .collect();
     let encoder = c
@@ -277,6 +299,95 @@ fn csv_escape(s: &str) -> String {
     } else {
         s.to_owned()
     }
+}
+
+#[derive(Deserialize)]
+struct ConvertOpenBody {
+    target: String,
+}
+
+async fn convert_open(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    Json(body): Json<ConvertOpenBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let path = {
+        let c = st.core.lock();
+        let item = c
+            .convert_items
+            .iter()
+            .find(|it| it.item_id == id)
+            .ok_or((
+                StatusCode::NOT_FOUND,
+                Json(ApiErrorBody {
+                    error: "convert item not found".to_owned(),
+                }),
+            ))?;
+        let targets = convert_item_open_targets(item);
+        match body.target.trim() {
+            "file" => targets.file.ok_or((
+                StatusCode::NOT_FOUND,
+                Json(ApiErrorBody {
+                    error: "no file on disk for this row".to_owned(),
+                }),
+            ))?,
+            "folder" => {
+                if let Some(file) = targets.file {
+                    if cfg!(target_os = "windows") {
+                        file
+                    } else {
+                        file.parent().map(|p| p.to_path_buf()).ok_or((
+                            StatusCode::NOT_FOUND,
+                            Json(ApiErrorBody {
+                                error: "no folder for this row".to_owned(),
+                            }),
+                        ))?
+                    }
+                } else {
+                    targets.folder.ok_or((
+                        StatusCode::NOT_FOUND,
+                        Json(ApiErrorBody {
+                            error: "no folder for this row".to_owned(),
+                        }),
+                    ))?
+                }
+            }
+            _ => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiErrorBody {
+                        error: "target must be file or folder".to_owned(),
+                    }),
+                ));
+            }
+        }
+    };
+    crate::app_actions::open_path(&path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiErrorBody {
+                error: format!("failed to open path: {e}"),
+            }),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+async fn convert_media(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    headers: HeaderMap,
+) -> Result<axum::response::Response, StatusCode> {
+    let path = {
+        let c = st.core.lock();
+        let item = c
+            .convert_items
+            .iter()
+            .find(|it| it.item_id == id)
+            .ok_or(StatusCode::NOT_FOUND)?;
+        convert_item_playable_path(item).ok_or(StatusCode::NOT_FOUND)?
+    };
+    super::media::stream_media_path(&path, &headers).await
 }
 
 async fn convert_thumbnail(

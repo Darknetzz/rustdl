@@ -8,8 +8,8 @@ use crate::app_ui::{
 };
 use crate::config::AppSettings;
 use crate::convert_state::{
-    convert_batch_totals_grew, convert_item_is_skipped, convert_item_status_label,
-    convert_item_will_skip_already_target, convert_skip_hint_label,
+    convert_batch_totals_grew, convert_item_is_skipped, convert_item_open_targets,
+    convert_item_status_label, convert_item_will_skip_already_target, convert_skip_hint_label,
     format_convert_batch_saved_line,
 };
 use crate::models::{ConvertQueueItem, ItemStatus};
@@ -818,8 +818,8 @@ impl PydlApp {
         });
     }
 
-    fn draw_convert_queue_card(&self, ui: &mut egui::Ui, it: &ConvertQueueItem) {
-        let theme = &self.settings.theme;
+    fn draw_convert_queue_card(&mut self, ui: &mut egui::Ui, it: &ConvertQueueItem) {
+        let theme = self.settings.theme.clone();
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
         let item_color = convert_item_status_color(it);
         let output_codec = transcode::normalize_target_codec(&self.settings.convert_target_codec);
@@ -829,7 +829,7 @@ impl PydlApp {
             output_codec,
         );
         let fill = if done {
-            theme::done_card_fill(theme)
+            theme::done_card_fill(&theme)
         } else {
             Color32::TRANSPARENT
         };
@@ -917,10 +917,10 @@ impl PydlApp {
                         if will_skip_target {
                             draw_convert_will_skip_notice(ui, &self.settings.convert_target_codec);
                         }
-                        draw_convert_media_badges(ui, it, probing, theme);
+                        draw_convert_media_badges(ui, it, probing, &theme);
 
-                        draw_convert_path_line(ui, "in:", &it.source_path, theme);
-                        draw_convert_path_line(ui, "out:", &it.output_path, theme);
+                        draw_convert_path_line(ui, "in:", &it.source_path, &theme);
+                        draw_convert_path_line(ui, "out:", &it.output_path, &theme);
 
                         if it.status == ItemStatus::Done
                             && !convert_item_is_skipped(it)
@@ -939,12 +939,44 @@ impl PydlApp {
                                         &human_bytes_ui(it.input_bytes),
                                         &human_bytes_ui(output_bytes),
                                         item_color,
-                                        theme,
+                                        &theme,
                                     );
                                 });
                             }
                         } else if !it.detail.is_empty() {
                             ui.label(RichText::new(&it.detail).small());
+                        }
+
+                        let targets = convert_item_open_targets(it);
+                        if targets.file.is_some() || targets.folder.is_some() {
+                            left_button_row(ui, |ui| {
+                                button_group(ui, ("convert_open", it.item_id), |g| {
+                                    let mut open_file = false;
+                                    let mut open_folder = false;
+                                    g.open_menu(
+                                        targets.file.is_some(),
+                                        targets.folder.is_some(),
+                                        &mut open_file,
+                                        &mut open_folder,
+                                    );
+                                    if open_file {
+                                        if let Some(p) = &targets.file {
+                                            self.open_file_path(p);
+                                        }
+                                    }
+                                    if open_folder {
+                                        if let Some(p) = &targets.file {
+                                            self.reveal_file_path(p);
+                                        } else if let Some(p) = &targets.folder {
+                                            if let Err(e) = app_actions::open_path(p) {
+                                                self.append_log(&format!(
+                                                    "Failed to open folder: {e}"
+                                                ));
+                                            }
+                                        }
+                                    }
+                                });
+                            });
                         }
                     });
                 });

@@ -3325,6 +3325,126 @@ function ConvertMediaBadges(item) {
   return badges;
 }
 
+async function openConvertItem(id, target) {
+  const res = await api(`/api/convert/${id}/open`, {
+    method: "POST",
+    body: JSON.stringify({ target }),
+  });
+  if (!res.ok) {
+    throw new Error(
+      await readApiError(res, "Could not open on the PC running rustdl.")
+    );
+  }
+}
+
+function convertMediaStreamUrl(itemId) {
+  return apiUrlWithAuth(`/api/convert/media/${itemId}`);
+}
+
+function toggleConvertCardMedia(item, thumb) {
+  const existing = thumb.querySelector(".card-media");
+  if (existing) {
+    stopActiveMedia();
+    return;
+  }
+  stopActiveMedia();
+  const name = item.media_filename || baseName(item.source_path) || "";
+  if (!browserCanPlayMediaFilename(name)) {
+    const ph = thumb.querySelector(".card-thumb-placeholder");
+    if (ph) {
+      ph.textContent =
+        "In-browser playback is not supported for this file type (e.g. MKV). Use Open to play on the PC running rustdl.";
+      ph.classList.remove("hidden");
+    }
+    thumb.querySelector("img")?.classList.add("hidden");
+    return;
+  }
+  const tag = item.media_kind === "audio" ? "audio" : "video";
+  const el = document.createElement(tag);
+  el.className = "card-media";
+  el.controls = true;
+  el.playsInline = true;
+  el.preload = "metadata";
+  el.src = convertMediaStreamUrl(item.item_id);
+  el.addEventListener("error", () => {
+    stopActiveMedia();
+    const ph = thumb.querySelector(".card-thumb-placeholder");
+    if (ph) {
+      ph.textContent = item.playable
+        ? "Playback failed (file missing or blocked)"
+        : "No local file for this row";
+      ph.classList.remove("hidden");
+    }
+  });
+  thumb.querySelector("img")?.classList.add("hidden");
+  thumb.querySelector(".card-thumb-placeholder")?.classList.add("hidden");
+  thumb.appendChild(el);
+  activeMediaEl = el;
+  el.play().catch(() => {});
+}
+
+function appendConvertPlayButton(group, item, thumb) {
+  if (!item.playable) return;
+  const play = document.createElement("button");
+  play.type = "button";
+  play.className = "primary";
+  setButtonLabel(play, ICON.playCircle, "Play");
+  play.onclick = () => toggleConvertCardMedia(item, thumb);
+  group.appendChild(play);
+}
+
+function appendConvertOpenMenuButton(group, item) {
+  if (!item.can_open_file && !item.can_open_folder) return;
+
+  const menu = document.createElement("details");
+  menu.className = "btn-menu";
+
+  const trigger = document.createElement("summary");
+  trigger.className = "btn-menu-trigger secondary";
+  setButtonLabel(trigger, ICON.folderOpen, "Open...");
+  trigger.title = "Open on the PC running rustdl";
+  menu.appendChild(trigger);
+
+  const panel = document.createElement("div");
+  panel.className = "btn-menu-panel";
+  panel.setAttribute("role", "menu");
+
+  if (item.can_open_file) {
+    const openBtn = document.createElement("button");
+    openBtn.type = "button";
+    openBtn.className = "btn-menu-item";
+    setButtonLabel(openBtn, ICON.playCircle, "Open file");
+    openBtn.title = "Launch with the default app on the PC running rustdl";
+    openBtn.onclick = (e) => {
+      e.preventDefault();
+      menu.open = false;
+      openConvertItem(item.item_id, "file").catch((err) =>
+        alert(err.message || String(err))
+      );
+    };
+    panel.appendChild(openBtn);
+  }
+
+  if (item.can_open_folder) {
+    const folderBtn = document.createElement("button");
+    folderBtn.type = "button";
+    folderBtn.className = "btn-menu-item";
+    setButtonLabel(folderBtn, ICON.folderOpen, "Show in folder");
+    folderBtn.title = "Reveal in Explorer / file manager on the PC running rustdl";
+    folderBtn.onclick = (e) => {
+      e.preventDefault();
+      menu.open = false;
+      openConvertItem(item.item_id, "folder").catch((err) =>
+        alert(err.message || String(err))
+      );
+    };
+    panel.appendChild(folderBtn);
+  }
+
+  menu.appendChild(panel);
+  group.appendChild(menu);
+}
+
 function renderConvertCard(item, showThumbnails) {
   const slug = convertSlug(item);
   const active = slug === "downloading" || slug === "queued";
@@ -3355,7 +3475,12 @@ function renderConvertCard(item, showThumbnails) {
   if (item.will_skip_target) {
     body.appendChild(ConvertWillSkipNotice());
   }
-  body.appendChild(ConvertMediaBadges(item));
+
+  const badges = ConvertMediaBadges(item);
+  const chip = document.createElement("span");
+  setStatusChip(chip, slug, item.status_label || item.status || "");
+  badges.appendChild(chip);
+  body.appendChild(badges);
 
   if (active) {
     const wrap = document.createElement("div");
@@ -3383,12 +3508,12 @@ function renderConvertCard(item, showThumbnails) {
 
   card.appendChild(body);
 
-  const chipWrap = document.createElement("div");
-  chipWrap.className = "card-actions";
-  const chip = document.createElement("span");
-  setStatusChip(chip, slug, item.status_label || item.status || "");
-  chipWrap.appendChild(chip);
-  card.appendChild(chipWrap);
+  const { bar: actions, group } = createCardActionBar();
+  appendConvertPlayButton(group, item, thumb);
+  appendConvertOpenMenuButton(group, item);
+  if (group.childElementCount > 0) {
+    card.appendChild(actions);
+  }
 
   return card;
 }
