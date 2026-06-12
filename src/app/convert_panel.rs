@@ -268,6 +268,7 @@ impl PydlApp {
             core.settings = self.settings.clone();
             core.output_dir = self.output_dir.clone();
             core.worker_count = self.worker_count.clamp(1, 6);
+            core.convert_paused = self.convert_paused;
             f(&mut core);
             (
                 core.convert_input_paths.clone(),
@@ -276,6 +277,7 @@ impl PydlApp {
                 core.convert_batch_summary,
                 core.convert_batch_progress,
                 core.convert_running,
+                core.convert_paused,
                 core.convert_media_inflight.clone(),
                 core.convert_save_deadline,
                 core.generation,
@@ -288,9 +290,10 @@ impl PydlApp {
         self.convert_batch_summary = mirror.3;
         self.convert_batch_progress = mirror.4;
         self.convert_running = mirror.5;
-        self.convert_media_inflight = mirror.6;
-        self.convert_save_deadline = mirror.7;
-        self.core_generation = mirror.8;
+        self.convert_paused = mirror.6;
+        self.convert_media_inflight = mirror.7;
+        self.convert_save_deadline = mirror.8;
+        self.core_generation = mirror.9;
         self.ensure_convert_thumbnails();
     }
 
@@ -311,6 +314,11 @@ impl PydlApp {
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
             .count();
+        let convert_active = self.convert_running
+            || self
+                .convert_items
+                .iter()
+                .any(|item| matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading));
         let skipped_count = self
             .convert_items
             .iter()
@@ -328,11 +336,33 @@ impl PydlApp {
         draw(ui, "convert_batch", &mut |g| {
             if g.success(
                 &format!("{} Start Convert batch", ui_icons::PLAY),
-                !self.convert_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
+                !self.convert_running
+                    && !self.convert_paused
+                    && self.has_ffmpeg
+                    && self.has_ffprobe
+                    && ready_count > 0,
             )
             .clicked()
             {
                 self.start_convert_batch();
+            }
+            if self.convert_paused {
+                if g.success(
+                    &format!("{} Resume Convert batch", ui_icons::PLAY),
+                    !self.convert_running && self.has_ffmpeg && self.has_ffprobe && ready_count > 0,
+                )
+                .clicked()
+                {
+                    self.convert_core_action(|core| core.resume_convert_batch());
+                }
+            } else if g
+                .warning(
+                    &format!("{} Pause Convert batch", ui_icons::CANCEL_TO_READY),
+                    convert_active,
+                )
+                .clicked()
+            {
+                self.convert_core_action(|core| core.pause_convert_batch());
             }
             if g.danger(
                 &format!("{} Cancel Convert batch", ui_icons::CANCEL_TO_READY),

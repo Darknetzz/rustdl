@@ -260,6 +260,8 @@ pub struct NavbarStatusInputs {
     pub shutdown_pending: bool,
     pub add_in_progress: bool,
     pub convert_running: bool,
+    pub convert_paused: bool,
+    pub convert_has_pending: bool,
     pub convert_resolving: bool,
     pub status_resolving: usize,
     pub status_queued: usize,
@@ -311,6 +313,14 @@ pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
             label: "Resolving",
             pulse: true,
             title: "Probing media metadata".to_owned(),
+        };
+    }
+    if input.convert_paused && input.convert_has_pending && !input.convert_running {
+        return NavbarStatusInfo {
+            slug: NavbarStatusSlug::Paused,
+            label: "Paused",
+            pulse: false,
+            title: "Convert batch paused — resume to continue".to_owned(),
         };
     }
     if input.downloads_paused
@@ -1922,6 +1932,8 @@ mod tests {
             shutdown_pending: false,
             add_in_progress: false,
             convert_running: false,
+            convert_paused: false,
+            convert_has_pending: false,
             convert_resolving: false,
             status_resolving: 0,
             status_queued: 0,

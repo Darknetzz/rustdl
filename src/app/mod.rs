@@ -210,6 +210,8 @@ pub struct PydlApp {
     convert_media_inflight: HashSet<u64>,
     /// Mirror of `DownloadCore::convert_running`.
     convert_running: bool,
+    /// Mirror of `DownloadCore::convert_paused`.
+    convert_paused: bool,
     /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
     convert_encoder_choice: Option<crate::transcode::EncoderChoice>,
     convert_encoder_detect_key: String,
@@ -408,6 +410,7 @@ impl PydlApp {
             convert_batch_progress: crate::app_state::BatchProgress::default(),
             convert_media_inflight: HashSet::new(),
             convert_running: false,
+            convert_paused: false,
             convert_encoder_choice: None,
             convert_encoder_detect_key: String::new(),
             convert_encoder_detection_inflight: false,
@@ -1196,6 +1199,13 @@ impl PydlApp {
             shutdown_pending: self.exit_pending_after_cancel,
             add_in_progress: self.add_in_progress,
             convert_running: self.convert_running,
+            convert_paused: self.convert_paused,
+            convert_has_pending: self.convert_items.iter().any(|item| {
+                matches!(
+                    item.status,
+                    ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading
+                )
+            }),
             convert_resolving,
             status_resolving: self.status_resolving,
             status_queued: self.status_queued,

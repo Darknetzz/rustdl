@@ -54,6 +54,7 @@ pub fn sync_app_to_core(app: &mut PydlApp, core: &mut DownloadCore) {
         app.settings_dirty = false;
     }
     core.downloads_paused = app.downloads_paused;
+    core.convert_paused = app.convert_paused;
     core.session_complete_notified = app.session_complete_notified;
     // The AV1 input textarea is GUI-editable; mirror it like output_dir. The rest of the AV1
     // queue state is owned by the core and flows back via sync_core_to_app.
@@ -94,6 +95,7 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     }
 
     app.downloads_paused = core.downloads_paused;
+    app.convert_paused = core.convert_paused;
     app.session_complete_notified = core.session_complete_notified;
     app.convert_save_deadline = core.convert_save_deadline;
 }
@@ -181,6 +183,7 @@ fn sync_convert_from_core(
         app.convert_input_paths = core.convert_input_paths.clone();
     }
     app.convert_running = core.convert_running;
+    app.convert_paused = core.convert_paused;
     app.convert_media_inflight = core.convert_media_inflight.clone();
     app.convert_encoder_choice = core.convert_encoder_choice.clone();
     app.convert_encoder_detect_key = core.convert_encoder_detect_key.clone();

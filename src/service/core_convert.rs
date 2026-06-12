@@ -147,7 +147,7 @@ impl DownloadCore {
 
     /// Starts the convert batch when [`AppSettings::convert_auto_start_on_add`] is enabled and tools are ready.
     pub fn maybe_auto_start_convert_batch(&mut self) {
-        if !self.settings.convert_auto_start_on_add || self.convert_running {
+        if !self.settings.convert_auto_start_on_add || self.convert_running || self.convert_paused {
             return;
         }
         if !self.has_ffmpeg || !self.has_ffprobe {
@@ -262,6 +262,10 @@ impl DownloadCore {
     }
 
     pub fn start_convert_batch(&mut self) {
+        if self.convert_paused {
+            self.append_log("Convert: batch is paused. Click Resume first.");
+            return;
+        }
         let jobs: Vec<(u64, ConvertInput, String)> = self
             .convert_items
             .iter()
@@ -313,11 +317,46 @@ impl DownloadCore {
     }
 
     pub fn cancel_convert_batch(&mut self) {
-        if !self.convert_running {
+        self.request_convert_batch_stop(false);
+    }
+
+    pub fn pause_convert_batch(&mut self) {
+        if self.convert_paused && !self.convert_running {
             return;
         }
+        self.convert_paused = true;
+        if self.convert_running {
+            self.request_convert_batch_stop(true);
+            self.append_log(
+                "Convert: batch paused (active items return to ready when the current encode stops).",
+            );
+        } else {
+            self.append_log("Convert: batch paused.");
+            self.bump_generation();
+        }
+    }
+
+    pub fn resume_convert_batch(&mut self) {
+        if !self.convert_paused {
+            return;
+        }
+        self.convert_paused = false;
+        self.append_log("Convert: batch resumed.");
+        self.start_convert_batch();
+    }
+
+    fn request_convert_batch_stop(&mut self, from_pause: bool) {
+        if !self.convert_running {
+            if !from_pause {
+                self.convert_paused = false;
+            }
+            return;
+        }
+        if !from_pause {
+            self.convert_paused = false;
+            self.append_log("Convert: cancel requested.");
+        }
         self.convert_cancel_flag.store(true, Ordering::Relaxed);
-        self.append_log("Convert: cancel requested.");
         self.bump_generation();
     }
 

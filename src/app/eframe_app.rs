@@ -477,16 +477,40 @@ impl eframe::App for PydlApp {
                 }
 
                 button_toolbar_wrapped(ui, |ui| {
-                    if has_idle_items {
+                    let downloads_active =
+                        self.status_queued > 0 || self.status_active > 0;
+                    if has_idle_items || self.downloads_paused || downloads_active {
                         button_group(ui, "dl_actions", |g| {
-                            if g
-                                .success(
-                                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                                    true,
-                                )
-                                .clicked()
+                            if has_idle_items
+                                && !self.downloads_paused
+                                && g
+                                    .success(
+                                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                                        true,
+                                    )
+                                    .clicked()
                             {
                                 self.start_downloads();
+                            }
+                            if self.downloads_paused {
+                                if g
+                                    .success(
+                                        &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                                        true,
+                                    )
+                                    .clicked()
+                                {
+                                    self.resume_all_downloads();
+                                }
+                            } else if downloads_active
+                                && g
+                                    .warning(
+                                        &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                                        true,
+                                    )
+                                    .clicked()
+                            {
+                                self.pause_all_downloads();
                             }
                         });
                     }
