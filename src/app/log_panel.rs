@@ -187,7 +187,7 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_log_float_v5");
+        let window_id = egui::Id::new("rustdl_log_float_v6");
         let init_id = window_id.with("size_init");
         let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let pointer_down = ctx.input(|i| i.pointer.any_down());
@@ -208,17 +208,23 @@ impl PydlApp {
         }
         let response = window.show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 4.0;
-            fill_allocated_rect(ui);
-            let body_bottom = ui.max_rect().bottom();
-            left_button_row(ui, |ui| {
-                self.draw_log_dock_controls_compact(ui);
+            let body_h =
+                finite_ui_span(ui.max_rect().height(), self.settings.log_float_height).max(260.0);
+            let body_w =
+                finite_ui_span(ui.max_rect().width(), self.settings.log_float_width).max(400.0);
+            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+                fill_allocated_rect(ui);
+                let body_bottom = ui.max_rect().bottom();
+                left_button_row(ui, |ui| {
+                    self.draw_log_dock_controls_compact(ui);
+                });
+                ui.add_space(2.0);
+                self.draw_activity_log_toolbar_inner(ui, true);
+                ui.add_space(2.0);
+                let scroll_h = finite_ui_span(height_to_bottom(ui, body_bottom), 80.0).max(80.0);
+                self.draw_activity_log_lines_scroll(ui, scroll_h);
+                consume_remaining_ui_space(ui);
             });
-            ui.add_space(2.0);
-            self.draw_activity_log_toolbar_inner(ui, true);
-            ui.add_space(2.0);
-            let scroll_h = finite_ui_span(height_to_bottom(ui, body_bottom), 80.0).max(80.0);
-            self.draw_activity_log_lines_scroll(ui, scroll_h);
-            consume_remaining_ui_space(ui);
         });
         if let Some(inner) = &response {
             if let Some((w, h)) = persist_resizable_window_size(
@@ -389,90 +395,89 @@ impl PydlApp {
     pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
         let scroll_h = finite_ui_span(scroll_h, 80.0).max(60.0);
         let w = content_width(ui).max(1.0);
-        allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
-            ui.set_min_height(scroll_h);
-            egui::Frame::dark_canvas(ui.style())
-                .fill(log_bg(&self.settings.theme))
-                .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
-                .inner_margin(egui::Margin::same(10.0))
-                .rounding(egui::Rounding::same(6.0))
-                .show(ui, |ui| {
-                    ui.set_min_height((scroll_h - 22.0).max(40.0));
-                    ui.set_width(ui.available_width());
-                    if self.log_lines.is_empty() {
-                        ui.label(
-                            RichText::new("Download activity will appear here.")
-                                .small()
-                                .color(text_hint(&self.settings.theme)),
-                        );
-                        return;
-                    }
-                    ui.spacing_mut().item_spacing.y = 3.0;
-                    let relative = self.settings.log_relative_time;
-                    let filtered: Vec<&String> = self
-                        .log_lines
-                        .iter()
-                        .filter(|line| self.log_filter.accepts(line))
-                        .collect();
-                    if filtered.is_empty() {
-                        ui.label(
-                            RichText::new(format!(
-                                "No lines match the \"{}\" filter ({} hidden). Switch to All.",
-                                self.log_filter.as_str(),
-                                self.log_lines.len()
-                            ))
+        ui.set_width(w);
+        let inner_h = (scroll_h - 22.0).max(40.0);
+        egui::Frame::dark_canvas(ui.style())
+            .fill(log_bg(&self.settings.theme))
+            .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
+            .inner_margin(egui::Margin::same(10.0))
+            .rounding(egui::Rounding::same(6.0))
+            .show(ui, |ui| {
+                ui.set_min_height(inner_h);
+                ui.set_width(ui.available_width().max(1.0));
+                if self.log_lines.is_empty() {
+                    ui.label(
+                        RichText::new("Download activity will appear here.")
                             .small()
                             .color(text_hint(&self.settings.theme)),
-                        );
-                        ui.add_space(4.0);
-                    }
-                    let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
-                    let window = if filtered.is_empty() {
-                        &filtered[..]
-                    } else {
-                        &filtered[start..]
-                    };
-                    let inner_h = ui.max_rect().height().max(40.0);
-                    egui::ScrollArea::vertical()
-                        .max_height(inner_h)
-                        .animated(true)
-                        .auto_shrink([false, false])
-                        .stick_to_bottom(self.settings.autoscroll_log)
-                        .show(ui, |ui| {
-                            ui.set_width(ui.available_width());
-                            if start > 0 {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "Showing last {} of {} matching lines",
-                                        window.len(),
-                                        filtered.len()
-                                    ))
-                                    .small()
-                                    .color(text_hint(&self.settings.theme)),
-                                );
-                            }
-                            for line in window {
-                                let color = log_line_color(line);
-                                let widget = log_line_widget(line, color, ui, relative);
-                                let label = egui::Label::new(widget).wrap().selectable(true);
-                                let r = ui.add(label);
-                                r.context_menu(|ui| {
-                                    button_group(ui, "log_copy_line", |g| {
-                                        if g.secondary(
-                                            &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
-                                            true,
-                                        )
-                                        .clicked()
-                                        {
-                                            g.ui().ctx().copy_text((*line).clone());
-                                            g.ui().close_menu();
-                                        }
-                                    });
+                    );
+                    return;
+                }
+                ui.spacing_mut().item_spacing.y = 3.0;
+                let relative = self.settings.log_relative_time;
+                let filtered: Vec<&String> = self
+                    .log_lines
+                    .iter()
+                    .filter(|line| self.log_filter.accepts(line))
+                    .collect();
+                if filtered.is_empty() {
+                    ui.label(
+                        RichText::new(format!(
+                            "No lines match the \"{}\" filter ({} hidden). Switch to All.",
+                            self.log_filter.as_str(),
+                            self.log_lines.len()
+                        ))
+                        .small()
+                        .color(text_hint(&self.settings.theme)),
+                    );
+                    ui.add_space(4.0);
+                }
+                let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
+                let window = if filtered.is_empty() {
+                    &filtered[..]
+                } else {
+                    &filtered[start..]
+                };
+                egui::ScrollArea::vertical()
+                    .id_salt("rustdl_log_lines_scroll")
+                    .max_height(inner_h)
+                    .animated(true)
+                    .auto_shrink([false, false])
+                    .stick_to_bottom(self.settings.autoscroll_log)
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width().max(1.0));
+                        if start > 0 {
+                            ui.label(
+                                RichText::new(format!(
+                                    "Showing last {} of {} matching lines",
+                                    window.len(),
+                                    filtered.len()
+                                ))
+                                .small()
+                                .color(text_hint(&self.settings.theme)),
+                            );
+                        }
+                        for line in window {
+                            let color = log_line_color(line);
+                            let widget = log_line_widget(line, color, ui, relative);
+                            let label = egui::Label::new(widget).wrap().selectable(true);
+                            let r = ui.add(label);
+                            r.context_menu(|ui| {
+                                button_group(ui, "log_copy_line", |g| {
+                                    if g.secondary(
+                                        &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                        true,
+                                    )
+                                    .clicked()
+                                    {
+                                        g.ui().ctx().copy_text((*line).clone());
+                                        g.ui().close_menu();
+                                    }
                                 });
-                            }
-                        });
-                });
-        });
+                            });
+                        }
+                    });
+            });
     }
 }
 
