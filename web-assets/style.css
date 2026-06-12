@@ -216,13 +216,39 @@ body {
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
-.navbar-status-pulse .navbar-status-dot {
-  animation: navbar-status-pulse 1.4s ease-in-out infinite;
+.navbar-status-pulse {
+  animation: navbar-status-badge-pulse 1.4s ease-in-out infinite;
 }
 
-@keyframes navbar-status-pulse {
+.navbar-status-pulse .navbar-status-dot {
+  animation: navbar-status-dot-pulse 1.4s ease-in-out infinite;
+}
+
+.navbar-status-pulse .navbar-status-label {
+  animation: navbar-status-label-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes navbar-status-badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 28%, transparent); }
+}
+
+@keyframes navbar-status-dot-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.88); }
+  50% { opacity: 0.35; transform: scale(0.72); }
+}
+
+@keyframes navbar-status-label-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navbar-status-pulse,
+  .navbar-status-pulse .navbar-status-dot,
+  .navbar-status-pulse .navbar-status-label {
+    animation: none;
+  }
 }
 
 .navbar-status-idle { color: var(--idle); border-color: rgba(158, 158, 158, 0.35); }

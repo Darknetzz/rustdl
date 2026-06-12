@@ -637,7 +637,7 @@ function deriveNavbarStatus(statusData, convertData) {
     return {
       slug: "queued",
       label: "Queued",
-      pulse: false,
+      pulse: true,
       title: `${queued} item(s) waiting to download`,
     };
   }
@@ -653,10 +653,11 @@ function renderNavbarStatus() {
   const root = document.getElementById("navbar-status");
   if (!root) return;
   const info = deriveNavbarStatus(lastStatusPayload, lastConvertPayload);
+  const shouldPulse = info.slug !== "idle" && info.slug !== "paused";
   root.className =
     "navbar-status navbar-status-" +
     info.slug +
-    (info.pulse ? " navbar-status-pulse" : "");
+    (shouldPulse ? " navbar-status-pulse" : "");
   root.title = info.title;
   const label = root.querySelector(".navbar-status-label");
   if (label) label.textContent = info.label;

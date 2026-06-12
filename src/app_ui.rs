@@ -337,7 +337,7 @@ pub fn derive_navbar_status(input: NavbarStatusInputs) -> NavbarStatusInfo {
         return NavbarStatusInfo {
             slug: NavbarStatusSlug::Queued,
             label: "Queued",
-            pulse: false,
+            pulse: true,
             title: format!("{} item(s) waiting to download", input.status_queued),
         };
     }
@@ -388,15 +388,32 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
         ui.ctx().request_repaint();
     }
     let (text_color, dot_color, border_color) = navbar_status_colors(info.slug);
-    let dot_alpha = if info.pulse {
+    let pulse_phase = if info.pulse {
         let t = ui.input(|i| i.time);
-        let phase = (t * std::f64::consts::TAU / 1.4).sin() * 0.5 + 0.5;
-        (0.55 + 0.45 * phase) as f32
+        (t * std::f64::consts::TAU / 1.4).sin() * 0.5 + 0.5
+    } else {
+        1.0
+    };
+    let dot_alpha = if info.pulse {
+        (0.35 + 0.65 * pulse_phase) as f32
+    } else {
+        1.0
+    };
+    let border_alpha = if info.pulse {
+        (0.45 + 0.55 * pulse_phase) as f32
+    } else {
+        1.0
+    };
+    let label_alpha = if info.pulse {
+        (0.62 + 0.38 * pulse_phase) as f32
     } else {
         1.0
     };
     egui::Frame::none()
-        .stroke(egui::Stroke::new(1.0, border_color))
+        .stroke(egui::Stroke::new(
+            1.0,
+            fade_color(border_color, border_alpha),
+        ))
         .rounding(egui::Rounding::same(999.0))
         .inner_margin(egui::Margin::symmetric(8.0, 4.0))
         .show(ui, |ui| {
@@ -407,7 +424,7 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
                     RichText::new(info.label)
                         .size(HEADER_STATUS_FONT_SIZE)
                         .strong()
-                        .color(text_color),
+                        .color(fade_color(text_color, label_alpha)),
                 );
             })
         })
