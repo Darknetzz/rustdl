@@ -2330,6 +2330,7 @@ function populateSettingsForm(s, commandPreview) {
     s.mode_convert_color,
     DEFAULT_MODE_CONVERT,
   );
+  setVal("set-subprocess-priority", s.subprocess_priority || "normal");
   setVal("set-ffmpeg-path", s.ffmpeg_path);
   setVal("set-ffprobe-path", s.ffprobe_path);
   const qs = document.getElementById("queue-search");
@@ -2381,6 +2382,7 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-convert-max-width", s.convert_max_width);
   setVal("set-convert-preset", s.convert_size_preset);
   setVal("set-convert-min-shrink", s.convert_min_shrink_percent);
+  setVal("set-convert-cpu-threads", s.convert_cpu_threads ?? 0);
   setVal("set-convert-encoder-override", s.convert_encoder_override);
   setCheck("set-convert-recursive", s.convert_recursive);
   setCheck("set-convert-dry-run", s.convert_dry_run);
@@ -2411,6 +2413,8 @@ function collectSettingsForm(base) {
     "set-mode-downloader-hex",
   );
   s.mode_convert_color = readModeColorField("set-mode-convert-color", "set-mode-convert-hex");
+  s.subprocess_priority =
+    document.getElementById("set-subprocess-priority").value || "normal";
   s.ffmpeg_path = document.getElementById("set-ffmpeg-path").value;
   s.ffprobe_path = document.getElementById("set-ffprobe-path").value;
 
@@ -2461,6 +2465,8 @@ function collectSettingsForm(base) {
   s.convert_size_preset = document.getElementById("set-convert-preset").value;
   s.convert_min_shrink_percent =
     parseFloat(document.getElementById("set-convert-min-shrink").value) || 0;
+  s.convert_cpu_threads =
+    parseInt(document.getElementById("set-convert-cpu-threads").value, 10) || 0;
   s.convert_encoder_override = document.getElementById("set-convert-encoder-override").value;
   s.convert_recursive = document.getElementById("set-convert-recursive").checked;
   s.convert_dry_run = document.getElementById("set-convert-dry-run").checked;
@@ -2477,6 +2483,9 @@ function collectSettingsForm(base) {
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
   s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
   s.convert_min_shrink_percent = Math.min(95, Math.max(0, s.convert_min_shrink_percent));
+  s.convert_cpu_threads = Math.max(0, s.convert_cpu_threads);
+  const allowedPriority = new Set(["normal", "below_normal", "idle"]);
+  if (!allowedPriority.has(s.subprocess_priority)) s.subprocess_priority = "normal";
   s.worker_count = Math.min(6, Math.max(1, s.worker_count));
   s.playlist_preview_cap = Math.min(500, Math.max(1, s.playlist_preview_cap));
   return s;

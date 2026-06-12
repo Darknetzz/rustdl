@@ -197,6 +197,16 @@
             <button type="button" class="secondary layout-preset-btn" data-preset="minimal">Minimal</button>
           </div>
 
+          <h3>Background work priority</h3>
+          <p class="hint">Lowers yt-dlp and ffmpeg priority so downloads and encodes are less likely to slow down other apps. Not a hard CPU/GPU cap.</p>
+          <label>Subprocess priority
+            <select id="set-subprocess-priority">
+              <option value="normal">Normal</option>
+              <option value="below_normal">Below normal</option>
+              <option value="idle">Idle</option>
+            </select>
+          </label>
+
           <h3>Shared executables</h3>
           <p class="hint">Used by the downloader and Video Converter. Leave empty to use PATH.</p>
           <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
@@ -344,6 +354,7 @@
             </select>
           </label>
           <label>Minimum shrink to keep output (%) <input type="number" id="set-convert-min-shrink" min="0" max="95" step="1" /></label>
+          <label>CPU threads (0 = auto) <input type="number" id="set-convert-cpu-threads" min="0" max="128" step="1" /></label>
           <label>Encoder override <input type="text" id="set-convert-encoder-override" placeholder="av1_nvenc, hevc_nvenc, libx264…" /></label>
 
           <h3>Files</h3>

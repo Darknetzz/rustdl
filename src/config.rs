@@ -260,6 +260,12 @@ pub struct AppSettings {
     /// Force ffmpeg encoder for converter mode; empty = auto-detect.
     #[serde(default, alias = "av1_encoder_override")]
     pub convert_encoder_override: String,
+    /// FFmpeg thread limit for converter encodes (`0` = ffmpeg default / all cores).
+    #[serde(default, alias = "av1_cpu_threads")]
+    pub convert_cpu_threads: u32,
+    /// yt-dlp / ffmpeg child process priority: `normal`, `below_normal`, or `idle`.
+    #[serde(default = "default_subprocess_priority")]
+    pub subprocess_priority: String,
     /// Enable LAN web UI (HTTP API + built-in pages).
     #[serde(default)]
     pub web_ui_enabled: bool,
@@ -437,6 +443,10 @@ fn default_convert_recursive() -> bool {
     true
 }
 
+fn default_subprocess_priority() -> String {
+    "normal".to_owned()
+}
+
 fn default_convert_max_width() -> u32 {
     1920
 }
@@ -541,6 +551,8 @@ impl Default for AppSettings {
             playlist_preview_cap: default_playlist_preview_cap(),
             active_profile: default_active_profile(),
             convert_encoder_override: String::new(),
+            convert_cpu_threads: 0,
+            subprocess_priority: default_subprocess_priority(),
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
@@ -678,6 +690,14 @@ pub fn load_settings() -> AppSettings {
     }
     cfg.convert_target_codec =
         crate::transcode::normalize_target_codec(&cfg.convert_target_codec).to_owned();
+    let max_cpus = crate::external_tools::logical_cpu_count();
+    if cfg.convert_cpu_threads > 0 {
+        cfg.convert_cpu_threads = cfg.convert_cpu_threads.clamp(1, max_cpus);
+    }
+    cfg.subprocess_priority = crate::external_tools::subprocess_priority_storage_value(
+        crate::external_tools::normalize_subprocess_priority(&cfg.subprocess_priority),
+    )
+    .to_owned();
     let mode = cfg.last_mode.trim().to_ascii_lowercase();
     cfg.last_mode = if mode == "convert" || mode == "av1" {
         "convert".to_owned()

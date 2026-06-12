@@ -96,6 +96,7 @@ pub async fn run_headless_download(opts: CliDownloadOptions) -> Result<()> {
         &extra,
         &yt_dlp,
         &ffmpeg,
+        &settings.subprocess_priority,
         cancel,
         |line| {
             if line.contains("download") || line.starts_with(ytdlp::PROGRESS_PREFIX) {

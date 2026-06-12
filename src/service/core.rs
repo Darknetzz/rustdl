@@ -1178,6 +1178,7 @@ impl DownloadCore {
                 output_dir.clone(),
                 yt_dlp_bin.clone(),
                 ffmpeg_bin.clone(),
+                self.settings.subprocess_priority.clone(),
                 urls,
             );
         }

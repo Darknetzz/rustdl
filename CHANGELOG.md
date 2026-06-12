@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- Settings → Shared → **Subprocess priority** (Normal / Below normal / Idle) for yt-dlp and ffmpeg background work; Settings → Video Converter → **CPU threads** (`0` = auto) limits ffmpeg decode/encode threads during transcodes. LAN web UI includes the same fields.
+
 ### Fixed
 
 - About **Check for updates** no longer fails with HTTP 404 when GitHub has releases but `/releases/latest` is empty; release tags like `rustdl-v0.5.0` are parsed correctly for version comparison.

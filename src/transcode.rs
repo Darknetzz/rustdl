@@ -6,7 +6,10 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use eframe::egui;
 
-use crate::external_tools::{no_console_window, resolve_executable};
+use crate::external_tools::{
+    apply_subprocess_launch, logical_cpu_count, no_console_window, normalize_subprocess_priority,
+    resolve_executable,
+};
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
 const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
@@ -51,6 +54,9 @@ pub struct ConvertConfig {
     pub size_preset: String,
     pub min_shrink_percent: f32,
     pub encoder_override: String,
+    /// `0` = ffmpeg default (all cores).
+    pub cpu_threads: u32,
+    pub subprocess_priority: String,
 }
 
 #[derive(Clone, Debug)]
@@ -320,6 +326,31 @@ fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) 
         format!("scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,format={pix_fmt}")
     };
     format!("{scale},setsar=1")
+}
+
+pub fn effective_cpu_threads(configured: u32) -> Option<u32> {
+    if configured == 0 {
+        None
+    } else {
+        Some(configured.clamp(1, logical_cpu_count()))
+    }
+}
+
+fn append_cpu_thread_args(cmd: &mut Command, enc: &EncoderChoice, cpu_threads: u32) {
+    let Some(threads) = effective_cpu_threads(cpu_threads) else {
+        return;
+    };
+    let threads_s = threads.to_string();
+    cmd.arg("-threads").arg(&threads_s);
+    match enc.encoder {
+        "libsvtav1" => {
+            cmd.args(["-svtav1-params", &format!("lp={threads_s}")]);
+        }
+        "libx265" => {
+            cmd.args(["-x265-params", &format!("pools={threads_s}:frame-threads=1")]);
+        }
+        _ => {}
+    }
 }
 
 fn append_encoder_rate_control(cmd: &mut Command, enc: &EncoderChoice, target_bitrate_bps: i64) {
@@ -867,20 +898,26 @@ where
     let vf = build_video_filter_chain(enc.hw_type, cfg.max_width, pix_fmt);
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
-    no_console_window(&mut cmd);
+    apply_subprocess_launch(
+        &mut cmd,
+        normalize_subprocess_priority(&cfg.subprocess_priority),
+    );
     cmd.arg("-hide_banner")
         .arg("-loglevel")
         .arg("error")
         .arg(if cfg.overwrite { "-y" } else { "-n" })
         .arg("-progress")
         .arg("pipe:1")
-        .arg("-nostats")
-        .arg("-i")
-        .arg(&plan.input)
+        .arg("-nostats");
+    if let Some(threads) = effective_cpu_threads(cfg.cpu_threads) {
+        cmd.arg("-threads").arg(threads.to_string());
+    }
+    cmd.arg("-i").arg(&plan.input)
         .arg("-vf")
         .arg(vf)
         .arg("-c:v")
         .arg(enc.encoder);
+    append_cpu_thread_args(&mut cmd, enc, cfg.cpu_threads);
     if enc.codec == "hevc" && enc.hw_type != "cpu" {
         cmd.args(["-tag:v", "hvc1"]);
     }
@@ -978,7 +1015,20 @@ mod tests {
             size_preset: "balanced".to_owned(),
             min_shrink_percent: 0.0,
             encoder_override: String::new(),
+            cpu_threads: 0,
+            subprocess_priority: "normal".to_owned(),
         }
+    }
+
+    #[test]
+    fn effective_cpu_threads_zero_means_auto() {
+        assert_eq!(effective_cpu_threads(0), None);
+    }
+
+    #[test]
+    fn effective_cpu_threads_clamps_to_logical_cpus() {
+        let max = logical_cpu_count();
+        assert_eq!(effective_cpu_threads(max.saturating_add(8)), Some(max));
     }
 
     #[test]

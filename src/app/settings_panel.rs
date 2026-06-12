@@ -430,6 +430,59 @@ impl PydlApp {
                             ui.end_row();
                         });
                         ui.separator();
+                        ui.label(RichText::new("Background work priority").strong());
+                        ui.label(
+                            RichText::new(
+                                "Lowers yt-dlp and ffmpeg process priority so downloads and encodes \
+                                 are less likely to slow down other apps. Not a hard CPU/GPU cap.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        let mut subprocess_priority = crate::external_tools::normalize_subprocess_priority(
+                            &self.settings.subprocess_priority,
+                        );
+                        settings_form_grid(ui, "shared_subprocess_priority", |ui| {
+                            ui.label("Subprocess priority");
+                            egui::ComboBox::from_id_salt("settings_subprocess_priority")
+                                .selected_text(crate::external_tools::subprocess_priority_label(
+                                    subprocess_priority,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (value, label) in [
+                                        (
+                                            crate::external_tools::SubprocessPriority::Normal,
+                                            "Normal",
+                                        ),
+                                        (
+                                            crate::external_tools::SubprocessPriority::BelowNormal,
+                                            "Below normal",
+                                        ),
+                                        (
+                                            crate::external_tools::SubprocessPriority::Idle,
+                                            "Idle",
+                                        ),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(&mut subprocess_priority, value, label)
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                        });
+                        let priority_changed = subprocess_priority
+                            != crate::external_tools::normalize_subprocess_priority(
+                                &self.settings.subprocess_priority,
+                            );
+                        if priority_changed {
+                            self.settings.subprocess_priority =
+                                crate::external_tools::subprocess_priority_storage_value(
+                                    subprocess_priority,
+                                )
+                                .to_owned();
+                            changed = true;
+                        }
+                        ui.separator();
                         ui.label(RichText::new("Shared executables").strong());
                         ui.label("Used by the downloader and Video Converter.");
                         settings_form_grid(ui, "shared_executables", |ui| {
@@ -1438,6 +1491,30 @@ impl PydlApp {
                                         .changed();
                                 });
                             ui.end_row();
+                            ui.label("CPU threads");
+                            let max_cpus = crate::external_tools::logical_cpu_count();
+                            let mut cpu_threads = self.settings.convert_cpu_threads;
+                            let cpu_slider_changed = ui
+                                .add(
+                                    egui::Slider::new(&mut cpu_threads, 0..=max_cpus)
+                                        .integer()
+                                        .custom_formatter(|n, _| {
+                                            if n.round() as u32 == 0 {
+                                                "auto".to_owned()
+                                            } else {
+                                                format!("{}", n.round() as u32)
+                                            }
+                                        }),
+                                )
+                                .on_hover_text(format!(
+                                    "Limit ffmpeg decode/encode threads (0 = auto, up to {max_cpus} cores)."
+                                ))
+                                .changed();
+                            if cpu_slider_changed {
+                                self.settings.convert_cpu_threads = cpu_threads;
+                            }
+                            changed |= cpu_slider_changed;
+                            ui.end_row();
                             ui.label("Encoder override");
                             egui::ComboBox::from_id_salt("settings_convert_encoder")
                                 .selected_text(if self.settings.convert_encoder_override.is_empty() {
@@ -1619,6 +1696,18 @@ impl PydlApp {
             self.settings.convert_max_width = self.settings.convert_max_width.clamp(320, 7680);
             self.settings.convert_min_shrink_percent =
                 self.settings.convert_min_shrink_percent.clamp(0.0, 95.0);
+            let max_cpus = crate::external_tools::logical_cpu_count();
+            if self.settings.convert_cpu_threads > 0 {
+                self.settings.convert_cpu_threads =
+                    self.settings.convert_cpu_threads.clamp(1, max_cpus);
+            }
+            self.settings.subprocess_priority =
+                crate::external_tools::subprocess_priority_storage_value(
+                    crate::external_tools::normalize_subprocess_priority(
+                        &self.settings.subprocess_priority,
+                    ),
+                )
+                .to_owned();
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             {
                 let mut core = self.shared_core.lock();

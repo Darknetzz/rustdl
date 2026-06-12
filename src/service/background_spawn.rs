@@ -218,6 +218,7 @@ pub(crate) fn spawn_download_worker(
     output_dir: String,
     yt_bin: String,
     ffmpeg_path: String,
+    subprocess_priority: String,
     urls: Vec<DownloadJob>,
 ) {
     let bus = bus.clone();
@@ -249,6 +250,7 @@ pub(crate) fn spawn_download_worker(
                 &extra_args,
                 &yt_bin,
                 &ffmpeg_path,
+                &subprocess_priority,
                 cancel_flag.clone(),
                 |line| {
                     try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });
@@ -285,6 +287,7 @@ pub(crate) fn spawn_download_worker(
                             &retry_args,
                             &yt_bin,
                             &ffmpeg_path,
+                            &subprocess_priority,
                             cancel_flag.clone(),
                             |line| {
                                 try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });

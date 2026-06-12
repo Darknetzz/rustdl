@@ -14,7 +14,8 @@ use tokio::process::Command as TokioCommand;
 use url::Url;
 
 use crate::external_tools::{
-    executable_exists, no_console_window, no_console_window_tokio, resolve_executable, which,
+    apply_subprocess_launch_tokio, executable_exists, no_console_window,
+    normalize_subprocess_priority, resolve_executable, which,
 };
 use crate::models::VideoPreview;
 
@@ -851,6 +852,7 @@ pub async fn stream_download_with_bins<F>(
     extra_args: &[String],
     yt_dlp_path: &str,
     ffmpeg_path: &str,
+    subprocess_priority: &str,
     cancel_flag: Arc<AtomicBool>,
     mut on_line: F,
 ) -> Result<()>
@@ -865,7 +867,10 @@ where
     };
     let output_template = format!("{output_dir}/{template}");
     let mut cmd = TokioCommand::new(resolve_executable(yt_dlp_path, "yt-dlp"));
-    no_console_window_tokio(&mut cmd);
+    apply_subprocess_launch_tokio(
+        &mut cmd,
+        normalize_subprocess_priority(subprocess_priority),
+    );
     cmd.arg("--newline")
         .arg("--progress-template")
         .arg(format!(
