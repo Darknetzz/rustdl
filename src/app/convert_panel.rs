@@ -263,6 +263,11 @@ impl PydlApp {
         let mirror = {
             let mut core = self.shared_core.lock();
             core.convert_input_paths = self.convert_input_paths.clone();
+            // Keep core settings in sync before mutations that may call `DownloadCore::persist_settings`
+            // (e.g. starting a batch), so disk is not overwritten with a stale copy.
+            core.settings = self.settings.clone();
+            core.output_dir = self.output_dir.clone();
+            core.worker_count = self.worker_count.clamp(1, 6);
             f(&mut core);
             (
                 core.convert_input_paths.clone(),
@@ -373,10 +378,15 @@ impl PydlApp {
         ui.label("Input paths (file/folder, one per line)");
         left_button_row(ui, |ui| {
             button_group(ui, "convert_input", |g| {
-                if g.secondary(&format!("{} Browse", ui_icons::BROWSE), true)
+                if g.secondary(&format!("{} Add folder", ui_icons::OPEN_FOLDER), true)
                     .clicked()
                 {
-                    self.browse_convert_inputs();
+                    self.add_convert_input_folder();
+                }
+                if g.secondary(&format!("{} Add file(s)", ui_icons::ADD), true)
+                    .clicked()
+                {
+                    self.add_convert_input_files();
                 }
                 if g.secondary(&format!("{} Scan inputs", ui_icons::SCAN), true)
                     .clicked()
@@ -421,8 +431,8 @@ impl PydlApp {
                     "Start batch when paths are added",
                 )
                 .on_hover_text(
-                    "Automatically run Start Convert batch after Browse, Scan inputs, \
-                             or drag-and-drop adds new ready items.",
+                    "Automatically run Start Convert batch after Add folder, Add file(s), \
+                             Scan inputs, or drag-and-drop adds new ready items.",
                 )
                 .changed()
             {
@@ -493,7 +503,7 @@ impl PydlApp {
                         );
                         ui.label(
                             RichText::new(
-                                "Browse, drop, or scan paths to add videos to the queue.",
+                                "Add folder or file(s), drop paths, or scan inputs to queue videos.",
                             )
                             .small(),
                         );
@@ -911,18 +921,21 @@ impl PydlApp {
         self.convert_core_action(|core| core.start_convert_batch());
     }
 
-    fn browse_convert_inputs(&mut self) {
-        let files = app_actions::pick_convert_input_files();
-        if !files.is_empty() {
-            let lines: Vec<String> = files
-                .into_iter()
-                .map(|p| p.to_string_lossy().to_string())
-                .collect();
-            self.extend_convert_input_paths_with_lines(lines);
-            return;
-        }
+    fn add_convert_input_folder(&mut self) {
         if let Some(folder) = app_actions::pick_convert_input_folder() {
             self.extend_convert_input_paths_with_lines(vec![folder.to_string_lossy().to_string()]);
         }
+    }
+
+    fn add_convert_input_files(&mut self) {
+        let files = app_actions::pick_convert_input_files();
+        if files.is_empty() {
+            return;
+        }
+        let lines: Vec<String> = files
+            .into_iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        self.extend_convert_input_paths_with_lines(lines);
     }
 }

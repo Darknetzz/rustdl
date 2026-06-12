@@ -565,7 +565,7 @@ impl eframe::App for PydlApp {
         self.flush_queue_to_disk();
         self.flush_convert_queue_to_disk();
         self.flush_log_to_disk();
-        let _ = save_settings(&self.settings);
+        self.persist_settings();
     }
 }
 

@@ -1400,8 +1400,9 @@ impl PydlApp {
                             changed |= ui
                                 .checkbox(&mut self.settings.convert_auto_start_on_add, "")
                                 .on_hover_text(
-                                    "After Browse, Scan inputs, drag-and-drop, or paste paths, \
-                                     start encoding when new ready items are added to the queue.",
+                                    "After Add folder, Add file(s), Scan inputs, drag-and-drop, \
+                                     or paste paths, start encoding when new ready items are added \
+                                     to the queue.",
                                 )
                                 .changed();
                             ui.end_row();
