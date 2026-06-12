@@ -4,7 +4,7 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row,
-    status_color, status_dot_with_label, MetaBadgeKind,
+    show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
 use crate::convert_state::{
@@ -631,55 +631,63 @@ impl PydlApp {
             let default_open = self.convert_queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
             let id = ui.make_persistent_id(("convert_queue_group", label));
-            let header = egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                id,
-                default_open,
-            )
-            .show_header(ui, |ui| {
-                status_dot_with_label(
-                    ui,
-                    &header_text,
-                    Self::convert_queue_group_color(label),
-                    true,
-                );
-            });
-            let (_toggle, header_inner, _) = header.body(|ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
-                if self.effective_convert_list_layout() {
-                    const LIST_ROW_H: f32 = 118.0;
-                    let row_count = ids.len().max(1);
-                    let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt(format!("rustdl_convert_list_{label}"))
-                        .max_height(max_h)
-                        .auto_shrink([false, true])
-                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
-                            for row in row_range {
-                                if let Some(item_id) = ids.get(row) {
-                                    if let Some(idx) = self.convert_item_idx(*item_id) {
-                                        let it = self.convert_items[idx].clone();
-                                        ui.group(|ui| {
-                                            self.draw_convert_queue_card(ui, &it);
-                                        });
+            let group_color = Self::convert_queue_group_color(label);
+            let theme = self.settings.theme.clone();
+            let mut header_inner = None;
+            show_queue_group_section(ui, &theme, group_color, |ui| {
+                let header = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    id,
+                    default_open,
+                )
+                .show_header(ui, |ui| {
+                    status_dot_with_label(
+                        ui,
+                        &header_text,
+                        group_color,
+                        true,
+                    );
+                });
+                let (_toggle, inner, _) = header.body(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
+                    if self.effective_convert_list_layout() {
+                        const LIST_ROW_H: f32 = 118.0;
+                        let row_count = ids.len().max(1);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
+                        egui::ScrollArea::vertical()
+                            .id_salt(format!("rustdl_convert_list_{label}"))
+                            .max_height(max_h)
+                            .auto_shrink([false, true])
+                            .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
+                                for row in row_range {
+                                    if let Some(item_id) = ids.get(row) {
+                                        if let Some(idx) = self.convert_item_idx(*item_id) {
+                                            let it = self.convert_items[idx].clone();
+                                            ui.group(|ui| {
+                                                self.draw_convert_queue_card(ui, &it);
+                                            });
+                                        }
                                     }
                                 }
-                            }
-                        });
-                } else {
-                    for item_id in &ids {
-                        let Some(idx) = self.convert_item_idx(*item_id) else {
-                            continue;
-                        };
-                        let it = self.convert_items[idx].clone();
-                        ui.group(|ui| {
-                            self.draw_convert_queue_card(ui, &it);
-                        });
+                            });
+                    } else {
+                        for item_id in &ids {
+                            let Some(idx) = self.convert_item_idx(*item_id) else {
+                                continue;
+                            };
+                            let it = self.convert_items[idx].clone();
+                            ui.group(|ui| {
+                                self.draw_convert_queue_card(ui, &it);
+                            });
+                        }
                     }
-                }
+                });
+                header_inner = Some(inner);
             });
             if scroll_here {
-                ui.scroll_to_rect(header_inner.response.rect, Some(egui::Align::TOP));
+                if let Some(inner) = header_inner {
+                    ui.scroll_to_rect(inner.response.rect, Some(egui::Align::TOP));
+                }
                 self.scroll_to_queue_group = None;
             }
         }

@@ -7,7 +7,7 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, popup_menu_above,
-    status_color, status_dot_with_label, MetaBadgeKind,
+    show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -729,98 +729,105 @@ impl PydlApp {
             let default_open = self.queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
             let id = ui.make_persistent_id(label);
-            let header = egui::collapsing_header::CollapsingState::load_with_default_open(
-                ui.ctx(),
-                id,
-                default_open,
-            )
-            .show_header(ui, |ui| {
-                status_dot_with_label(ui, &header_text, header_color, true);
-                if label == "Done" && !ids.is_empty() {
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui
-                            .small_button("Re-queue visible")
-                            .on_hover_text("Move visible Done items back to Ready")
-                            .clicked()
-                        {
-                            let n = self.requeue_done_items(&ids);
-                            if n > 0 {
-                                self.append_log(&format!("Re-queued {n} done item(s)."));
+            let theme = self.settings.theme.clone();
+            let mut header_inner = None;
+            show_queue_group_section(ui, &theme, header_color, |ui| {
+                let header = egui::collapsing_header::CollapsingState::load_with_default_open(
+                    ui.ctx(),
+                    id,
+                    default_open,
+                )
+                .show_header(ui, |ui| {
+                    status_dot_with_label(ui, &header_text, header_color, true);
+                    if label == "Done" && !ids.is_empty() {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            if ui
+                                .small_button("Re-queue visible")
+                                .on_hover_text("Move visible Done items back to Ready")
+                                .clicked()
+                            {
+                                let n = self.requeue_done_items(&ids);
+                                if n > 0 {
+                                    self.append_log(&format!("Re-queued {n} done item(s)."));
+                                }
                             }
-                        }
-                        ui.label("History:");
-                        egui::ComboBox::from_id_salt(format!("history_filter_{label}"))
-                            .selected_text(match self.history_filter_days {
-                                None => "All time".to_owned(),
-                                Some(1) => "Last 24h".to_owned(),
-                                Some(7) => "Last 7 days".to_owned(),
-                                Some(30) => "Last 30 days".to_owned(),
-                                Some(d) => format!("Last {d} days"),
-                            })
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(
-                                    &mut self.history_filter_days,
-                                    None,
-                                    "All time",
-                                );
-                                ui.selectable_value(
-                                    &mut self.history_filter_days,
-                                    Some(1),
-                                    "Last 24h",
-                                );
-                                ui.selectable_value(
-                                    &mut self.history_filter_days,
-                                    Some(7),
-                                    "Last 7 days",
-                                );
-                                ui.selectable_value(
-                                    &mut self.history_filter_days,
-                                    Some(30),
-                                    "Last 30 days",
-                                );
-                            });
-                    });
-                }
-            });
-            let (_toggle, header_inner, _) = header.body(|ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
-                let allow_reorder = label == "Ready";
-                if self.effective_card_list_layout() {
-                    const LIST_ROW_H: f32 = 42.0;
-                    let row_count = ids.len().max(1);
-                    let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
-                    egui::ScrollArea::vertical()
-                        .id_salt(format!("rustdl_list_{label}"))
-                        .max_height(max_h)
-                        .auto_shrink([false, true])
-                        // show_rows virtualizes list rows for large Ready/Issues groups.
-                        .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
-                            for row in row_range {
-                                if let Some(item_id) = ids.get(row) {
-                                    if let Some(idx) = self.item_idx(*item_id) {
-                                        self.draw_card_list(ui, idx, allow_reorder);
+                            ui.label("History:");
+                            egui::ComboBox::from_id_salt(format!("history_filter_{label}"))
+                                .selected_text(match self.history_filter_days {
+                                    None => "All time".to_owned(),
+                                    Some(1) => "Last 24h".to_owned(),
+                                    Some(7) => "Last 7 days".to_owned(),
+                                    Some(30) => "Last 30 days".to_owned(),
+                                    Some(d) => format!("Last {d} days"),
+                                })
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(
+                                        &mut self.history_filter_days,
+                                        None,
+                                        "All time",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.history_filter_days,
+                                        Some(1),
+                                        "Last 24h",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.history_filter_days,
+                                        Some(7),
+                                        "Last 7 days",
+                                    );
+                                    ui.selectable_value(
+                                        &mut self.history_filter_days,
+                                        Some(30),
+                                        "Last 30 days",
+                                    );
+                                });
+                        });
+                    }
+                });
+                let (_toggle, inner, _) = header.body(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
+                    let allow_reorder = label == "Ready";
+                    if self.effective_card_list_layout() {
+                        const LIST_ROW_H: f32 = 42.0;
+                        let row_count = ids.len().max(1);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
+                        egui::ScrollArea::vertical()
+                            .id_salt(format!("rustdl_list_{label}"))
+                            .max_height(max_h)
+                            .auto_shrink([false, true])
+                            // show_rows virtualizes list rows for large Ready/Issues groups.
+                            .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
+                                for row in row_range {
+                                    if let Some(item_id) = ids.get(row) {
+                                        if let Some(idx) = self.item_idx(*item_id) {
+                                            self.draw_card_list(ui, idx, allow_reorder);
+                                        }
                                     }
+                                }
+                            });
+                    } else {
+                        let row_width = ui.available_width().max(1.0);
+                        ui.set_width(row_width);
+                        ui.horizontal_wrapped(|ui| {
+                            ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
+                            for id in &ids {
+                                let idx = self
+                                    .item_idx(*id)
+                                    .or_else(|| self.items.iter().position(|it| it.item_id == *id));
+                                if let Some(idx) = idx {
+                                    self.draw_card(ui, idx, allow_reorder);
                                 }
                             }
                         });
-                } else {
-                    let row_width = ui.available_width().max(1.0);
-                    ui.set_width(row_width);
-                    ui.horizontal_wrapped(|ui| {
-                        ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
-                        for id in &ids {
-                            let idx = self
-                                .item_idx(*id)
-                                .or_else(|| self.items.iter().position(|it| it.item_id == *id));
-                            if let Some(idx) = idx {
-                                self.draw_card(ui, idx, allow_reorder);
-                            }
-                        }
-                    });
-                }
+                    }
+                });
+                header_inner = Some(inner);
             });
             if scroll_here {
-                ui.scroll_to_rect(header_inner.response.rect, Some(egui::Align::TOP));
+                if let Some(inner) = header_inner {
+                    ui.scroll_to_rect(inner.response.rect, Some(egui::Align::TOP));
+                }
                 self.scroll_to_queue_group = None;
             }
         }

@@ -751,6 +751,36 @@ pub fn dock_panel_horizontal_frame() -> egui::Frame {
     })
 }
 
+/// Dimmed fill for queue status groups (Active, Ready, Done, …).
+pub fn queue_group_section_fill(theme: &str) -> Color32 {
+    if theme == "light" {
+        Color32::from_rgb(224, 226, 234)
+    } else {
+        Color32::from_rgb(16, 17, 22)
+    }
+}
+
+/// Wraps a collapsible queue group in a rounded panel with a dimmed background.
+pub fn show_queue_group_section<R>(
+    ui: &mut egui::Ui,
+    theme: &str,
+    accent: Color32,
+    add_contents: impl FnOnce(&mut egui::Ui) -> R,
+) -> egui::InnerResponse<R> {
+    egui::Frame::none()
+        .fill(queue_group_section_fill(theme))
+        .stroke(Stroke::new(1.0, mode_border(accent)))
+        .inner_margin(egui::Margin::symmetric(10.0, 8.0))
+        .outer_margin(egui::Margin {
+            left: 0.0,
+            right: 0.0,
+            top: 0.0,
+            bottom: 8.0,
+        })
+        .rounding(egui::Rounding::same(8.0))
+        .show(ui, add_contents)
+}
+
 fn mode_panel_gradient_shape(rect: egui::Rect, left: Color32, right: Color32) -> Shape {
     let mut mesh = egui::Mesh::default();
     let base = mesh.vertices.len() as u32;
