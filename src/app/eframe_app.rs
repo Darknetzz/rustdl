@@ -45,10 +45,7 @@ impl eframe::App for PydlApp {
         self.maybe_adjust_videos_dock_for_viewport(ctx);
         if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
             self.exit_pending_after_cancel = false;
-            self.exit_allowed = true;
-            self.flush_queue_to_disk();
-            self.flush_convert_queue_to_disk();
-            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            self.finish_exit(ctx);
         }
         self.poll_done_file_lookup();
         self.poll_output_disk_space();

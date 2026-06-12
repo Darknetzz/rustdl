@@ -178,6 +178,8 @@ pub struct PydlApp {
     exit_allowed: bool,
     /// User confirmed quit while work was active; wait for graceful cancellation.
     exit_pending_after_cancel: bool,
+    /// When set, queues are cleared instead of saved when exit completes.
+    exit_clear_queues_on_quit: bool,
     /// When set, only the matching queue section is shown (click download summary).
     queue_group_focus: Option<&'static str>,
     /// Scroll target set when focusing a queue group from the summary row.
@@ -386,6 +388,7 @@ impl PydlApp {
             exit_confirm_open: false,
             exit_allowed: false,
             exit_pending_after_cancel: false,
+            exit_clear_queues_on_quit: false,
             queue_group_focus: None,
             scroll_to_queue_group: None,
             queue_search,
@@ -1887,19 +1890,50 @@ impl PydlApp {
         self.exit_confirm_open = true;
     }
 
-    fn confirm_exit(&mut self, ctx: &egui::Context) {
+    fn confirm_exit(&mut self, ctx: &egui::Context, clear_queues: bool) {
         self.exit_confirm_open = false;
+        self.exit_clear_queues_on_quit = clear_queues;
         if self.exit_work_in_progress() {
             self.exit_pending_after_cancel = true;
             self.convert_core_action(|core| core.cancel_convert_batch());
             self.cancel_all_active(CancelPostAction::Ready);
-            self.append_log("Graceful shutdown requested: cancelling active jobs before exit...");
+            self.append_log(if clear_queues {
+                "Graceful shutdown requested: cancelling active jobs, then clearing saved queue(s) before exit…"
+            } else {
+                "Graceful shutdown requested: cancelling active jobs before exit…"
+            });
             return;
         }
+        self.finish_exit(ctx);
+    }
+
+    fn finish_exit(&mut self, ctx: &egui::Context) {
+        if self.exit_clear_queues_on_quit {
+            self.clear_queues_and_persist_empty();
+        } else {
+            self.flush_queue_to_disk();
+            self.flush_convert_queue_to_disk();
+        }
+        self.exit_clear_queues_on_quit = false;
         self.exit_allowed = true;
-        self.flush_queue_to_disk();
-        self.flush_convert_queue_to_disk();
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    fn clear_queues_and_persist_empty(&mut self) {
+        let downloader_ids: Vec<u64> = self.items.iter().map(|it| it.item_id).collect();
+        let convert_ids: Vec<u64> = self.convert_items.iter().map(|it| it.item_id).collect();
+        self.download_core_action(|core| core.clear_all_queues_for_exit());
+        self.convert_input_paths.clear();
+        for id in downloader_ids
+            .into_iter()
+            .chain(convert_ids.into_iter())
+        {
+            self.textures.remove(&id);
+            self.thumbnail_inflight.remove(&id);
+            self.thumbnail_attempted.remove(&id);
+            self.selected_item_ids.remove(&id);
+        }
+        self.refresh_input_line_info();
     }
 
     fn handle_viewport_close_request(&mut self, ctx: &egui::Context) {
@@ -1961,7 +1995,7 @@ impl PydlApp {
                                 ui.add_space(6.0);
                                 ui.label(
                                     RichText::new(
-                                        "Your queue will be saved. Confirm quit to request graceful cancellation of active downloader/AV1 jobs before closing.",
+                                        "Your queue will be saved. Confirm quit to request graceful cancellation of active downloader/converter jobs before closing. Use Quit and Clear Queue to discard saved queues instead.",
                                     )
                                     .color(ALERT_WARNING_TEXT),
                                 );
@@ -1973,8 +2007,10 @@ impl PydlApp {
                                 );
                                 ui.add_space(6.0);
                                 ui.label(
-                                    RichText::new("Your download queue will be saved.")
-                                        .color(ALERT_DANGER_TEXT),
+                                    RichText::new(
+                                        "Your download and converter queues will be saved. Use Quit and Clear Queue to discard them instead.",
+                                    )
+                                    .color(ALERT_DANGER_TEXT),
                                 );
                             }
                         });
@@ -1992,8 +2028,20 @@ impl PydlApp {
                         {
                             cancel_exit_confirm = true;
                         }
+                        if g
+                            .warning(
+                                &format!("{} Quit and Clear Queue", ui_icons::CLEAR_QUEUE),
+                                true,
+                            )
+                            .on_hover_text(
+                                "Close rustdl and remove all saved downloader and converter queue items.",
+                            )
+                            .clicked()
+                        {
+                            self.confirm_exit(ctx, true);
+                        }
                         if g.danger(&format!("{} Quit", ui_icons::EXIT), true).clicked() {
-                            self.confirm_exit(ctx);
+                            self.confirm_exit(ctx, false);
                         }
                     });
                 });

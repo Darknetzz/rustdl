@@ -1366,6 +1366,21 @@ impl DownloadCore {
         removed
     }
 
+    /// Clears downloader and converter queues and writes empty persisted state (used on exit).
+    pub fn clear_all_queues_for_exit(&mut self) {
+        let _ = self.clear_queue(QueueClearFilter::All);
+        self.convert_input_paths.clear();
+        if !self.convert_items.is_empty() {
+            self.clear_convert_queue();
+        } else {
+            self.clear_convert_queue_persistence();
+        }
+        if let Err(err) = save_queue_items(&[]) {
+            self.append_log(&format!("Failed to clear saved queue state: {err}"));
+        }
+        self.bump_generation();
+    }
+
     pub fn item_has_file_on_disk(&self, item: &QueueItem) -> bool {
         let output_dir = self.effective_output_dir();
         self.done_file_index
