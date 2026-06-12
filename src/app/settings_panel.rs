@@ -1431,12 +1431,23 @@ impl PydlApp {
                                 "Re-encode files already in the target codec",
                                 &mut self.settings.convert_reencode_target,
                             );
-                            ui.label("Use recommended container for target codec");
+                            let recommended_container = crate::transcode::recommended_container_for_target(
+                                &self.settings.convert_target_codec,
+                            )
+                            .to_ascii_uppercase();
+                            let codec_label = crate::transcode::target_codec_label(
+                                &self.settings.convert_target_codec,
+                            );
+                            ui.label(format!(
+                                "Use recommended container ({recommended_container})"
+                            ));
                             changed |= ui
                                 .checkbox(&mut self.settings.convert_use_recommended_container, "")
-                                .on_hover_text(
-                                    "AV1 → MKV; H.264/H.265 → MP4. When off, outputs keep the source extension.",
-                                )
+                                .on_hover_text(format!(
+                                    "When enabled, {} outputs use .{}. When off, outputs keep the source extension.",
+                                    codec_label,
+                                    recommended_container.to_ascii_lowercase(),
+                                ))
                                 .changed();
                             ui.end_row();
                             ui.label("Target bitrate");

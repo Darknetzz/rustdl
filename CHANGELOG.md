@@ -17,6 +17,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Settings → Video Converter shows the recommended **container** (e.g. MKV for AV1, MP4 for H.264/H.265) beside the “Use recommended container” option for the selected target codec.
 - Video Converter input row uses separate **Add folder** and **Add file(s)** buttons instead of a single Browse control; **Recursive folder scan** is available on the converter panel (still in Settings).
 - Video Converter **CPU threads** auto (`0`) now splits ~75% of logical cores across parallel jobs (max 4 threads per encode) instead of letting each ffmpeg process use every core.
 
