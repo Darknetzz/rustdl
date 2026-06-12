@@ -1515,24 +1515,6 @@ impl PydlApp {
         );
     }
 
-    fn streams_incomplete_message(has_video: bool, has_audio: bool) -> Option<String> {
-        if !has_video && !has_audio {
-            Some("File has neither video nor audio streams according to ffprobe.".to_owned())
-        } else if !has_video {
-            Some(
-                "Download has audio only (no video stream). Try yt-dlp -f \"bv*+ba/b\" with ffmpeg merge, or check available formats (-F)."
-                    .to_owned(),
-            )
-        } else if !has_audio {
-            Some(
-                "Download has video but no audio stream. Try a different format or merge (bestvideo+bestaudio)."
-                    .to_owned(),
-            )
-        } else {
-            None
-        }
-    }
-
     /// Probes the saved file for this queue row. Err = could not probe; Ok((v, a)) = stream presence.
     fn probe_saved_file_streams(&self, item: &QueueItem) -> Result<(bool, bool), String> {
         if !self.has_ffprobe {

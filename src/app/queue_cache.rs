@@ -51,15 +51,6 @@ impl PydlApp {
         self.transfer_totals_dirty = true;
     }
 
-    pub(super) fn apply_status_delta(&mut self, old: ItemStatus, new: ItemStatus) {
-        if old == new {
-            return;
-        }
-        app_state::dec_status_count(&mut self.status_counts, old);
-        app_state::inc_status_count(&mut self.status_counts, new);
-        self.sync_status_fields_from_counts();
-    }
-
     #[allow(dead_code)]
     pub(super) fn on_item_removed(&mut self, item: &QueueItem) {
         app_state::dec_status_count(&mut self.status_counts, item.status);
@@ -102,15 +93,6 @@ impl PydlApp {
             self.last_transfer_totals_at = Some(now);
         }
         self.cached_transfer_totals.clone()
-    }
-
-    pub(super) fn set_item_status_at(&mut self, idx: usize, new: ItemStatus) {
-        let old = self.items[idx].status;
-        if old == new {
-            return;
-        }
-        crate::app_state::transition_queue_item_status(&mut self.items[idx], new);
-        self.apply_status_delta(old, new);
     }
 
     pub(super) fn mark_transfer_totals_dirty(&mut self) {

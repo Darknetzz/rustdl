@@ -304,7 +304,7 @@ pub async fn run_headless_start_queue() -> Result<()> {
     let core = service.shared_core();
     {
         let mut c = core.lock();
-        c.start_downloads();
+        c.start_downloads_from_queue();
     }
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
