@@ -554,6 +554,7 @@ async function refreshStatus() {
   if (data.shutdown_pending) shuttingDown = true;
   renderStatusSummary(data);
   renderNavbarStatus();
+  renderNavbarSystemUsage(data.system_usage);
   renderNavbarDiskSpace(data.output_disk_space);
   updateTopbarVersion(data);
   updateSettingsOutputDiskHint(data.output_disk_space);
@@ -958,6 +959,42 @@ function updateSettingsOutputDiskHint(disk) {
     disk.total_bytes
   )} total${diskSpaceBarHtml(disk)}`;
   el.classList.remove("hidden");
+}
+
+function formatUsagePercent(value) {
+  if (value == null || !isFinite(value)) return "…";
+  return `${Math.round(Math.max(0, Math.min(100, value)))}%`;
+}
+
+function usageLevelClass(percent) {
+  if (percent == null || !isFinite(percent)) return "usage-badge-unknown";
+  if (percent >= 90) return "usage-badge-critical";
+  if (percent >= 75) return "usage-badge-warn";
+  return "usage-badge-ok";
+}
+
+function renderUsageBadge(name, percent) {
+  const el = document.createElement("span");
+  const level = usageLevelClass(percent);
+  el.className = `usage-badge ${level}`;
+  el.textContent = `${name} ${formatUsagePercent(percent)}`;
+  el.title =
+    percent != null && isFinite(percent)
+      ? `${name} utilization: ${percent.toFixed(1)}%`
+      : `${name} utilization: measuring…`;
+  return el;
+}
+
+function renderNavbarSystemUsage(usage) {
+  const root = document.getElementById("navbar-system-usage");
+  if (!root) return;
+  root.innerHTML = "";
+  if (!usage) return;
+  root.appendChild(renderUsageBadge("CPU", usage.cpu_percent));
+  root.appendChild(renderUsageBadge("RAM", usage.ram_percent));
+  if (usage.show_gpu) {
+    root.appendChild(renderUsageBadge("GPU", usage.gpu_percent));
+  }
 }
 
 function renderNavbarDiskSpace(disk) {

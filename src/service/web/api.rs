@@ -33,6 +33,7 @@ pub(super) struct ApiState {
     pub core: SharedCore,
     /// Set in `--web-only` mode; signals the headless process to exit after graceful shutdown.
     pub process_exit: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
+    system_usage: Arc<Mutex<crate::system_usage::SystemUsageMonitor>>,
 }
 
 impl ApiState {
@@ -40,6 +41,7 @@ impl ApiState {
         Self {
             core,
             process_exit: Arc::new(Mutex::new(None)),
+            system_usage: Arc::new(Mutex::new(crate::system_usage::SystemUsageMonitor::new())),
         }
     }
 
@@ -59,6 +61,14 @@ struct DiskSpaceJson {
     volume_label: Option<String>,
     percent_free: f64,
     level: &'static str,
+}
+
+#[derive(Serialize)]
+struct SystemUsageJson {
+    cpu_percent: Option<f32>,
+    ram_percent: Option<f32>,
+    gpu_percent: Option<f32>,
+    show_gpu: bool,
 }
 
 #[derive(Serialize)]
@@ -97,6 +107,7 @@ struct StatusResponse {
     status: StatusCountsJson,
     download_batch: BatchProgressJson,
     tools: serde_json::Value,
+    system_usage: SystemUsageJson,
     output_disk_space: Option<DiskSpaceJson>,
     config_warnings: Vec<String>,
 }
@@ -279,6 +290,17 @@ fn disk_space_json(output_dir: &str) -> Option<DiskSpaceJson> {
     })
 }
 
+fn system_usage_json(monitor: &mut crate::system_usage::SystemUsageMonitor) -> SystemUsageJson {
+    monitor.maybe_poll();
+    let snap = monitor.snapshot();
+    SystemUsageJson {
+        cpu_percent: snap.cpu_percent,
+        ram_percent: snap.ram_percent,
+        gpu_percent: snap.gpu_percent,
+        show_gpu: cfg!(windows),
+    }
+}
+
 async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
     let c = st.core.lock();
     let output_dir = c.effective_output_dir();
@@ -314,6 +336,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         },
         download_batch: crate::app_state::compute_download_batch_progress(&c.items).into(),
         tools: c.tools_status_json(),
+        system_usage: system_usage_json(&mut st.system_usage.lock()),
         output_disk_space: disk_space_json(&output_dir),
         config_warnings,
     })
