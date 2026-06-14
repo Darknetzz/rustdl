@@ -248,11 +248,12 @@ Configure the webhook for **push** events on `Darknetzz/rustdl`. Payload URL pat
 
 ## Agent conventions
 
+- **CHANGELOG (required)**: Any user-visible change must include a `CHANGELOG.md` update under `## [Unreleased]` in the **same commit** as the code. Write for end users (what changed in the app, not file names). Do not mark a user-facing task complete without a changelog bullet. Skip only for changes with no user-facing effect (CI, internal refactors, agent/docs-only edits to this file). See **CHANGELOG on every commit** below.
 - **Scope**: Smallest correct diff; match existing naming and patterns in the file you touch.
 - **Comments**: Only for non-obvious behavior; prefer clear code.
 - **Tests**: Add or extend tests when fixing real behavior bugs; avoid trivial tests unless requested.
 - **Docs**: Do not add new markdown files unless asked (this file is the exception the user requested).
-- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include `CHANGELOG.md` updates under `[Unreleased]`; bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**) and tag the bump commit with `rustdl-vX.Y.Z` (bump scripts or `-TagOnly`; do not push the tag until release unless asked).
+- **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include the `CHANGELOG.md` update (see **CHANGELOG (required)** above); bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**) and tag the bump commit with `rustdl-vX.Y.Z` (bump scripts or `-TagOnly`; do not push the tag until release unless asked).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.
 
 ## Further reading
