@@ -10,6 +10,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-14
+
+
 ### Added
 
 - **LAN web UI parity (v0.6 roadmap):** Convert batch **Pause** / **Resume**; Ready-row **reorder** (↑/↓); Done **history filter** (24h / 7d / 30d) and **Re-queue visible**; profile **save**, **rename**, **delete**, **export**, and **import**; activity log **filter** (All / Important / Errors) and **export**; queue **bulk select** with Remove/Retry selected; per-card **Refetch metadata**, **Cancel → Ready/Remove**, and **Re-check all saved files** API.
@@ -418,7 +421,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 
 [0.5.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.8...rustdl-v0.5.0
 [0.5.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.0...rustdl-v0.5.1
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.1...dev
+[0.7.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.2...rustdl-v0.7.0
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...dev
 [0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7
 [0.4.6]: https://github.com/Darknetzz/rustdl/compare/db8b01f...b76f00b
 [0.4.5]: https://github.com/Darknetzz/rustdl/compare/1f4ab5a...db8b01f
