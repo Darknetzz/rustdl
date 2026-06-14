@@ -207,7 +207,7 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
 
     let token = settings.web_auth_token.trim();
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
-    let mut handle = spawn_web_server_at(rt.clone(), core, &bind, token, Some(exit_tx))
+    let mut handle = spawn_web_server_at(rt.clone(), core.clone(), &bind, token, Some(exit_tx))
         .map_err(|e| anyhow!(e.message()))?;
 
     let local_url = web_ui_browser_url(&bind);
@@ -225,6 +225,14 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     tokio::select! {
         _ = tokio::signal::ctrl_c() => {},
         _ = exit_rx => {},
+    }
+    {
+        let mut c = core.lock();
+        c.maybe_flush_queue_save();
+        c.maybe_flush_convert_queue_save();
+        c.flush_queue_to_disk();
+        c.flush_convert_queue_to_disk();
+        c.flush_log_to_disk();
     }
     handle.stop();
     println!("Stopped.");
@@ -313,6 +321,12 @@ pub async fn run_headless_start_queue() -> Result<()> {
             break;
         }
     }
+    {
+        let mut c = core.lock();
+        c.maybe_flush_queue_save();
+        c.flush_queue_to_disk();
+        c.flush_log_to_disk();
+    }
     Ok(())
 }
 
@@ -330,6 +344,12 @@ pub async fn run_headless_convert_batch() -> Result<()> {
         if !c.convert_running {
             break;
         }
+    }
+    {
+        let mut c = core.lock();
+        c.maybe_flush_convert_queue_save();
+        c.flush_convert_queue_to_disk();
+        c.flush_log_to_disk();
     }
     Ok(())
 }

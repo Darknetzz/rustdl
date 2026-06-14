@@ -32,6 +32,13 @@
     <div id="navbar-system-usage" class="navbar-system-usage" aria-label="Host resource usage"></div>
     <div id="navbar-disk-space" class="navbar-disk-space" aria-label="Output disk space"></div>
     <div class="topbar-actions btn-toolbar">
+      <button type="button" id="btn-topbar-menu" class="secondary topbar-menu-btn" data-icon="menu" title="More actions" aria-label="More actions" aria-expanded="false" aria-controls="topbar-overflow-menu">Menu</button>
+      <div id="topbar-overflow-menu" class="topbar-overflow-menu hidden" role="menu" aria-label="More actions">
+        <button type="button" id="btn-refresh-tools-menu" class="secondary" data-icon="sync" role="menuitem">Refresh tools</button>
+        <button type="button" id="btn-theme-toggle-menu" class="secondary" role="menuitem">Theme</button>
+        <button type="button" id="btn-settings-menu" class="secondary" data-icon="settings" role="menuitem">Settings</button>
+        <button type="button" id="btn-quit-menu" class="danger" data-icon="exit_to_app" role="menuitem">Quit</button>
+      </div>
       <button type="button" id="btn-refresh-tools" class="secondary" data-icon="sync" title="Re-run PATH checks for yt-dlp, ffmpeg, and ffprobe (after install or settings change)">Refresh tools</button>
       <button type="button" id="btn-theme-toggle" class="secondary" title="Toggle light/dark theme">Theme</button>
       <div id="downloader-only-actions" class="btn-group" role="group" aria-label="Download controls">
@@ -124,6 +131,10 @@
       <section class="panel">
         <h2>Video Converter</h2>
         <p class="hint">Transcode local videos to AV1, H.265, or H.264 to save space. Paths are read on the rustdl host, not your browser.</p>
+        <div class="preset-row convert-preset-row">
+          <span class="hint">Encoding presets:</span>
+          <div id="convert-presets-row" class="btn-group" role="group" aria-label="Convert encoding presets"></div>
+        </div>
         <label class="convert-input-label">Input paths (file or folder, one per line)
           <textarea id="convert-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
         </label>
@@ -348,7 +359,23 @@
 
           <h3>Cookies and impersonate</h3>
           <label>Cookies (file or browser) <input type="text" id="set-cookies" /></label>
+          <div class="row">
+            <button type="button" id="btn-test-cookies" class="secondary" data-icon="science">Test cookies</button>
+          </div>
           <label>Impersonate <input type="text" id="set-impersonate" placeholder="chrome" /></label>
+
+          <h3>Watch folder</h3>
+          <label class="check"><input type="checkbox" id="set-watch-folder-enabled" /> Auto-enqueue URLs from a watched folder (.url / .txt)</label>
+          <label>Watch folder path <input type="text" id="set-watch-folder-path" placeholder="D:\Downloads\watch" /></label>
+
+          <h3>Queue templates</h3>
+          <p class="hint">Save the current queue as a named template or load URLs from a saved template.</p>
+          <label>Template name <input type="text" id="queue-template-name" placeholder="my-playlist" /></label>
+          <div class="row btn-group">
+            <button type="button" id="btn-queue-template-save" class="secondary" data-icon="save">Save template</button>
+            <button type="button" id="btn-queue-template-load" class="secondary" data-icon="upload">Load template</button>
+          </div>
+          <ul id="queue-template-list" class="hint template-list"></ul>
 
           <h3>yt-dlp options</h3>
           <label>Extra args (space-separated) <textarea id="set-extra-args" rows="2"></textarea></label>
@@ -404,6 +431,10 @@
           <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
           <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
           <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>
+
+          <h3>Watch folder</h3>
+          <label class="check"><input type="checkbox" id="set-convert-watch-enabled" /> Auto-scan new videos into the convert queue</label>
+          <label>Convert watch folder <input type="text" id="set-convert-watch-path" placeholder="D:\Videos\incoming" /></label>
         </div>
 
         <div id="settings-tab-webui" class="settings-panel" role="tabpanel" hidden>
@@ -415,12 +446,61 @@
             <textarea id="set-web-ip-whitelist" rows="4" placeholder="127.0.0.1&#10;192.168.1.0/24" spellcheck="false"></textarea>
           </label>
           <p class="hint">One IP or CIDR per line. Matching clients skip the API token (full API access). Other clients still need the token from the desktop app.</p>
+          <h3>API token</h3>
+          <p class="hint">Token for LAN clients without IP whitelist access. Copy from the desktop app or generate a new one here (saved to settings).</p>
+          <label>Current token
+            <input type="text" id="set-web-auth-token" readonly class="token-masked" placeholder="(not set)" />
+          </label>
+          <div class="row btn-group">
+            <button type="button" id="btn-generate-web-token" class="secondary" data-icon="vpn_key">Generate new token</button>
+            <button type="button" id="btn-copy-web-token" class="secondary" data-icon="content_copy">Copy token</button>
+          </div>
         </div>
       </div>
       <div class="dialog-actions">
         <div class="btn-group" role="group" aria-label="Settings dialog">
           <button type="button" id="btn-settings-cancel" class="secondary" data-icon="close">Cancel</button>
           <button type="submit" class="primary" data-icon="save">Save settings</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="settings-dialog">
+    <form method="dialog" id="confirm-form">
+      <h2 id="confirm-title">Confirm</h2>
+      <p id="confirm-message"></p>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="button" id="btn-confirm-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" id="btn-confirm-ok" class="primary danger" data-icon="check">Confirm</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="prompt-dialog" class="settings-dialog">
+    <form method="dialog" id="prompt-form">
+      <h2 id="prompt-title">Input</h2>
+      <p id="prompt-message" class="hint"></p>
+      <label id="prompt-label-wrap">Value <input type="text" id="prompt-input" /></label>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="button" id="btn-prompt-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" id="btn-prompt-ok" class="primary" data-icon="check">OK</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="playlist-preview-dialog" class="settings-dialog">
+    <form method="dialog" id="playlist-preview-form">
+      <h2>Playlist preview</h2>
+      <p id="playlist-preview-summary" class="hint"></p>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="button" id="btn-playlist-preview-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" id="btn-playlist-preview-add" class="primary" data-icon="add">Add all URLs</button>
         </div>
       </div>
     </form>

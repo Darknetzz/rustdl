@@ -9,8 +9,8 @@ impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         {
             let shared = self.shared_core.clone();
-            let core = shared.lock();
-            core_sync::sync_core_to_app(&core, self);
+            let mut core = shared.lock();
+            core_sync::sync_core_to_app(&mut core, self);
         }
         #[cfg(windows)]
         {

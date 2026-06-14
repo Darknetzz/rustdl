@@ -793,7 +793,7 @@ impl PydlApp {
                     if self.effective_card_list_layout() {
                         const LIST_ROW_H: f32 = 42.0;
                         let row_count = ids.len().max(1);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 600.0);
                         egui::ScrollArea::vertical()
                             .id_salt(format!("rustdl_list_{label}"))
                             .max_height(max_h)

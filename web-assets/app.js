@@ -33,6 +33,78 @@ function notifyError(message) {
   showToast(message, "error");
 }
 
+const VIEW_STORAGE_KEY = "rustdl-web-view";
+
+function showConfirmDialog(message, title = "Confirm") {
+  return new Promise((resolve) => {
+    const dlg = document.getElementById("confirm-dialog");
+    const titleEl = document.getElementById("confirm-title");
+    const msgEl = document.getElementById("confirm-message");
+    if (!dlg || !titleEl || !msgEl) {
+      resolve(window.confirm(message));
+      return;
+    }
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    const onClose = (ok) => {
+      dlg.removeEventListener("close", onCloseHandler);
+      resolve(ok);
+    };
+    const onCloseHandler = () => onClose(dlg.returnValue === "confirm");
+    dlg.addEventListener("close", onCloseHandler);
+    document.getElementById("btn-confirm-cancel").onclick = () => {
+      dlg.close("cancel");
+    };
+    document.getElementById("confirm-form").onsubmit = (e) => {
+      e.preventDefault();
+      dlg.close("confirm");
+    };
+    dlg.showModal();
+  });
+}
+
+function showPromptDialog(message, defaultValue = "", title = "Input") {
+  return new Promise((resolve) => {
+    const dlg = document.getElementById("prompt-dialog");
+    const titleEl = document.getElementById("prompt-title");
+    const msgEl = document.getElementById("prompt-message");
+    const input = document.getElementById("prompt-input");
+    if (!dlg || !titleEl || !msgEl || !input) {
+      resolve(window.prompt(message, defaultValue));
+      return;
+    }
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    input.value = defaultValue || "";
+    const onClose = () => {
+      dlg.removeEventListener("close", onCloseHandler);
+      resolve(dlg.returnValue === "ok" ? input.value : null);
+    };
+    const onCloseHandler = onClose;
+    dlg.addEventListener("close", onCloseHandler);
+    document.getElementById("btn-prompt-cancel").onclick = () => dlg.close("cancel");
+    document.getElementById("prompt-form").onsubmit = (e) => {
+      e.preventDefault();
+      dlg.close("ok");
+    };
+    dlg.showModal();
+    input.focus();
+  });
+}
+
+function maskWebToken(token) {
+  const t = String(token || "").trim();
+  if (!t) return "";
+  if (t.length <= 8) return t;
+  return `${t.slice(0, 4)}…${t.slice(-4)}`;
+}
+
+function randomWebToken() {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // Route legacy alert() calls through the toast bar (LAN/mobile friendly).
 window.alert = (message) => showToast(String(message), "error");
 
@@ -76,6 +148,11 @@ function formatRelativeAgo(date) {
     return date.toLocaleString(undefined, { month: "short", day: "numeric" });
   }
   return date.toLocaleDateString();
+}
+
+function formatRelativeTime(unixSecs) {
+  if (!unixSecs) return "";
+  return formatRelativeAgo(new Date(unixSecs * 1000));
 }
 
 function formatLogLineDisplay(line, relative) {
@@ -477,10 +554,8 @@ async function saveQueueSearchSetting(value) {
       method: "POST",
       body: JSON.stringify({ settings: patch }),
     });
-    if (res.ok) {
-      const data = await res.json();
-      cachedSettings = data.settings;
-    }
+    const data = await res.json();
+    cachedSettings = data.settings;
   } catch {
     /* ignore */
   }
@@ -516,6 +591,7 @@ function startStatusPoll() {
   if (statusPollIntervalId != null) return;
   statusPollIntervalId = setInterval(() => {
     if (shuttingDown) return;
+    if (sseConnected) return;
     refreshStatus().catch(() => {});
     refreshLogs().catch(() => {});
   }, 5000);
@@ -592,6 +668,9 @@ async function api(path, options = {}) {
       "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token.";
     showAuthPanel(msg);
     throw new Error(msg);
+  }
+  if (!res.ok) {
+    throw new Error(await readApiError(res, `Request failed (${res.status})`));
   }
   return res;
 }
@@ -905,7 +984,7 @@ async function requestAppShutdown() {
     msg +=
       " Active downloads will be cancelled first, then rustdl will exit.";
   }
-  if (!confirm(msg)) return;
+  if (!(await showConfirmDialog(msg, "Quit rustdl?"))) return;
   shuttingDown = true;
   updateQuitButtonState();
   showShutdownNotice("Shutting down rustdl…");
@@ -1557,6 +1636,22 @@ function appendReadyReorderButtons(group, item, readyItems) {
   }
 }
 
+function appendVerifyStreamsButton(group, item) {
+  if (statusSlug(item.status) !== "done") return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  setButtonLabel(btn, ICON.check, "Verify");
+  btn.onclick = () =>
+    api(`/api/queue/${item.item_id}/verify`, { method: "POST" })
+      .then(async (res) => {
+        const data = await res.json();
+        showToast(data.message || "Verify complete.");
+      })
+      .catch((e) => notifyError(e.message || "Verify failed."));
+  group.appendChild(btn);
+}
+
 function appendRefetchButton(group, item) {
   const slug = statusSlug(item.status);
   if (slug !== "idle" || !item.error) return;
@@ -1930,6 +2025,7 @@ function renderQueueCard(item, settings, ctx) {
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
+  appendVerifyStreamsButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
     card.appendChild(actions);
@@ -2002,6 +2098,7 @@ function renderQueueCardListRow(item, settings, ctx) {
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
+  appendVerifyStreamsButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
     card.appendChild(actions);
@@ -2770,6 +2867,12 @@ function populateSettingsForm(s, commandPreview) {
 
   setCheck("set-web-ui-enabled", s.web_ui_enabled);
   setVal("set-web-bind-address", s.web_bind_address || "0.0.0.0:8765");
+  setCheck("set-watch-folder-enabled", s.watch_folder_enabled);
+  setVal("set-watch-folder-path", s.watch_folder_path);
+  setCheck("set-convert-watch-enabled", s.convert_watch_folder_enabled);
+  setVal("set-convert-watch-path", s.convert_watch_folder_path);
+  const tokenEl = document.getElementById("set-web-auth-token");
+  if (tokenEl) tokenEl.value = maskWebToken(s.web_auth_token);
   const whitelistEl = document.getElementById("set-web-ip-whitelist");
   if (whitelistEl) {
     whitelistEl.value = Array.isArray(s.web_auth_ip_whitelist)
@@ -2873,6 +2976,11 @@ function collectSettingsForm(base) {
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
+  s.watch_folder_enabled = document.getElementById("set-watch-folder-enabled")?.checked ?? false;
+  s.watch_folder_path = document.getElementById("set-watch-folder-path")?.value || "";
+  s.convert_watch_folder_enabled =
+    document.getElementById("set-convert-watch-enabled")?.checked ?? false;
+  s.convert_watch_folder_path = document.getElementById("set-convert-watch-path")?.value || "";
 
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
   s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
@@ -2896,6 +3004,50 @@ function switchSettingsTab(name) {
   document.getElementById("settings-tab-webui").hidden = name !== "webui";
 }
 
+async function refreshQueueTemplatesList() {
+  const list = document.getElementById("queue-template-list");
+  if (!list) return;
+  try {
+    const res = await api("/api/queue/templates");
+    const data = await res.json();
+    const names = data.templates || [];
+    if (!names.length) {
+      list.innerHTML = "<li>No saved templates yet.</li>";
+      return;
+    }
+    list.innerHTML = names.map((n) => `<li>${escapeHtml(n)}</li>`).join("");
+  } catch {
+    list.innerHTML = "<li>Could not load templates.</li>";
+  }
+}
+
+async function loadConvertPresetsRow() {
+  const root = document.getElementById("convert-presets-row");
+  if (!root) return;
+  try {
+    const res = await api("/api/convert/presets");
+    const data = await res.json();
+    const presets = data.presets || [];
+    root.innerHTML = "";
+    for (const name of presets) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "secondary";
+      btn.textContent = name;
+      btn.onclick = () =>
+        api("/api/convert/presets/apply", {
+          method: "POST",
+          body: JSON.stringify({ name }),
+        })
+          .then(() => showToast(`Applied preset “${name}”.`))
+          .catch((e) => notifyError(e.message || "Could not apply preset."));
+      root.appendChild(btn);
+    }
+  } catch {
+    root.innerHTML = "<span class=\"hint\">Presets unavailable.</span>";
+  }
+}
+
 async function openSettingsDialog() {
   const [settingsRes, profilesRes] = await Promise.all([
     api("/api/settings"),
@@ -2906,6 +3058,7 @@ async function openSettingsDialog() {
   cachedSettings = settingsData.settings;
   populateSettingsForm(cachedSettings, settingsData.command_preview);
   populateProfiles(profilesData);
+  refreshQueueTemplatesList().catch(() => {});
   document.getElementById("settings-dialog").showModal();
 }
 
@@ -3060,20 +3213,20 @@ document.getElementById("settings-form").onsubmit = async (e) => {
   if (!cachedSettings) return;
   const wasThumbnails = cachedSettings.show_thumbnails !== false;
   const patch = collectSettingsForm(cachedSettings);
-  const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
-  if (res.ok) {
+  try {
+    const res = await api("/api/settings", { method: "POST", body: JSON.stringify({ settings: patch }) });
     const data = await res.json();
     cachedSettings = data.settings;
-  } else {
-    cachedSettings = patch;
+    statusFlags.auto_add_pasted_urls = !!cachedSettings.auto_add_pasted_urls;
+    if (cachedSettings.show_thumbnails && !wasThumbnails) {
+      clearThumbnailCaches();
+    }
+    renderLogView();
+    document.getElementById("settings-dialog").close();
+    await refreshAll();
+  } catch (err) {
+    notifyError(err.message || "Could not save settings.");
   }
-  statusFlags.auto_add_pasted_urls = !!cachedSettings.auto_add_pasted_urls;
-  if (cachedSettings.show_thumbnails && !wasThumbnails) {
-    clearThumbnailCaches();
-  }
-  renderLogView();
-  document.getElementById("settings-dialog").close();
-  await refreshAll();
 };
 
 document.querySelectorAll(".settings-tab").forEach((btn) => {
@@ -3148,6 +3301,11 @@ function setView(view) {
     view === "convert" ? "convert" : view === "library" ? "library" : "downloader";
   document.body.classList.remove("view-downloader", "view-convert", "view-library");
   document.body.classList.add(`view-${currentView}`);
+  try {
+    localStorage.setItem(VIEW_STORAGE_KEY, currentView);
+  } catch {
+    /* ignore */
+  }
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === currentView);
   });
@@ -3163,35 +3321,68 @@ function setView(view) {
 async function refreshLibrary() {
   const root = document.getElementById("library-list");
   if (!root) return;
-  const data = await api("/api/library");
-  const items = data.items || [];
-  if (!items.length) {
-    root.innerHTML = "<p class=\"hint\">No completed downloads.</p>";
-    return;
-  }
-  root.innerHTML = items
-    .map(
-      (it) => `<div class="queue-card library-card">
+  try {
+    const res = await api("/api/library");
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      root.innerHTML = "<p class=\"hint\">No completed downloads.</p>";
+      return;
+    }
+    root.innerHTML = items
+      .map((it) => {
+        const meta = [
+          it.uploader ? escapeHtml(it.uploader) : "",
+          it.completed_at ? formatRelativeTime(it.completed_at) : "",
+          it.local_path ? escapeHtml(it.local_path) : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        const openBtn = it.local_path
+          ? `<button type="button" class="secondary" data-open="${it.item_id}">Open</button>`
+          : "";
+        return `<div class="queue-card library-card">
         <div class="card-title">${escapeHtml(it.title || it.video_id || "Untitled")}</div>
+        ${meta ? `<div class="card-meta hint">${meta}</div>` : ""}
         <div class="card-actions btn-group">
-          <button type="button" class="secondary" data-requeue="${it.item_id}" data-url="${escapeHtml(it.local_path ? "" : "")}">Re-queue</button>
+          <button type="button" class="secondary" data-requeue="${it.item_id}">Re-queue</button>
+          ${openBtn}
         </div>
-      </div>`
-    )
-    .join("");
-  root.querySelectorAll("[data-requeue]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const item = items.find((x) => String(x.item_id) === btn.dataset.requeue);
-      if (!item) return;
-      const url = item.webpage_url;
-      if (!url) {
-        notifyError("No URL to re-queue.");
-        return;
-      }
-      await api("/api/queue", { method: "POST", body: JSON.stringify({ urls: [url] }) });
-      showToast("Re-queued download.");
+      </div>`;
+      })
+      .join("");
+    root.querySelectorAll("[data-requeue]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const item = items.find((x) => String(x.item_id) === btn.dataset.requeue);
+        if (!item) return;
+        const url = item.webpage_url;
+        if (!url) {
+          notifyError("No URL to re-queue.");
+          return;
+        }
+        try {
+          await api("/api/queue", { method: "POST", body: JSON.stringify({ urls: [url] }) });
+          showToast("Re-queued download.");
+        } catch (err) {
+          notifyError(err.message || "Re-queue failed.");
+        }
+      });
     });
-  });
+    root.querySelectorAll("[data-open]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await api(`/api/library/${btn.dataset.open}/open`, {
+            method: "POST",
+            body: JSON.stringify({ target: "file" }),
+          });
+        } catch (err) {
+          notifyError(err.message || "Could not open file.");
+        }
+      });
+    });
+  } catch (err) {
+    root.innerHTML = `<p class="hint">${escapeHtml(err.message || "Could not load library.")}</p>`;
+  }
 }
 
 function convertSlug(item) {
@@ -4038,6 +4229,110 @@ applyStaticButtonIcons();
 
 initWebTheme();
 
+loadConvertPresetsRow().catch(() => {});
+
+document.getElementById("btn-topbar-menu")?.addEventListener("click", () => {
+  const menu = document.getElementById("topbar-overflow-menu");
+  const btn = document.getElementById("btn-topbar-menu");
+  if (!menu) return;
+  menu.classList.toggle("hidden");
+  if (btn) btn.setAttribute("aria-expanded", menu.classList.contains("hidden") ? "false" : "true");
+});
+document.getElementById("btn-refresh-tools-menu")?.addEventListener("click", () => {
+  refreshToolsOnly().catch((e) => notifyError(e.message));
+  document.getElementById("topbar-overflow-menu")?.classList.add("hidden");
+});
+document.getElementById("btn-theme-toggle-menu")?.addEventListener("click", () => {
+  document.getElementById("btn-theme-toggle")?.click();
+  document.getElementById("topbar-overflow-menu")?.classList.add("hidden");
+});
+document.getElementById("btn-settings-menu")?.addEventListener("click", () => {
+  openSettingsDialog().catch(console.error);
+  document.getElementById("topbar-overflow-menu")?.classList.add("hidden");
+});
+document.getElementById("btn-quit-menu")?.addEventListener("click", () => {
+  requestAppShutdown().catch((e) => notifyError(e.message));
+});
+
+document.getElementById("btn-test-cookies")?.addEventListener("click", async () => {
+  try {
+    const res = await api("/api/tools/cookie-check", { method: "POST" });
+    const data = await res.json();
+    showToast(data.message || data.ok ? "Cookies OK." : "Cookie check finished.");
+  } catch (e) {
+    notifyError(e.message || "Cookie check failed.");
+  }
+});
+
+document.getElementById("btn-queue-template-save")?.addEventListener("click", async () => {
+  const name = document.getElementById("queue-template-name")?.value?.trim();
+  if (!name) {
+    notifyError("Enter a template name.");
+    return;
+  }
+  try {
+    await api("/api/queue/templates", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    showToast(`Saved template “${name}”.`);
+    refreshQueueTemplatesList().catch(() => {});
+  } catch (e) {
+    notifyError(e.message || "Could not save template.");
+  }
+});
+
+document.getElementById("btn-queue-template-load")?.addEventListener("click", async () => {
+  const name = document.getElementById("queue-template-name")?.value?.trim();
+  if (!name) {
+    notifyError("Enter a template name to load.");
+    return;
+  }
+  try {
+    const res = await api("/api/queue/templates/load", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    });
+    const data = await res.json();
+    showToast(`Loaded ${data.accepted || 0} URL(s) from template.`);
+    await refreshAll();
+  } catch (e) {
+    notifyError(e.message || "Could not load template.");
+  }
+});
+
+document.getElementById("btn-generate-web-token")?.addEventListener("click", async () => {
+  if (!cachedSettings) return;
+  const token = randomWebToken();
+  try {
+    const res = await api("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ patch: { web_auth_token: token } }),
+    });
+    const data = await res.json();
+    cachedSettings = data.settings;
+    const tokenEl = document.getElementById("set-web-auth-token");
+    if (tokenEl) tokenEl.value = maskWebToken(cachedSettings.web_auth_token);
+    showToast("New API token generated and saved.");
+  } catch (e) {
+    notifyError(e.message || "Could not generate token.");
+  }
+});
+
+document.getElementById("btn-copy-web-token")?.addEventListener("click", async () => {
+  const token = cachedSettings?.web_auth_token?.trim();
+  if (!token) {
+    notifyError("No token to copy.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(token);
+    showToast("Token copied to clipboard.");
+  } catch {
+    notifyError("Could not copy token.");
+  }
+});
+
 wireModeColorControls();
 applyModeColors(cachedSettings);
 
@@ -4123,6 +4418,8 @@ async function tryConnectWithoutToken() {
 if (token()) {
   document.getElementById("token-input").value = token();
   showApp();
+  const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+  if (savedView === "convert" || savedView === "library") setView(savedView);
   refreshAll().catch(() => {});
   connectSse();
   startStatusPoll();

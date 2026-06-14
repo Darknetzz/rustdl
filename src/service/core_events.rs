@@ -75,7 +75,10 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
                             item_id,
                         );
                     }
-                    core.lock().maybe_flush_convert_queue_save();
+                    let mut c = core.lock();
+                    c.maybe_flush_queue_save();
+                    c.maybe_flush_convert_queue_save();
+                    c.maybe_flush_log_save();
                 }
                 Err(RecvError::Lagged(n)) => {
                     eprintln!("rustdl: SSE event buffer lagged ({n} events dropped)");
@@ -446,7 +449,15 @@ impl super::core::DownloadCore {
         }
         self.transfer_totals_dirty = true;
         self.maybe_append_download_line_log(item_id, line);
-        self.bump_generation();
+        let bump = should_bump_convert_progress(
+            &mut self.download_progress_throttle,
+            item_id,
+            pct,
+            false,
+        );
+        if bump {
+            self.mark_queue_item_dirty(item_id);
+        }
     }
 
     fn maybe_append_download_line_log(&mut self, item_id: u64, line: &str) {

@@ -10,10 +10,6 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
-### Changed
-
-- About dialog: **Source on GitHub** shows the GitHub mark icon beside the link.
-
 ### Added
 
 - Rolling **`rustdl-dev`** GitHub pre-release: `scripts/publish_dev_release.*`, `scripts/push_dev.*`, optional `scripts/dev_release_webhook.py`, and **`.githooks/pre-push`** auto-publish (install once with `scripts/install_dev_release_hook.*`).
@@ -21,6 +17,27 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Documentation
 
 - README **Screenshots** section with desktop Downloader and LAN web UI images; `scripts/capture_readme_screenshots.py` to regenerate them.
+
+## [0.7.1] - 2026-06-14
+
+### Added
+
+- LAN web UI: queue templates (save/load), cookie test, per-item verify on Done cards, convert encoding presets, watch-folder settings, masked API token with generate/copy, enriched Library tab with Open on host, mobile topbar menu, and in-page confirm/prompt dialogs.
+- Desktop: richer Download library window (search + history filter); Video Converter queue search, bulk remove selected, and Ready-row drag reorder.
+- `POST /api/library/:id/open` and `POST /api/queue/templates/load` API endpoints.
+
+### Changed
+
+- About dialog: **Source on GitHub** shows the GitHub mark icon beside the link.
+- Web settings save returns updated settings JSON (fixes broken save flow in the LAN UI).
+- Download progress updates throttle full-queue GUI sync (same approach as convert).
+- Queue/config JSON writes use atomic temp-file + rename.
+- Headless/web-only and CLI queue modes flush persisted queues on shutdown.
+
+### Fixed
+
+- Downloader queue debounced saves flush from the background core (web-only and headless no longer lose queue state).
+- LAN web API errors surface through centralized fetch handling and toast notifications.
 
 ## [0.7.0] - 2026-06-14
 

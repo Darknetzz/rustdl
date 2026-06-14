@@ -466,6 +466,35 @@ impl DownloadCore {
         self.bump_generation();
     }
 
+    /// Reorders Ready (Idle) convert rows by drag-and-drop; returns false when ids are invalid.
+    pub fn reorder_convert_ready_items(&mut self, dragged_id: u64, target_id: u64) -> bool {
+        if dragged_id == target_id {
+            return false;
+        }
+        let from_idx = self
+            .convert_items
+            .iter()
+            .position(|it| it.item_id == dragged_id && it.status == ItemStatus::Idle);
+        let to_idx = self
+            .convert_items
+            .iter()
+            .position(|it| it.item_id == target_id && it.status == ItemStatus::Idle);
+        let (from_idx, to_idx) = match (from_idx, to_idx) {
+            (Some(f), Some(t)) => (f, t),
+            _ => return false,
+        };
+        let item = self.convert_items.remove(from_idx);
+        let insert_at = if to_idx > from_idx {
+            to_idx - 1
+        } else {
+            to_idx
+        };
+        self.convert_items.insert(insert_at, item);
+        self.schedule_convert_queue_save();
+        self.bump_generation();
+        true
+    }
+
     // --- persistence ---
 
     pub fn schedule_convert_queue_save(&mut self) {

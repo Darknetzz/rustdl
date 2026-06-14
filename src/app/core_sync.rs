@@ -119,7 +119,20 @@ fn queue_item_mirror_changed(
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
     let app_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
     let core_ids: HashSet<u64> = core.items.iter().map(|it| it.item_id).collect();
-    if app_ids == core_ids && app.items.len() == core.items.len() {
+    let dirty_only = !core.dirty_queue_item_ids.is_empty()
+        && app_ids == core_ids
+        && app.items.len() == core.items.len();
+    if dirty_only {
+        let core_by_id: std::collections::HashMap<u64, &crate::models::QueueItem> =
+            core.items.iter().map(|it| (it.item_id, it)).collect();
+        for app_it in app.items.iter_mut() {
+            if core.dirty_queue_item_ids.contains(&app_it.item_id) {
+                if let Some(core_it) = core_by_id.get(&app_it.item_id) {
+                    *app_it = (*core_it).clone();
+                }
+            }
+        }
+    } else if app_ids == core_ids && app.items.len() == core.items.len() {
         let core_by_id: std::collections::HashMap<u64, &crate::models::QueueItem> =
             core.items.iter().map(|it| (it.item_id, it)).collect();
         for app_it in app.items.iter_mut() {
@@ -255,14 +268,17 @@ fn sync_convert_from_core(
     }
 }
 
-pub fn sync_core_to_app(core: &DownloadCore, app: &mut PydlApp) {
+pub fn sync_core_to_app(core: &mut DownloadCore, app: &mut PydlApp) {
     let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
     let previous_convert_ids: HashSet<u64> =
         app.convert_items.iter().map(|it| it.item_id).collect();
     sync_shared_fields_from_core(core, app);
+    app.done_file_index = core.done_file_index.clone();
+    app.done_lookup_truncation_logged = core.done_lookup_truncation_logged;
     if core.generation != app.core_generation {
         sync_queue_from_core(core, app, &previous_item_ids);
         sync_convert_from_core(core, app, &previous_convert_ids);
+        core.dirty_queue_item_ids.clear();
         app.core_generation = core.generation;
     }
 }

@@ -595,9 +595,7 @@ impl PydlApp {
                 }
             });
 
-        if !self.convert_mode {
-            self.draw_queue_search_row(ui);
-        }
+        self.draw_queue_search_row(ui);
 
         if self.convert_mode {
             if !self.convert_items.is_empty() {

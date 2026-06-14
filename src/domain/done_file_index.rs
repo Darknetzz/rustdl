@@ -13,6 +13,7 @@ pub const DONE_LOOKUP_MAX_ENTRIES: usize = 50_000;
 const DONE_LOOKUP_MAX_DEPTH: u32 = 8;
 
 /// Indexes `video_id` → output file path and last-modified time using `[id]` segments in filenames.
+#[derive(Clone)]
 pub struct DoneFileIndex {
     pub lookup: HashMap<String, (PathBuf, SystemTime)>,
     cached_output_dir: String,

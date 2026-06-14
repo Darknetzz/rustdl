@@ -194,10 +194,13 @@ pub struct DownloadCore {
     pub done_file_index: DoneFileIndex,
     pub done_lookup_truncation_logged: bool,
     pub download_log_throttle: HashMap<u64, f64>,
+    /// Last UI sync bump per download item: `(unix_secs, percent)`.
+    pub download_progress_throttle: HashMap<u64, (f64, f32)>,
     /// Last UI sync bump per convert item: `(unix_secs, percent)`.
     pub convert_progress_throttle: HashMap<u64, (f64, f32)>,
     /// Thumbnail image bytes shared between the desktop GUI and LAN `/api/thumbnail` proxy.
     pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
+    pub dirty_queue_item_ids: HashSet<u64>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
     /// Incremented when settings or profile store change; GUI pulls settings when this differs.
@@ -334,8 +337,10 @@ impl DownloadCore {
             done_file_index: DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
             download_log_throttle: HashMap::new(),
+            download_progress_throttle: HashMap::new(),
             convert_progress_throttle: HashMap::new(),
             thumbnail_cache: HashMap::new(),
+            dirty_queue_item_ids: HashSet::new(),
             generation: 1,
             settings_generation: 1,
             config_load_issues: Vec::new(),
@@ -508,6 +513,11 @@ impl DownloadCore {
         self.generation = self.generation.saturating_add(1);
     }
 
+    pub fn mark_queue_item_dirty(&mut self, item_id: u64) {
+        self.dirty_queue_item_ids.insert(item_id);
+        self.bump_generation();
+    }
+
     /// Keeps monotonic item IDs when reusing an existing row (e.g. Refetch metadata).
     pub fn bump_item_id_floor(&mut self, used_id: u64) {
         if self.next_item_id <= used_id {
@@ -531,8 +541,35 @@ impl DownloadCore {
         self.queue_save_deadline = Some(Instant::now() + QUEUE_SAVE_DEBOUNCE);
     }
 
+    pub fn maybe_flush_queue_save(&mut self) {
+        if let Some(deadline) = self.queue_save_deadline {
+            if Instant::now() >= deadline {
+                self.queue_save_deadline = None;
+                self.flush_queue_to_disk();
+            }
+        }
+    }
+
     pub fn schedule_log_save(&mut self) {
         self.log_save_deadline = Some(Instant::now() + QUEUE_SAVE_DEBOUNCE);
+    }
+
+    pub fn maybe_flush_log_save(&mut self) {
+        if let Some(deadline) = self.log_save_deadline {
+            if Instant::now() >= deadline {
+                self.log_save_deadline = None;
+                if let Err(err) = save_activity_log(&self.log_lines) {
+                    eprintln!("rustdl: failed to save activity log: {err}");
+                }
+            }
+        }
+    }
+
+    pub fn flush_log_to_disk(&mut self) {
+        self.log_save_deadline = None;
+        if let Err(err) = save_activity_log(&self.log_lines) {
+            eprintln!("rustdl: failed to save activity log: {err}");
+        }
     }
 
     pub fn flush_queue_to_disk(&mut self) {

@@ -306,6 +306,28 @@ impl PydlApp {
             self.thumbnail_inflight.remove(&id);
             self.thumbnail_attempted.remove(&id);
         }
+        self.selected_item_ids.clear();
+    }
+
+    fn remove_selected_convert_items(&mut self) {
+        let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
+        if ids.is_empty() {
+            self.append_log("No convert items selected.");
+            return;
+        }
+        let id_set: std::collections::HashSet<u64> = ids.iter().copied().collect();
+        self.convert_core_action(|core| {
+            core.convert_items.retain(|it| !id_set.contains(&it.item_id));
+            core.update_convert_status();
+            core.schedule_convert_queue_save();
+            core.bump_generation();
+        });
+        for id in ids {
+            self.textures.remove(&id);
+            self.thumbnail_inflight.remove(&id);
+            self.thumbnail_attempted.remove(&id);
+        }
+        self.selected_item_ids.clear();
     }
 
     /// Start/cancel/clear groups for the Convert queue footer (wrap-friendly).
@@ -383,6 +405,20 @@ impl PydlApp {
             }
         });
         draw(ui, "av1_queue", &mut |g| {
+            if !self.selected_item_ids.is_empty() {
+                if g.danger(
+                    &format!(
+                        "{} Remove selected ({})",
+                        ui_icons::REMOVE,
+                        self.selected_item_ids.len()
+                    ),
+                    true,
+                )
+                .clicked()
+                {
+                    self.remove_selected_convert_items();
+                }
+            }
             if g.secondary(
                 &format!("{} Export batch CSV", ui_icons::EXPORT),
                 !self.convert_items.is_empty(),
@@ -590,7 +626,10 @@ impl PydlApp {
             });
     }
 
-    fn convert_item_in_queue_group(item: &ConvertQueueItem, label: &str) -> bool {
+    fn convert_item_in_queue_group(&self, item: &ConvertQueueItem, label: &str) -> bool {
+        if !self.convert_item_matches_search(item) {
+            return false;
+        }
         match label {
             "Active" => matches!(item.status, ItemStatus::Queued | ItemStatus::Downloading),
             "Ready" => item.status == ItemStatus::Idle,
@@ -632,7 +671,7 @@ impl PydlApp {
             let mut ids: Vec<u64> = self
                 .convert_items
                 .iter()
-                .filter(|it| Self::convert_item_in_queue_group(it, label))
+                .filter(|it| self.convert_item_in_queue_group(it, label))
                 .map(|it| it.item_id)
                 .collect();
             if label == "Active" {
@@ -671,7 +710,7 @@ impl PydlApp {
                     if self.effective_convert_list_layout() {
                         const LIST_ROW_H: f32 = 118.0;
                         let row_count = ids.len().max(1);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 360.0);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 600.0);
                         egui::ScrollArea::vertical()
                             .id_salt(format!("rustdl_convert_list_{label}"))
                             .max_height(max_h)
@@ -682,7 +721,11 @@ impl PydlApp {
                                         if let Some(idx) = self.convert_item_idx(*item_id) {
                                             let it = self.convert_items[idx].clone();
                                             ui.group(|ui| {
-                                                self.draw_convert_queue_card(ui, &it);
+                                                self.draw_convert_queue_card(
+                                                    ui,
+                                                    &it,
+                                                    label == "Ready",
+                                                );
                                             });
                                         }
                                     }
@@ -695,7 +738,7 @@ impl PydlApp {
                             };
                             let it = self.convert_items[idx].clone();
                             ui.group(|ui| {
-                                self.draw_convert_queue_card(ui, &it);
+                                self.draw_convert_queue_card(ui, &it, label == "Ready");
                             });
                         }
                     }
@@ -836,10 +879,11 @@ impl PydlApp {
         });
     }
 
-    fn draw_convert_queue_card(&mut self, ui: &mut egui::Ui, it: &ConvertQueueItem) {
+    fn draw_convert_queue_card(&mut self, ui: &mut egui::Ui, it: &ConvertQueueItem, allow_reorder: bool) {
         let theme = self.settings.theme.clone();
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
         let item_color = convert_item_status_color(it);
+        let id = it.item_id;
         let output_codec = transcode::normalize_target_codec(&self.settings.convert_target_codec);
         let will_skip_target = convert_item_will_skip_already_target(
             it,
@@ -863,7 +907,21 @@ impl PydlApp {
             .inner_margin(egui::Margin::symmetric(8.0, 6.0))
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
-                ui.horizontal(|ui| {
+                let row_response = ui.horizontal(|ui| {
+                    if allow_reorder && it.status == ItemStatus::Idle {
+                        let drag_id = egui::Id::new(("convert_ready_drag", id));
+                        let _drag = ui.dnd_drag_source(drag_id, std::sync::Arc::new(id), |ui| {
+                            ui.label(RichText::new("↕").weak());
+                        });
+                    }
+                    let mut selected = self.selected_item_ids.contains(&id);
+                    if ui.checkbox(&mut selected, "").changed() {
+                        if selected {
+                            self.selected_item_ids.insert(id);
+                        } else {
+                            self.selected_item_ids.remove(&id);
+                        }
+                    }
                     ui.spacing_mut().item_spacing.x = 10.0;
                     let thumb_size = egui::vec2(90.0, 52.0);
                     let (thumb_rect, _) = ui.allocate_exact_size(thumb_size, egui::Sense::hover());
@@ -998,6 +1056,13 @@ impl PydlApp {
                         }
                     });
                 });
+                if allow_reorder && it.status == ItemStatus::Idle {
+                    if let Some(dragged) = row_response.response.dnd_release_payload::<u64>() {
+                        if *dragged != id {
+                            self.reorder_convert_ready_items(*dragged, id);
+                        }
+                    }
+                }
             });
     }
 

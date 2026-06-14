@@ -186,7 +186,7 @@ struct QueueRequeueResponse {
     requeued: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 struct SettingsResponse {
     settings: AppSettings,
     command_preview: String,
@@ -263,10 +263,12 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/queue/import-file", post(queue_import_multipart))
         .route("/api/queue/templates", get(queue_templates_list))
         .route("/api/queue/templates", post(queue_templates_save))
+        .route("/api/queue/templates/load", post(queue_templates_load))
         .route("/api/queue/:id/overrides", post(queue_item_overrides))
         .route("/api/queue/:id/verify", post(queue_verify_streams))
         .route("/api/queue/:id", axum::routing::delete(queue_remove))
         .route("/api/library", get(library_list))
+        .route("/api/library/:id/open", post(library_open))
         .route(
             "/api/queue/:id/file",
             axum::routing::delete(queue_delete_file),
@@ -848,6 +850,70 @@ async fn library_list(State(st): State<ApiState>) -> Json<LibraryResponse> {
 }
 
 #[derive(Deserialize)]
+struct LibraryOpenBody {
+    target: String,
+}
+
+async fn library_open(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    Json(body): Json<LibraryOpenBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let path = {
+        let c = st.core.lock();
+        let item = c
+            .items
+            .iter()
+            .find(|it| it.item_id == id && it.status == crate::models::ItemStatus::Done)
+            .ok_or((
+                StatusCode::NOT_FOUND,
+                Json(ApiErrorBody {
+                    error: "library item not found".to_owned(),
+                }),
+            ))?;
+        let local = item.local_path.as_ref().ok_or((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "no file on disk for this row".to_owned(),
+            }),
+        ))?;
+        let file = std::path::PathBuf::from(local);
+        match body.target.trim() {
+            "file" => file,
+            "folder" => {
+                if cfg!(target_os = "windows") {
+                    file
+                } else {
+                    file.parent().map(|p| p.to_path_buf()).ok_or((
+                        StatusCode::NOT_FOUND,
+                        Json(ApiErrorBody {
+                            error: "no folder for this row".to_owned(),
+                        }),
+                    ))?
+                }
+            }
+            _ => {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ApiErrorBody {
+                        error: "target must be file or folder".to_owned(),
+                    }),
+                ));
+            }
+        }
+    };
+    crate::app_actions::open_path(&path).map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ApiErrorBody {
+                error: format!("failed to open path: {e}"),
+            }),
+        )
+    })?;
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize)]
 struct QueueTemplateSaveBody {
     name: String,
 }
@@ -873,6 +939,42 @@ async fn queue_templates_save(
         )
     })?;
     Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize)]
+struct QueueTemplateLoadBody {
+    name: String,
+}
+
+async fn queue_templates_load(
+    State(st): State<ApiState>,
+    Json(body): Json<QueueTemplateLoadBody>,
+) -> Result<Json<AddUrlsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let name = body.name.trim();
+    if name.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "template name required".into(),
+            }),
+        ));
+    }
+    let template = crate::queue_templates::load_queue_template(name).map_err(|e| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("{e:#}"),
+            }),
+        )
+    })?;
+    let urls = crate::queue_templates::template_item_urls(&template);
+    let mut c = st.core.lock();
+    let stats = c.queue_urls_for_resolve(urls);
+    Ok(Json(AddUrlsResponse {
+        accepted: stats.accepted,
+        skipped_duplicates: stats.duplicate_in_input + stats.duplicate_existing,
+        skipped_invalid: stats.invalid,
+    }))
 }
 
 async fn queue_delete_file(State(st): State<ApiState>, Path(id): Path<u64>) -> StatusCode {
@@ -953,30 +1055,13 @@ async fn downloads_retry_failed(State(st): State<ApiState>) -> StatusCode {
 
 async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {
     let c = st.core.lock();
-    let mut parts = vec![c.yt_dlp_bin(), "--newline".to_owned()];
-    parts.push("-o".to_owned());
-    parts.push(format!(
-        "{}/{}",
-        c.output_dir,
-        output_filename_template(&c.settings)
-    ));
-    let ffmpeg = c.ffmpeg_bin();
-    if !ffmpeg.is_empty() {
-        parts.push("--ffmpeg-location".to_owned());
-        parts.push(ffmpeg);
-    }
-    parts.extend(build_download_extra_args(&c.settings));
-    parts.push("<url>".to_owned());
-    Json(SettingsResponse {
-        settings: c.settings.clone(),
-        command_preview: parts.join(" "),
-    })
+    Json(settings_response_from_core(&c))
 }
 
 async fn settings_patch(
     State(st): State<ApiState>,
     Json(body): Json<PatchSettingsBody>,
-) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+) -> Result<Json<SettingsResponse>, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
     if let Some(patch) = body.patch {
         c.merge_settings_patch(&patch)
@@ -991,7 +1076,28 @@ async fn settings_patch(
             }),
         ));
     }
-    Ok(StatusCode::OK)
+    Ok(Json(settings_response_from_core(&c)))
+}
+
+fn settings_response_from_core(c: &DownloadCore) -> SettingsResponse {
+    let mut parts = vec![c.yt_dlp_bin(), "--newline".to_owned()];
+    parts.push("-o".to_owned());
+    parts.push(format!(
+        "{}/{}",
+        c.output_dir,
+        output_filename_template(&c.settings)
+    ));
+    let ffmpeg = c.ffmpeg_bin();
+    if !ffmpeg.is_empty() {
+        parts.push("--ffmpeg-location".to_owned());
+        parts.push(ffmpeg);
+    }
+    parts.extend(build_download_extra_args(&c.settings));
+    parts.push("<url>".to_owned());
+    SettingsResponse {
+        settings: c.settings.clone(),
+        command_preview: parts.join(" "),
+    }
 }
 
 async fn logs_get(State(st): State<ApiState>) -> Json<LogsResponse> {
@@ -1179,14 +1285,14 @@ pub(super) fn thumbnail_response_owned(bytes: Vec<u8>, content_type: String) -> 
 mod tests {
     use std::sync::Arc;
 
-    use axum::body::Body;
+    use axum::body::{to_bytes, Body};
     use axum::http::{Request, StatusCode};
     use tokio::runtime::Runtime;
     use tower::ServiceExt;
 
     use crate::service::core::DownloadCore;
 
-    use super::{api_router, ApiState};
+    use super::{api_router, ApiState, SettingsResponse};
 
     fn test_state(rt: Arc<Runtime>) -> ApiState {
         let (core, _rx) = DownloadCore::new_shared(rt, true);
@@ -1308,8 +1414,39 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(response.status(), StatusCode::OK);
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: SettingsResponse = serde_json::from_slice(&body).unwrap();
+            assert!(!parsed.settings.auto_start_downloads);
+            assert!(!parsed.command_preview.is_empty());
             let c = state.core.lock();
             assert!(!c.settings.auto_start_downloads);
+        });
+    }
+
+    #[test]
+    fn settings_patch_returns_settings_json() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state.clone());
+            let body = Body::from(r#"{"settings":{"auto_start_downloads":true}}"#);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/settings")
+                        .header("Authorization", "Bearer test-token")
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: SettingsResponse = serde_json::from_slice(&bytes).unwrap();
+            assert!(parsed.settings.auto_start_downloads);
+            assert!(parsed.command_preview.contains("yt-dlp") || parsed.command_preview.contains("<url>"));
         });
     }
 

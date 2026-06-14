@@ -57,6 +57,29 @@ fn quarantine_bad_config_file(path: &Path) {
     let _ = fs::rename(path, bak);
 }
 
+fn write_atomic(path: &Path, raw: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "failed to create directory: {}",
+                    parent.to_string_lossy()
+                )
+            })?;
+        }
+    }
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, raw).with_context(|| format!("failed to write {}", tmp.to_string_lossy()))?;
+    fs::rename(&tmp, path).with_context(|| {
+        format!(
+            "failed to replace {} with {}",
+            path.to_string_lossy(),
+            tmp.to_string_lossy()
+        )
+    })?;
+    Ok(())
+}
+
 pub(crate) fn load_json_file<T: DeserializeOwned + Default>(
     path: PathBuf,
     label: &'static str,
@@ -713,7 +736,7 @@ pub fn save_activity_log(lines: &VecDeque<String>) -> Result<()> {
     }
     let payload: Vec<&str> = lines.iter().map(String::as_str).collect();
     let raw = serde_json::to_string_pretty(&payload).context("failed to serialize activity log")?;
-    fs::write(&path, raw).with_context(|| {
+    write_atomic(&path, &raw).with_context(|| {
         format!(
             "failed to write activity log file: {}",
             path.to_string_lossy()
@@ -861,7 +884,7 @@ pub fn save_settings(settings: &AppSettings) -> Result<()> {
         })?;
     }
     let raw = serde_json::to_string_pretty(settings).context("failed to serialize settings")?;
-    fs::write(&cfg_path, raw).with_context(|| {
+    write_atomic(&cfg_path, &raw).with_context(|| {
         format!(
             "failed to write settings file: {}",
             cfg_path.to_string_lossy()
@@ -911,7 +934,7 @@ pub fn save_queue_items(items: &[QueueItem]) -> Result<()> {
         })?;
     }
     let raw = serde_json::to_string_pretty(items).context("failed to serialize queue items")?;
-    fs::write(&path, raw)
+    write_atomic(&path, &raw)
         .with_context(|| format!("failed to write queue file: {}", path.to_string_lossy()))?;
     let active: std::collections::HashSet<u64> = items.iter().map(|it| it.item_id).collect();
     crate::thumbnail_store::prune_downloader_thumbnails(&active);
@@ -970,7 +993,7 @@ pub fn save_convert_queue_snapshot(snapshot: &ConvertQueueSnapshot) -> Result<()
     }
     let raw = serde_json::to_string_pretty(snapshot)
         .context("failed to serialize converter queue snapshot")?;
-    fs::write(&path, raw).with_context(|| {
+    write_atomic(&path, &raw).with_context(|| {
         format!(
             "failed to write converter queue file: {}",
             path.to_string_lossy()
@@ -1010,6 +1033,18 @@ mod tests {
         let v: AppSettings = load_json_file(path.clone(), "settings");
         assert_eq!(v.worker_count, AppSettings::default().worker_count);
         assert!(dir.join("bad.json.bak").exists());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn write_atomic_round_trip() {
+        let dir = std::env::temp_dir().join(format!("rustdl_atomic_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("tmpdir");
+        let path = dir.join("queue.json");
+        write_atomic(&path, "{\"ok\":true}").expect("write");
+        let raw = fs::read_to_string(&path).expect("read");
+        assert_eq!(raw, "{\"ok\":true}");
         let _ = fs::remove_dir_all(&dir);
     }
 }

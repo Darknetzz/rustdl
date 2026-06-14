@@ -95,6 +95,21 @@ body.theme-light {
     justify-content: flex-start;
   }
 
+  .topbar-menu-btn {
+    display: inline-flex;
+  }
+
+  .topbar-actions .btn-toolbar > .btn-group:not(.topbar-overflow-menu),
+  .topbar-actions .btn-toolbar > button:not(.topbar-menu-btn) {
+    display: none;
+  }
+
+  #navbar-system-usage,
+  #navbar-disk-space,
+  #tools-status {
+    display: none;
+  }
+
   .queue-group-body {
     grid-template-columns: 1fr !important;
   }
@@ -330,6 +345,29 @@ body {
 .tool-badge.missing { color: var(--danger); border-color: rgba(239, 83, 80, 0.35); }
 
 .topbar-actions.btn-toolbar { justify-content: flex-end; }
+
+.topbar-menu-btn {
+  display: none;
+}
+
+.topbar-overflow-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  min-width: 12rem;
+}
+
+.topbar-overflow-menu.hidden {
+  display: none;
+}
+
+.token-masked {
+  font-family: ui-monospace, monospace;
+}
 
 .panel {
   margin: 1rem;

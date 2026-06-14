@@ -18,6 +18,8 @@ impl PydlApp {
                 self.flush_queue_to_disk();
             }
         }
+        let mut core = self.shared_core.lock();
+        core.maybe_flush_queue_save();
     }
 
     pub(super) fn maybe_flush_convert_queue_save(&mut self) {

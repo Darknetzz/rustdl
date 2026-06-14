@@ -508,8 +508,8 @@ impl PydlApp {
         // Pull the core-owned Convert queue into the GUI mirror and kick off thumbnail loads.
         {
             let shared = app.shared_core.clone();
-            let core = shared.lock();
-            core_sync::sync_core_to_app(&core, &mut app);
+            let mut core = shared.lock();
+            core_sync::sync_core_to_app(&mut core, &mut app);
         }
         app.ensure_convert_thumbnails();
         app.ensure_downloader_thumbnails();
@@ -561,6 +561,12 @@ impl PydlApp {
     pub(super) fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) {
         self.download_core_action(|core| {
             core.reorder_ready_items(dragged_id, target_id);
+        });
+    }
+
+    pub(super) fn reorder_convert_ready_items(&mut self, dragged_id: u64, target_id: u64) {
+        self.convert_core_action(|core| {
+            core.reorder_convert_ready_items(dragged_id, target_id);
         });
     }
 
@@ -650,6 +656,16 @@ impl PydlApp {
                 .as_ref()
                 .is_some_and(|u| u.to_ascii_lowercase().contains(&q))
             || item.video_id.to_ascii_lowercase().contains(&q)
+    }
+
+    pub(super) fn convert_item_matches_search(&self, item: &crate::models::ConvertQueueItem) -> bool {
+        let q = self.queue_search.trim().to_ascii_lowercase();
+        if q.is_empty() {
+            return true;
+        }
+        item.source_path.to_ascii_lowercase().contains(&q)
+            || item.output_path.to_ascii_lowercase().contains(&q)
+            || item.detail.to_ascii_lowercase().contains(&q)
     }
 
     fn export_queue_to_file(&mut self) {
@@ -1312,8 +1328,13 @@ impl PydlApp {
     }
 
     pub(super) fn refresh_done_file_lookup(&mut self) {
-        self.done_file_index.refresh(&self.output_dir);
-        if self.done_file_index.scan_truncated {
+        let scan_truncated = {
+            let mut core = self.shared_core.lock();
+            core.refresh_done_file_lookup();
+            self.done_file_index = core.done_file_index.clone();
+            core.done_file_index.scan_truncated
+        };
+        if scan_truncated {
             if !self.done_lookup_truncation_logged {
                 self.done_lookup_truncation_logged = true;
                 self.append_log(&format!(
@@ -1324,6 +1345,7 @@ impl PydlApp {
         } else {
             self.done_lookup_truncation_logged = false;
         }
+        self.shared_core.lock().done_lookup_truncation_logged = self.done_lookup_truncation_logged;
     }
 
     pub(super) fn find_downloaded_file_for_item(
@@ -1610,8 +1632,8 @@ impl PydlApp {
             core.queue_urls_for_resolve(lines);
         }
         {
-            let core = shared.lock();
-            core_sync::sync_core_to_app(&core, self);
+            let mut core = shared.lock();
+            core_sync::sync_core_to_app(&mut core, self);
         }
         self.refresh_input_line_info();
     }
@@ -1994,8 +2016,8 @@ impl PydlApp {
         }
         let shared = self.shared_core.clone();
         {
-            let core = shared.lock();
-            core_sync::sync_core_to_app(&core, self);
+            let mut core = shared.lock();
+            core_sync::sync_core_to_app(&mut core, self);
         }
         self.invalidate_queue_caches();
         self.queue_dirty = true;
@@ -2258,46 +2280,71 @@ impl PydlApp {
         let mut open = self.library_open;
         egui::Window::new("Download library")
             .open(&mut open)
-            .default_width(520.0)
-            .default_height(400.0)
+            .default_width(560.0)
+            .default_height(480.0)
             .resizable(true)
             .show(ctx, |ui| {
                 ui.label(
-                    RichText::new("Completed downloads — re-queue or open from disk.")
+                    RichText::new("Completed downloads — search, filter, re-queue, or open on disk.")
                         .small()
                         .color(crate::theme::TEXT_MUTED),
                 );
+                ui.horizontal(|ui| {
+                    ui.label("Search");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.queue_search)
+                            .hint_text("Title, URL, uploader…")
+                            .desired_width(200.0),
+                    );
+                    ui.label("History");
+                    egui::ComboBox::from_id_salt("library_history_filter")
+                        .selected_text(match self.history_filter_days {
+                            Some(1) => "Last 24 hours",
+                            Some(7) => "Last 7 days",
+                            Some(30) => "Last 30 days",
+                            _ => "All time",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut self.history_filter_days, None, "All time");
+                            ui.selectable_value(&mut self.history_filter_days, Some(1), "Last 24 hours");
+                            ui.selectable_value(&mut self.history_filter_days, Some(7), "Last 7 days");
+                            ui.selectable_value(&mut self.history_filter_days, Some(30), "Last 30 days");
+                        });
+                });
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    let done: Vec<(u64, String, String, Option<String>)> = self
+                    let done: Vec<&QueueItem> = self
                         .items
                         .iter()
                         .filter(|it| it.status == ItemStatus::Done)
-                        .map(|it| {
-                            (
-                                it.item_id,
-                                it.title.clone(),
-                                it.webpage_url.clone(),
-                                it.local_path.clone(),
-                            )
-                        })
+                        .filter(|it| self.item_matches_search(it))
+                        .filter(|it| self.item_matches_history_filter(it))
                         .collect();
                     if done.is_empty() {
-                        ui.label("No completed downloads in the current queue.");
+                        ui.label("No completed downloads match the current filter.");
                         return;
                     }
                     let mut requeue_url: Option<String> = None;
                     let mut open_path: Option<String> = None;
-                    for (item_id, title, webpage_url, local_path) in &done {
+                    for it in done {
                         ui.horizontal(|ui| {
-                            ui.label(title);
-                            if ui.small_button("Re-queue").clicked() {
-                                requeue_url = Some(webpage_url.clone());
-                                let _ = item_id;
+                            ui.label(RichText::new(it.title.clone()).strong());
+                            if let Some(u) = &it.uploader {
+                                ui.label(RichText::new(u).small().color(crate::theme::TEXT_MUTED));
                             }
-                            if local_path.is_some() && ui.small_button("Open").clicked() {
-                                open_path = local_path.clone();
+                            if ui.small_button("Re-queue").clicked() {
+                                requeue_url = Some(it.webpage_url.clone());
+                            }
+                            if it.local_path.is_some() && ui.small_button("Open").clicked() {
+                                open_path = it.local_path.clone();
                             }
                         });
+                        if let Some(p) = &it.local_path {
+                            ui.label(
+                                RichText::new(p)
+                                    .small()
+                                    .color(crate::theme::TEXT_MUTED),
+                            );
+                        }
                     }
                     if let Some(url) = requeue_url {
                         self.download_core_action(|core| {
