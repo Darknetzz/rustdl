@@ -18,6 +18,8 @@ use crate::ui_icons;
 use super::{InputLineInfo, InputLineKind, PydlApp};
 
 const MAX_LOG_RENDER_LINES: usize = 320;
+pub(crate) const DEFAULT_LOG_RENDER_LINES: usize = MAX_LOG_RENDER_LINES;
+const LOG_RENDER_LINES_STEP: usize = 320;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LogFilter {
@@ -455,7 +457,7 @@ impl PydlApp {
                         );
                         ui.add_space(4.0);
                     }
-                    let start = filtered.len().saturating_sub(MAX_LOG_RENDER_LINES);
+                    let start = filtered.len().saturating_sub(self.log_render_line_limit);
                     let window = if filtered.is_empty() {
                         &filtered[..]
                     } else {
@@ -470,15 +472,26 @@ impl PydlApp {
                         .show(ui, |ui| {
                             ui.set_width(ui.available_width().max(1.0));
                             if start > 0 {
-                                ui.label(
-                                    RichText::new(format!(
-                                        "Showing last {} of {} matching lines",
-                                        window.len(),
-                                        filtered.len()
-                                    ))
-                                    .small()
-                                    .color(text_hint(&self.settings.theme)),
-                                );
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "Showing last {} of {} matching lines",
+                                            window.len(),
+                                            filtered.len()
+                                        ))
+                                        .small()
+                                        .color(text_hint(&self.settings.theme)),
+                                    );
+                                    if ui
+                                        .small_button("Show earlier lines")
+                                        .on_hover_text("Load more log history into the panel")
+                                        .clicked()
+                                    {
+                                        self.log_render_line_limit = self
+                                            .log_render_line_limit
+                                            .saturating_add(LOG_RENDER_LINES_STEP);
+                                    }
+                                });
                             }
                             for line in window {
                                 let color = log_line_color(line);

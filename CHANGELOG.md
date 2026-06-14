@@ -18,6 +18,22 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - README **Screenshots** section with desktop Downloader and LAN web UI images; `scripts/capture_readme_screenshots.py` to regenerate them.
 
+## [0.7.2] - 2026-06-14
+
+### Added
+
+- Desktop command palette: keyboard shortcuts, Download library, export log, dock/float Videos and activity log, and layout presets (Compact / Review / Minimal).
+- Activity log panels: **Show earlier lines** control to load more history without rendering the full deque every frame.
+- LAN web UI: import-URLs dialog, playlist-preview confirm dialog, and remaining actions migrated from native `confirm()` / `prompt()` to in-page dialogs.
+
+### Changed
+
+- Web playlist preview and queue import use modal dialogs instead of browser-native prompts.
+
+### Fixed
+
+- Web copy-URL fallback and bulk-remove / profile / convert-clear flows use the same dialog helpers as the rest of the LAN UI.
+
 ## [0.7.1] - 2026-06-14
 
 ### Added

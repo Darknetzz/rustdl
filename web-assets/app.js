@@ -1354,7 +1354,7 @@ function appendUrlMenuButton(group, item) {
     e.preventDefault();
     menu.open = false;
     navigator.clipboard.writeText(url).catch(() => {
-      window.prompt("Copy URL:", url);
+      showPromptDialog("Copy this URL:", url, "Copy URL");
     });
   };
   panel.appendChild(copyBtn);
@@ -1888,10 +1888,12 @@ function appendRemoveMenuButton(group, item) {
       e.preventDefault();
       menu.open = false;
       const name = item.media_filename || "this file";
-      if (!confirm(`Delete ${name} from the output folder?`)) return;
-      deleteQueueItemFile(item.item_id).catch((err) =>
-        alert(err.message || String(err))
-      );
+      showConfirmDialog(`Delete ${name} from the output folder?`, "Delete file").then((ok) => {
+        if (!ok) return;
+        deleteQueueItemFile(item.item_id).catch((err) =>
+          notifyError(err.message || String(err))
+        );
+      });
     };
     panel.appendChild(deleteBtn);
   }
@@ -2478,7 +2480,7 @@ async function deleteQueueItemFile(id) {
 }
 
 async function clearQueue(filter, confirmMessage) {
-  if (confirmMessage && !confirm(confirmMessage)) return;
+  if (confirmMessage && !(await showConfirmDialog(confirmMessage))) return;
   const res = await api("/api/queue/clear", {
     method: "POST",
     body: JSON.stringify({ filter }),
@@ -2583,21 +2585,31 @@ async function exportQueueUrls() {
 }
 
 async function importQueueUrlsFromPrompt() {
-  const raw = prompt("Paste URLs to add (one per line):");
-  if (!raw || !raw.trim()) return;
+  const dlg = document.getElementById("import-urls-dialog");
+  const input = document.getElementById("import-urls-input");
+  if (!dlg || !input) return;
+  input.value = "";
+  dlg.showModal();
+}
+
+async function submitImportUrlsFromDialog() {
+  const input = document.getElementById("import-urls-input");
+  const raw = input?.value || "";
+  if (!raw.trim()) return;
   const urls = raw
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith("#"));
-  if (!urls.length) return;
-  const res = await api("/api/queue/import", {
+  if (!urls.length) {
+    notifyError("No URLs to import.");
+    return;
+  }
+  await api("/api/queue/import", {
     method: "POST",
     body: JSON.stringify({ urls }),
   });
-  if (!res.ok) {
-    throw new Error("Import failed.");
-  }
   await refreshAll();
+  showToast(`Imported ${urls.length} URL(s).`);
 }
 
 function mountQueueImportExport(container) {
@@ -3125,6 +3137,8 @@ document.getElementById("btn-add").onclick = async () => {
   await flushAutoAddFromInput();
 };
 
+let pendingPlaylistUrls = [];
+
 document.getElementById("btn-playlist-preview")?.addEventListener("click", async () => {
   const input = document.getElementById("url-input");
   const lines = (input?.value || "")
@@ -3133,7 +3147,7 @@ document.getElementById("btn-playlist-preview")?.addEventListener("click", async
     .filter(Boolean);
   const url = lines[0];
   if (!url) {
-    alert("Paste a playlist or channel URL first.");
+    notifyError("Paste a playlist or channel URL first.");
     return;
   }
   try {
@@ -3141,27 +3155,40 @@ document.getElementById("btn-playlist-preview")?.addEventListener("click", async
       method: "POST",
       body: JSON.stringify({ url }),
     });
-    if (!res.ok) throw new Error(await readApiError(res, "Playlist preview failed."));
     const data = await res.json();
     const title = data.title ? `"${data.title}"` : "This playlist";
     if (!data.count) {
-      alert("No entries found (single video or empty playlist).");
+      notifyError("No entries found (single video or empty playlist).");
       return;
     }
-    if (
-      confirm(
-        `${title} has ${data.count} video(s) (up to cap). Add all to the queue?`
-      )
-    ) {
-      await api("/api/queue", {
-        method: "POST",
-        body: JSON.stringify({ urls: data.urls }),
-      });
-      await refreshAll();
-    }
+    pendingPlaylistUrls = data.urls || [];
+    const summary = `${title} has ${data.count} video(s) (up to cap). Add all to the queue?`;
+    document.getElementById("playlist-preview-summary").textContent = summary;
+    document.getElementById("playlist-preview-dialog").showModal();
   } catch (e) {
-    alert(e.message || String(e));
+    notifyError(e.message || String(e));
   }
+});
+
+document.getElementById("playlist-preview-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  document.getElementById("playlist-preview-dialog").close();
+  if (!pendingPlaylistUrls.length) return;
+  try {
+    await api("/api/queue", {
+      method: "POST",
+      body: JSON.stringify({ urls: pendingPlaylistUrls }),
+    });
+    pendingPlaylistUrls = [];
+    await refreshAll();
+    showToast("Playlist URLs added to the queue.");
+  } catch (err) {
+    notifyError(err.message || "Could not add playlist URLs.");
+  }
+});
+
+document.getElementById("btn-playlist-preview-cancel")?.addEventListener("click", () => {
+  document.getElementById("playlist-preview-dialog")?.close();
 });
 
 document.getElementById("btn-clear-url-input").onclick = () => clearUrlInput();
@@ -4018,7 +4045,7 @@ async function convertResume() {
 }
 
 async function convertClear() {
-  if (!confirm("Clear the entire Convert queue?")) return;
+  if (!(await showConfirmDialog("Clear the entire Convert queue?", "Clear Convert queue"))) return;
   await api("/api/convert/clear", { method: "POST" });
   await refreshConvert();
 }
@@ -4030,7 +4057,8 @@ async function convertRetrySkipped() {
 
 async function profileDelete() {
   const name = document.getElementById("set-active-profile")?.value;
-  if (!name || !confirm(`Delete profile "${name}"?`)) return;
+  if (!name) return;
+  if (!(await showConfirmDialog(`Delete profile "${name}"?`, "Delete profile"))) return;
   const res = await api("/api/profiles/delete", {
     method: "POST",
     body: JSON.stringify({ name }),
@@ -4041,7 +4069,7 @@ async function profileDelete() {
 
 async function profileRename() {
   const oldName = document.getElementById("set-active-profile")?.value;
-  const newName = prompt("New profile name:", oldName);
+  const newName = await showPromptDialog("Enter a new name for this profile.", oldName, "Rename profile");
   if (!newName || !oldName || newName.trim() === oldName) return;
   const res = await api("/api/profiles/rename", {
     method: "POST",
@@ -4052,7 +4080,7 @@ async function profileRename() {
 }
 
 async function profileSaveAs() {
-  const name = prompt("Save current settings as profile:");
+  const name = await showPromptDialog("Save current settings as a new profile.", "", "Save profile");
   if (!name || !name.trim()) return;
   const res = await api("/api/profiles/save", {
     method: "POST",
@@ -4115,7 +4143,13 @@ function updateBulkSelectionUi() {
 
 async function bulkRemoveSelected() {
   if (!selectedQueueIds.size) return;
-  if (!confirm(`Remove ${selectedQueueIds.size} selected item(s) from the queue?`)) return;
+  if (
+    !(await showConfirmDialog(
+      `Remove ${selectedQueueIds.size} selected item(s) from the queue?`,
+      "Remove selected"
+    ))
+  )
+    return;
   for (const id of [...selectedQueueIds]) {
     await api(`/api/queue/${id}`, { method: "DELETE" });
   }
@@ -4395,6 +4429,24 @@ document.addEventListener("keydown", (e) => {
     document.getElementById("settings-dialog")?.close();
     document.getElementById("about-dialog")?.close();
   }
+});
+
+document.getElementById("btn-playlist-preview-cancel")?.addEventListener("click", () => {
+  document.getElementById("playlist-preview-dialog")?.close();
+});
+
+document.getElementById("import-urls-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  document.getElementById("import-urls-dialog")?.close();
+  try {
+    await submitImportUrlsFromDialog();
+  } catch (err) {
+    notifyError(err.message || String(err));
+  }
+});
+
+document.getElementById("btn-import-urls-cancel")?.addEventListener("click", () => {
+  document.getElementById("import-urls-dialog")?.close();
 });
 
 document.body.classList.add("view-downloader");

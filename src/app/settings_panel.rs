@@ -88,7 +88,7 @@ fn apply_organize_preset(settings: &mut AppSettings, preset: &str) {
     }
 }
 
-fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
+pub(crate) fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
     match preset {
         "compact" => {
             settings.card_list_layout = true;

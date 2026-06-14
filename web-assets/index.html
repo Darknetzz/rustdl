@@ -506,6 +506,20 @@
     </form>
   </dialog>
 
+  <dialog id="import-urls-dialog" class="settings-dialog">
+    <form method="dialog" id="import-urls-form">
+      <h2>Import URLs</h2>
+      <p class="hint">Paste one URL per line. Lines starting with # are ignored.</p>
+      <label>URLs <textarea id="import-urls-input" rows="8" spellcheck="false"></textarea></label>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="button" id="btn-import-urls-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" id="btn-import-urls-ok" class="primary" data-icon="add">Import</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <section id="shutdown-screen" class="shutdown-screen" role="status" aria-live="polite">
     <p id="shutdown-message" class="shutdown-message"></p>
   </section>

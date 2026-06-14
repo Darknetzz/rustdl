@@ -266,6 +266,8 @@ pub struct PydlApp {
     config_load_banner_dismissed: bool,
     command_palette_open: bool,
     command_palette_query: String,
+    /// Max matching log lines rendered in docked/floating log panels (user can load more).
+    log_render_line_limit: usize,
     /// Set by keyboard shortcut; consumed by queue search field.
     focus_queue_search: bool,
     profile_rename_buffer: Option<(String, String)>,
@@ -466,6 +468,7 @@ impl PydlApp {
             config_load_banner_dismissed: false,
             command_palette_open: false,
             command_palette_query: String::new(),
+            log_render_line_limit: crate::app::log_panel::DEFAULT_LOG_RENDER_LINES,
             focus_queue_search: false,
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,

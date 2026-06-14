@@ -84,6 +84,46 @@ const COMMANDS: &[PaletteCommand] = &[
         label: "Open About",
         keywords: "about version help",
     },
+    PaletteCommand {
+        label: "Show keyboard shortcuts",
+        keywords: "shortcuts keys help hotkeys",
+    },
+    PaletteCommand {
+        label: "Open Download library",
+        keywords: "library done history downloads",
+    },
+    PaletteCommand {
+        label: "Export activity log",
+        keywords: "export log save file",
+    },
+    PaletteCommand {
+        label: "Dock Videos panel",
+        keywords: "dock videos queue panel",
+    },
+    PaletteCommand {
+        label: "Float Videos window",
+        keywords: "float undock videos window",
+    },
+    PaletteCommand {
+        label: "Dock activity log",
+        keywords: "dock log panel bottom",
+    },
+    PaletteCommand {
+        label: "Float activity log",
+        keywords: "float undock log window",
+    },
+    PaletteCommand {
+        label: "Layout: Compact queue",
+        keywords: "layout compact list small",
+    },
+    PaletteCommand {
+        label: "Layout: Review mode",
+        keywords: "layout review cards thumbnails",
+    },
+    PaletteCommand {
+        label: "Layout: Minimal",
+        keywords: "layout minimal no thumbnails",
+    },
 ];
 
 fn matches_query(label: &str, keywords: &str, query: &str) -> bool {
@@ -201,6 +241,44 @@ impl PydlApp {
             "Switch to Video Converter mode" => self.set_app_mode(true),
             "Open output folder" => self.open_output_folder(),
             "Open About" => self.about_open = true,
+            "Show keyboard shortcuts" => self.about_open = true,
+            "Open Download library" => self.library_open = true,
+            "Export activity log" => self.export_activity_log(),
+            "Dock Videos panel" => {
+                self.note_videos_dock_user_choice(true);
+                self.settings.videos_docked = true;
+                self.persist_settings();
+            }
+            "Float Videos window" => {
+                self.note_videos_dock_user_choice(false);
+                self.settings.videos_docked = false;
+                self.persist_settings();
+            }
+            "Dock activity log" => {
+                self.settings.logs_docked = true;
+                self.settings.logs_open = true;
+                self.persist_settings();
+            }
+            "Float activity log" => {
+                self.settings.logs_docked = false;
+                self.settings.logs_open = true;
+                self.persist_settings();
+            }
+            "Layout: Compact queue" => {
+                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "compact");
+                self.settings_dirty = true;
+                self.persist_settings();
+            }
+            "Layout: Review mode" => {
+                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "review");
+                self.settings_dirty = true;
+                self.persist_settings();
+            }
+            "Layout: Minimal" => {
+                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "minimal");
+                self.settings_dirty = true;
+                self.persist_settings();
+            }
             _ => {}
         }
     }

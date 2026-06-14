@@ -2103,3 +2103,33 @@ mod thumbnail_cache_tests {
         assert!(core.cached_thumbnail_bytes(77, &drift_key).is_some());
     }
 }
+
+#[cfg(test)]
+mod queue_save_tests {
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    #[test]
+    fn maybe_flush_queue_save_skips_before_deadline() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let mut core = shared.lock();
+        core.schedule_queue_save();
+        assert!(core.queue_save_deadline.is_some());
+        core.maybe_flush_queue_save();
+        assert!(core.queue_save_deadline.is_some());
+    }
+
+    #[test]
+    fn maybe_flush_queue_save_clears_deadline_after_elapsed() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let mut core = shared.lock();
+        core.schedule_queue_save();
+        core.queue_save_deadline = Some(Instant::now() - Duration::from_millis(1));
+        core.maybe_flush_queue_save();
+        assert!(core.queue_save_deadline.is_none());
+    }
+}

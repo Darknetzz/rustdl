@@ -1573,4 +1573,46 @@ mod tests {
             assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         });
     }
+
+    #[test]
+    fn queue_overrides_schedules_debounced_save() {
+        use std::time::{Duration, Instant};
+
+        use crate::models::{ItemStatus, QueueItem};
+
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        {
+            let mut c = state.core.lock();
+            c.items.push(QueueItem {
+                item_id: 1,
+                status: ItemStatus::Idle,
+                ..Default::default()
+            });
+            c.rebuild_item_index();
+            c.update_status();
+        }
+        rt.block_on(async {
+            let app = api_router(state.clone());
+            let body = Body::from(r#"{"format_override":"best"}"#);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/queue/1/overrides")
+                        .header("Authorization", "Bearer test-token")
+                        .header("content-type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+        let mut c = state.core.lock();
+        assert!(c.queue_save_deadline.is_some());
+        c.queue_save_deadline = Some(Instant::now() - Duration::from_millis(1));
+        c.maybe_flush_queue_save();
+        assert!(c.queue_save_deadline.is_none());
+    }
 }
