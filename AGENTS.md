@@ -67,6 +67,7 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
+| `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
 
 User data (not in repo): `<config_dir>/rustdl/` — `rustdl_config.json`, `rustdl_queue.json`, `rustdl_activity_log.json`. See `README.md` for paths.
@@ -167,6 +168,24 @@ The script runs `cargo fmt --check`, `clippy`, and `test` unless you pass `-Skip
 5. `git tag rustdl-vX.Y.Z` then `git push github dev` and `git push github rustdl-vX.Y.Z`.
 
 Build release binaries locally (`.\scripts\build_binary.ps1` / `./scripts/build_binary.sh`); publish with `gh release create` / `gh release upload` if desired. Mirror to GitLab separately if needed (`git push gitlab dev --tags`).
+
+### Windows winget
+
+End-user install (after the manifest is accepted in [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs)):
+
+```powershell
+winget install Darknetzz.rustdl
+```
+
+This repo keeps an **example manifest** at `packaging/winget/Darknetzz.rustdl.yaml` (`PackageIdentifier: Darknetzz.rustdl`, portable x64 `rustdl.exe`). User-facing docs live in `README.md` → **Install (Windows)**.
+
+**On each release** that should ship via winget:
+
+1. Build/upload `rustdl.exe` to the GitHub release (`rustdl-vX.Y.Z` tag asset URL).
+2. Update `packaging/winget/Darknetzz.rustdl.yaml`: `PackageVersion`, `InstallerUrl`, and `InstallerSha256` (hash of the uploaded exe).
+3. Open a PR to **microsoft/winget-pkgs** (maintainer fork, e.g. `Darknetzz/winget-pkgs`, branch `darknetzz-rustdl-X.Y.Z`) with the versioned manifest under `manifests/d/Darknetzz/rustdl/<version>/`. Use `winget validate` / the PR checklist before submit.
+
+Do not commit a local `winget-pkgs/` clone; it is a separate checkout for PR prep only.
 
 **First release / missing older tags:** compare links use `rustdl-vPREV...rustdl-vX.Y.Z`. If `rustdl-vPREV` was never pushed (this repo had changelog-only versions before tagging), either backfill that tag on the old release commit or accept that the compare URL works only after both tags exist.
 
