@@ -25,7 +25,7 @@ const COMMANDS: &[PaletteCommand] = &[
         keywords: "download yt-dlp profile",
     },
     PaletteCommand {
-        label: "Settings → Convert tab",
+        label: "Settings → Converter tab",
         keywords: "convert av1 encode video",
     },
     PaletteCommand {
@@ -208,7 +208,7 @@ impl PydlApp {
                 self.settings_open = true;
                 self.sync_settings_tab_to_disk();
             }
-            "Settings → Convert tab" => {
+            "Settings → Converter tab" => {
                 self.settings_tab = SettingsTab::Convert;
                 self.settings_open = true;
                 self.sync_settings_tab_to_disk();

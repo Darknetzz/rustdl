@@ -10,6 +10,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- Settings tab label **AV1** → **Converter** (desktop and LAN web), matching Video Converter mode and README.
+- Settings **UI scale** − / + controls align in a single stepper row.
+
 ### Added
 
 - Rolling **`rustdl-dev`** GitHub pre-release: `scripts/publish_dev_release.*`, `scripts/push_dev.*`, optional `scripts/dev_release_webhook.py`, and **`.githooks/pre-push`** auto-publish (install once with `scripts/install_dev_release_hook.*`).

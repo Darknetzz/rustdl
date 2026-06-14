@@ -173,7 +173,7 @@ impl PydlApp {
                         ui.selectable_value(
                             &mut self.settings_tab,
                             SettingsTab::Convert,
-                            format!("{} AV1", ui_icons::TAB_AV1),
+                            format!("{} Converter", ui_icons::TAB_AV1),
                         )
                     });
                     g.add(|ui| {
@@ -245,35 +245,30 @@ impl PydlApp {
                                 &mut self.settings.log_relative_time,
                             );
                             ui.label("UI scale");
-                            ui.horizontal(|ui| {
-                                ui.spacing_mut().item_spacing.x = 8.0;
+                            left_button_row(ui, |ui| {
                                 let pct = (self.settings.ui_scale * 100.0).round() as i32;
                                 let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
                                 let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
-                                left_button_row(ui, |ui| {
-                                    button_group(ui, "ui_scale_minus", |g| {
-                                        if g
-                                            .secondary("−", !at_min)
-                                            .on_hover_text("Decrease UI scale")
-                                            .clicked()
-                                        {
-                                            bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
-                                            changed = true;
-                                        }
+                                button_group(ui, "ui_scale", |g| {
+                                    if g
+                                        .secondary("−", !at_min)
+                                        .on_hover_text("Decrease UI scale")
+                                        .clicked()
+                                    {
+                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
+                                        changed = true;
+                                    }
+                                    g.add(|ui| {
+                                        ui.label(RichText::new(format!("{pct}%")).strong())
                                     });
-                                });
-                                ui.label(RichText::new(format!("{pct}%")).strong());
-                                left_button_row(ui, |ui| {
-                                    button_group(ui, "ui_scale_plus", |g| {
-                                        if g
-                                            .secondary("+", !at_max)
-                                            .on_hover_text("Increase UI scale")
-                                            .clicked()
-                                        {
-                                            bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
-                                            changed = true;
-                                        }
-                                    });
+                                    if g
+                                        .secondary("+", !at_max)
+                                        .on_hover_text("Increase UI scale")
+                                        .clicked()
+                                    {
+                                        bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
+                                        changed = true;
+                                    }
                                 });
                             });
                             ui.end_row();
