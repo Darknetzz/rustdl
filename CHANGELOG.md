@@ -32,20 +32,6 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Convert queue footer uses full-size batch controls (Start / Pause / Cancel / Retry / Clear) instead of compact buttons.
 - Video Converter input paths field supports right-click **Paste** (same context menu as the downloader URL box).
 - Settings → Video Converter → **Parallel conversions** (`1..=6`, default `1`) runs multiple ffmpeg transcodes at once during a batch; LAN web UI includes the same field.
-
-### Changed
-
-- Downloader and Video Converter queue groups (Active, Ready, Done, etc.) each sit in a rounded panel with a dimmed background and a status-colored border.
-- Settings → Video Converter shows the recommended **container** (e.g. MKV for AV1, MP4 for H.264/H.265) beside the “Use recommended container” option for the selected target codec.
-- Video Converter input row uses separate **Add folder** and **Add file(s)** buttons instead of a single Browse control; **Recursive folder scan** is available on the converter panel (still in Settings).
-- Video Converter **CPU threads** auto (`0`) now splits ~75% of logical cores across parallel jobs (max 4 threads per encode) instead of letting each ffmpeg process use every core.
-
-### Fixed
-
-- Download queue cards no longer show raw `progress:` pipe data under the progress bar; only meaningful yt-dlp status lines (e.g. merge/fixup phases) appear there.
-- Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
-- Starting a Video Converter batch no longer overwrites `rustdl_config.json` with stale settings from the background core (GUI settings are synced before the batch starts).
-
 - **Desktop Library** window and LAN **Library** tab browse completed downloads and re-queue URLs.
 - Settings UI for **watch folders**, **post-encode convert options**, **convert presets**, **queue templates**, and **Test cookies**.
 - Desktop **Export log**; floating Videos footer **Remove/Retry selected**; **playlist capped** badge and activity-log notice.
@@ -55,6 +41,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Downloader and Video Converter queue groups (Active, Ready, Done, etc.) each sit in a rounded panel with a dimmed background and a status-colored border.
+- Settings → Video Converter shows the recommended **container** (e.g. MKV for AV1, MP4 for H.264/H.265) beside the “Use recommended container” option for the selected target codec.
+- Video Converter input row uses separate **Add folder** and **Add file(s)** buttons instead of a single Browse control; **Recursive folder scan** is available on the converter panel (still in Settings).
+- Video Converter **CPU threads** auto (`0`) now splits ~75% of logical cores across parallel jobs (max 4 threads per encode) instead of letting each ffmpeg process use every core.
 - Downloader GUI sync mirrors only changed queue fields (less cloning on large queues).
 - Playlist preview passes **`--playlist-end`** to yt-dlp; done-file backfill skips unchanged output-folder scans.
 - Setup hint names missing tools (yt-dlp / ffmpeg / ffprobe); welcome text mentions Converter and LAN web UI.
@@ -62,6 +52,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Download queue cards no longer show raw `progress:` pipe data under the progress bar; only meaningful yt-dlp status lines (e.g. merge/fixup phases) appear there.
+- Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
+- Starting a Video Converter batch no longer overwrites `rustdl_config.json` with stale settings from the background core (GUI settings are synced before the batch starts).
 - Web API tests isolate from the saved on-disk queue; thumbnail cache tests use synthetic IDs (portable CI).
 - SSE lag events log a warning when the event buffer overflows.
 
