@@ -632,6 +632,83 @@ impl PydlApp {
                             ui.end_row();
                         });
                         ui.separator();
+                        ui.label(RichText::new("Watch folder").strong());
+                        ui.label(
+                            RichText::new(
+                                "Auto-enqueue URLs from new .url / .txt files dropped in a folder (polled every 5s).",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        settings_form_grid(ui, "dl_watch_folder", |ui| {
+                            changed |= settings_checkbox(
+                                ui,
+                                "Enable downloader watch folder",
+                                &mut self.settings.watch_folder_enabled,
+                            );
+                            ui.label("Folder path");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.watch_folder_path)
+                                        .hint_text(r"C:\Downloads\inbox"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Queue templates").strong());
+                        settings_form_grid(ui, "queue_templates", |ui| {
+                            ui.label("Template name");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.queue_template_name_buf)
+                                        .hint_text("my-playlist"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "queue_templates_actions", |g| {
+                                let name = self.queue_template_name_buf.trim();
+                                if g.secondary(
+                                    &format!("{} Save current queue", ui_icons::SAVE),
+                                    !self.items.is_empty() && !name.is_empty(),
+                                )
+                                .clicked()
+                                {
+                                    let template = crate::queue_templates::queue_template_from_items(
+                                        name,
+                                        &self.items,
+                                    );
+                                    match crate::queue_templates::save_queue_template(&template) {
+                                        Ok(()) => self.append_log(&format!(
+                                            "Saved queue template \"{name}\"."
+                                        )),
+                                        Err(e) => {
+                                            self.append_log(&format!("Save template failed: {e:#}"))
+                                        }
+                                    }
+                                }
+                            });
+                        });
+                        let templates = crate::queue_templates::list_queue_templates();
+                        if !templates.is_empty() {
+                            ui.label("Saved templates:");
+                            for name in &templates {
+                                ui.horizontal(|ui| {
+                                    if ui.button(format!("{} Load {name}", ui_icons::IMPORT_FILE)).clicked() {
+                                        if let Ok(tpl) = crate::queue_templates::load_queue_template(name) {
+                                            let urls = crate::queue_templates::template_item_urls(&tpl);
+                                            self.download_core_action(|core| {
+                                                let _ = core.queue_urls_for_resolve(urls);
+                                            });
+                                            self.append_log(&format!("Loaded queue template \"{name}\"."));
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                        ui.separator();
                         ui.label(RichText::new("Downloader executables").strong());
                         ui.label("Leave empty to use PATH lookup.");
                         settings_form_grid(ui, "dl_executables", |ui| {
@@ -1233,6 +1310,25 @@ impl PydlApp {
                                 .changed();
                             ui.end_row();
                         });
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "cookie_test", |g| {
+                                if g.secondary(&format!("{} Test cookies", ui_icons::RECHECK), true)
+                                    .on_hover_text("Probe yt-dlp with current cookies against YouTube")
+                                    .clicked()
+                                {
+                                    let result = crate::ytdlp::cookie_health_probe(
+                                        &self.settings.yt_dlp_path,
+                                        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                                        &self.settings.yt_dlp_cookies,
+                                        &self.settings.yt_dlp_impersonate,
+                                    );
+                                    self.append_log(&format!(
+                                        "Cookie check: {}",
+                                        result.message
+                                    ));
+                                }
+                            });
+                        });
                         ui.label("Impersonate (optional)");
                         ui.label(
                             RichText::new(
@@ -1565,6 +1661,76 @@ impl PydlApp {
                                             .changed();
                                     }
                                 });
+                            ui.end_row();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Post-encode options").strong());
+                        settings_form_grid(ui, "convert_post_encode", |ui| {
+                            changed |= settings_checkbox(
+                                ui,
+                                "Copy subtitle sidecars after encode",
+                                &mut self.settings.convert_copy_subtitles,
+                            );
+                            changed |= settings_checkbox(
+                                ui,
+                                "Write SHA-256 checksum sidecar",
+                                &mut self.settings.convert_write_checksum,
+                            );
+                            ui.label("Move output to subfolder");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.convert_post_move_subfolder,
+                                    )
+                                    .hint_text("encoded (optional)"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            ui.label("Max hardware encodes");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.convert_max_hw_encodes)
+                                        .range(0..=6),
+                                )
+                                .on_hover_text(
+                                    "Cap concurrent GPU encodes when parallel conversions > 1 (0 = unlimited).",
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Convert presets").strong());
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "convert_presets", |g| {
+                                for preset in crate::convert_presets::builtin_convert_presets() {
+                                    if g.secondary(&preset.name, true).clicked() {
+                                        preset.fields.apply_to(&mut self.settings);
+                                        changed = true;
+                                        self.append_log(&format!(
+                                            "Applied convert preset \"{}\".",
+                                            preset.name
+                                        ));
+                                    }
+                                }
+                            });
+                        });
+                        ui.separator();
+                        ui.label(RichText::new("Convert watch folder").strong());
+                        settings_form_grid(ui, "convert_watch_folder", |ui| {
+                            changed |= settings_checkbox(
+                                ui,
+                                "Enable convert watch folder",
+                                &mut self.settings.convert_watch_folder_enabled,
+                            );
+                            ui.label("Folder path");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.convert_watch_folder_path,
+                                    )
+                                    .hint_text(r"C:\Videos\inbox"),
+                                )
+                                .changed();
                             ui.end_row();
                         });
                     }

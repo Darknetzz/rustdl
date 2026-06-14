@@ -384,6 +384,24 @@ impl PydlApp {
         });
         draw(ui, "av1_queue", &mut |g| {
             if g.secondary(
+                &format!("{} Export batch CSV", ui_icons::EXPORT),
+                !self.convert_items.is_empty(),
+            )
+            .clicked()
+            {
+                self.export_convert_batch_csv();
+            }
+            if g.warning(
+                &format!("{} Fallback to software encoder", ui_icons::RETRY),
+                self.convert_running,
+            )
+            .on_hover_text("Switch remaining jobs to libx264/libx265/libsvtav1 if GPU encode fails")
+            .clicked()
+            {
+                self.convert_core_action(|core| core.fallback_convert_encoder_to_software());
+                self.append_log("Convert batch: switched to software encoder fallback.");
+            }
+            if g.secondary(
                 &format!("{} Clear Convert queue", ui_icons::CLEAR_QUEUE),
                 !self.convert_running,
             )

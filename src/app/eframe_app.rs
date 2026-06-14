@@ -176,7 +176,8 @@ impl eframe::App for PydlApp {
                             ui.label(
                                 RichText::new(
                                     "Welcome to rustdl — set your output folder, confirm yt-dlp is on PATH, \
-                                     and open Settings for download presets and quality options.",
+                                     and open Settings for download presets, Video Converter, LAN web UI, \
+                                     and organize-downloads options.",
                                 )
                                 .color(ALERT_WARNING_TEXT),
                             );
@@ -209,9 +210,22 @@ impl eframe::App for PydlApp {
                     });
                 }
                 if !self.has_yt_dlp || !self.has_ffmpeg || !self.has_ffprobe {
+                    let mut missing = Vec::new();
+                    if !self.has_yt_dlp {
+                        missing.push("yt-dlp");
+                    }
+                    if !self.has_ffmpeg {
+                        missing.push("ffmpeg");
+                    }
+                    if !self.has_ffprobe {
+                        missing.push("ffprobe");
+                    }
                     ui.colored_label(
                         LOG_COLOR_WARN,
-                        "Setup hint: configure missing tools in Settings -> Executables.",
+                        format!(
+                            "Setup hint: missing {} — configure in Settings → Shared → Executables.",
+                            missing.join(", ")
+                        ),
                     );
                 }
                 #[cfg(not(windows))]
@@ -570,6 +584,7 @@ impl eframe::App for PydlApp {
         self.draw_settings_window(ctx);
         self.draw_about_window(ctx);
         self.draw_command_palette(ctx);
+        self.draw_library_window(ctx);
         if !self.settings.videos_docked {
             self.draw_videos_window(ctx);
         }
@@ -676,6 +691,12 @@ impl PydlApp {
                 {
                     self.settings.logs_open = true;
                     self.persist_settings();
+                }
+                if g.secondary(&format!("{} Library", ui_icons::OPEN_FOLDER), true)
+                    .on_hover_text("Browse completed downloads and re-queue")
+                    .clicked()
+                {
+                    self.library_open = true;
                 }
                 if g.secondary(&format!("{} Settings", ui_icons::SETTINGS), true)
                     .on_hover_text(

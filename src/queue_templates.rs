@@ -98,3 +98,29 @@ pub fn template_item_urls(template: &QueueTemplate) -> Vec<String> {
         .map(|it| it.source_line.clone())
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn save_and_load_queue_template() {
+        let _guard = tempdir().expect("tempdir");
+        // queue_templates_dir uses rustdl_config_dir; test via queue_template_from_items round-trip
+        let items = vec![crate::models::QueueItem {
+            item_id: 1,
+            source_line: "https://example.com/v".to_owned(),
+            format_override: Some("-f best".to_owned()),
+            ..Default::default()
+        }];
+        let template = queue_template_from_items("test_tpl", &items);
+        assert_eq!(template.items.len(), 1);
+        assert_eq!(
+            template.items[0].format_override.as_deref(),
+            Some("-f best")
+        );
+        let urls = template_item_urls(&template);
+        assert_eq!(urls, vec!["https://example.com/v".to_owned()]);
+    }
+}

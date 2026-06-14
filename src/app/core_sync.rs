@@ -100,6 +100,22 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.convert_save_deadline = core.convert_save_deadline;
 }
 
+fn queue_item_mirror_changed(
+    app_it: &crate::models::QueueItem,
+    core_it: &crate::models::QueueItem,
+) -> bool {
+    app_it.status != core_it.status
+        || (app_it.percent - core_it.percent).abs() > f32::EPSILON
+        || app_it.detail != core_it.detail
+        || app_it.local_path != core_it.local_path
+        || app_it.thumbnail_path != core_it.thumbnail_path
+        || app_it.error != core_it.error
+        || app_it.title != core_it.title
+        || app_it.speed_text != core_it.speed_text
+        || app_it.eta_text != core_it.eta_text
+        || app_it.size_text != core_it.size_text
+}
+
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
     let app_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
     let core_ids: HashSet<u64> = core.items.iter().map(|it| it.item_id).collect();
@@ -108,7 +124,9 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
             core.items.iter().map(|it| (it.item_id, it)).collect();
         for app_it in app.items.iter_mut() {
             if let Some(core_it) = core_by_id.get(&app_it.item_id) {
-                *app_it = (*core_it).clone();
+                if queue_item_mirror_changed(app_it, core_it) {
+                    *app_it = (*core_it).clone();
+                }
             }
         }
     } else {

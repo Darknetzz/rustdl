@@ -14,6 +14,16 @@
 - `yt-dlp` on `PATH` (or set custom executable path in Settings)
 - Optional: `ffmpeg` and `ffprobe` on `PATH` (or set custom executable paths in Settings)
 
+## Install (Windows)
+
+After a release is published, you can install with [winget](https://github.com/microsoft/winget-cli) using the manifest in [`packaging/winget/Darknetzz.rustdl.yaml`](packaging/winget/Darknetzz.rustdl.yaml):
+
+```powershell
+winget install Darknetzz.rustdl
+```
+
+Or download `rustdl.exe` from [GitHub Releases](https://github.com/Darknetzz/rustdl/releases).
+
 ## Run
 
 From this directory:
@@ -29,9 +39,12 @@ cargo run -- --download "https://..." [--profile "Best quality"] [--output-dir "
 cargo run -- --download @urls.txt          # batch from file (one URL per line)
 cargo run -- --download -                  # batch from stdin
 cargo run -- --list-profiles
+cargo run -- --enqueue URL|@file|-         # append URLs to the saved download queue
+cargo run -- --start-queue                 # start persisted download queue and wait
+cargo run -- --convert-batch               # start persisted convert batch and wait
 ```
 
-`--download` runs yt-dlp directly (no shared download queue, activity log persistence, or LAN web UI). Use the GUI or `--web-only` for full queue/history behavior.
+`--download` runs yt-dlp directly (no shared download queue, activity log persistence, or LAN web UI). Use the GUI or `--web-only` for full queue/history behavior. `--enqueue`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the desktop app.
 
 Headless web UI (no GUI window; uses saved queue, settings, and profiles):
 
@@ -78,13 +91,14 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 
 ## LAN web UI
 
-When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings, then use the page to control the **Downloader** queue (add URLs, start/pause, settings, activity log) and the **Video Converter** queue (scan paths, start/cancel batch encode).
+When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings (unless your IP is on the whitelist), then use the page to control the **Downloader** queue, **Video Converter** queue, and **Library** of completed downloads.
 
-**Still desktop-only:** drag-to-reorder Ready items, queue/settings file import-export dialogs, desktop notifications on session complete, update check (About), browser URL drag-and-drop (Windows only).
+**Still desktop-only:** native queue/settings file pickers (web uses API import/export), desktop notifications on session complete, in-app update download (Windows only), browser URL drag-and-drop (Windows only).
 
 **Security notes:**
 
 - Traffic is plain **HTTP** (no TLS). Anyone who can reach the bind address and knows the token can control downloads and read queue metadata.
+- Optional **IP whitelist** (Settings → Web UI): clients on listed IPs or CIDR ranges may connect without the API token.
 - Use only on a **trusted home LAN**. Do not expose the port to the public internet without a reverse proxy, TLS, and stronger authentication.
 - Generate a new token if you suspect it was leaked. Disabling the web UI stops the HTTP server on the next settings save (or when you restart the app).
 
@@ -114,6 +128,8 @@ Open **Settings** from the main toolbar.
 Settings are split into tabs:
 
 ### General
+
+Settings tabs in the app are named **Shared**, **Downloader**, **Video Converter**, and **Web UI**. The table below uses descriptive names; open **Settings → Shared** for executables, UI scale, subprocess priority, and GitHub token.
 
 | Setting | Description |
 | --- | --- |
@@ -210,7 +226,10 @@ Presets update current settings immediately, and you can still tweak any individ
 Also in the same folder:
 
 - `rustdl_queue.json` — saved download queue
+- `rustdl_convert_queue.json` — saved Video Converter queue (when *Remember Convert queue* is enabled)
 - `rustdl_activity_log.json` — persisted activity log (survives restarts)
+- `queue_templates/` — saved downloader queue templates
+- `rustdl_convert_presets.json` — user-defined convert presets (built-in Fast AV1 / Quality H.265 ship in-app)
 
 Open **Settings**, **Logs**, or **About** → **Open config folder** to reveal this directory in your file manager.
 

@@ -42,22 +42,28 @@ impl DoneFileIndex {
         self.force_refresh = true;
     }
 
-    /// Refreshes the index when the output folder path or its mtime changes.
-    pub(crate) fn refresh(&mut self, output_dir: &str) {
+    /// Returns true when the next [`refresh`] call will rescan the output folder.
+    pub(crate) fn will_refresh(&self, output_dir: &str) -> bool {
         let path = Path::new(output_dir);
         let mtime = if path.is_dir() {
             fs::metadata(path).and_then(|m| m.modified()).ok()
         } else {
             None
         };
+        self.force_refresh || self.cached_output_dir != output_dir || self.cached_dir_mtime != mtime
+    }
 
-        let dirty = self.force_refresh
-            || self.cached_output_dir != output_dir
-            || self.cached_dir_mtime != mtime;
-
-        if !dirty {
+    /// Refreshes the index when the output folder path or its mtime changes.
+    pub(crate) fn refresh(&mut self, output_dir: &str) {
+        if !self.will_refresh(output_dir) {
             return;
         }
+        let path = Path::new(output_dir);
+        let mtime = if path.is_dir() {
+            fs::metadata(path).and_then(|m| m.modified()).ok()
+        } else {
+            None
+        };
 
         self.force_refresh = false;
         self.cached_output_dir = output_dir.to_owned();

@@ -820,6 +820,7 @@ struct LibraryEntry {
     completed_at: Option<u64>,
     local_path: Option<String>,
     video_id: String,
+    webpage_url: String,
 }
 
 #[derive(Serialize)]
@@ -840,6 +841,7 @@ async fn library_list(State(st): State<ApiState>) -> Json<LibraryResponse> {
             completed_at: it.completed_at,
             local_path: it.local_path.clone(),
             video_id: it.video_id.clone(),
+            webpage_url: it.webpage_url.clone(),
         })
         .collect();
     Json(LibraryResponse { items })
@@ -850,10 +852,8 @@ struct QueueTemplateSaveBody {
     name: String,
 }
 
-async fn queue_templates_list(State(st): State<ApiState>) -> Json<serde_json::Value> {
+async fn queue_templates_list(State(_st): State<ApiState>) -> Json<serde_json::Value> {
     let names = crate::queue_templates::list_queue_templates();
-    let c = st.core.lock();
-    let _ = c;
     Json(serde_json::json!({ "templates": names }))
 }
 
@@ -862,10 +862,8 @@ async fn queue_templates_save(
     Json(body): Json<QueueTemplateSaveBody>,
 ) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let c = st.core.lock();
-    let template = crate::queue_templates::queue_template_from_items(
-        body.name.trim(),
-        &c.snapshot_queue(),
-    );
+    let template =
+        crate::queue_templates::queue_template_from_items(body.name.trim(), &c.snapshot_queue());
     crate::queue_templates::save_queue_template(&template).map_err(|e| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -1195,6 +1193,9 @@ mod tests {
         {
             let mut c = core.lock();
             c.settings.web_auth_token = "test-token".to_owned();
+            c.items.clear();
+            c.rebuild_item_index();
+            c.update_status();
         }
         ApiState::new(core)
     }
@@ -1309,6 +1310,130 @@ mod tests {
             assert_eq!(response.status(), StatusCode::OK);
             let c = state.core.lock();
             assert!(!c.settings.auto_start_downloads);
+        });
+    }
+
+    #[test]
+    fn library_list_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/library")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn queue_templates_list_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/queue/templates")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn cookie_check_without_cookies() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/tools/cookie-check")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn convert_queue_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/convert/queue")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn convert_presets_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/convert/presets")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn playlist_preview_rejects_blank_url() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let body = Body::from(r#"{"url":"   "}"#);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/queue/playlist-preview")
+                        .header("Authorization", "Bearer test-token")
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         });
     }
 }

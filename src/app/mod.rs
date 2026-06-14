@@ -172,7 +172,9 @@ pub struct PydlApp {
     session_restore_prompt_open: bool,
     session_restore_downloader_count: usize,
     session_restore_convert_count: usize,
+    library_open: bool,
     about_open: bool,
+    queue_template_name_buf: String,
     exit_confirm_open: bool,
     /// After the user confirms quit, allow the next viewport close through.
     exit_allowed: bool,
@@ -217,7 +219,6 @@ pub struct PydlApp {
     /// GUI-local encoder indicator (display only; the worker re-detects when it runs).
     convert_encoder_choice: Option<crate::transcode::EncoderChoice>,
     convert_encoder_detect_key: String,
-    watch_folder_state: crate::watch_folder::WatchFolderState,
     convert_encoder_detection_inflight: bool,
 
     done_file_index: done_file_index::DoneFileIndex,
@@ -386,7 +387,9 @@ impl PydlApp {
             session_restore_prompt_open,
             session_restore_downloader_count,
             session_restore_convert_count,
+            library_open: false,
             about_open: false,
+            queue_template_name_buf: String::new(),
             exit_confirm_open: false,
             exit_allowed: false,
             exit_pending_after_cancel: false,
@@ -418,7 +421,6 @@ impl PydlApp {
             convert_paused: false,
             convert_encoder_choice: None,
             convert_encoder_detect_key: String::new(),
-            watch_folder_state: crate::watch_folder::WatchFolderState::new(),
             convert_encoder_detection_inflight: false,
             done_file_index: done_file_index::DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
@@ -650,6 +652,39 @@ impl PydlApp {
         }
     }
 
+    pub(super) fn export_convert_batch_csv(&mut self) {
+        let Some(path) = rfd::FileDialog::new()
+            .set_title("Export convert batch summary")
+            .set_file_name("rustdl-convert-summary.csv")
+            .add_filter("CSV", &["csv"])
+            .save_file()
+        else {
+            return;
+        };
+        let core = self.shared_core.lock();
+        let mut lines =
+            vec!["item_id,source_path,output_path,status,input_bytes,output_bytes".to_owned()];
+        for it in &core.convert_items {
+            lines.push(format!(
+                "{},{},{},{},{},{}",
+                it.item_id,
+                it.source_path.replace(',', ";"),
+                it.output_path.replace(',', ";"),
+                it.status.as_str(),
+                it.input_bytes,
+                it.output_bytes.unwrap_or(0),
+            ));
+        }
+        drop(core);
+        match std::fs::write(&path, lines.join("\n")) {
+            Ok(()) => self.append_log(&format!(
+                "Exported convert summary to {}",
+                path.to_string_lossy()
+            )),
+            Err(e) => self.append_log(&format!("Export convert summary failed: {e}")),
+        }
+    }
+
     fn remove_selected_items(&mut self) {
         let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
         if ids.is_empty() {
@@ -666,14 +701,20 @@ impl PydlApp {
     }
 
     fn retry_selected_failed(&mut self) {
-        for id in self.selected_item_ids.iter().copied().collect::<Vec<_>>() {
+        let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
+        let mut retried = 0usize;
+        for id in ids {
             if self
                 .items
                 .iter()
                 .any(|x| x.item_id == id && x.status == ItemStatus::Failed)
             {
                 self.retry_download_item_id(id);
+                retried += 1;
             }
+        }
+        if retried > 0 {
+            self.append_log(&format!("Retrying {retried} selected failed download(s)."));
         }
     }
 
@@ -1427,36 +1468,7 @@ impl PydlApp {
     }
 
     pub(super) fn poll_watch_folders(&mut self) {
-        if self.settings.watch_folder_enabled {
-            let path = self.settings.watch_folder_path.trim();
-            if !path.is_empty() {
-                let urls = self
-                    .watch_folder_state
-                    .poll_downloader_folder(std::path::Path::new(path));
-                if !urls.is_empty() {
-                    self.download_core_action(|core| {
-                        let _ = core.queue_urls_for_resolve(urls);
-                    });
-                }
-            }
-        }
-        if self.settings.convert_watch_folder_enabled {
-            let path = self.settings.convert_watch_folder_path.trim();
-            if !path.is_empty() {
-                let paths = self
-                    .watch_folder_state
-                    .poll_convert_folder(std::path::Path::new(path));
-                let auto_start = self.settings.convert_auto_start_on_add;
-                if !paths.is_empty() {
-                    self.download_core_action(|core| {
-                        core.scan_convert_paths_into_queue(&paths);
-                        if auto_start {
-                            core.start_convert_batch();
-                        }
-                    });
-                }
-            }
-        }
+        // Watch-folder polling runs in DownloadCore (see spawn_watch_folder_loop).
     }
 
     /// Re-run yt-dlp metadata for this row (same URL), replacing the card when resolve completes.
@@ -2023,5 +2035,66 @@ impl PydlApp {
             exit_confirm_open = false;
         }
         self.exit_confirm_open = exit_confirm_open;
+    }
+
+    pub(super) fn draw_library_window(&mut self, ctx: &egui::Context) {
+        if !self.library_open {
+            return;
+        }
+        let mut open = self.library_open;
+        egui::Window::new("Download library")
+            .open(&mut open)
+            .default_width(520.0)
+            .default_height(400.0)
+            .resizable(true)
+            .show(ctx, |ui| {
+                ui.label(
+                    RichText::new("Completed downloads — re-queue or open from disk.")
+                        .small()
+                        .color(crate::theme::TEXT_MUTED),
+                );
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    let done: Vec<(u64, String, String, Option<String>)> = self
+                        .items
+                        .iter()
+                        .filter(|it| it.status == ItemStatus::Done)
+                        .map(|it| {
+                            (
+                                it.item_id,
+                                it.title.clone(),
+                                it.webpage_url.clone(),
+                                it.local_path.clone(),
+                            )
+                        })
+                        .collect();
+                    if done.is_empty() {
+                        ui.label("No completed downloads in the current queue.");
+                        return;
+                    }
+                    let mut requeue_url: Option<String> = None;
+                    let mut open_path: Option<String> = None;
+                    for (item_id, title, webpage_url, local_path) in &done {
+                        ui.horizontal(|ui| {
+                            ui.label(title);
+                            if ui.small_button("Re-queue").clicked() {
+                                requeue_url = Some(webpage_url.clone());
+                                let _ = item_id;
+                            }
+                            if local_path.is_some() && ui.small_button("Open").clicked() {
+                                open_path = local_path.clone();
+                            }
+                        });
+                    }
+                    if let Some(url) = requeue_url {
+                        self.download_core_action(|core| {
+                            let _ = core.queue_urls_for_resolve(vec![url]);
+                        });
+                    }
+                    if let Some(p) = open_path {
+                        let _ = crate::app_actions::open_path(std::path::Path::new(&p));
+                    }
+                });
+            });
+        self.library_open = open;
     }
 }

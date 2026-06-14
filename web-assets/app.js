@@ -18,6 +18,24 @@ let doneHistoryFilterDays = loadDoneHistoryFilter();
 let queueSearchSaveTimer = null;
 let logExpanded = false;
 
+let toastTimer = null;
+function showToast(message, kind = "info") {
+  const el = document.getElementById("web-toast");
+  if (!el) return;
+  el.textContent = message;
+  el.className = `web-toast toast-${kind}`;
+  el.classList.remove("hidden");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.add("hidden"), 5000);
+}
+
+function notifyError(message) {
+  showToast(message, "error");
+}
+
+// Route legacy alert() calls through the toast bar (LAN/mobile friendly).
+window.alert = (message) => showToast(String(message), "error");
+
 function escapeHtml(s) {
   return String(s)
     .replace(/&/g, "&amp;")
@@ -1953,6 +1971,20 @@ function renderQueueCardListRow(item, settings, ctx) {
   title.textContent = " " + (item.title || item.source_line);
   body.appendChild(chip);
   body.appendChild(title);
+  if (s.card_list_layout) {
+    const fmt = document.createElement("input");
+    fmt.type = "text";
+    fmt.className = "format-override-input";
+    fmt.placeholder = "yt-dlp -f override (optional)";
+    fmt.value = item.format_override || "";
+    fmt.title = "Per-item format override";
+    fmt.addEventListener("change", () => {
+      setItemOverrides(item.item_id, fmt.value.trim() || null, item.profile_override || null).catch(
+        (e) => notifyError(String(e))
+      );
+    });
+    body.appendChild(fmt);
+  }
   if (slug === "downloading" || slug === "queued") {
     const pct = document.createElement("span");
     pct.className = "card-footer";
@@ -3112,19 +3144,54 @@ function baseName(p) {
 }
 
 function setView(view) {
-  currentView = view === "convert" ? "convert" : "downloader";
-  document.body.classList.remove("view-downloader", "view-convert");
-  document.body.classList.add(
-    currentView === "convert" ? "view-convert" : "view-downloader"
-  );
+  currentView =
+    view === "convert" ? "convert" : view === "library" ? "library" : "downloader";
+  document.body.classList.remove("view-downloader", "view-convert", "view-library");
+  document.body.classList.add(`view-${currentView}`);
   document.querySelectorAll(".nav-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.view === currentView);
   });
   document.getElementById("downloader-main").classList.toggle("hidden", currentView !== "downloader");
   document.getElementById("convert-main").classList.toggle("hidden", currentView !== "convert");
+  document.getElementById("library-main")?.classList.toggle("hidden", currentView !== "library");
   const dlActions = document.getElementById("downloader-only-actions");
   if (dlActions) dlActions.classList.toggle("hidden", currentView !== "downloader");
   if (currentView === "convert") refreshConvert().catch(() => {});
+  if (currentView === "library") refreshLibrary().catch(() => {});
+}
+
+async function refreshLibrary() {
+  const root = document.getElementById("library-list");
+  if (!root) return;
+  const data = await api("/api/library");
+  const items = data.items || [];
+  if (!items.length) {
+    root.innerHTML = "<p class=\"hint\">No completed downloads.</p>";
+    return;
+  }
+  root.innerHTML = items
+    .map(
+      (it) => `<div class="queue-card library-card">
+        <div class="card-title">${escapeHtml(it.title || it.video_id || "Untitled")}</div>
+        <div class="card-actions btn-group">
+          <button type="button" class="secondary" data-requeue="${it.item_id}" data-url="${escapeHtml(it.local_path ? "" : "")}">Re-queue</button>
+        </div>
+      </div>`
+    )
+    .join("");
+  root.querySelectorAll("[data-requeue]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const item = items.find((x) => String(x.item_id) === btn.dataset.requeue);
+      if (!item) return;
+      const url = item.webpage_url;
+      if (!url) {
+        notifyError("No URL to re-queue.");
+        return;
+      }
+      await api("/api/queue", { method: "POST", body: JSON.stringify({ urls: [url] }) });
+      showToast("Re-queued download.");
+    });
+  });
 }
 
 function convertSlug(item) {
@@ -3905,6 +3972,28 @@ document.getElementById("btn-convert-pause").onclick = () => convertPause().catc
 document.getElementById("btn-convert-resume").onclick = () => convertResume().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-cancel").onclick = () => convertCancel().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-clear").onclick = () => convertClear().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-export")?.addEventListener("click", async () => {
+  const token = localStorage.getItem(TOKEN_KEY) || "";
+  const res = await fetch("/api/convert/export-summary", {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    notifyError("Export failed.");
+    return;
+  }
+  const blob = await res.blob();
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "rustdl-convert-summary.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast("Convert summary exported.");
+});
+document.getElementById("btn-convert-fallback")?.addEventListener("click", () =>
+  api("/api/convert/fallback-software", { method: "POST" })
+    .then(() => showToast("Switched to software encoder."))
+    .catch((e) => notifyError(e.message || String(e)))
+);
 document.getElementById("btn-convert-retry-skipped").onclick = () =>
   convertRetrySkipped().catch((e) => alert(e.message || String(e)));
 document.getElementById("btn-convert-settings").onclick = () =>

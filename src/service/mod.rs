@@ -35,7 +35,8 @@ impl RustdlService {
         auto_restore: bool,
     ) -> (Self, crossbeam_channel::Receiver<crate::domain::UiEvent>) {
         let (core, rx) = DownloadCore::new_shared(runtime.clone(), auto_restore);
-        core_events::spawn_core_event_loop(runtime, core.clone());
+        core_events::spawn_core_event_loop(runtime.clone(), core.clone());
+        core_events::spawn_watch_folder_loop(runtime, core.clone());
         (Self { core: core.clone() }, rx)
     }
 

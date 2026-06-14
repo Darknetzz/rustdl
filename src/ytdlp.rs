@@ -998,11 +998,14 @@ pub fn flat_playlist_preview(
     let bin = resolve_executable(yt_dlp_path, "yt-dlp");
     let mut cmd = Command::new(&bin);
     no_console_window(&mut cmd);
+    let limit = cap.max(1);
     cmd.args([
         "-J",
         "--flat-playlist",
         "--no-warnings",
         "--skip-download",
+        "--playlist-end",
+        &limit.to_string(),
         trimmed,
     ]);
     let output = cmd
@@ -1017,6 +1020,11 @@ pub fn flat_playlist_preview(
         });
     }
     let root: Value = serde_json::from_slice(&output.stdout).context("invalid yt-dlp JSON")?;
+    Ok(parse_flat_playlist_json(&root, cap))
+}
+
+/// Parses yt-dlp `-J --flat-playlist` JSON without spawning a subprocess.
+pub fn parse_flat_playlist_json(root: &Value, cap: usize) -> FlatPlaylistPreview {
     let title = root
         .get("title")
         .or_else(|| root.get("playlist_title"))
@@ -1030,13 +1038,13 @@ pub fn flat_playlist_preview(
                 urls.push(u);
             }
         }
-    } else if let Some(u) = entry_webpage_url(&root) {
+    } else if let Some(u) = entry_webpage_url(root) {
         urls.push(u);
     }
-    Ok(FlatPlaylistPreview { title, urls })
+    FlatPlaylistPreview { title, urls }
 }
 
-fn entry_webpage_url(entry: &Value) -> Option<String> {
+pub(crate) fn entry_webpage_url(entry: &Value) -> Option<String> {
     entry
         .get("webpage_url")
         .or_else(|| entry.get("url"))
@@ -1304,5 +1312,50 @@ mod tests {
             super::stream_presence_from_ffprobe_json(raw),
             Some((true, true))
         );
+    }
+
+    #[test]
+    fn parse_flat_playlist_json_extracts_entries() {
+        let raw: Value = serde_json::from_str(
+            r#"{"title":"My Playlist","entries":[
+                {"webpage_url":"https://youtu.be/a"},
+                {"url":"https://youtu.be/b"},
+                {"webpage_url":"ftp://skip"}
+            ]}"#,
+        )
+        .expect("json");
+        let preview = parse_flat_playlist_json(&raw, 10);
+        assert_eq!(preview.title.as_deref(), Some("My Playlist"));
+        assert_eq!(preview.urls.len(), 2);
+        assert!(preview.urls[0].contains("youtu.be/a"));
+    }
+
+    #[test]
+    fn parse_flat_playlist_json_single_video() {
+        let raw: Value =
+            serde_json::from_str(r#"{"webpage_url":"https://youtu.be/solo"}"#).expect("json");
+        let preview = parse_flat_playlist_json(&raw, 5);
+        assert_eq!(preview.urls, vec!["https://youtu.be/solo".to_owned()]);
+    }
+
+    #[test]
+    fn parse_flat_playlist_json_respects_cap() {
+        let raw: Value = serde_json::from_str(
+            r#"{"entries":[
+                {"webpage_url":"https://youtu.be/1"},
+                {"webpage_url":"https://youtu.be/2"},
+                {"webpage_url":"https://youtu.be/3"}
+            ]}"#,
+        )
+        .expect("json");
+        let preview = parse_flat_playlist_json(&raw, 2);
+        assert_eq!(preview.urls.len(), 2);
+    }
+
+    #[test]
+    fn cookie_health_probe_empty_cookies() {
+        let result = cookie_health_probe("yt-dlp", "https://example.com", "", "");
+        assert!(!result.ok);
+        assert!(result.message.contains("No cookies"));
     }
 }

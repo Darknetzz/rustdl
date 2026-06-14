@@ -342,9 +342,7 @@ pub fn resolve_convert_cpu_threads(configured: u32, parallel: usize) -> u32 {
         return configured.clamp(1, cpus);
     }
     let budget = cpus.saturating_mul(3).saturating_div(4).max(1);
-    (budget / parallel)
-        .max(1)
-        .min(CONVERT_AUTO_THREADS_PER_JOB_CAP)
+    (budget / parallel).clamp(1, CONVERT_AUTO_THREADS_PER_JOB_CAP)
 }
 
 pub fn effective_cpu_threads(configured: u32) -> Option<u32> {

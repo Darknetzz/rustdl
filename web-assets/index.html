@@ -21,6 +21,7 @@
       <nav class="view-nav btn-group" id="view-nav" aria-label="Section">
         <button type="button" id="nav-downloader" class="nav-btn active" data-view="downloader" data-icon="cloud_download">Downloader</button>
         <button type="button" id="nav-convert" class="nav-btn" data-view="convert" data-icon="bolt">Convert</button>
+        <button type="button" id="nav-library" class="nav-btn" data-view="library" data-icon="folder">Library</button>
       </nav>
       <div id="navbar-status" class="navbar-status navbar-status-idle" role="status" aria-live="polite" title="Application activity">
         <span class="navbar-status-dot" aria-hidden="true"></span>
@@ -46,6 +47,8 @@
   </header>
 
   <div id="config-warnings" class="config-warnings hidden" role="alert" aria-live="polite"></div>
+
+  <div id="web-toast" class="web-toast hidden" role="status" aria-live="polite"></div>
 
   <section id="auth-panel" class="panel">
     <h2>Connect</h2>
@@ -109,6 +112,14 @@
     </section>
     </div>
 
+    <div id="library-main" class="hidden">
+      <section class="panel">
+        <h2>Download library</h2>
+        <p class="hint">Completed downloads from the saved queue. Re-queue URLs or open files on the host PC.</p>
+        <div id="library-list" class="queue"></div>
+      </section>
+    </div>
+
     <div id="convert-main" class="hidden">
       <section class="panel">
         <h2>Video Converter</h2>
@@ -127,6 +138,8 @@
           <div class="btn-group" role="group" aria-label="Convert queue">
             <button type="button" id="btn-convert-retry-skipped" class="secondary" data-icon="refresh" disabled title="No skipped items">Retry skipped</button>
             <button type="button" id="btn-convert-clear" class="secondary" data-icon="clear_all">Clear queue</button>
+            <button type="button" id="btn-convert-export" class="secondary" data-icon="download" title="Export batch summary as CSV">Export CSV</button>
+            <button type="button" id="btn-convert-fallback" class="secondary" data-icon="refresh" title="Switch to software encoder if GPU encode fails">Software fallback</button>
             <button type="button" id="btn-convert-settings" class="secondary" data-icon="settings">Converter settings</button>
           </div>
         </div>

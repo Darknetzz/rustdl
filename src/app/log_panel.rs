@@ -376,6 +376,12 @@ impl PydlApp {
                 {
                     self.open_activity_log_file();
                 }
+                if g.secondary(&format!("{} Export log", ui_icons::EXPORT), true)
+                    .on_hover_text("Save the current activity log to rustdl_activity_log.json")
+                    .clicked()
+                {
+                    self.export_activity_log();
+                }
                 if !compact
                     && g.secondary(
                         &format!("{} Open config folder", ui_icons::OPEN_FOLDER),

@@ -185,6 +185,26 @@ impl PydlApp {
             });
         });
         draw(ui, "dl_queue_maint", &mut |g| {
+            if !self.selected_item_ids.is_empty() {
+                if g.danger(
+                    &format!(
+                        "{} Remove selected ({})",
+                        ui_icons::REMOVE,
+                        self.selected_item_ids.len()
+                    ),
+                    true,
+                )
+                .clicked()
+                {
+                    self.remove_selected_items();
+                }
+                if self.status_failed > 0
+                    && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
+                        .clicked()
+                {
+                    self.retry_selected_failed();
+                }
+            }
             if self.status_failed > 0
                 && g
                     .warning(
@@ -320,6 +340,26 @@ impl PydlApp {
                     import_queue = true;
                 }
             });
+            if !self.selected_item_ids.is_empty() {
+                if g.danger(
+                    &format!(
+                        "{} Remove selected ({})",
+                        ui_icons::REMOVE,
+                        self.selected_item_ids.len()
+                    ),
+                    true,
+                )
+                .clicked()
+                {
+                    self.remove_selected_items();
+                }
+                if self.status_failed > 0
+                    && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
+                        .clicked()
+                {
+                    self.retry_selected_failed();
+                }
+            }
             if self.status_failed > 0
                 && g
                     .warning(

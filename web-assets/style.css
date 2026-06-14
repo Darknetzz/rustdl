@@ -1569,3 +1569,27 @@ body.view-convert .card-progress-fill:not([class*="status-"]) {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
+
+.web-toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(92vw, 520px);
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  background: var(--panel-bg, #2a2d35);
+  color: var(--text, #e8eaed);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  z-index: 9999;
+  font-size: 0.9rem;
+}
+.web-toast.toast-error {
+  border: 1px solid #c44;
+}
+.format-override-input {
+  display: block;
+  width: 100%;
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}

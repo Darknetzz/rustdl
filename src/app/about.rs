@@ -39,7 +39,7 @@ impl PydlApp {
                     "Ctrl+, (Cmd+,): Open Settings",
                     "Ctrl+F (Cmd+F): Focus queue search",
                     "Ctrl+L (Cmd+L): Show or hide activity log",
-                    "Ctrl+K (Cmd+K): Command palette",
+                    "Ctrl+K (Cmd+K): Command palette (pause/resume, retry all, mode switch)",
                     "Escape: Close dialogs and floating panels",
                 ] {
                     ui.label(RichText::new(line).small().color(Color32::GRAY));
@@ -111,6 +111,16 @@ impl PydlApp {
                                 .clicked()
                             {
                                 self.open_release_url();
+                            }
+                            #[cfg(not(windows))]
+                            if self.update_has_update {
+                                ui.label(
+                                    RichText::new(
+                                        "One-click download is Windows-only; use the release page on this platform.",
+                                    )
+                                    .small()
+                                    .color(Color32::GRAY),
+                                );
                             }
                         });
                     });

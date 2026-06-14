@@ -16,7 +16,9 @@ use crate::convert_state::{
 use crate::models::ConvertQueueItem;
 use crate::transcode::{encoder_indicator_label, encoder_uses_hardware, target_codec_label};
 
-use super::api::{extract_local_video_thumbnail, thumbnail_response, ApiErrorBody, ApiState, BatchProgressJson};
+use super::api::{
+    extract_local_video_thumbnail, thumbnail_response, ApiErrorBody, ApiState, BatchProgressJson,
+};
 
 #[derive(Serialize)]
 struct ConvertItemView {
@@ -313,16 +315,12 @@ async fn convert_open(
 ) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let path = {
         let c = st.core.lock();
-        let item = c
-            .convert_items
-            .iter()
-            .find(|it| it.item_id == id)
-            .ok_or((
-                StatusCode::NOT_FOUND,
-                Json(ApiErrorBody {
-                    error: "convert item not found".to_owned(),
-                }),
-            ))?;
+        let item = c.convert_items.iter().find(|it| it.item_id == id).ok_or((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "convert item not found".to_owned(),
+            }),
+        ))?;
         let targets = convert_item_open_targets(item);
         match body.target.trim() {
             "file" => targets.file.ok_or((

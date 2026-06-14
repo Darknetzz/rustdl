@@ -7,20 +7,11 @@ use std::time::{Duration, SystemTime};
 
 const POLL_INTERVAL: Duration = Duration::from_secs(5);
 
+#[derive(Default)]
 pub struct WatchFolderState {
     seen_downloader: HashSet<PathBuf>,
     seen_convert: HashSet<PathBuf>,
     last_poll: Option<SystemTime>,
-}
-
-impl Default for WatchFolderState {
-    fn default() -> Self {
-        Self {
-            seen_downloader: HashSet::new(),
-            seen_convert: HashSet::new(),
-            last_poll: None,
-        }
-    }
 }
 
 impl WatchFolderState {
@@ -112,4 +103,38 @@ fn collect_new_media_files(folder: &Path, seen: &mut HashSet<PathBuf>) -> Vec<St
         }
     }
     paths
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn collect_new_url_files_finds_http_lines() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(
+            dir.path().join("links.txt"),
+            "https://example.com/a\n\nhttps://example.com/b\n",
+        )
+        .expect("write");
+        let mut seen = HashSet::new();
+        let urls = collect_new_url_files(dir.path(), &mut seen);
+        assert_eq!(urls.len(), 2);
+        assert!(urls[0].contains("example.com"));
+        let urls2 = collect_new_url_files(dir.path(), &mut seen);
+        assert!(urls2.is_empty());
+    }
+
+    #[test]
+    fn poll_downloader_folder_respects_interval() {
+        let dir = tempdir().expect("tempdir");
+        fs::write(dir.path().join("a.url"), "https://example.com/watch").expect("write");
+        let mut state = WatchFolderState::new();
+        let urls = state.poll_downloader_folder(dir.path());
+        assert_eq!(urls.len(), 1);
+        let urls2 = state.poll_downloader_folder(dir.path());
+        assert!(urls2.is_empty());
+    }
 }

@@ -46,6 +46,25 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
 - Starting a Video Converter batch no longer overwrites `rustdl_config.json` with stale settings from the background core (GUI settings are synced before the batch starts).
 
+- **Desktop Library** window and LAN **Library** tab browse completed downloads and re-queue URLs.
+- Settings UI for **watch folders**, **post-encode convert options**, **convert presets**, **queue templates**, and **Test cookies**.
+- Desktop **Export log**; floating Videos footer **Remove/Retry selected**; **playlist capped** badge and activity-log notice.
+- Convert batch **Export CSV** and **Software encoder fallback** on desktop and LAN web UI.
+- LAN web UI **toast** notifications (replacing blocking `alert()` dialogs) and per-item **`-f` override** in list layout.
+- Headless **`--web-only`** and CLI modes run **watch-folder** polling in the background core (same as GUI).
+
+### Changed
+
+- Downloader GUI sync mirrors only changed queue fields (less cloning on large queues).
+- Playlist preview passes **`--playlist-end`** to yt-dlp; done-file backfill skips unchanged output-folder scans.
+- Setup hint names missing tools (yt-dlp / ffmpeg / ffprobe); welcome text mentions Converter and LAN web UI.
+- README documents CLI queue flags, winget install, IP whitelist, convert queue file, and updated LAN parity notes.
+
+### Fixed
+
+- Web API tests isolate from the saved on-disk queue; thumbnail cache tests use synthetic IDs (portable CI).
+- SSE lag events log a warning when the event buffer overflows.
+
 ## [0.5.2] - 2026-06-12
 
 ### Fixed

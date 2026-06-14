@@ -431,6 +431,9 @@ impl PydlApp {
                 ui.spacing_mut().item_spacing.y = 6.0;
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
+                    if self.items[idx].playlist_capped {
+                        draw_meta_badge(ui, "Playlist capped", MetaBadgeKind::SizeEstimate);
+                    }
                     if let Some(ref res) = resolution_label {
                         draw_meta_badge(ui, res, MetaBadgeKind::Resolution);
                     }

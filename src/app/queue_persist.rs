@@ -76,4 +76,25 @@ impl PydlApp {
             self.append_log(&format!("Failed to open activity log: {e}"));
         }
     }
+
+    pub(super) fn export_activity_log(&mut self) {
+        let path = activity_log_file_path();
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let body: String = self
+            .log_lines
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+        match std::fs::write(&path, &body) {
+            Ok(()) => self.append_log(&format!(
+                "Exported activity log ({} lines) to {}",
+                self.log_lines.len(),
+                path.display()
+            )),
+            Err(e) => self.append_log(&format!("Export activity log failed: {e}")),
+        }
+    }
 }

@@ -170,6 +170,9 @@ mod tests {
     #[test]
     fn ignores_blank_whitelist_entries() {
         let ip = "127.0.0.1".parse().unwrap();
-        assert!(ip_whitelisted(ip, &[" ".to_owned(), "127.0.0.1".to_owned()]));
+        assert!(ip_whitelisted(
+            ip,
+            &[" ".to_owned(), "127.0.0.1".to_owned()]
+        ));
     }
 }

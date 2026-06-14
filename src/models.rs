@@ -70,6 +70,9 @@ pub struct QueueItem {
     /// Frame rate from ffprobe on the saved file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fps: Option<f32>,
+    /// True when a playlist/channel was truncated to the preview cap.
+    #[serde(default)]
+    pub playlist_capped: bool,
 }
 
 impl Default for QueueItem {
@@ -103,6 +106,7 @@ impl Default for QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            playlist_capped: false,
         }
     }
 }
@@ -138,6 +142,7 @@ impl QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            playlist_capped: false,
         }
     }
 
@@ -184,6 +189,7 @@ impl QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            playlist_capped: p.playlist_capped,
         }
     }
 }

@@ -1,7 +1,7 @@
 //! Applies download-queue `UiEvent`s to [`DownloadCore`] so web API and GUI stay in sync.
 
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::runtime::Runtime;
 use tokio::sync::broadcast::error::RecvError;
@@ -77,9 +77,21 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
                     }
                     core.lock().maybe_flush_convert_queue_save();
                 }
-                Err(RecvError::Lagged(_)) => {}
+                Err(RecvError::Lagged(n)) => {
+                    eprintln!("rustdl: SSE event buffer lagged ({n} events dropped)");
+                }
                 Err(RecvError::Closed) => break,
             }
+        }
+    });
+}
+
+pub fn spawn_watch_folder_loop(runtime: Arc<Runtime>, core: SharedCore) {
+    runtime.spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(5));
+        loop {
+            interval.tick().await;
+            core.lock().poll_watch_folders();
         }
     });
 }
@@ -367,6 +379,7 @@ impl super::core::DownloadCore {
                 self.append_log(&format!("Already in queue (duplicate): {source_line}"));
             }
         } else {
+            let capped = keys.iter().any(|pv| pv.playlist_capped);
             for (n, pv) in keys.into_iter().enumerate() {
                 let assign_iid = if n == 0 {
                     iid
@@ -384,6 +397,12 @@ impl super::core::DownloadCore {
                 let item = QueueItem::from_preview(assign_iid, pv);
                 self.items.insert(0, item);
                 prefetch.push(assign_iid);
+            }
+            if capped {
+                let cap = self.settings.playlist_preview_cap;
+                self.append_log(&format!(
+                    "Playlist preview capped at {cap} entries; not all items were added."
+                ));
             }
         }
         self.rebuild_item_index();
