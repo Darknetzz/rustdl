@@ -8,6 +8,22 @@
 
 <p align="center">Source: <a href="https://github.com/Darknetzz/rustdl">github.com/Darknetzz/rustdl</a> · mirror: <a href="https://gitlab.roste.org/kriss/rustdl">gitlab.roste.org/kriss/rustdl</a></p>
 
+## Screenshots
+
+### Desktop app (Downloader)
+
+<img src="assets/screenshots/desktop-app.png" alt="rustdl desktop app — Downloader mode with preview cards, batch progress, and queue controls" width="900" />
+
+Paste URLs, preview metadata cards, then start downloads. Switch to **Video Converter** from the mode toggle for local transcoding.
+
+### LAN web UI
+
+<img src="assets/screenshots/web-ui.png" alt="rustdl LAN web UI — control the downloader queue from a browser on your home network" width="900" />
+
+The built-in web interface mirrors the downloader queue, Video Converter, and library. Enable it under **Settings → Web UI** (or run `rustdl --web-only`).
+
+To refresh these images locally: `python scripts/capture_readme_screenshots.py` (desktop capture is Windows-only; see the script for web UI steps).
+
 ## Requirements
 
 - Rust stable toolchain (`cargo`)

@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Documentation
+
+- README **Screenshots** section with desktop Downloader and LAN web UI images; `scripts/capture_readme_screenshots.py` to regenerate them.
+
 ## [0.7.0] - 2026-06-14
 
 
