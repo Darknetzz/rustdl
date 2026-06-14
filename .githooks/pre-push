@@ -1,0 +1,33 @@
+#!/bin/sh
+# After a successful push of dev to github, build and refresh the rustdl-dev release.
+# Installed via: scripts/install_dev_release_hook.ps1 (sets core.hooksPath = .githooks)
+#
+# Git has no post-push hook; this schedules publish in the background once the remote
+# ref matches the commit being pushed (see scripts/wait_and_publish_dev.*).
+
+remote="$1"
+repo_root=$(git rev-parse --show-toplevel) || exit 0
+
+schedule_publish() {
+	commit="$1"
+	if command -v pwsh >/dev/null 2>&1; then
+		pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/wait_and_publish_dev.ps1" -Remote "$remote" -Commit "$commit" &
+	elif command -v powershell >/dev/null 2>&1; then
+		powershell -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/wait_and_publish_dev.ps1" -Remote "$remote" -Commit "$commit" &
+	elif [ -x "$repo_root/scripts/wait_and_publish_dev.sh" ]; then
+		"$repo_root/scripts/wait_and_publish_dev.sh" "$remote" "$commit" &
+	else
+		echo "rustdl: could not schedule dev release publish (no pwsh/powershell/wait script)" >&2
+	fi
+}
+
+# pre-push stdin: <local ref> SP <local sha> SP <remote ref> SP <remote sha> LF
+while read -r local_ref local_sha remote_ref remote_sha; do
+	[ "$remote" = "github" ] || continue
+	[ "$remote_ref" = "refs/heads/dev" ] || continue
+	# branch delete
+	[ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+	schedule_publish "$local_sha"
+done
+
+exit 0

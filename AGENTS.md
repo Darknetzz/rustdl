@@ -69,6 +69,8 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
 | `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
 | `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev release, mirror GitLab |
+| `scripts/install_dev_release_hook.ps1`, `scripts/install_dev_release_hook.sh` | One-time: enable `.githooks/pre-push` auto-publish on `git push github dev` |
+| `.githooks/pre-push` | Git hook (via `core.hooksPath`) — schedules rolling dev release after push |
 | `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
@@ -196,17 +198,29 @@ GitHub does not run custom hooks on push, and this repo keeps Actions **manual-o
 
 | Approach | When to use |
 |----------|-------------|
-| **`push_dev` scripts** | Default — run locally after you push (replaces `git push github dev` + manual upload). |
-| **`dev_release_webhook.py`** | Optional — always-on host; GitHub **push** webhook triggers build + `gh release` when anyone pushes `dev`. |
+| **`.githooks/pre-push` (recommended)** | One-time install per clone; runs after any successful `git push github dev` (including via `pushall`). |
+| **`push_dev` scripts** | Manual all-in-one push + publish (no hook). |
+| **`dev_release_webhook.py`** | Optional server; GitHub **push** webhook when pushes come from machines without the hook. |
 
-**Local workflow (recommended):**
+**Automatic publish (recommended, one-time per clone):**
+
+| Platform | Command |
+|----------|---------|
+| Windows | `.\scripts\install_dev_release_hook.ps1` |
+| Unix | `./scripts/install_dev_release_hook.sh` |
+
+Sets `core.hooksPath = .githooks`. After that, **any** successful `git push github dev` (or `pushall`, which pushes `github` first) schedules a background build + `gh release` upload to **`rustdl-dev`**. Log: `%TEMP%\rustdl-dev-release.log` (Windows) or `$TMPDIR/rustdl-dev-release.log` (Unix). Disable: same script with `-Uninstall` / `--uninstall`.
+
+Requires **`gh auth login`** with `repo` scope. Only pushes to remote **`github`** ref **`dev`** trigger publish (GitLab mirror pushes do not).
+
+**Manual all-in-one push + publish:**
 
 | Platform | Command |
 |----------|---------|
 | Windows | `.\scripts\push_dev.ps1` |
 | Unix | `./scripts/push_dev.sh` |
 
-That pushes `dev` to **`github`**, runs `publish_dev_release` (build + `gh release` upload), then mirrors **`gitlab`**. Use `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable. `-DryRun` / `--dry-run` previews steps.
+Use when the hook is not installed. Pushes `dev` to **`github`**, runs `publish_dev_release`, then mirrors **`gitlab`**. `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable.
 
 **Publish only** (already pushed, or webhook checkout):
 
@@ -215,7 +229,7 @@ That pushes `dev` to **`github`**, runs `publish_dev_release` (build + `gh relea
 | Windows | `.\scripts\publish_dev_release.ps1` |
 | Unix | `./scripts/publish_dev_release.sh` |
 
-Requires **`gh auth login`** with `repo` scope. The release tag is always **`rustdl-dev`** (pre-release); each run moves `--target` to the built commit and `--clobber`-uploads the platform binary (`rustdl.exe` on Windows, `rustdl` on Unix). Notes include `[Unreleased]` from `CHANGELOG.md`.
+The release tag is always **`rustdl-dev`** (pre-release); each run moves `--target` to the built commit and `--clobber`-uploads the platform binary (`rustdl.exe` on Windows, `rustdl` on Unix). Notes include `[Unreleased]` from `CHANGELOG.md`.
 
 **Webhook (optional):** on a build machine with this repo, `gh`, and Rust:
 
