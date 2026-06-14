@@ -15,7 +15,7 @@ Installers:
   - Architecture: x64
     InstallerType: portable
     InstallerUrl: https://github.com/Darknetzz/rustdl/releases/download/rustdl-v0.7.0/rustdl.exe
-    InstallerSha256: PLACEHOLDER
+    InstallerSha256: 654DC5B7823C5D671DB52954BEF1C4370281B123911DC33F44590BBF9ED512AF
     PortableCommandAlias:
       - DisplayName: rustdl
         Command: rustdl.exe
