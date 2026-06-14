@@ -8,6 +8,6 @@ mod media;
 mod server;
 
 pub use server::{
-    resolve_web_bind_address, spawn_web_server, spawn_web_server_at, web_ui_browser_url,
+    resolve_web_bind_address, spawn_web_server_at, try_spawn_web_server, web_ui_browser_url,
     WebServerHandle,
 };

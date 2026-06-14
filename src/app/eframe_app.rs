@@ -144,6 +144,7 @@ impl eframe::App for PydlApp {
                 self.sync_theme_if_needed(ctx);
                 self.draw_main_header(ui);
                 self.draw_config_load_banner(ui);
+                self.draw_web_server_banner(ui);
                 let (dl_nav, av1_nav) = draw_mode_nav_bar(
                     ui,
                     &self.settings.theme,
@@ -347,6 +348,15 @@ impl eframe::App for PydlApp {
                         .clicked()
                         {
                             self.add_urls(ctx.input(|i| i.time));
+                        }
+                        if g.secondary(
+                            &format!("{} Playlist preview", ui_icons::SHOW_ALL),
+                            !self.add_in_progress && !self.playlist_preview_inflight,
+                        )
+                        .on_hover_text("Preview playlist/channel entries before adding")
+                        .clicked()
+                        {
+                            self.start_playlist_preview_from_input();
                         }
                         g.import_export_menu(!self.add_in_progress, |ui| {
                             if ui
@@ -596,6 +606,7 @@ impl eframe::App for PydlApp {
         self.input_urls_snapshot = self.input_urls.clone();
         self.draw_session_restore_dialog(ctx);
         self.draw_exit_confirm_dialog(ctx);
+        self.draw_playlist_preview_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
         {
             let shared = self.shared_core.clone();

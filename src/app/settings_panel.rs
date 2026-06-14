@@ -1742,6 +1742,15 @@ impl PydlApp {
                             )
                             .color(crate::app_ui::ALERT_WARNING_TEXT),
                         );
+                        if let Some(err) = &self.web_server_start_error {
+                            super::alert_danger(ui, |ui| {
+                                ui.label(
+                                    RichText::new(format!("Web UI is not running: {err}"))
+                                        .color(crate::app_ui::ALERT_DANGER_TEXT),
+                                );
+                            });
+                            ui.add_space(4.0);
+                        }
                         settings_form_grid(ui, "web_ui_settings", |ui| {
                             changed |= settings_checkbox(ui, "Enable web UI", &mut self.settings.web_ui_enabled);
                             ui.label("Bind address");

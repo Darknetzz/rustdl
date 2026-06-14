@@ -96,33 +96,22 @@ pub fn resolve_web_bind_address(
     Ok(format!("{host}:{port}"))
 }
 
-pub fn spawn_web_server(
+pub fn try_spawn_web_server(
     runtime: Arc<Runtime>,
     core: SharedCore,
     settings: &AppSettings,
-) -> Option<WebServerHandle> {
+) -> Result<Option<WebServerHandle>, WebServerStartError> {
     if !settings.web_ui_enabled {
-        return None;
+        return Ok(None);
     }
-    match spawn_web_server_at(
+    spawn_web_server_at(
         runtime,
         core,
         settings.web_bind_address.trim(),
         settings.web_auth_token.trim(),
         None,
-    ) {
-        Ok(handle) => {
-            eprintln!(
-                "rustdl: web UI listening on http://{}",
-                settings.web_bind_address.trim()
-            );
-            Some(handle)
-        }
-        Err(e) => {
-            eprintln!("rustdl: {}", e.message());
-            None
-        }
-    }
+    )
+    .map(Some)
 }
 
 pub fn spawn_web_server_at(

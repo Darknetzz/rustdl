@@ -621,6 +621,42 @@ pub(crate) fn spawn_convert_worker(
     });
 }
 
+pub(crate) fn spawn_playlist_preview(
+    rt: &Arc<Runtime>,
+    bus: &UiEventBus,
+    yt_dlp_bin: String,
+    url: String,
+    cap: usize,
+) {
+    let bus = bus.clone();
+    let rt = rt.clone();
+    rt.spawn(async move {
+        let source_url = url.clone();
+        let outcome = tokio::task::spawn_blocking(move || {
+            ytdlp::flat_playlist_preview(&yt_dlp_bin, &url, cap)
+        })
+        .await;
+        let (title, urls, error) = match outcome {
+            Ok(Ok(preview)) => (preview.title, preview.urls, None),
+            Ok(Err(e)) => (None, Vec::new(), Some(format!("{e:#}"))),
+            Err(e) => (
+                None,
+                Vec::new(),
+                Some(format!("playlist preview task failed: {e}")),
+            ),
+        };
+        let _ = try_send_ui(
+            &bus,
+            UiEvent::PlaylistPreviewDone {
+                source_url,
+                title,
+                urls,
+                error,
+            },
+        );
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::should_retry_without_embed_thumbnail;

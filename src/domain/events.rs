@@ -105,6 +105,13 @@ pub enum UiEvent {
     },
     /// Graceful shutdown finished (web SSE + desktop window close).
     ShutdownRequested,
+    /// Flat playlist preview finished (`ytdlp::flat_playlist_preview`).
+    PlaylistPreviewDone {
+        source_url: String,
+        title: Option<String>,
+        urls: Vec<String>,
+        error: Option<String>,
+    },
 }
 
 /// yt-dlp progress lines that would flood the log if recorded every event.

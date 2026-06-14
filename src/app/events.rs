@@ -123,6 +123,19 @@ impl PydlApp {
                     self.flush_convert_queue_to_disk();
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
+                UiEvent::PlaylistPreviewDone {
+                    source_url: _,
+                    title,
+                    urls,
+                    error,
+                } => {
+                    self.playlist_preview_inflight = false;
+                    self.playlist_preview_title = title;
+                    self.playlist_preview_urls = urls;
+                    self.playlist_preview_error = error;
+                    self.playlist_preview_open = true;
+                    ctx.request_repaint();
+                }
             }
         }
         self.drain_pending_thumbnail_uploads(ctx);

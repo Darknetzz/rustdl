@@ -13,7 +13,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **LAN web UI parity (v0.6 roadmap):** Convert batch **Pause** / **Resume**; Ready-row **reorder** (↑/↓); Done **history filter** (24h / 7d / 30d) and **Re-queue visible**; profile **save**, **rename**, **delete**, **export**, and **import**; activity log **filter** (All / Important / Errors) and **export**; queue **bulk select** with Remove/Retry selected; per-card **Refetch metadata**, **Cancel → Ready/Remove**, and **Re-check all saved files** API.
-- **Playlist preview** on web and API (`POST /api/queue/playlist-preview`) — flat-list playlist/channel entries and add all with confirmation.
+- **Playlist preview** on web and API (`POST /api/queue/playlist-preview`) — flat-list playlist/channel entries and add all with confirmation; same confirm dialog on the desktop **Playlist preview** button.
 - **Headless CLI:** `rustdl --start-queue` and `rustdl --convert-batch` run persisted queues without the GUI.
 - **Watch folders** (Settings): auto-enqueue `.url`/`.txt` from a downloader folder; auto-scan new videos into the convert queue (optional auto-start).
 - **Queue templates** saved under the config dir (`queue_templates/`); **convert presets** (`rustdl_convert_presets.json`) with built-in Fast AV1 and Quality H.265.
@@ -52,6 +52,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Desktop shows a **Web UI could not start** banner (and Settings → Web UI warning) when the LAN server fails to bind (port conflict, invalid address, or empty token).
 - Download queue cards no longer show raw `progress:` pipe data under the progress bar; only meaningful yt-dlp status lines (e.g. merge/fixup phases) appear there.
 - Video Converter no longer freezes the window during large batches with parallel encodes: ffmpeg progress updates are throttled before triggering a full queue sync, only changed rows are mirrored to the GUI, and the worker pool no longer pre-spawns one async task per queued file.
 - Starting a Video Converter batch no longer overwrites `rustdl_config.json` with stale settings from the background core (GUI settings are synced before the batch starts).

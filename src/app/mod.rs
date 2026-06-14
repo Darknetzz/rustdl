@@ -176,6 +176,14 @@ pub struct PydlApp {
     about_open: bool,
     queue_template_name_buf: String,
     exit_confirm_open: bool,
+    playlist_preview_open: bool,
+    playlist_preview_inflight: bool,
+    playlist_preview_source_url: String,
+    playlist_preview_title: Option<String>,
+    playlist_preview_urls: Vec<String>,
+    playlist_preview_error: Option<String>,
+    web_server_start_error: Option<String>,
+    web_server_banner_dismissed: bool,
     /// After the user confirms quit, allow the next viewport close through.
     exit_allowed: bool,
     /// User confirmed quit while work was active; wait for graceful cancellation.
@@ -391,6 +399,14 @@ impl PydlApp {
             about_open: false,
             queue_template_name_buf: String::new(),
             exit_confirm_open: false,
+            playlist_preview_open: false,
+            playlist_preview_inflight: false,
+            playlist_preview_source_url: String::new(),
+            playlist_preview_title: None,
+            playlist_preview_urls: Vec::new(),
+            playlist_preview_error: None,
+            web_server_start_error: None,
+            web_server_banner_dismissed: false,
             exit_allowed: false,
             exit_pending_after_cancel: false,
             exit_clear_queues_on_quit: false,
@@ -972,21 +988,216 @@ impl PydlApp {
         if let Some(mut handle) = self.web_server.take() {
             handle.stop();
         }
-        self.web_server = crate::service::web::spawn_web_server(
+        self.web_server_start_error = None;
+        if !self.settings.web_ui_enabled {
+            self.append_log("Web UI disabled.");
+            return;
+        }
+        match crate::service::web::try_spawn_web_server(
             self.runtime.clone(),
             self.shared_core.clone(),
             &self.settings,
-        );
-        if self.settings.web_ui_enabled {
-            if self.web_server.is_some() {
+        ) {
+            Ok(Some(handle)) => {
+                self.web_server = Some(handle);
+                self.web_server_banner_dismissed = false;
+                eprintln!(
+                    "rustdl: web UI listening on http://{}",
+                    self.settings.web_bind_address.trim()
+                );
                 self.append_log(&format!(
                     "Web UI enabled on http://{} (token required)",
                     self.settings.web_bind_address.trim()
                 ));
             }
-        } else {
-            self.append_log("Web UI disabled.");
+            Ok(None) => {}
+            Err(e) => {
+                let msg = e.message();
+                self.web_server_start_error = Some(msg.clone());
+                self.web_server_banner_dismissed = false;
+                eprintln!("rustdl: {msg}");
+                self.append_log(&format!("Web UI failed to start: {msg}"));
+            }
         }
+    }
+
+    pub(super) fn start_playlist_preview_from_input(&mut self) {
+        if self.playlist_preview_inflight || self.add_in_progress {
+            return;
+        }
+        if !self.has_yt_dlp {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            self.refresh_deps();
+            return;
+        }
+        let url = self
+            .collect_valid_new_lines()
+            .into_iter()
+            .next()
+            .or_else(|| {
+                self.input_line_info
+                    .iter()
+                    .find(|x| x.kind == InputLineKind::Valid)
+                    .map(|x| x.line.clone())
+            });
+        let Some(url) = url else {
+            self.append_log("Paste a playlist or channel URL first.");
+            return;
+        };
+        self.playlist_preview_inflight = true;
+        self.playlist_preview_open = true;
+        self.playlist_preview_source_url = url.clone();
+        self.playlist_preview_title = None;
+        self.playlist_preview_urls.clear();
+        self.playlist_preview_error = None;
+        self.append_log(&format!("Previewing playlist entries for {url}"));
+        background_spawn::spawn_playlist_preview(
+            &self.runtime,
+            &self.ui_bus,
+            self.yt_dlp_bin(),
+            url,
+            self.settings.playlist_preview_cap,
+        );
+    }
+
+    fn confirm_playlist_preview_add(&mut self) {
+        let urls = std::mem::take(&mut self.playlist_preview_urls);
+        self.playlist_preview_open = false;
+        self.playlist_preview_error = None;
+        self.playlist_preview_title = None;
+        if urls.is_empty() {
+            return;
+        }
+        self.queue_urls_for_resolve(urls);
+    }
+
+    pub(super) fn draw_playlist_preview_dialog(&mut self, ctx: &egui::Context) {
+        if !self.playlist_preview_open {
+            return;
+        }
+        let _ = modal_backdrop(ctx, egui::Id::new("playlist_preview_backdrop"));
+        let mut open = true;
+        let mut add_all = false;
+        let mut close_only = false;
+        let mut modal_frame = egui::Frame::window(&ctx.style());
+        modal_frame.fill = BG_LOG;
+        modal_frame.stroke = egui::Stroke::new(1.0, BORDER_PANEL);
+        modal_frame.inner_margin = egui::Margin::same(20.0);
+        modal_frame.rounding = egui::Rounding::same(8.0);
+        egui::Window::new("Playlist preview")
+            .open(&mut open)
+            .frame(modal_frame)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(440.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.set_width(ui.available_width());
+                if self.playlist_preview_inflight {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label("Fetching playlist entries from yt-dlp…");
+                    });
+                    return;
+                }
+                if let Some(err) = &self.playlist_preview_error {
+                    alert_danger(ui, |ui| {
+                        ui.label(RichText::new(err).color(ALERT_DANGER_TEXT));
+                    });
+                    ui.add_space(12.0);
+                    centered_button_row(ui, "playlist_preview_err", |ui| {
+                        button_group(ui, "playlist_preview_err", |g| {
+                            if g.secondary(&format!("{} Close", ui_icons::DISMISS), true)
+                                .clicked()
+                            {
+                                close_only = true;
+                            }
+                        });
+                    });
+                    return;
+                }
+                let count = self.playlist_preview_urls.len();
+                if count == 0 {
+                    ui.label("No entries found (single video or empty playlist).");
+                    ui.add_space(12.0);
+                    centered_button_row(ui, "playlist_preview_empty", |ui| {
+                        button_group(ui, "playlist_preview_empty", |g| {
+                            if g.secondary(&format!("{} Close", ui_icons::DISMISS), true)
+                                .clicked()
+                            {
+                                close_only = true;
+                            }
+                        });
+                    });
+                    return;
+                }
+                let title = self
+                    .playlist_preview_title
+                    .as_deref()
+                    .map(|t| format!("\"{t}\""))
+                    .unwrap_or_else(|| "This playlist".to_owned());
+                ui.label(format!(
+                    "{title} has {count} video(s) (up to cap). Add all to the queue?"
+                ));
+                ui.add_space(12.0);
+                centered_button_row(ui, "playlist_preview", |ui| {
+                    button_group(ui, "playlist_preview", |g| {
+                        if g.secondary(&format!("{} Cancel", ui_icons::DISMISS), true)
+                            .clicked()
+                        {
+                            close_only = true;
+                        }
+                        if g.success(&format!("{} Add all", ui_icons::ADD), true)
+                            .clicked()
+                        {
+                            add_all = true;
+                        }
+                    });
+                });
+            });
+        if !open || close_only {
+            self.playlist_preview_open = false;
+            self.playlist_preview_error = None;
+            self.playlist_preview_title = None;
+            self.playlist_preview_urls.clear();
+        } else if add_all {
+            self.confirm_playlist_preview_add();
+        }
+    }
+
+    pub(super) fn draw_web_server_banner(&mut self, ui: &mut egui::Ui) {
+        let Some(err) = self.web_server_start_error.clone() else {
+            return;
+        };
+        if self.web_server_banner_dismissed {
+            return;
+        }
+        alert_danger(ui, |ui| {
+            ui.label(RichText::new("LAN web UI could not start:").strong());
+            ui.label(RichText::new(err).color(ALERT_DANGER_TEXT));
+            ui.label(
+                RichText::new(
+                    "Check Settings → Web UI (bind address, auth token, and port conflicts).",
+                )
+                .small(),
+            );
+            ui.horizontal(|ui| {
+                if ui
+                    .button(format!("{} Open Settings", ui_icons::SETTINGS))
+                    .clicked()
+                {
+                    self.settings_open = true;
+                    self.settings_tab = SettingsTab::WebUi;
+                }
+                if ui
+                    .button(format!("{} Dismiss", ui_icons::DISMISS))
+                    .clicked()
+                {
+                    self.web_server_banner_dismissed = true;
+                }
+            });
+        });
+        ui.add_space(4.0);
     }
 
     fn metadata_extra_args(&self) -> Vec<String> {
