@@ -9,6 +9,23 @@ use crate::ui_icons;
 use super::PydlApp;
 
 impl PydlApp {
+    fn draw_github_link(ui: &mut egui::Ui, mark: &egui::TextureHandle, url: &str) {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        let icon_size = egui::vec2(16.0, 16.0);
+        let tint = ui.visuals().hyperlink_color;
+        let icon = ui.add(
+            egui::Image::new(egui::load::SizedTexture::new(mark.id(), icon_size))
+                .tint(tint)
+                .sense(egui::Sense::click()),
+        );
+        ui.hyperlink_to("Source on GitHub", url);
+        if icon.clicked() {
+            if let Err(e) = crate::app_actions::open_browser(url) {
+                eprintln!("rustdl: failed to open URL: {e}");
+            }
+        }
+    }
+
     pub(super) fn draw_about_window(&mut self, ctx: &egui::Context) {
         if !self.about_open {
             return;
@@ -27,7 +44,7 @@ impl PydlApp {
                         .color(Color32::LIGHT_GRAY),
                 );
                 ui.horizontal(|ui| {
-                    ui.hyperlink_to("Source on GitHub", pkg_version::GITHUB_REPOSITORY);
+                    Self::draw_github_link(ui, &self.github_mark, pkg_version::GITHUB_REPOSITORY);
                     ui.label("·");
                     ui.hyperlink_to("Releases", pkg_version::GITHUB_RELEASES);
                 });

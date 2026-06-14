@@ -151,6 +151,7 @@ pub struct PydlApp {
     textures: HashMap<u64, TextureHandle>,
     /// Same artwork as the window icon, shown next to the title.
     logo: TextureHandle,
+    github_mark: TextureHandle,
     thumbnail_attempted: HashSet<u64>,
     thumbnail_inflight: HashSet<u64>,
     next_item_id: u64,
@@ -280,6 +281,7 @@ pub struct PydlApp {
 impl PydlApp {
     pub fn new(cc: &eframe::CreationContext<'_>, runtime: Arc<Runtime>) -> Self {
         let logo = app_icon::load_logo_texture(&cc.egui_ctx);
+        let github_mark = app_icon::load_github_mark_texture(&cc.egui_ctx);
         let (rustdl_service, rx) = crate::service::RustdlService::new_gui(runtime.clone());
         let shared_core = rustdl_service.shared_core();
         let ui_bus = shared_core.lock().ui_event_bus();
@@ -375,6 +377,7 @@ impl PydlApp {
             pending_resolve_ids: HashMap::new(),
             textures: HashMap::new(),
             logo,
+            github_mark,
             thumbnail_attempted: HashSet::new(),
             thumbnail_inflight: HashSet::new(),
             next_item_id,
