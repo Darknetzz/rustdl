@@ -67,6 +67,9 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
+| `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
+| `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev release, mirror GitLab |
+| `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
 
@@ -186,6 +189,42 @@ This repo keeps an **example manifest** at `packaging/winget/Darknetzz.rustdl.ya
 3. Open a PR to **microsoft/winget-pkgs** (maintainer fork, e.g. `Darknetzz/winget-pkgs`, branch `darknetzz-rustdl-X.Y.Z`) with the versioned manifest under `manifests/d/Darknetzz/rustdl/<version>/`. Use `winget validate` / the PR checklist before submit.
 
 Do not commit a local `winget-pkgs/` clone; it is a separate checkout for PR prep only.
+
+### Rolling dev release (no GitHub Actions)
+
+GitHub does not run custom hooks on push, and this repo keeps Actions **manual-only**. To refresh a **rolling pre-release** (`rustdl-dev`) on every `dev` push without Actions:
+
+| Approach | When to use |
+|----------|-------------|
+| **`push_dev` scripts** | Default — run locally after you push (replaces `git push github dev` + manual upload). |
+| **`dev_release_webhook.py`** | Optional — always-on host; GitHub **push** webhook triggers build + `gh release` when anyone pushes `dev`. |
+
+**Local workflow (recommended):**
+
+| Platform | Command |
+|----------|---------|
+| Windows | `.\scripts\push_dev.ps1` |
+| Unix | `./scripts/push_dev.sh` |
+
+That pushes `dev` to **`github`**, runs `publish_dev_release` (build + `gh release` upload), then mirrors **`gitlab`**. Use `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable. `-DryRun` / `--dry-run` previews steps.
+
+**Publish only** (already pushed, or webhook checkout):
+
+| Platform | Command |
+|----------|---------|
+| Windows | `.\scripts\publish_dev_release.ps1` |
+| Unix | `./scripts/publish_dev_release.sh` |
+
+Requires **`gh auth login`** with `repo` scope. The release tag is always **`rustdl-dev`** (pre-release); each run moves `--target` to the built commit and `--clobber`-uploads the platform binary (`rustdl.exe` on Windows, `rustdl` on Unix). Notes include `[Unreleased]` from `CHANGELOG.md`.
+
+**Webhook (optional):** on a build machine with this repo, `gh`, and Rust:
+
+```bash
+export RUSTDL_WEBHOOK_SECRET='…'   # same secret as GitHub → Settings → Webhooks
+python scripts/dev_release_webhook.py
+```
+
+Configure the webhook for **push** events on `Darknetzz/rustdl`. Payload URL path defaults to `/rustdl-dev-release` (port `8766`). Use HTTPS reverse proxy in production.
 
 **First release / missing older tags:** compare links use `rustdl-vPREV...rustdl-vX.Y.Z`. If `rustdl-vPREV` was never pushed (this repo had changelog-only versions before tagging), either backfill that tag on the old release commit or accept that the compare URL works only after both tags exist.
 

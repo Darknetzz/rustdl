@@ -14,6 +14,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - About dialog: **Source on GitHub** shows the GitHub mark icon beside the link.
 
+### Added
+
+- Rolling **`rustdl-dev`** GitHub pre-release: `scripts/publish_dev_release.*`, `scripts/push_dev.*`, and optional `scripts/dev_release_webhook.py` (no GitHub Actions).
+
 ### Documentation
 
 - README **Screenshots** section with desktop Downloader and LAN web UI images; `scripts/capture_readme_screenshots.py` to regenerate them.
