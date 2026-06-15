@@ -109,6 +109,8 @@ struct WindowsGpuUsage {
     query: isize,
     counter: isize,
     active: bool,
+    /// PDH needs two samples before utilization values are valid.
+    primed: bool,
 }
 
 #[cfg(windows)]
@@ -120,7 +122,7 @@ impl WindowsGpuUsage {
 
         let mut query = 0isize;
         let mut counter = 0isize;
-        let path = windows_sys::core::w!("\\GPU Engine(*engtype_3D)\\Utilization Percentage");
+        let path = windows_sys::core::w!("\\GPU Engine(*)\\Utilization Percentage");
         let mut active = false;
         unsafe {
             if PdhOpenQueryW(std::ptr::null(), 0, &mut query) == 0
@@ -136,6 +138,7 @@ impl WindowsGpuUsage {
             query,
             counter,
             active,
+            primed: false,
         }
     }
 
@@ -152,6 +155,10 @@ impl WindowsGpuUsage {
             if PdhCollectQueryData(self.query) != 0 {
                 return None;
             }
+            if !self.primed {
+                self.primed = true;
+                return None;
+            }
 
             let mut buffer_size = 0u32;
             let mut item_count = 0u32;
@@ -166,23 +173,25 @@ impl WindowsGpuUsage {
                 return None;
             }
 
-            let mut buffer: Vec<PDH_FMT_COUNTERVALUE_ITEM_W> =
-                vec![std::mem::zeroed(); item_count as usize];
-            buffer_size =
-                (buffer.len() * std::mem::size_of::<PDH_FMT_COUNTERVALUE_ITEM_W>()) as u32;
+            // Buffer holds items plus the null-terminated instance name strings.
+            let mut buffer = vec![0u8; buffer_size as usize];
             let status = PdhGetFormattedCounterArrayW(
                 self.counter,
                 PDH_FMT_DOUBLE,
                 &mut buffer_size,
                 &mut item_count,
-                buffer.as_mut_ptr(),
+                buffer.as_mut_ptr().cast(),
             );
             if status != 0 {
                 return None;
             }
 
+            let items = std::slice::from_raw_parts(
+                buffer.as_ptr().cast::<PDH_FMT_COUNTERVALUE_ITEM_W>(),
+                item_count as usize,
+            );
             let mut max_usage = 0.0f32;
-            for item in buffer.iter().take(item_count as usize) {
+            for item in items {
                 if item.FmtValue.CStatus != PDH_CSTATUS_VALID_DATA {
                     continue;
                 }
@@ -224,5 +233,18 @@ mod tests {
         assert_eq!(usage_level_color(50.0), Color32::from_rgb(129, 199, 132));
         assert_eq!(usage_level_color(80.0), Color32::from_rgb(255, 167, 38));
         assert_eq!(usage_level_color(95.0), Color32::from_rgb(229, 57, 53));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_gpu_usage_reads_pdh_counters() {
+        let mut monitor = SystemUsageMonitor::new();
+        monitor.maybe_poll();
+        std::thread::sleep(std::time::Duration::from_millis(1600));
+        monitor.maybe_poll();
+        assert!(
+            monitor.snapshot().gpu_percent.is_some(),
+            "GPU utilization should be readable after two PDH samples"
+        );
     }
 }
