@@ -75,7 +75,7 @@ if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   echo "Release $tag exists; --force will refresh assets and target."
 fi
 
-local_tag_sha="$(git rev-parse -q --verify "refs/tags/${tag}" 2>/dev/null || true)"
+local_tag_sha="$(git rev-parse -q --verify "${tag}^{commit}" 2>/dev/null || true)"
 if [[ -n "$local_tag_sha" ]]; then
   if [[ "$local_tag_sha" != "$commit" ]]; then
     if [[ "$force" -eq 0 ]]; then

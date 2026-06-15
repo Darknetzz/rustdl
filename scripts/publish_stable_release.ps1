@@ -66,7 +66,7 @@ function Ensure-AnnotatedTag {
         [string] $Version
     )
 
-    $local = git rev-parse -q --verify "refs/tags/$TagName" 2>$null
+    $local = git rev-parse -q --verify "${TagName}^{commit}" 2>$null
     if ($local) {
         if ($local.Trim() -eq $Sha) {
             return
