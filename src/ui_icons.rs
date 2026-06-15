@@ -12,6 +12,12 @@ pub const EXPORT: &str = m::ICON_UPLOAD;
 pub const USE_DOWNLOADS: &str = m::ICON_DOWNLOAD;
 /// Output / destination volume free space (header, settings hint).
 pub const DESTINATION_DISK: &str = m::ICON_STORAGE;
+/// Host CPU utilization (header status row).
+pub const USAGE_CPU: &str = m::ICON_SPEED;
+/// Host RAM utilization (header status row).
+pub const USAGE_RAM: &str = m::ICON_MEMORY;
+/// Host GPU utilization (header status row, Windows).
+pub const USAGE_GPU: &str = m::ICON_MONITOR;
 pub const OPEN_FOLDER: &str = m::ICON_FOLDER_OPEN;
 pub const BROWSE: &str = m::ICON_FOLDER_OPEN;
 pub const RETRY: &str = m::ICON_REFRESH;

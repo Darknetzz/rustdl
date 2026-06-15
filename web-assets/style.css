@@ -325,6 +325,14 @@ body {
   border-radius: 6px;
   border: 1px solid var(--border);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.usage-badge-icon {
+  font-size: 0.95em;
+  line-height: 1;
 }
 
 .usage-badge-ok { color: var(--ok); border-color: rgba(129, 199, 132, 0.35); }

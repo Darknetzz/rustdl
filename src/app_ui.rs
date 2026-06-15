@@ -109,9 +109,15 @@ pub fn draw_disk_space_progress_bar(
     ))
 }
 
-fn draw_usage_stat_label(ui: &mut egui::Ui, name: &str, percent: Option<f32>, muted: Color32) {
+fn draw_usage_stat_label(
+    ui: &mut egui::Ui,
+    icon: &str,
+    name: &str,
+    percent: Option<f32>,
+    muted: Color32,
+) {
     let text = format!(
-        "{name} {}",
+        "{icon} {name} {}",
         crate::system_usage::format_usage_percent(percent)
     );
     let color = percent
@@ -137,10 +143,10 @@ pub fn draw_system_usage_header(
 ) {
     let muted = text_muted(theme);
     let draw = |ui: &mut egui::Ui| {
-        draw_usage_stat_label(ui, "CPU", usage.cpu_percent, muted);
-        draw_usage_stat_label(ui, "RAM", usage.ram_percent, muted);
+        draw_usage_stat_label(ui, ui_icons::USAGE_CPU, "CPU", usage.cpu_percent, muted);
+        draw_usage_stat_label(ui, ui_icons::USAGE_RAM, "RAM", usage.ram_percent, muted);
         #[cfg(windows)]
-        draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
+        draw_usage_stat_label(ui, ui_icons::USAGE_GPU, "GPU", usage.gpu_percent, muted);
     };
     if vertical {
         ui.vertical(|ui| {
@@ -150,13 +156,13 @@ pub fn draw_system_usage_header(
     } else {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 6.0;
-            draw_usage_stat_label(ui, "CPU", usage.cpu_percent, muted);
+            draw_usage_stat_label(ui, ui_icons::USAGE_CPU, "CPU", usage.cpu_percent, muted);
             ui.label(
                 RichText::new("·")
                     .size(HEADER_STATUS_FONT_SIZE)
                     .color(muted),
             );
-            draw_usage_stat_label(ui, "RAM", usage.ram_percent, muted);
+            draw_usage_stat_label(ui, ui_icons::USAGE_RAM, "RAM", usage.ram_percent, muted);
             #[cfg(windows)]
             {
                 ui.label(
@@ -164,7 +170,7 @@ pub fn draw_system_usage_header(
                         .size(HEADER_STATUS_FONT_SIZE)
                         .color(muted),
                 );
-                draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
+                draw_usage_stat_label(ui, ui_icons::USAGE_GPU, "GPU", usage.gpu_percent, muted);
             }
         });
     }

@@ -1170,11 +1170,31 @@ function usageLevelClass(percent) {
   return "usage-badge-ok";
 }
 
+function usageBadgeIcon(name) {
+  switch (name) {
+    case "CPU":
+      return ICON.speed;
+    case "RAM":
+      return ICON.memory;
+    case "GPU":
+      return ICON.monitor;
+    default:
+      return ICON.speed;
+  }
+}
+
 function renderUsageBadge(name, percent) {
   const el = document.createElement("span");
   const level = usageLevelClass(percent);
   el.className = `usage-badge ${level}`;
-  el.textContent = `${name} ${formatUsagePercent(percent)}`;
+  const icon = document.createElement("span");
+  icon.className = "material-icons usage-badge-icon";
+  icon.setAttribute("aria-hidden", "true");
+  icon.textContent = usageBadgeIcon(name);
+  el.appendChild(icon);
+  el.appendChild(
+    document.createTextNode(` ${name} ${formatUsagePercent(percent)}`)
+  );
   el.title =
     percent != null && isFinite(percent)
       ? `${name} utilization: ${percent.toFixed(1)}%`
