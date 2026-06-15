@@ -15,6 +15,7 @@ const ICON = {
   download: "download",
   edit: "edit",
   exit: "exit_to_app",
+  folder: "folder",
   folderOpen: "folder_open",
   music: "music_note",
   pause: "pause",

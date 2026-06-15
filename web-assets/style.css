@@ -14,6 +14,9 @@
   --mode-convert: #ab47bc;
   --mode-convert-soft: rgba(171, 71, 188, 0.1);
   --mode-convert-border: rgba(171, 71, 188, 0.32);
+  --mode-library: #66bb6a;
+  --mode-library-soft: rgba(102, 187, 106, 0.1);
+  --mode-library-border: rgba(102, 187, 106, 0.32);
   --danger: #ef5350;
   --ok: #81c784;
   --warn: #ffc107;
@@ -333,7 +336,13 @@ body {
 .usage-badge-icon {
   font-size: 0.95em;
   line-height: 1;
+  color: inherit;
 }
+
+.usage-badge-ok .usage-badge-icon { color: var(--ok); }
+.usage-badge-warn .usage-badge-icon { color: var(--warn); }
+.usage-badge-critical .usage-badge-icon { color: var(--failed); }
+.usage-badge-unknown .usage-badge-icon { color: var(--muted); }
 
 .usage-badge-ok { color: var(--ok); border-color: rgba(129, 199, 132, 0.35); }
 .usage-badge-warn { color: var(--warn); border-color: rgba(255, 193, 7, 0.35); }
@@ -395,6 +404,12 @@ body.view-convert #convert-main .panel {
   border-color: var(--mode-convert-border);
   box-shadow: inset 3px 0 0 var(--mode-convert);
   background: linear-gradient(90deg, var(--mode-convert-soft) 0%, var(--panel) 28%);
+}
+
+body.view-library #library-main .panel {
+  border-color: var(--mode-library-border);
+  box-shadow: inset 3px 0 0 var(--mode-library);
+  background: linear-gradient(90deg, var(--mode-library-soft) 0%, var(--panel) 28%);
 }
 
 .hidden { display: none !important; }
@@ -1488,6 +1503,11 @@ body.shutdown-mode .shutdown-screen {
   color: #fff;
 }
 
+.nav-btn[data-view="library"].active {
+  background: var(--mode-library);
+  color: #fff;
+}
+
 .view-nav.btn-group {
   background: rgba(255, 255, 255, 0.03);
   box-shadow: 0 0 0 1px var(--border);
@@ -1503,6 +1523,10 @@ body.view-downloader {
 
 body.view-convert {
   --accent: var(--mode-convert);
+}
+
+body.view-library {
+  --accent: var(--mode-library);
 }
 
 body.view-downloader button.primary {
