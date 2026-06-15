@@ -47,6 +47,13 @@ try {
         if ($DryRun) { $publishArgs += '-DryRun' }
         & (Join-Path $PSScriptRoot 'publish_dev_release.ps1') @publishArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+        Write-Host ''
+        Write-Host '--- stable release (if new version) ---'
+        $stableArgs = @('-SkipBuild')
+        if ($DryRun) { $stableArgs += '-DryRun' }
+        & (Join-Path $PSScriptRoot 'publish_stable_release.ps1') @stableArgs
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
 
     if (-not $SkipGitlab) {

@@ -1,5 +1,5 @@
 #!/bin/sh
-# After a successful push of dev to github, build and refresh the rustdl-dev release.
+# After a successful push of dev to github, build and refresh rustdl-dev plus any new stable release.
 # Installed via: scripts/install_dev_release_hook.ps1 (sets core.hooksPath = .githooks)
 #
 # Git has no post-push hook; this schedules publish in the background once the remote

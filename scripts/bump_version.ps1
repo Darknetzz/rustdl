@@ -8,7 +8,7 @@
   commit already contains the new version. If Cargo.toml is not committed yet, run
   -TagOnly after your version-bump commit.
 
-  Pushing rustdl-v* tags triggers GitHub release CI — keep tags local until release day.
+  Pushing dev to github publishes the stable release for the Cargo.toml version (via publish_stable_release).
 
 .EXAMPLE
   .\scripts\bump_version.ps1
@@ -71,7 +71,7 @@ function New-RustdlVersionTag {
     }
 
     Write-Host "Created annotated tag $tag at $(git -C $RepoRoot rev-parse --short HEAD)."
-    Write-Host 'Do not push rustdl-v* tags until release day (push triggers GitHub release CI).'
+    Write-Host 'Push dev to github to publish the stable release (pre-push hook / push_dev), or run .\scripts\publish_stable_release.ps1.'
 }
 
 Push-Location $RepoRoot

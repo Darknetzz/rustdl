@@ -57,6 +57,15 @@ try {
     }
 
     Write-Log "Published rustdl-dev for $Commit"
+
+    Write-Log "Publishing stable release (if Cargo version is new) ..."
+    & (Join-Path $PSScriptRoot 'publish_stable_release.ps1') -Commit $Commit -SkipBuild
+    if ($LASTEXITCODE -ne 0) {
+        Write-Log "publish_stable_release.ps1 failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+    }
+
+    Write-Log "Stable release step finished for $Commit"
 }
 catch {
     Write-Log "Error: $($_.Exception.Message)"

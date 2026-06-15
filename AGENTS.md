@@ -66,11 +66,12 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `tests/` | Integration tests (ytdlp fixtures, queue perf, subprocess smoke) |
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
-| `scripts/release.ps1`, `scripts/release.sh` | Cut a release (finalize changelog, commit, tag, optional push) |
+| `scripts/release.ps1`, `scripts/release.sh` | Optional: finalize `[Unreleased]` changelog + compare links (`release: vX.Y.Z` commit) |
 | `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
-| `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev release, mirror GitLab |
+| `scripts/publish_stable_release.ps1`, `scripts/publish_stable_release.sh` | Tag and publish **`rustdl-vX.Y.Z`** when the Cargo version is new on GitHub |
+| `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev + stable releases, mirror GitLab |
 | `scripts/install_dev_release_hook.ps1`, `scripts/install_dev_release_hook.sh` | One-time: enable `.githooks/pre-push` auto-publish on `git push github dev` |
-| `.githooks/pre-push` | Git hook (via `core.hooksPath`) — schedules rolling dev release after push |
+| `.githooks/pre-push` | Git hook (via `core.hooksPath`) — schedules rolling dev + stable release publish after push |
 | `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
@@ -101,12 +102,13 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 
 - App version: `Cargo.toml` `version` field (also `rustdl --version` / About).
 - User-facing history: `CHANGELOG.md` ([Keep a Changelog](https://keepachangelog.com/en/1.1.0/)), [Semantic Versioning](https://semver.org/).
-- Git remotes: **`github`** (canonical; triggers release CI) and **`gitlab`** (mirror). There is no `origin` remote.
+- Git remotes: **`github`** (canonical) and **`gitlab`** (mirror). There is no `origin` remote.
+- **Stable releases:** every new `Cargo.toml` version is published to GitHub as `rustdl-vX.Y.Z` when `dev` is pushed (pre-push hook or `push_dev`). The rolling **`rustdl-dev`** pre-release is separate and always tracks the tip of `dev`.
 
 ### Day-to-day development
 
 1. **User-visible change** → add a bullet under `## [Unreleased]` in `CHANGELOG.md` (same commit as the change).
-2. **Medium or larger change** → bump `Cargo.toml` in that same commit (still under `[Unreleased]` until release day):
+2. **Medium or larger change** → bump `Cargo.toml` in that same commit and add a dated `## [X.Y.Z]` section (or bullets under `[Unreleased]`) in `CHANGELOG.md`:
 
    | Platform | Command |
    |----------|---------|
@@ -115,7 +117,7 @@ After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `ap
 
    Default is **patch** (`0.4.6` → `0.4.7`). Skip bumps for trivial fixes and non-user-facing work.
 
-   **Tag on every bump:** the bump scripts create an annotated tag `rustdl-vX.Y.Z` on `HEAD` when that commit already contains the new `Cargo.toml` version. After a manual version edit, commit first, then run `.\scripts\bump_version.ps1 -TagOnly` or `./scripts/bump_version.sh --tag-only`. **Do not push** `rustdl-v*` tags until release day. `release.ps1` / `release.sh` move an existing bump tag to the release commit with `-f`.
+   **Tag on every bump:** the bump scripts create an annotated tag `rustdl-vX.Y.Z` on `HEAD` when that commit already contains the new `Cargo.toml` version. After a manual version edit, commit first, then run `.\scripts\bump_version.ps1 -TagOnly` or `./scripts/bump_version.sh --tag-only`. **Push `dev` to `github`** (or run `push_dev` / `publish_stable_release`) to publish the stable GitHub release.
 
 3. **Before opening a PR** → run CI checks locally (see **Running and testing locally**).
 
@@ -132,7 +134,7 @@ Do not wait until release day to record changes—the `[Unreleased]` section is 
 
 ### Version bump on medium/bigger commits
 
-When committing **medium or larger** user-visible work, bump `version` in `Cargo.toml` in the **same commit** as the `CHANGELOG.md` update (still under `[Unreleased]` until a release is cut):
+When committing **medium or larger** user-visible work, bump `version` in `Cargo.toml` in the **same commit** as the `CHANGELOG.md` update:
 
 | Size | Semver | Examples |
 |------|--------|----------|
@@ -140,13 +142,17 @@ When committing **medium or larger** user-visible work, bump `version` in `Cargo
 | **Minor** (+0.1.0) | `Y` | New features, notable behavior changes, multi-area improvements |
 | **Major** (+1.0.0) | `X` | Breaking changes (rare) |
 
-**Bump the version** for anything you would call a medium or bigger change—do not wait for release day.
+**Bump the version** for anything you would call a medium or bigger change.
 
 **Skip the version bump** for trivial one-off fixes (typo, tiny tweak) and changes with no user-facing effect (CI, internal refactors, docs-only edits such as this file).
 
-When you bump `version` in `Cargo.toml` (via the bump scripts or by hand), **always create the matching `rustdl-vX.Y.Z` tag** on that commit before finishing the task (`-TagOnly` after a manual edit).
+When you bump `version` in `Cargo.toml` (via the bump scripts or by hand), **always create the matching `rustdl-vX.Y.Z` tag** on that commit (`-TagOnly` after a manual edit), then push `dev` so the stable release is published.
 
-### Cutting a release
+### Changelog finalization (optional)
+
+`release.ps1` / `release.sh` are **optional** helpers when you want to move `[Unreleased]` bullets into a dated `## [X.Y.Z]` section and refresh compare links at the bottom of `CHANGELOG.md`. They are **not** required to publish — `publish_stable_release` reads the matching changelog section (or `[Unreleased]`) and creates the GitHub release on push.
+
+### Manual release script (changelog housekeeping)
 
 Use the release scripts on a **clean** `dev` checkout (all `[Unreleased]` work already committed; `Cargo.toml` version is the number you are shipping):
 
@@ -192,9 +198,9 @@ This repo keeps an **example manifest** at `packaging/winget/Darknetzz.rustdl.ya
 
 Do not commit a local `winget-pkgs/` clone; it is a separate checkout for PR prep only.
 
-### Rolling dev release (no GitHub Actions)
+### Dev push publish (no GitHub Actions)
 
-GitHub does not run custom hooks on push, and this repo keeps Actions **manual-only**. To refresh a **rolling pre-release** (`rustdl-dev`) on every `dev` push without Actions:
+GitHub does not run custom hooks on push, and this repo keeps Actions **manual-only**. On every `dev` push to **`github`**, the hook (or `push_dev`) builds once, refreshes the rolling **`rustdl-dev`** pre-release, and publishes a **stable** `rustdl-vX.Y.Z` release when that Cargo version is not on GitHub yet.
 
 | Approach | When to use |
 |----------|-------------|
@@ -209,7 +215,7 @@ GitHub does not run custom hooks on push, and this repo keeps Actions **manual-o
 | Windows | `.\scripts\install_dev_release_hook.ps1` |
 | Unix | `./scripts/install_dev_release_hook.sh` |
 
-Sets `core.hooksPath = .githooks`. After that, **any** successful `git push github dev` (or `pushall`, which pushes `github` first) schedules a background build + `gh release` upload to **`rustdl-dev`**. Log: `%TEMP%\rustdl-dev-release.log` (Windows) or `$TMPDIR/rustdl-dev-release.log` (Unix). Disable: same script with `-Uninstall` / `--uninstall`.
+Sets `core.hooksPath = .githooks`. After that, **any** successful `git push github dev` (or `pushall`, which pushes `github` first) schedules a background build + `gh release` upload to **`rustdl-dev`** and any missing stable **`rustdl-vX.Y.Z`**. Log: `%TEMP%\rustdl-dev-release.log` (Windows) or `$TMPDIR/rustdl-dev-release.log` (Unix). Disable: same script with `-Uninstall` / `--uninstall`.
 
 Requires **`gh auth login`** with `repo` scope. Only pushes to remote **`github`** ref **`dev`** trigger publish (GitLab mirror pushes do not).
 
@@ -220,16 +226,16 @@ Requires **`gh auth login`** with `repo` scope. Only pushes to remote **`github`
 | Windows | `.\scripts\push_dev.ps1` |
 | Unix | `./scripts/push_dev.sh` |
 
-Use when the hook is not installed. Pushes `dev` to **`github`**, runs `publish_dev_release`, then mirrors **`gitlab`**. `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable.
+Use when the hook is not installed. Pushes `dev` to **`github`**, runs `publish_dev_release` + `publish_stable_release`, then mirrors **`gitlab`**. `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable.
 
 **Publish only** (already pushed, or webhook checkout):
 
 | Platform | Command |
 |----------|---------|
-| Windows | `.\scripts\publish_dev_release.ps1` |
-| Unix | `./scripts/publish_dev_release.sh` |
+| Windows | `.\scripts\publish_dev_release.ps1` ; `.\scripts\publish_stable_release.ps1` |
+| Unix | `./scripts/publish_dev_release.sh` ; `./scripts/publish_stable_release.sh` |
 
-The release tag is always **`rustdl-dev`** (pre-release); each run moves `--target` to the built commit and `--clobber`-uploads the platform binary (`rustdl.exe` on Windows, `rustdl` on Unix). Notes include `[Unreleased]` from `CHANGELOG.md`.
+**`rustdl-dev`** is always a pre-release at the tip of `dev`. **`rustdl-vX.Y.Z`** is a stable release per `Cargo.toml` version; each version is published once (re-run with `-Force` / `--force` to refresh).
 
 **Webhook (optional):** on a build machine with this repo, `gh`, and Rust:
 

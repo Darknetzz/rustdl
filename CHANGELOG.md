@@ -18,6 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - Rolling **`rustdl-dev`** GitHub pre-release: `scripts/publish_dev_release.*`, `scripts/push_dev.*`, optional `scripts/dev_release_webhook.py`, and **`.githooks/pre-push`** auto-publish (install once with `scripts/install_dev_release_hook.*`).
+- Stable GitHub releases (`rustdl-vX.Y.Z`) publish automatically on `dev` push when the Cargo version is new (`scripts/publish_stable_release.*`).
 
 ### Documentation
 

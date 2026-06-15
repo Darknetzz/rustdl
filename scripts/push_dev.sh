@@ -51,6 +51,12 @@ if [[ "$skip_publish" -eq 0 ]]; then
   publish_args=()
   [[ "$dry_run" -eq 1 ]] && publish_args+=(--dry-run)
   ./scripts/publish_dev_release.sh "${publish_args[@]}"
+
+  echo
+  echo '--- stable release (if new version) ---'
+  stable_args=(--skip-build)
+  [[ "$dry_run" -eq 1 ]] && stable_args+=(--dry-run)
+  ./scripts/publish_stable_release.sh "${stable_args[@]}"
 fi
 
 if [[ "$skip_gitlab" -eq 0 ]]; then

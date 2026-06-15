@@ -93,6 +93,29 @@ def publish_dev(after_sha: str) -> None:
     log(f"Publishing rolling dev release for {after_sha[:7]} …")
     subprocess.run(cmd, cwd=REPO_ROOT, check=True)
 
+    stable_ps1 = SCRIPTS / "publish_stable_release.ps1"
+    stable_sh = SCRIPTS / "publish_stable_release.sh"
+    if sys.platform == "win32":
+        stable_script = stable_ps1
+        stable_cmd = [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(stable_script),
+            "-Commit",
+            after_sha,
+            "-SkipBuild",
+        ]
+    else:
+        stable_script = stable_sh
+        stable_cmd = [str(stable_script), "--commit", after_sha, "--skip-build"]
+
+    if stable_script.is_file():
+        log(f"Publishing stable release (if new) for {after_sha[:7]} …")
+        subprocess.run(stable_cmd, cwd=REPO_ROOT, check=True)
+
     subprocess.run(
         ["git", "checkout", "dev"],
         cwd=REPO_ROOT,

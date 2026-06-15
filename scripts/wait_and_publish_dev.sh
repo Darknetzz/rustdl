@@ -40,3 +40,11 @@ if ! ./scripts/publish_dev_release.sh --commit "$commit"; then
 fi
 
 log "Published rustdl-dev for ${commit}"
+
+log "Publishing stable release (if Cargo version is new) ..."
+if ! ./scripts/publish_stable_release.sh --commit "$commit" --skip-build; then
+  log "publish_stable_release.sh failed."
+  exit 1
+fi
+
+log "Stable release step finished for ${commit}"

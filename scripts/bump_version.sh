@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Bump semver in Cargo.toml (patch by default). Does not edit CHANGELOG — add bullets under [Unreleased] yourself.
 # After bumping, creates rustdl-vX.Y.Z on HEAD when that commit already has the new version.
-# Run with --tag-only after committing a manual version bump. Pushing rustdl-v* triggers release CI.
+# Run with --tag-only after committing a manual version bump.
+# Push dev to github to publish the stable release (pre-push hook / push_dev).
 set -euo pipefail
 
 usage() {
@@ -46,7 +47,7 @@ create_rustdl_version_tag() {
 
   git -C "$repo_root" tag -a "$tag" -m "rustdl ${version}"
   echo "Created annotated tag ${tag} at $(git -C "$repo_root" rev-parse --short HEAD)."
-  echo "Do not push rustdl-v* tags until release day (push triggers GitHub release CI)."
+  echo "Push dev to github to publish the stable release (pre-push hook / push_dev), or run ./scripts/publish_stable_release.sh."
 }
 
 part="patch"
