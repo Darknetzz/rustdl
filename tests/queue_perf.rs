@@ -104,7 +104,8 @@ fn synthetic_500_dirty_mirror_sync_bench() {
     let app_items = synthetic_queue_items(500);
     let core_items = app_items.clone();
     let dirty: HashSet<u64> = core_items.iter().take(100).map(|it| it.item_id).collect();
-    let core_by_id: HashMap<u64, &QueueItem> = core_items.iter().map(|it| (it.item_id, it)).collect();
+    let core_by_id: HashMap<u64, &QueueItem> =
+        core_items.iter().map(|it| (it.item_id, it)).collect();
     let t0 = Instant::now();
     for _ in 0..50 {
         let mut mirror = app_items.clone();

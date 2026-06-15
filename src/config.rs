@@ -61,10 +61,7 @@ fn write_atomic(path: &Path, raw: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         if !parent.as_os_str().is_empty() {
             fs::create_dir_all(parent).with_context(|| {
-                format!(
-                    "failed to create directory: {}",
-                    parent.to_string_lossy()
-                )
+                format!("failed to create directory: {}", parent.to_string_lossy())
             })?;
         }
     }

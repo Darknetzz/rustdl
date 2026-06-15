@@ -668,18 +668,35 @@ impl PydlApp {
     }
 
     fn draw_main_header_tool_checks(&mut self, ui: &mut egui::Ui, compact: bool) {
-        ui.spacing_mut().item_spacing.x = 10.0;
-        draw_precheck_status(
-            ui,
-            "ffprobe",
-            self.has_ffprobe,
-            &self.ffprobe_version,
-            compact,
-        );
-        draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, compact);
-        draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, compact);
-        self.draw_system_usage(ui);
-        self.draw_output_disk_space(ui);
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 12.0;
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 1.0;
+                draw_precheck_status(
+                    ui,
+                    "ffprobe",
+                    self.has_ffprobe,
+                    &self.ffprobe_version,
+                    compact,
+                );
+                draw_precheck_status(
+                    ui,
+                    "ffmpeg",
+                    self.has_ffmpeg,
+                    &self.ffmpeg_version,
+                    compact,
+                );
+                draw_precheck_status(
+                    ui,
+                    "yt-dlp",
+                    self.has_yt_dlp,
+                    &self.yt_dlp_version,
+                    compact,
+                );
+            });
+            self.draw_system_usage(ui, true);
+            self.draw_output_disk_space(ui);
+        });
     }
 
     fn draw_main_header_actions(&mut self, ui: &mut egui::Ui) {

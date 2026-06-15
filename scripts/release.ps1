@@ -34,6 +34,13 @@ function Get-CargoVersion {
 }
 
 function Get-LatestReleasedVersion {
+    $fromTags = git tag -l 'rustdl-v*' |
+        ForEach-Object { $_ -replace '^rustdl-v', '' } |
+        Where-Object { $_ -match '^\d+\.\d+\.\d+$' } |
+        Sort-Object { [version]$_ }
+    if ($fromTags) {
+        return $fromTags[-1]
+    }
     $versions = Select-String -LiteralPath $ChangelogPath -Pattern '^## \[(\d+\.\d+\.\d+)\]' |
         ForEach-Object { $_.Matches[0].Groups[1].Value } |
         Sort-Object { [version]$_ }

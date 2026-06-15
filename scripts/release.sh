@@ -64,6 +64,12 @@ read_version() {
 }
 
 latest_released_version() {
+  local from_tags
+  from_tags="$(git tag -l 'rustdl-v*' | sed 's/^rustdl-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)"
+  if [[ -n "$from_tags" ]]; then
+    echo "$from_tags"
+    return
+  fi
   grep -E '^## \[[0-9]+\.[0-9]+\.[0-9]+\]' CHANGELOG.md \
     | sed -E 's/^## \[([0-9]+\.[0-9]+\.[0-9]+)\].*/\1/' \
     | sort -V \

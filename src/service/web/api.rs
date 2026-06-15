@@ -1446,7 +1446,10 @@ mod tests {
             let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
             let parsed: SettingsResponse = serde_json::from_slice(&bytes).unwrap();
             assert!(parsed.settings.auto_start_downloads);
-            assert!(parsed.command_preview.contains("yt-dlp") || parsed.command_preview.contains("<url>"));
+            assert!(
+                parsed.command_preview.contains("yt-dlp")
+                    || parsed.command_preview.contains("<url>")
+            );
         });
     }
 

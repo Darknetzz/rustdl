@@ -449,12 +449,8 @@ impl super::core::DownloadCore {
         }
         self.transfer_totals_dirty = true;
         self.maybe_append_download_line_log(item_id, line);
-        let bump = should_bump_convert_progress(
-            &mut self.download_progress_throttle,
-            item_id,
-            pct,
-            false,
-        );
+        let bump =
+            should_bump_convert_progress(&mut self.download_progress_throttle, item_id, pct, false);
         if bump {
             self.mark_queue_item_dirty(item_id);
         }

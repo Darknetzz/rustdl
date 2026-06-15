@@ -11,20 +11,19 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ## [Unreleased]
 
 ### Changed
+- Main header: executable PATH checks and CPU/RAM/GPU usage are shown in two compact vertical columns to use less horizontal space.
 
-- Settings tab label **AV1** → **Converter** (desktop and LAN web), matching Video Converter mode and README.
-- Settings **UI scale** − / + controls align in a single stepper row.
+## [0.7.3] - 2026-06-15
 
 ### Added
 
-- Rolling **`rustdl-dev`** GitHub pre-release: `scripts/publish_dev_release.*`, `scripts/push_dev.*`, optional `scripts/dev_release_webhook.py`, and **`.githooks/pre-push`** auto-publish (install once with `scripts/install_dev_release_hook.*`).
-- Stable GitHub releases (`rustdl-vX.Y.Z`) publish automatically on `dev` push when the Cargo version is new (`scripts/publish_stable_release.*`).
+- Stable GitHub releases publish automatically on `dev` push when `Cargo.toml` has a new version (alongside the rolling **`rustdl-dev`** pre-release).
 
 ### Documentation
 
-- README **Screenshots** section with desktop Downloader and LAN web UI images; `scripts/capture_readme_screenshots.py` to regenerate them.
+- README **Screenshots** section with desktop Downloader and LAN web UI images.
 
-## [0.7.2] - 2026-06-14
+## [0.7.2] - 2026-06-15
 
 ### Added
 
@@ -34,6 +33,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Settings tab label **AV1** → **Converter** (desktop and LAN web), matching Video Converter mode and README.
+- Settings **UI scale** − / + controls align in a single stepper row.
 - Web playlist preview and queue import use modal dialogs instead of browser-native prompts.
 
 ### Fixed
@@ -473,7 +474,10 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.5.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.4.8...rustdl-v0.5.0
 [0.5.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.0...rustdl-v0.5.1
 [0.7.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.5.2...rustdl-v0.7.0
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...dev
+[0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
+[0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
+[0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...dev
 [0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7
 [0.4.6]: https://github.com/Darknetzz/rustdl/compare/db8b01f...b76f00b
 [0.4.5]: https://github.com/Darknetzz/rustdl/compare/1f4ab5a...db8b01f

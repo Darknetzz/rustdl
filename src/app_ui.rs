@@ -133,27 +133,41 @@ pub fn draw_system_usage_header(
     ui: &mut egui::Ui,
     usage: &crate::system_usage::SystemUsageSnapshot,
     theme: &str,
+    vertical: bool,
 ) {
     let muted = text_muted(theme);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 6.0;
+    let draw = |ui: &mut egui::Ui| {
         draw_usage_stat_label(ui, "CPU", usage.cpu_percent, muted);
-        ui.label(
-            RichText::new("·")
-                .size(HEADER_STATUS_FONT_SIZE)
-                .color(muted),
-        );
         draw_usage_stat_label(ui, "RAM", usage.ram_percent, muted);
         #[cfg(windows)]
-        {
+        draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
+    };
+    if vertical {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 1.0;
+            draw(ui);
+        });
+    } else {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            draw_usage_stat_label(ui, "CPU", usage.cpu_percent, muted);
             ui.label(
                 RichText::new("·")
                     .size(HEADER_STATUS_FONT_SIZE)
                     .color(muted),
             );
-            draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
-        }
-    });
+            draw_usage_stat_label(ui, "RAM", usage.ram_percent, muted);
+            #[cfg(windows)]
+            {
+                ui.label(
+                    RichText::new("·")
+                        .size(HEADER_STATUS_FONT_SIZE)
+                        .color(muted),
+                );
+                draw_usage_stat_label(ui, "GPU", usage.gpu_percent, muted);
+            }
+        });
+    }
 }
 
 pub fn status_color(s: ItemStatus) -> Color32 {

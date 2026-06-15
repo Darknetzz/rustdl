@@ -661,7 +661,10 @@ impl PydlApp {
             || item.video_id.to_ascii_lowercase().contains(&q)
     }
 
-    pub(super) fn convert_item_matches_search(&self, item: &crate::models::ConvertQueueItem) -> bool {
+    pub(super) fn convert_item_matches_search(
+        &self,
+        item: &crate::models::ConvertQueueItem,
+    ) -> bool {
         let q = self.queue_search.trim().to_ascii_lowercase();
         if q.is_empty() {
             return true;
@@ -885,11 +888,12 @@ impl PydlApp {
         self.system_usage.maybe_poll();
     }
 
-    pub(super) fn draw_system_usage(&self, ui: &mut egui::Ui) {
+    pub(super) fn draw_system_usage(&self, ui: &mut egui::Ui, vertical: bool) {
         crate::app_ui::draw_system_usage_header(
             ui,
             &self.system_usage.snapshot(),
             &self.settings.theme,
+            vertical,
         );
     }
 
@@ -2288,9 +2292,11 @@ impl PydlApp {
             .resizable(true)
             .show(ctx, |ui| {
                 ui.label(
-                    RichText::new("Completed downloads — search, filter, re-queue, or open on disk.")
-                        .small()
-                        .color(crate::theme::TEXT_MUTED),
+                    RichText::new(
+                        "Completed downloads — search, filter, re-queue, or open on disk.",
+                    )
+                    .small()
+                    .color(crate::theme::TEXT_MUTED),
                 );
                 ui.horizontal(|ui| {
                     ui.label("Search");
@@ -2309,9 +2315,21 @@ impl PydlApp {
                         })
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut self.history_filter_days, None, "All time");
-                            ui.selectable_value(&mut self.history_filter_days, Some(1), "Last 24 hours");
-                            ui.selectable_value(&mut self.history_filter_days, Some(7), "Last 7 days");
-                            ui.selectable_value(&mut self.history_filter_days, Some(30), "Last 30 days");
+                            ui.selectable_value(
+                                &mut self.history_filter_days,
+                                Some(1),
+                                "Last 24 hours",
+                            );
+                            ui.selectable_value(
+                                &mut self.history_filter_days,
+                                Some(7),
+                                "Last 7 days",
+                            );
+                            ui.selectable_value(
+                                &mut self.history_filter_days,
+                                Some(30),
+                                "Last 30 days",
+                            );
                         });
                 });
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -2342,11 +2360,7 @@ impl PydlApp {
                             }
                         });
                         if let Some(p) = &it.local_path {
-                            ui.label(
-                                RichText::new(p)
-                                    .small()
-                                    .color(crate::theme::TEXT_MUTED),
-                            );
+                            ui.label(RichText::new(p).small().color(crate::theme::TEXT_MUTED));
                         }
                     }
                     if let Some(url) = requeue_url {

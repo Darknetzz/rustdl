@@ -317,7 +317,8 @@ impl PydlApp {
         }
         let id_set: std::collections::HashSet<u64> = ids.iter().copied().collect();
         self.convert_core_action(|core| {
-            core.convert_items.retain(|it| !id_set.contains(&it.item_id));
+            core.convert_items
+                .retain(|it| !id_set.contains(&it.item_id));
             core.update_convert_status();
             core.schedule_convert_queue_save();
             core.bump_generation();
@@ -405,8 +406,8 @@ impl PydlApp {
             }
         });
         draw(ui, "av1_queue", &mut |g| {
-            if !self.selected_item_ids.is_empty() {
-                if g.danger(
+            if !self.selected_item_ids.is_empty()
+                && g.danger(
                     &format!(
                         "{} Remove selected ({})",
                         ui_icons::REMOVE,
@@ -415,9 +416,8 @@ impl PydlApp {
                     true,
                 )
                 .clicked()
-                {
-                    self.remove_selected_convert_items();
-                }
+            {
+                self.remove_selected_convert_items();
             }
             if g.secondary(
                 &format!("{} Export batch CSV", ui_icons::EXPORT),
@@ -879,7 +879,12 @@ impl PydlApp {
         });
     }
 
-    fn draw_convert_queue_card(&mut self, ui: &mut egui::Ui, it: &ConvertQueueItem, allow_reorder: bool) {
+    fn draw_convert_queue_card(
+        &mut self,
+        ui: &mut egui::Ui,
+        it: &ConvertQueueItem,
+        allow_reorder: bool,
+    ) {
         let theme = self.settings.theme.clone();
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
         let item_color = convert_item_status_color(it);
