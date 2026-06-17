@@ -22,7 +22,6 @@ impl PydlApp {
                 let icon_size = egui::vec2(16.0, 16.0);
                 ui.add(
                     egui::Image::new(egui::load::SizedTexture::new(mark.id(), icon_size))
-                        .tint(tint)
                         .sense(egui::Sense::click()),
                 )
                 .clicked()

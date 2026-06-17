@@ -85,12 +85,12 @@ pub fn load_logo_texture(ctx: &Context) -> TextureHandle {
     ctx.load_texture("rustdl_logo", ci, TextureOptions::LINEAR)
 }
 
-/// GitHub mark for About → Source on GitHub (white silhouette; tinted at draw time).
+/// Official GitHub mark (black circle, white Octocat) for About → Source on GitHub.
 pub fn load_github_mark_texture(ctx: &Context) -> TextureHandle {
     let bytes = include_bytes!("../assets/github-mark.png");
     let img = image::load_from_memory(bytes).expect("github mark png");
     let rgba = img.to_rgba8();
-    let size = [rgba.width() as usize, rgba.height() as usize];
-    let ci = ColorImage::from_rgba_unmultiplied(size, rgba.as_raw());
+    let scaled = image::imageops::resize(&rgba, 64, 64, image::imageops::FilterType::Lanczos3);
+    let ci = ColorImage::from_rgba_unmultiplied([64, 64], scaled.as_raw());
     ctx.load_texture("github_mark", ci, TextureOptions::LINEAR)
 }
