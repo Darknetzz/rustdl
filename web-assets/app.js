@@ -3376,25 +3376,85 @@ function clearThumbnailCaches() {
   convertThumbInflight.clear();
 }
 
-function saveTokenFromForm() {
-  const v = document.getElementById("token-input").value.trim();
-  if (!v) return;
-  localStorage.setItem(TOKEN_KEY, v);
-  clearThumbnailCaches();
-  document.getElementById("auth-status").textContent = "Token saved.";
-  showApp();
-  refreshAll().catch((e) => {
-    document.getElementById("auth-status").textContent =
-      e instanceof Error ? e.message : String(e);
+async function validateAuthToken(candidate) {
+  const res = await fetch("/api/status", {
+    headers: { "X-Rustdl-Token": candidate },
   });
-  connectSse();
-  startStatusPoll();
+  if (res.status === 401) {
+    throw new Error(
+      "Token rejected. Copy the current API token from rustdl Settings → Web UI on the host PC."
+    );
+  }
+  if (res.status === 503) {
+    throw new Error(
+      "Web UI has no API token configured on the host. Set one in rustdl Settings → Web UI."
+    );
+  }
+  if (!res.ok) {
+    throw new Error(await readApiError(res, `Could not connect (${res.status})`));
+  }
 }
 
-document.getElementById("auth-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  saveTokenFromForm();
-});
+function tokenFromPageUrl() {
+  return new URLSearchParams(window.location.search).get("token")?.trim() || "";
+}
+
+function stripTokenFromPageUrl() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("token")) return;
+  url.searchParams.delete("token");
+  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+}
+
+/** @returns {Promise<boolean>} true when the token was accepted and the app is connected */
+async function saveTokenFromForm() {
+  const input = document.getElementById("token-input");
+  const statusEl = document.getElementById("auth-status");
+  const saveBtn = document.getElementById("btn-save-token");
+  const v = input?.value?.trim() ?? "";
+  if (!v) {
+    if (statusEl) {
+      statusEl.textContent =
+        "Enter the API token from rustdl Settings → Web UI, then click Save token.";
+    }
+    input?.focus();
+    return false;
+  }
+  if (saveBtn) saveBtn.disabled = true;
+  if (statusEl) statusEl.textContent = "Checking token…";
+  try {
+    await validateAuthToken(v);
+    localStorage.setItem(TOKEN_KEY, v);
+    ipAuthBypass = false;
+    clearThumbnailCaches();
+    if (statusEl) statusEl.textContent = "Token saved.";
+    showApp();
+    await refreshAll();
+    connectSse();
+    startStatusPoll();
+    startFallbackPolling();
+    return true;
+  } catch (e) {
+    localStorage.removeItem(TOKEN_KEY);
+    showAuthPanel();
+    const msg = e instanceof Error ? e.message : String(e);
+    if (statusEl) statusEl.textContent = msg;
+    notifyError(msg);
+    return false;
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+const authForm = document.getElementById("auth-form");
+if (authForm) {
+  authForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    saveTokenFromForm().catch((err) =>
+      notifyError(err instanceof Error ? err.message : String(err))
+    );
+  });
+}
 
 document.getElementById("btn-refresh-tools").onclick = () => refreshToolsOnly().catch(() => {});
 
@@ -3510,7 +3570,16 @@ document.getElementById("btn-settings-cancel").onclick = () => {
 
 document.getElementById("settings-form").onsubmit = async (e) => {
   e.preventDefault();
-  if (!cachedSettings) return;
+  if (!cachedSettings) {
+    try {
+      const res = await api("/api/settings");
+      const data = await res.json();
+      cachedSettings = data.settings;
+    } catch (err) {
+      notifyError(err.message || "Could not load settings.");
+      return;
+    }
+  }
   const wasThumbnails = cachedSettings.show_thumbnails !== false;
   const patch = collectSettingsForm(cachedSettings);
   try {
@@ -4957,15 +5026,33 @@ async function tryConnectWithoutToken() {
   }
 }
 
-if (token()) {
-  document.getElementById("token-input").value = token();
-  showApp();
-  const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
-  if (savedView === "convert" || savedView === "library") setView(savedView);
-  refreshAll().catch(() => {});
-  connectSse();
-  startStatusPoll();
-  startFallbackPolling();
-} else {
-  tryConnectWithoutToken();
+async function bootstrapAuth() {
+  const urlToken = tokenFromPageUrl();
+  if (urlToken) {
+    stripTokenFromPageUrl();
+    const input = document.getElementById("token-input");
+    if (input) input.value = urlToken;
+    if (await saveTokenFromForm()) {
+      const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (savedView === "convert" || savedView === "library") setView(savedView);
+      return;
+    }
+  }
+
+  const saved = token();
+  if (saved) {
+    const input = document.getElementById("token-input");
+    if (input) input.value = saved;
+    if (await saveTokenFromForm()) {
+      const savedView = localStorage.getItem(VIEW_STORAGE_KEY);
+      if (savedView === "convert" || savedView === "library") setView(savedView);
+      return;
+    }
+  }
+
+  if (!(await tryConnectWithoutToken())) {
+    showAuthPanel();
+  }
 }
+
+bootstrapAuth().catch(() => showAuthPanel());

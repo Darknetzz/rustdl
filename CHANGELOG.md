@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- LAN web UI: saving the API token now validates it before connecting, shows errors for empty or rejected tokens, and auto-connects when opened via a QR link (`?token=…`).
+
 ### Changed
 
 - Downloader main panel: output folder and profile show as a one-line summary with **Edit…** opening a modal (replaces the expandable options block).
