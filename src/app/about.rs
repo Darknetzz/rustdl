@@ -8,18 +8,34 @@ use crate::ui_icons;
 
 use super::PydlApp;
 
+enum AboutLinkIcon<'a> {
+    Texture(&'a egui::TextureHandle),
+    Material(&'static str),
+}
+
 impl PydlApp {
-    fn draw_github_link(ui: &mut egui::Ui, mark: &egui::TextureHandle, url: &str) {
+    fn draw_about_link(ui: &mut egui::Ui, icon: AboutLinkIcon<'_>, label: &str, url: &str) {
         ui.spacing_mut().item_spacing.x = 4.0;
-        let icon_size = egui::vec2(16.0, 16.0);
         let tint = ui.visuals().hyperlink_color;
-        let icon = ui.add(
-            egui::Image::new(egui::load::SizedTexture::new(mark.id(), icon_size))
-                .tint(tint)
-                .sense(egui::Sense::click()),
-        );
-        ui.hyperlink_to("Source on GitHub", url);
-        if icon.clicked() {
+        let icon_clicked = match icon {
+            AboutLinkIcon::Texture(mark) => {
+                let icon_size = egui::vec2(16.0, 16.0);
+                ui.add(
+                    egui::Image::new(egui::load::SizedTexture::new(mark.id(), icon_size))
+                        .tint(tint)
+                        .sense(egui::Sense::click()),
+                )
+                .clicked()
+            }
+            AboutLinkIcon::Material(glyph) => ui
+                .add(
+                    egui::Label::new(RichText::new(glyph).color(tint).size(16.0))
+                        .sense(egui::Sense::click()),
+                )
+                .clicked(),
+        };
+        ui.hyperlink_to(label, url);
+        if icon_clicked {
             if let Err(e) = crate::app_actions::open_browser(url) {
                 eprintln!("rustdl: failed to open URL: {e}");
             }
@@ -44,9 +60,19 @@ impl PydlApp {
                         .color(Color32::LIGHT_GRAY),
                 );
                 ui.horizontal(|ui| {
-                    Self::draw_github_link(ui, &self.github_mark, pkg_version::GITHUB_REPOSITORY);
+                    Self::draw_about_link(
+                        ui,
+                        AboutLinkIcon::Texture(&self.github_mark),
+                        "Source on GitHub",
+                        pkg_version::GITHUB_REPOSITORY,
+                    );
                     ui.label("·");
-                    ui.hyperlink_to("Releases", pkg_version::GITHUB_RELEASES);
+                    Self::draw_about_link(
+                        ui,
+                        AboutLinkIcon::Material(ui_icons::RELEASES),
+                        "Releases",
+                        pkg_version::GITHUB_RELEASES,
+                    );
                 });
                 ui.separator();
                 ui.label(RichText::new("Keyboard shortcuts").strong());

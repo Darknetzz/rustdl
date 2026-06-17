@@ -67,6 +67,8 @@ pub const PAGE_URL: &str = m::ICON_LINK;
 pub const UPDATE_CHECK: &str = m::ICON_SYNC;
 /// Open release / get update (browser).
 pub const UPDATE_OPEN: &str = m::ICON_OPEN_IN_NEW;
+/// GitHub releases page link (About).
+pub const RELEASES: &str = m::ICON_NEW_RELEASES;
 
 pub const CHECK_STREAMS: &str = m::ICON_SEARCH;
 pub const REDOWNLOAD: &str = m::ICON_REFRESH;

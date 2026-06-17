@@ -85,7 +85,7 @@ pub fn load_logo_texture(ctx: &Context) -> TextureHandle {
     ctx.load_texture("rustdl_logo", ci, TextureOptions::LINEAR)
 }
 
-/// GitHub mark for About → Source on GitHub (white glyph; tint at draw time).
+/// GitHub mark for About → Source on GitHub (white silhouette; tinted at draw time).
 pub fn load_github_mark_texture(ctx: &Context) -> TextureHandle {
     let bytes = include_bytes!("../assets/github-mark.png");
     let img = image::load_from_memory(bytes).expect("github mark png");
