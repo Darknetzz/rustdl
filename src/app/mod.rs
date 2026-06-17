@@ -202,6 +202,8 @@ pub struct PydlApp {
     downloads_paused: bool,
     /// Avoid repeating desktop notifications for the same idle spell.
     session_complete_notified: bool,
+    /// Avoid repeating desktop notifications for the same convert batch idle spell.
+    convert_batch_complete_notified: bool,
     update_check_in_progress: bool,
     update_download_in_progress: bool,
     update_latest_version: Option<String>,
@@ -422,6 +424,7 @@ impl PydlApp {
             selected_item_ids: HashSet::new(),
             downloads_paused: false,
             session_complete_notified: false,
+            convert_batch_complete_notified: false,
             update_check_in_progress: false,
             update_download_in_progress: false,
             update_latest_version: None,
@@ -761,6 +764,7 @@ impl PydlApp {
 
     fn maybe_notify_session_complete(&mut self) {
         if self.session_complete_notified
+            || self.convert_running
             || self.queue_running > 0
             || self.add_in_progress
             || self.status_resolving > 0
@@ -781,8 +785,37 @@ impl PydlApp {
         }
         self.session_complete_notified = true;
         let summary = format!(
-            "rustdl: {} done, {} failed",
+            "Downloads finished: {} done, {} failed",
             self.status_done, self.status_failed
+        );
+        if let Err(e) = notify_rust::Notification::new()
+            .summary("rustdl")
+            .body(&summary)
+            .show()
+        {
+            self.append_log(&format!("Notification failed: {e}"));
+        }
+    }
+
+    fn maybe_notify_convert_batch_complete(&mut self) {
+        if self.convert_batch_complete_notified || self.convert_running || self.convert_paused {
+            return;
+        }
+        let counts = self.convert_status_counts;
+        if counts.queued > 0 || counts.running > 0 {
+            return;
+        }
+        if self.convert_items.is_empty() {
+            return;
+        }
+        let processed = counts.done + counts.failed + counts.skipped;
+        if processed == 0 {
+            return;
+        }
+        self.convert_batch_complete_notified = true;
+        let summary = format!(
+            "Convert batch finished: {} done, {} failed, {} skipped",
+            counts.done, counts.failed, counts.skipped
         );
         if let Err(e) = notify_rust::Notification::new()
             .summary("rustdl")

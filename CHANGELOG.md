@@ -10,6 +10,18 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-06-17
+
+### Added
+
+- Desktop notification when a Video Converter batch finishes (done / failed / skipped counts).
+- LAN web UI: convert queue search, Library search and history filter (24h / 7d / 30d), command palette (`Ctrl+K` / `Cmd+K`), HTML5 drag-to-reorder for Ready rows, and optional browser notifications when download or convert sessions complete.
+- Settings → Web UI: **Browser notifications on session complete** toggle (desktop and LAN web).
+
+### Fixed
+
+- Desktop “downloads finished” notification no longer appears while a Convert batch is still running.
+
 ## [0.8.0] - 2026-06-17
 
 ### Added
@@ -498,7 +510,9 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...dev
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...dev
+[0.8.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.0...rustdl-v0.8.1
+[0.8.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...rustdl-v0.8.0
 [0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7
 [0.4.6]: https://github.com/Darknetzz/rustdl/compare/db8b01f...b76f00b
 [0.4.5]: https://github.com/Darknetzz/rustdl/compare/1f4ab5a...db8b01f

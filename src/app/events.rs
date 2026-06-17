@@ -111,7 +111,8 @@ impl PydlApp {
                 UiEvent::ConvertDuration { .. }
                 | UiEvent::ConvertMediaProbed { .. }
                 | UiEvent::ConvertDone { .. }
-                | UiEvent::ConvertBatchDone => {
+                | UiEvent::ConvertBatchDone
+                | UiEvent::DownloadSessionComplete { .. } => {
                     ctx.request_repaint();
                 }
                 UiEvent::LogLine { .. } => {

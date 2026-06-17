@@ -301,6 +301,9 @@ pub struct AppSettings {
     /// Client IPs or CIDR ranges that may use the web API without a token (e.g. `192.168.1.0/24`).
     #[serde(default)]
     pub web_auth_ip_whitelist: Vec<String>,
+    /// Show browser notifications when download or convert sessions complete (LAN web UI).
+    #[serde(default = "default_web_browser_notifications")]
+    pub web_browser_notifications: bool,
     /// GitHub personal access token for in-app update checks (required when the repo is private).
     #[serde(default)]
     pub github_token: String,
@@ -363,6 +366,10 @@ pub struct AppSettings {
 
 fn default_web_bind_address() -> String {
     "0.0.0.0:8765".to_owned()
+}
+
+fn default_web_browser_notifications() -> bool {
+    true
 }
 
 fn default_log_filter() -> String {
@@ -645,6 +652,7 @@ impl Default for AppSettings {
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
             web_auth_ip_whitelist: Vec::new(),
+            web_browser_notifications: default_web_browser_notifications(),
             github_token: String::new(),
             queue_search: String::new(),
             log_filter: default_log_filter(),

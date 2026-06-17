@@ -99,6 +99,11 @@ pub enum UiEvent {
         final_output_path: Option<String>,
     },
     ConvertBatchDone,
+    /// Download queue reached a fully idle terminal state (web SSE subscribers).
+    DownloadSessionComplete {
+        done: usize,
+        failed: usize,
+    },
     /// Activity log line (web SSE subscribers).
     LogLine {
         line: String,

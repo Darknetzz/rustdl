@@ -83,7 +83,7 @@ impl eframe::App for PydlApp {
         if trigger_settings {
             self.settings_open = true;
         }
-        if trigger_focus_search && !self.convert_mode {
+        if trigger_focus_search {
             self.focus_queue_search = true;
         }
         if trigger_toggle_log {
@@ -602,6 +602,7 @@ impl eframe::App for PydlApp {
             self.draw_logs_window(ctx);
         }
         self.maybe_notify_session_complete();
+        self.maybe_notify_convert_batch_complete();
 
         self.input_urls_snapshot = self.input_urls.clone();
         self.draw_session_restore_dialog(ctx);

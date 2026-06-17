@@ -1795,6 +1795,12 @@ impl PydlApp {
                                 }
                             });
                             ui.end_row();
+                            changed |= settings_checkbox(
+                                ui,
+                                "Browser notifications on session complete",
+                                &mut self.settings.web_browser_notifications,
+                            );
+                            ui.end_row();
                         });
                         {
                             let show_token_id = ui.id().with("web_token_visible");

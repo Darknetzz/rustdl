@@ -213,6 +213,9 @@ fn sync_convert_from_core(
     if app.convert_input_paths != core.convert_input_paths {
         app.convert_input_paths = core.convert_input_paths.clone();
     }
+    if core.convert_running && !app.convert_running {
+        app.convert_batch_complete_notified = false;
+    }
     app.convert_running = core.convert_running;
     app.convert_paused = core.convert_paused;
     app.convert_media_inflight = core.convert_media_inflight.clone();

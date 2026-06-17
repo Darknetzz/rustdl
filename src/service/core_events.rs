@@ -548,6 +548,38 @@ impl super::core::DownloadCore {
         self.update_status();
         self.schedule_queue_save();
         self.bump_generation();
+        self.maybe_emit_download_session_complete();
+    }
+
+    pub fn maybe_emit_download_session_complete(&mut self) {
+        use crate::domain::events::{try_send_ui, UiEvent};
+        if self.session_complete_notified
+            || self.convert_running
+            || self.queue_running > 0
+            || self.add_in_progress
+            || self.status_resolving > 0
+            || self.status_queued > 0
+            || self.status_active > 0
+        {
+            return;
+        }
+        let has_items = !self.items.is_empty();
+        let all_terminal = self.items.iter().all(|it| {
+            matches!(
+                it.status,
+                ItemStatus::Done | ItemStatus::Failed | ItemStatus::Idle
+            )
+        });
+        if !has_items || !all_terminal {
+            return;
+        }
+        self.session_complete_notified = true;
+        let done = self.status_done;
+        let failed = self.status_failed;
+        let _ = try_send_ui(
+            &self.ui_event_bus(),
+            UiEvent::DownloadSessionComplete { done, failed },
+        );
     }
 
     pub fn maybe_auto_start_downloads(&mut self) {

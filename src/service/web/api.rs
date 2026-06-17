@@ -1225,6 +1225,9 @@ fn event_json(ev: &UiEvent) -> serde_json::Value {
             ..
         } => serde_json::json!({"type":"convert_done","item_id":item_id,"ok":ok,"detail":detail}),
         UiEvent::ConvertBatchDone => serde_json::json!({"type":"convert_batch_done"}),
+        UiEvent::DownloadSessionComplete { done, failed } => {
+            serde_json::json!({"type":"download_session_complete","done":done,"failed":failed})
+        }
         UiEvent::ShutdownRequested => serde_json::json!({"type":"shutdown"}),
         _ => serde_json::json!({"type":"other"}),
     }

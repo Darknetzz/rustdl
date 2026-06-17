@@ -533,6 +533,86 @@ function itemMatchesSearch(item, query) {
   return hay.includes(q);
 }
 
+function convertItemMatchesSearch(item, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const hay = [item.source_path, item.output_path, item.detail]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+function libraryItemMatchesSearch(item, query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return true;
+  const hay = [item.title, item.webpage_url, item.uploader, item.video_id, item.local_path]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+function libraryItemWithinHistory(item, days) {
+  if (days == null) return true;
+  if (!item.completed_at) return false;
+  const cutoff = Math.floor(Date.now() / 1000) - days * 86400;
+  return item.completed_at >= cutoff;
+}
+
+function getConvertSearchQuery() {
+  const el = document.getElementById("convert-search");
+  const settings = cachedSettings || {};
+  return el ? el.value : settings.queue_search || "";
+}
+
+function browserNotificationsEnabled() {
+  return cachedSettings?.web_browser_notifications !== false;
+}
+
+let notificationPermissionRequested = false;
+
+async function ensureNotificationPermission() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+  const result = await Notification.requestPermission();
+  return result === "granted";
+}
+
+function maybeRequestNotificationPermissionOnGesture() {
+  if (notificationPermissionRequested || !browserNotificationsEnabled()) return;
+  if (!("Notification" in window) || Notification.permission !== "default") return;
+  notificationPermissionRequested = true;
+  ensureNotificationPermission().catch(() => {});
+}
+
+function showSessionNotification(body) {
+  if (!browserNotificationsEnabled()) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  try {
+    new Notification("rustdl", { body, icon: "/favicon.png" });
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyConvertBatchComplete() {
+  const data = lastConvertPayload;
+  if (!data?.items?.length) return;
+  let done = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const it of data.items) {
+    if (it.skipped) skipped += 1;
+    else if (it.status === "Done") done += 1;
+    else if (it.status === "Failed") failed += 1;
+  }
+  showSessionNotification(
+    `Convert batch finished: ${done} done, ${failed} failed, ${skipped} skipped`,
+  );
+}
+
 function itemMatchesStatusFilter(item, slug) {
   if (!slug) return true;
   const st = statusSlug(item.status);
@@ -1724,6 +1804,40 @@ function appendReadyReorderButtons(group, item, readyItems, reorderFn) {
   }
 }
 
+function attachReadyRowDragDrop(card, item, readyItems, reorderFn) {
+  if (!card || readyItems.length < 2) return;
+  const reorder = reorderFn || reorderQueueItem;
+  card.draggable = true;
+  card.classList.add("ready-draggable");
+  card.addEventListener("dragstart", (e) => {
+    card.classList.add("dragging");
+    e.dataTransfer?.setData("text/plain", String(item.item_id));
+    if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
+  });
+  card.addEventListener("dragend", () => {
+    card.classList.remove("dragging");
+    document.querySelectorAll(".ready-drop-target").forEach((el) => {
+      el.classList.remove("ready-drop-target");
+    });
+  });
+  card.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    card.classList.add("ready-drop-target");
+  });
+  card.addEventListener("dragleave", () => {
+    card.classList.remove("ready-drop-target");
+  });
+  card.addEventListener("drop", (e) => {
+    e.preventDefault();
+    card.classList.remove("ready-drop-target");
+    const draggedRaw = e.dataTransfer?.getData("text/plain");
+    const draggedId = parseInt(draggedRaw || "", 10);
+    if (!draggedId || draggedId === item.item_id) return;
+    reorder(draggedId, item.item_id).catch((err) => notifyError(err.message || String(err)));
+  });
+}
+
 function appendVerifyStreamsButton(group, item) {
   if (statusSlug(item.status) !== "done") return;
   const btn = document.createElement("button");
@@ -2114,6 +2228,9 @@ function renderQueueCard(item, settings, ctx) {
   appendRefetchButton(group, item);
   if (slug === "idle" && !item.error) {
     appendReadyReorderButtons(group, item, readyItems);
+    if (readyItems.length > 1) {
+      attachReadyRowDragDrop(card, item, readyItems, reorderQueueItem);
+    }
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
@@ -2187,6 +2304,9 @@ function renderQueueCardListRow(item, settings, ctx) {
   appendRefetchButton(group, item);
   if (slug === "idle" && !item.error) {
     appendReadyReorderButtons(group, item, readyItems);
+    if (readyItems.length > 1) {
+      attachReadyRowDragDrop(card, item, readyItems, reorderQueueItem);
+    }
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
@@ -2832,6 +2952,22 @@ function handleSseEvent(data) {
       return;
     case "convert_done":
     case "convert_batch_done":
+      refreshConvert()
+        .then(() => {
+          if (data.type === "convert_batch_done") {
+            notifyConvertBatchComplete();
+          }
+        })
+        .catch(() => {});
+      refreshStatus().catch(() => {});
+      return;
+    case "download_session_complete":
+      showSessionNotification(
+        `Downloads finished: ${data.done ?? 0} done, ${data.failed ?? 0} failed`,
+      );
+      refreshStatus().catch(() => {});
+      refreshQueue(true).catch(() => {});
+      return;
     case "convert_duration":
     case "convert_media_probed":
       refreshConvert().catch(() => {});
@@ -2946,6 +3082,10 @@ function populateSettingsForm(s, commandPreview) {
   const qs = document.getElementById("queue-search");
   if (qs && document.activeElement !== qs) {
     qs.value = s.queue_search || "";
+  }
+  const cs = document.getElementById("convert-search");
+  if (cs && document.activeElement !== cs) {
+    cs.value = s.queue_search || "";
   }
 
   setCheck("set-auto-add", s.auto_add_pasted_urls);
@@ -3119,6 +3259,8 @@ function collectSettingsForm(base) {
     .split(/\n+/)
     .map((line) => line.trim())
     .filter(Boolean);
+  s.web_browser_notifications =
+    document.getElementById("set-web-browser-notifications")?.checked ?? true;
   s.watch_folder_enabled = document.getElementById("set-watch-folder-enabled")?.checked ?? false;
   s.watch_folder_path = document.getElementById("set-watch-folder-path")?.value || "";
   s.convert_watch_folder_enabled =
@@ -3479,12 +3621,26 @@ function setView(view) {
 async function refreshLibrary() {
   const root = document.getElementById("library-list");
   if (!root) return;
+  const searchEl = document.getElementById("library-search");
+  const historyEl = document.getElementById("library-history-filter");
+  const searchQuery = searchEl ? searchEl.value : "";
+  const historyVal = historyEl ? historyEl.value : "all";
+  const historyDays = historyVal === "all" ? null : parseInt(historyVal, 10);
   try {
     const res = await api("/api/library");
     const data = await res.json();
-    const items = data.items || [];
-    if (!items.length) {
+    const allItems = data.items || [];
+    const items = allItems.filter(
+      (it) =>
+        libraryItemMatchesSearch(it, searchQuery) &&
+        libraryItemWithinHistory(it, historyDays),
+    );
+    if (!allItems.length) {
       root.innerHTML = "<p class=\"hint\">No completed downloads.</p>";
+      return;
+    }
+    if (!items.length) {
+      root.innerHTML = "<p class=\"hint\">No library items match the current search or filter.</p>";
       return;
     }
     root.innerHTML = items
@@ -3932,6 +4088,7 @@ function renderConvertCard(item, settings, ctx) {
   appendConvertOpenMenuButton(group, item);
   if (slug === "idle" && readyItems.length > 1) {
     appendReadyReorderButtons(group, item, readyItems, reorderConvertItem);
+    attachReadyRowDragDrop(card, item, readyItems, reorderConvertItem);
   }
   if (group.childElementCount > 0) {
     card.appendChild(actions);
@@ -4164,6 +4321,10 @@ async function refreshConvert() {
   if (!root) return;
   const settings = cachedSettings || {};
   const showThumbnails = settings.show_thumbnails !== false;
+  const searchQuery = getConvertSearchQuery();
+  const filteredItems = (data.items || []).filter((it) =>
+    convertItemMatchesSearch(it, searchQuery),
+  );
   const listLayout = effectiveListLayout(settings, data.items.length);
   pruneconvertThumbKeys(data.items);
   root.className = "queue" + (listLayout ? " list-layout" : "");
@@ -4176,11 +4337,19 @@ async function refreshConvert() {
     updateConvertBulkSelectionUi();
     return;
   }
-  const readyItems = data.items
+  if (!filteredItems.length) {
+    const empty = document.createElement("p");
+    empty.className = "hint convert-empty";
+    empty.textContent = "No convert items match the current search.";
+    root.appendChild(empty);
+    updateConvertBulkSelectionUi();
+    return;
+  }
+  const readyItems = filteredItems
     .filter((it) => convertGroup(it) === "Ready")
     .sort((a, b) => (a.sort_order || a.item_id || 0) - (b.sort_order || b.item_id || 0));
   const cardCtx = { readyItems };
-  renderGroupedQueue(root, data.items, {
+  renderGroupedQueue(root, filteredItems, {
     settings: { ...settings, card_list_layout: listLayout, show_thumbnails: showThumbnails },
     groupFn: convertGroup,
     groupOrder: CONVERT_QUEUE_GROUPS,
@@ -4564,6 +4733,132 @@ document.getElementById("queue-search")?.addEventListener("input", (e) => {
   queueSearchSaveTimer = setTimeout(() => saveQueueSearchSetting(e.target.value), 400);
 });
 
+document.getElementById("convert-search")?.addEventListener("input", (e) => {
+  refreshConvert().catch(console.error);
+  clearTimeout(queueSearchSaveTimer);
+  queueSearchSaveTimer = setTimeout(() => saveQueueSearchSetting(e.target.value), 400);
+});
+
+document.getElementById("library-search")?.addEventListener("input", () => {
+  refreshLibrary().catch(console.error);
+});
+
+document.getElementById("library-history-filter")?.addEventListener("change", () => {
+  refreshLibrary().catch(console.error);
+});
+
+const PALETTE_COMMANDS = [
+  { label: "Open Settings", keywords: "settings preferences", run: () => openSettingsDialog() },
+  { label: "Start downloads", keywords: "start run download", run: () => api("/api/downloads/start", { method: "POST" }).then(refreshAll) },
+  { label: "Pause downloads", keywords: "pause hold", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
+  { label: "Resume downloads", keywords: "resume continue", run: () => api("/api/downloads/resume", { method: "POST" }).then(refreshAll) },
+  { label: "Start Convert batch", keywords: "convert encode start", run: () => convertStart() },
+  { label: "Pause Convert batch", keywords: "convert pause", run: () => convertPause() },
+  { label: "Resume Convert batch", keywords: "convert resume", run: () => convertResume() },
+  { label: "Switch to Downloader", keywords: "mode download", run: () => setView("downloader") },
+  { label: "Switch to Video Converter", keywords: "mode convert", run: () => setView("convert") },
+  { label: "Switch to Library", keywords: "library done", run: () => setView("library") },
+  { label: "Focus queue search", keywords: "search find filter", run: () => focusActiveSearch() },
+  { label: "Export activity log", keywords: "export log", run: () => exportActivityLog() },
+  { label: "Open About", keywords: "about version", run: () => document.getElementById("about-dialog")?.showModal() },
+  { label: "Refresh page data", keywords: "refresh reload sync", run: () => refreshAll() },
+];
+
+let paletteActiveIndex = 0;
+
+function focusActiveSearch() {
+  if (currentView === "convert") {
+    document.getElementById("convert-search")?.focus();
+  } else if (currentView === "library") {
+    document.getElementById("library-search")?.focus();
+  } else {
+    document.getElementById("queue-search")?.focus();
+  }
+}
+
+function filterPaletteCommands(query) {
+  const q = String(query || "").trim().toLowerCase();
+  if (!q) return PALETTE_COMMANDS;
+  return PALETTE_COMMANDS.filter(
+    (cmd) =>
+      cmd.label.toLowerCase().includes(q) || cmd.keywords.toLowerCase().includes(q),
+  );
+}
+
+function renderCommandPaletteList(commands) {
+  const list = document.getElementById("command-palette-list");
+  if (!list) return;
+  list.innerHTML = "";
+  commands.forEach((cmd, idx) => {
+    const li = document.createElement("li");
+    li.textContent = cmd.label;
+    li.dataset.index = String(idx);
+    li.classList.toggle("active", idx === paletteActiveIndex);
+    li.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      runPaletteCommand(cmd);
+    });
+    list.appendChild(li);
+  });
+}
+
+function openCommandPalette() {
+  const root = document.getElementById("command-palette");
+  const input = document.getElementById("command-palette-input");
+  if (!root || !input) return;
+  paletteActiveIndex = 0;
+  input.value = "";
+  renderCommandPaletteList(PALETTE_COMMANDS);
+  root.classList.remove("hidden");
+  input.focus();
+}
+
+function closeCommandPalette() {
+  document.getElementById("command-palette")?.classList.add("hidden");
+}
+
+async function runPaletteCommand(cmd) {
+  closeCommandPalette();
+  try {
+    await cmd.run();
+  } catch (err) {
+    notifyError(err.message || String(err));
+  }
+}
+
+document.getElementById("command-palette-backdrop")?.addEventListener("click", closeCommandPalette);
+
+document.getElementById("command-palette-input")?.addEventListener("input", (e) => {
+  paletteActiveIndex = 0;
+  renderCommandPaletteList(filterPaletteCommands(e.target.value));
+});
+
+document.getElementById("command-palette-input")?.addEventListener("keydown", (e) => {
+  const commands = filterPaletteCommands(e.target.value);
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeCommandPalette();
+    return;
+  }
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    paletteActiveIndex = Math.min(paletteActiveIndex + 1, Math.max(0, commands.length - 1));
+    renderCommandPaletteList(commands);
+    return;
+  }
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    paletteActiveIndex = Math.max(paletteActiveIndex - 1, 0);
+    renderCommandPaletteList(commands);
+    return;
+  }
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const cmd = commands[paletteActiveIndex];
+    if (cmd) runPaletteCommand(cmd);
+  }
+});
+
 document.getElementById("btn-expand-log")?.addEventListener("click", () => {
   logExpanded = !logExpanded;
   document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
@@ -4589,9 +4884,13 @@ document.querySelectorAll(".layout-preset-btn").forEach((btn) => {
 });
 
 document.addEventListener("keydown", (e) => {
+  maybeRequestNotificationPermissionOnGesture();
   if (document.getElementById("app-main")?.classList.contains("hidden")) return;
   const mod = e.ctrlKey || e.metaKey;
-  if (mod && e.key === ",") {
+  if (mod && e.key === "k") {
+    e.preventDefault();
+    openCommandPalette();
+  } else if (mod && e.key === ",") {
     e.preventDefault();
     openSettingsDialog().catch(console.error);
   } else if (mod && e.key === "Enter") {
@@ -4603,16 +4902,24 @@ document.addEventListener("keydown", (e) => {
     api("/api/downloads/start", { method: "POST" }).then(refreshAll).catch(console.error);
   } else if (mod && e.key === "f") {
     e.preventDefault();
-    document.getElementById("queue-search")?.focus();
+    focusActiveSearch();
   } else if (mod && e.key === "l") {
     e.preventDefault();
     logExpanded = !logExpanded;
     document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
   } else if (e.key === "Escape") {
+    if (!document.getElementById("command-palette")?.classList.contains("hidden")) {
+      closeCommandPalette();
+      return;
+    }
     document.getElementById("settings-dialog")?.close();
     document.getElementById("about-dialog")?.close();
   }
 });
+
+document.addEventListener("click", () => {
+  maybeRequestNotificationPermissionOnGesture();
+}, { once: false });
 
 document.getElementById("btn-playlist-preview-cancel")?.addEventListener("click", () => {
   document.getElementById("playlist-preview-dialog")?.close();
