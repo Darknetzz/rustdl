@@ -15,6 +15,7 @@ pub mod domain;
 pub mod download_organize;
 pub mod external_tools;
 pub mod http_client;
+pub mod log_filter;
 pub mod models;
 pub mod pkg_version;
 pub mod profiles;

@@ -148,6 +148,7 @@
           </div>
           <div class="btn-group" role="group" aria-label="Convert queue">
             <button type="button" id="btn-convert-retry-skipped" class="secondary" data-icon="refresh" disabled title="No skipped items">Retry skipped</button>
+            <button type="button" id="btn-convert-bulk-remove" class="secondary danger" data-icon="remove" disabled title="Remove selected convert items">Remove selected</button>
             <button type="button" id="btn-convert-clear" class="secondary" data-icon="clear_all">Clear queue</button>
             <button type="button" id="btn-convert-export" class="secondary" data-icon="download" title="Export batch summary as CSV">Export CSV</button>
             <button type="button" id="btn-convert-fallback" class="secondary" data-icon="refresh" title="Switch to software encoder if GPU encode fails">Software fallback</button>
@@ -257,6 +258,7 @@
           <h3>Behavior</h3>
           <label class="check"><input type="checkbox" id="set-auto-add" /> Auto-add pasted URLs after a short delay</label>
           <label class="check"><input type="checkbox" id="set-auto-start" /> Auto-start downloads when new items become ready</label>
+          <label>Scheduled download start (local HH:MM, empty = off) <input type="text" id="set-scheduled-start" placeholder="08:30" maxlength="5" /></label>
           <label class="check"><input type="checkbox" id="set-enqueue-convert" /> Enqueue completed downloads in Video Converter queue</label>
           <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
           <label>Output folder <input type="text" id="set-output-dir" /></label>

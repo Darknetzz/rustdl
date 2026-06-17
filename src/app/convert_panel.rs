@@ -315,13 +315,8 @@ impl PydlApp {
             self.append_log("No convert items selected.");
             return;
         }
-        let id_set: std::collections::HashSet<u64> = ids.iter().copied().collect();
         self.convert_core_action(|core| {
-            core.convert_items
-                .retain(|it| !id_set.contains(&it.item_id));
-            core.update_convert_status();
-            core.schedule_convert_queue_save();
-            core.bump_generation();
+            core.remove_convert_items(&ids);
         });
         for id in ids {
             self.textures.remove(&id);

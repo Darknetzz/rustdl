@@ -385,6 +385,22 @@ pub fn session_restore_discard_on_startup(preference: &str) -> bool {
     preference.trim().eq_ignore_ascii_case("never")
 }
 
+/// Parses `HH:MM` (24h local) for scheduled download start; empty input is disabled.
+pub fn parse_scheduled_time_hhmm(raw: &str) -> Option<(u32, u32)> {
+    let s = raw.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let (h, m) = s.split_once(':')?;
+    let hour: u32 = h.trim().parse().ok()?;
+    let minute: u32 = m.trim().parse().ok()?;
+    if hour < 24 && minute < 60 {
+        Some((hour, minute))
+    } else {
+        None
+    }
+}
+
 /// GitHub token for release API calls: settings field, then `RUSTDL_GITHUB_TOKEN`, then `GITHUB_TOKEN`.
 pub fn resolve_github_token(settings: &AppSettings) -> Option<String> {
     let from_settings = settings.github_token.trim();

@@ -54,27 +54,11 @@ impl LogFilter {
     }
 
     pub(crate) fn accepts(self, line: &str) -> bool {
-        let body = log_message_body(line);
-        match self {
-            LogFilter::All => true,
-            LogFilter::Errors => is_error_line(body),
-            LogFilter::Important => {
-                let lower = body.to_ascii_lowercase();
-                is_error_line(body)
-                    || lower.contains("metadata fetch failed")
-                    || lower.contains("download failed")
-                    || lower.contains("starting")
-                    || lower.contains("started")
-                    || lower.contains("completed")
-                    || lower.contains("done")
-                    || lower.contains("queue")
-                    || lower.contains("convert")
-                    || lower.contains("skipped")
-                    || lower.contains("skip_reason")
-            }
-        }
+        crate::log_filter::log_filter_accepts(self.slug(), line)
     }
 }
+
+pub(crate) use crate::log_filter::is_error_line;
 
 /// Muted semantic text on dark backgrounds (matches activity log).
 pub(crate) const LOG_COLOR_ERROR: Color32 = Color32::from_rgb(255, 138, 128);
@@ -136,15 +120,6 @@ fn log_line_widget(
         job.append(&display, 0.0, fmt(color));
     }
     egui::WidgetText::from(job)
-}
-
-pub(crate) fn is_error_line(line: &str) -> bool {
-    let lower = line.to_ascii_lowercase();
-    lower.contains("error")
-        || lower.contains("failed")
-        || lower.contains("not found")
-        || lower.contains("invalid")
-        || lower.contains("missing")
 }
 
 fn is_warning_line(line: &str) -> bool {
@@ -408,11 +383,39 @@ impl PydlApp {
             ui.label(RichText::new("Activity log").small().strong());
             self.draw_log_dock_controls_inner(ui, true);
         });
+        self.draw_docked_activity_log_body(ui, max_log_h, true);
+    }
+
+    /// Shared docked log chrome: height slider, toolbar, scroll (after heading/dock row).
+    pub(super) fn draw_docked_activity_log_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        max_log_h: f32,
+        compact_toolbar: bool,
+    ) {
         let max_log = max_log_h.clamp(80.0, 480.0);
         self.draw_log_height_slider(ui, max_log);
-        self.draw_activity_log_toolbar_inner(ui, true);
+        self.draw_activity_log_toolbar_inner(ui, compact_toolbar);
         let log_h = self.settings.log_dock_height.clamp(80.0, max_log);
         self.draw_activity_log_lines_scroll(ui, log_h);
+    }
+
+    /// Activity log body with explicit scroll height (main-column undocked footer).
+    pub(super) fn draw_docked_activity_log_body_with_height(
+        &mut self,
+        ui: &mut egui::Ui,
+        max_log_h: f32,
+        log_h: f32,
+        compact_toolbar: bool,
+    ) {
+        let max_log = max_log_h.clamp(80.0, 480.0);
+        self.draw_log_height_slider(ui, max_log);
+        if compact_toolbar {
+            self.draw_activity_log_toolbar_inner(ui, true);
+        } else {
+            self.draw_activity_log_toolbar(ui);
+        }
+        self.draw_activity_log_lines_scroll(ui, log_h.max(60.0));
     }
 
     /// Scrollable log lines only (toolbar is separate).

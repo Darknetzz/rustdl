@@ -94,7 +94,9 @@ pub fn spawn_watch_folder_loop(runtime: Arc<Runtime>, core: SharedCore) {
         let mut interval = tokio::time::interval(Duration::from_secs(5));
         loop {
             interval.tick().await;
-            core.lock().poll_watch_folders();
+            let mut c = core.lock();
+            c.poll_watch_folders();
+            c.poll_scheduled_download_start();
         }
     });
 }
@@ -251,7 +253,7 @@ impl super::core::DownloadCore {
             force_bump,
         ) {
             self.update_convert_status();
-            self.bump_generation();
+            self.mark_convert_item_dirty(item_id);
         }
     }
 

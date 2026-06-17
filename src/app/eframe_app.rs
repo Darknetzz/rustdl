@@ -679,20 +679,8 @@ impl PydlApp {
                     &self.ffprobe_version,
                     compact,
                 );
-                draw_precheck_status(
-                    ui,
-                    "ffmpeg",
-                    self.has_ffmpeg,
-                    &self.ffmpeg_version,
-                    compact,
-                );
-                draw_precheck_status(
-                    ui,
-                    "yt-dlp",
-                    self.has_yt_dlp,
-                    &self.yt_dlp_version,
-                    compact,
-                );
+                draw_precheck_status(ui, "ffmpeg", self.has_ffmpeg, &self.ffmpeg_version, compact);
+                draw_precheck_status(ui, "yt-dlp", self.has_yt_dlp, &self.yt_dlp_version, compact);
             });
             self.draw_system_usage(ui, true);
             self.draw_output_disk_space(ui);

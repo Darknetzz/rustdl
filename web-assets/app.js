@@ -13,6 +13,11 @@ let logLinesCache = [];
 let queueStatusFilter = null;
 /** @type {Set<number>} */
 let selectedQueueIds = new Set();
+let selectedConvertIds = new Set();
+/** @type {{ error_keywords: string[], important_keywords: string[] } | null} */
+let logFilterRules = null;
+let sessionRestorePromptOpen = false;
+let sessionRestoreHandled = false;
 /** @type {number | null} done history filter in days; null = all time */
 let doneHistoryFilterDays = loadDoneHistoryFilter();
 let queueSearchSaveTimer = null;
@@ -175,14 +180,16 @@ function logMessageBody(line) {
 
 function isLogErrorLine(body) {
   const lower = body.toLowerCase();
-  return (
-    lower.includes("error") ||
-    lower.includes("failed") ||
-    lower.includes("failure") ||
-    lower.includes("missing") ||
-    lower.includes("denied") ||
-    lower.includes("not found")
-  );
+  const keywords = logFilterRules?.error_keywords || [
+    "error",
+    "failed",
+    "failure",
+    "not found",
+    "invalid",
+    "missing",
+    "denied",
+  ];
+  return keywords.some((kw) => lower.includes(kw));
 }
 
 function logFilterAccepts(line, filter) {
@@ -190,19 +197,19 @@ function logFilterAccepts(line, filter) {
   if (filter === "errors") return isLogErrorLine(body);
   if (filter === "important") {
     const lower = body.toLowerCase();
-    return (
-      isLogErrorLine(body) ||
-      lower.includes("metadata fetch failed") ||
-      lower.includes("download failed") ||
-      lower.includes("starting") ||
-      lower.includes("started") ||
-      lower.includes("completed") ||
-      lower.includes("done") ||
-      lower.includes("queue") ||
-      lower.includes("convert") ||
-      lower.includes("skipped") ||
-      lower.includes("skip_reason")
-    );
+    const keywords = logFilterRules?.important_keywords || [
+      "metadata fetch failed",
+      "download failed",
+      "starting",
+      "started",
+      "completed",
+      "done",
+      "queue",
+      "convert",
+      "skipped",
+      "skip_reason",
+    ];
+    return isLogErrorLine(body) || keywords.some((kw) => lower.includes(kw));
   }
   return true;
 }
@@ -546,6 +553,51 @@ function renderConfigWarnings(warnings) {
   el.innerHTML = warnings.map((w) => `<p>${escapeHtml(w)}</p>`).join("");
 }
 
+function sessionRestoreBodyText(restore) {
+  const parts = [];
+  if (restore.downloader_count > 0) {
+    parts.push(`${restore.downloader_count} downloader item(s)`);
+  }
+  if (restore.convert_count > 0) {
+    parts.push(`${restore.convert_count} convert item(s)`);
+  }
+  if (!parts.length) return "Restore saved queue state from the last session?";
+  return `Restore saved queue from the last session? (${parts.join(", ")})`;
+}
+
+async function maybePromptSessionRestore(statusData) {
+  const restore = statusData?.session_restore;
+  if (!restore?.pending) {
+    sessionRestoreHandled = false;
+    return;
+  }
+  if (sessionRestoreHandled || sessionRestorePromptOpen) return;
+  sessionRestoreHandled = true;
+  const pref = (cachedSettings || {}).session_restore_preference || "ask";
+  if (pref.toLowerCase() === "never") {
+    await api("/api/session-restore/discard", { method: "POST" }).catch(() => {});
+    return;
+  }
+  if (pref.toLowerCase() === "always") {
+    await api("/api/session-restore/apply", { method: "POST" }).catch(() => {});
+    await refreshAll();
+    return;
+  }
+  sessionRestorePromptOpen = true;
+  const ok = await showConfirmDialog(sessionRestoreBodyText(restore), "Restore session");
+  sessionRestorePromptOpen = false;
+  try {
+    if (ok) {
+      await api("/api/session-restore/apply", { method: "POST" });
+    } else {
+      await api("/api/session-restore/discard", { method: "POST" });
+    }
+    await refreshAll();
+  } catch (e) {
+    notifyError(e.message || String(e));
+  }
+}
+
 async function saveQueueSearchSetting(value) {
   if (!cachedSettings) return;
   const patch = { ...cachedSettings, queue_search: value };
@@ -605,6 +657,8 @@ let cachedHasYtDlp = false;
 
 /** Last queue generation from `/api/queue` (skip rebuild when unchanged). */
 let lastQueueGeneration = 0;
+let lastQueueStructureKey = "";
+let lastQueueStructureKey = "";
 /** Last status generation from `/api/status`. */
 let lastStatusGeneration = 0;
 let sseConnected = false;
@@ -757,8 +811,10 @@ async function refreshStatus() {
   updateQuitButtonState();
   renderTools(data.tools);
   renderConfigWarnings(data.config_warnings);
+  if (data.log_filter_rules) logFilterRules = data.log_filter_rules;
   cachedHasYtDlp = data.tools?.yt_dlp?.ok === true;
   updateDownloadControlButtons(data);
+  await maybePromptSessionRestore(data);
   if (typeof data.generation === "number") {
     lastStatusGeneration = data.generation;
   }
@@ -1587,6 +1643,17 @@ async function reorderQueueItem(draggedId, targetId) {
   await refreshQueue(true);
 }
 
+async function reorderConvertItem(draggedId, targetId) {
+  const res = await api("/api/convert/reorder", {
+    method: "POST",
+    body: JSON.stringify({ dragged_id: draggedId, target_id: targetId }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Could not reorder convert item."));
+  }
+  await refreshConvert();
+}
+
 async function requeueDoneItems(itemIds) {
   const res = await api("/api/queue/requeue", {
     method: "POST",
@@ -1627,7 +1694,8 @@ async function setItemOverrides(id, formatOverride, profileOverride) {
   await refreshQueue(true);
 }
 
-function appendReadyReorderButtons(group, item, readyItems) {
+function appendReadyReorderButtons(group, item, readyItems, reorderFn) {
+  const reorder = reorderFn || reorderQueueItem;
   const idx = readyItems.findIndex((it) => it.item_id === item.item_id);
   if (idx < 0) return;
   if (idx > 0) {
@@ -1637,7 +1705,7 @@ function appendReadyReorderButtons(group, item, readyItems) {
     up.title = "Move up";
     setButtonLabel(up, ICON.arrowUpward, "↑");
     up.onclick = () =>
-      reorderQueueItem(item.item_id, readyItems[idx - 1].item_id).catch((e) =>
+      reorder(item.item_id, readyItems[idx - 1].item_id).catch((e) =>
         alert(e.message || String(e))
       );
     group.appendChild(up);
@@ -1649,7 +1717,7 @@ function appendReadyReorderButtons(group, item, readyItems) {
     down.title = "Move down";
     setButtonLabel(down, ICON.arrowDownward, "↓");
     down.onclick = () =>
-      reorderQueueItem(item.item_id, readyItems[idx + 1].item_id).catch((e) =>
+      reorder(item.item_id, readyItems[idx + 1].item_id).catch((e) =>
         alert(e.message || String(e))
       );
     group.appendChild(down);
@@ -1717,16 +1785,18 @@ function appendCancelMenuButton(group, item) {
   group.appendChild(menu);
 }
 
-function appendSelectionCheckbox(card, item) {
+function appendSelectionCheckbox(card, item, selectedSet, updateUiFn) {
+  const ids = selectedSet || selectedQueueIds;
+  const updateUi = updateUiFn || updateBulkSelectionUi;
   const wrap = document.createElement("label");
   wrap.className = "card-select";
   const cb = document.createElement("input");
   cb.type = "checkbox";
-  cb.checked = selectedQueueIds.has(item.item_id);
+  cb.checked = ids.has(item.item_id);
   cb.onchange = () => {
-    if (cb.checked) selectedQueueIds.add(item.item_id);
-    else selectedQueueIds.delete(item.item_id);
-    updateBulkSelectionUi();
+    if (cb.checked) ids.add(item.item_id);
+    else ids.delete(item.item_id);
+    updateUi();
   };
   wrap.appendChild(cb);
   card.insertBefore(wrap, card.firstChild);
@@ -2359,6 +2429,30 @@ function findQueueCard(itemId) {
   return document.querySelector(`#queue [data-item-id="${itemId}"]`);
 }
 
+function patchQueueCardProgress(item) {
+  const card = findQueueCard(item.item_id);
+  if (!card) return false;
+  const slug = statusSlug(item.status);
+  const fill = card.querySelector(".card-progress-fill");
+  if (fill) {
+    fill.style.width = `${Math.min(100, Math.max(0, Number(item.percent) || 0))}%`;
+    fill.className = `card-progress-fill status-${slug}`;
+  }
+  patchQueueCardDownloadLine(item.item_id, item.detail || item.speed_text || "");
+  const chip = card.querySelector(".status-chip");
+  if (chip) setStatusChip(chip, slug, item.status || "");
+  return true;
+}
+
+function tryPatchDownloaderQueue(items) {
+  if (!items?.length) return false;
+  let patched = 0;
+  for (const item of items) {
+    if (patchQueueCardProgress(item)) patched += 1;
+  }
+  return patched === items.length;
+}
+
 function patchQueueCardDownloadLine(itemId, line) {
   const card = findQueueCard(itemId);
   if (!card) return;
@@ -2399,16 +2493,27 @@ async function refreshQueue(force = false) {
   const settings = cachedSettings || {};
   pruneThumbFailedKeys(data.items);
   stopActiveMedia();
-  root.className = "queue" + (settings.card_list_layout ? " list-layout" : "");
-  root.innerHTML = "";
+  const allItems = data.items || [];
+  const structureKey = allItems.map((it) => it.item_id).join(",");
   const searchInput = document.getElementById("queue-search");
   const searchQuery = searchInput ? searchInput.value : settings.queue_search || "";
-  const items = (data.items || []).filter(
+  const items = allItems.filter(
     (item) =>
       itemMatchesSearch(item, searchQuery) &&
       itemMatchesStatusFilter(item, queueStatusFilter) &&
       itemMatchesDoneHistory(item)
   );
+  if (
+    !force &&
+    structureKey === lastQueueStructureKey &&
+    items.length > 0 &&
+    tryPatchDownloaderQueue(items)
+  ) {
+    return;
+  }
+  lastQueueStructureKey = structureKey;
+  root.className = "queue" + (effectiveListLayout(settings, allItems.length) ? " list-layout" : "");
+  root.innerHTML = "";
   const readyItems = (data.items || [])
     .filter((item) => downloadQueueGroup(item) === "Ready" && itemMatchesSearch(item, searchQuery))
     .sort((a, b) => (a.sort_order || a.item_id || 0) - (b.sort_order || b.item_id || 0));
@@ -2423,7 +2528,10 @@ async function refreshQueue(force = false) {
     return;
   }
   renderGroupedQueue(root, items, {
-    settings,
+    settings: {
+      ...settings,
+      card_list_layout: effectiveListLayout(settings, (data.items || []).length),
+    },
     groupFn: downloadQueueGroup,
     groupOrder: DOWNLOAD_QUEUE_GROUPS,
     renderItem: (item, s) =>
@@ -2842,6 +2950,7 @@ function populateSettingsForm(s, commandPreview) {
 
   setCheck("set-auto-add", s.auto_add_pasted_urls);
   setCheck("set-auto-start", s.auto_start_downloads);
+  setVal("set-scheduled-start", s.scheduled_download_start || "");
   setCheck("set-enqueue-convert", s.enqueue_downloads_to_convert);
   setVal("set-workers", s.worker_count);
   setVal("set-output-dir", s.output_dir);
@@ -2939,6 +3048,8 @@ function collectSettingsForm(base) {
 
   s.auto_add_pasted_urls = document.getElementById("set-auto-add").checked;
   s.auto_start_downloads = document.getElementById("set-auto-start").checked;
+  s.scheduled_download_start =
+    document.getElementById("set-scheduled-start")?.value?.trim() || "";
   s.enqueue_downloads_to_convert = document.getElementById("set-enqueue-convert").checked;
   s.worker_count = parseInt(document.getElementById("set-workers").value, 10) || 3;
   s.output_dir = document.getElementById("set-output-dir").value;
@@ -3750,12 +3861,15 @@ function appendConvertOpenMenuButton(group, item) {
   group.appendChild(menu);
 }
 
-function renderConvertCard(item, showThumbnails) {
+function renderConvertCard(item, settings, ctx) {
   const slug = convertSlug(item);
   const active = slug === "downloading" || slug === "queued";
+  const readyItems = (ctx && ctx.readyItems) || [];
   const card = document.createElement("article");
   card.className = "card" + (item.will_skip_target ? " convert-will-skip" : "");
+  card.dataset.itemId = String(item.item_id);
 
+  const showThumbnails = (settings || {}).show_thumbnails !== false;
   const thumb = document.createElement("div");
   thumb.className = "card-thumb";
   const img = document.createElement("img");
@@ -3816,9 +3930,14 @@ function renderConvertCard(item, showThumbnails) {
   const { bar: actions, group } = createCardActionBar();
   appendConvertPlayButton(group, item, thumb);
   appendConvertOpenMenuButton(group, item);
+  if (slug === "idle" && readyItems.length > 1) {
+    appendReadyReorderButtons(group, item, readyItems, reorderConvertItem);
+  }
   if (group.childElementCount > 0) {
     card.appendChild(actions);
   }
+
+  appendSelectionCheckbox(card, item, selectedConvertIds, updateConvertBulkSelectionUi);
 
   return card;
 }
@@ -3959,6 +4078,38 @@ async function fetchconvertThumbnailBlob(item) {
   }
 }
 
+const AUTO_LIST_LAYOUT_THRESHOLD = 50;
+
+function effectiveListLayout(settings, itemCount) {
+  const s = settings || {};
+  return !!s.card_list_layout || itemCount > AUTO_LIST_LAYOUT_THRESHOLD;
+}
+
+function updateConvertBulkSelectionUi() {
+  const n = selectedConvertIds.size;
+  const removeBtn = document.getElementById("btn-convert-bulk-remove");
+  if (removeBtn) removeBtn.disabled = n === 0;
+}
+
+async function bulkRemoveConvertSelected() {
+  if (!selectedConvertIds.size) return;
+  if (
+    !(await showConfirmDialog(
+      `Remove ${selectedConvertIds.size} selected convert item(s) from the queue?`,
+      "Remove selected"
+    ))
+  )
+    return;
+  const res = await api("/api/convert/bulk-remove", {
+    method: "POST",
+    body: JSON.stringify({ item_ids: [...selectedConvertIds] }),
+  });
+  if (!res.ok) throw new Error(await readApiError(res, "Bulk remove failed."));
+  selectedConvertIds.clear();
+  updateConvertBulkSelectionUi();
+  await refreshConvert();
+}
+
 async function refreshConvert() {
   let data;
   try {
@@ -4011,26 +4162,35 @@ async function refreshConvert() {
 
   const root = document.getElementById("convert-queue");
   if (!root) return;
-  const showThumbnails = (cachedSettings || {}).show_thumbnails !== false;
+  const settings = cachedSettings || {};
+  const showThumbnails = settings.show_thumbnails !== false;
+  const listLayout = effectiveListLayout(settings, data.items.length);
   pruneconvertThumbKeys(data.items);
+  root.className = "queue" + (listLayout ? " list-layout" : "");
   root.innerHTML = "";
   if (!data.items.length) {
     const empty = document.createElement("p");
     empty.className = "hint convert-empty";
     empty.textContent = "Nothing here yet. Add file or folder paths above, then Scan inputs.";
     root.appendChild(empty);
+    updateConvertBulkSelectionUi();
     return;
   }
+  const readyItems = data.items
+    .filter((it) => convertGroup(it) === "Ready")
+    .sort((a, b) => (a.sort_order || a.item_id || 0) - (b.sort_order || b.item_id || 0));
+  const cardCtx = { readyItems };
   renderGroupedQueue(root, data.items, {
-    settings: { card_list_layout: false, show_thumbnails: showThumbnails },
+    settings: { ...settings, card_list_layout: listLayout, show_thumbnails: showThumbnails },
     groupFn: convertGroup,
     groupOrder: CONVERT_QUEUE_GROUPS,
-    renderItem: (item, s) => renderConvertCard(item, s.show_thumbnails !== false),
+    renderItem: (item, s) => renderConvertCard(item, s, cardCtx),
     defaultOpenCtx: {},
     mode: "cv",
     defaultOpenFn: (label) => convertQueueGroupDefaultOpen(label),
     sortGroupItems: null,
   });
+  updateConvertBulkSelectionUi();
 }
 
 async function convertScan() {
@@ -4238,6 +4398,9 @@ document.getElementById("btn-convert-fallback")?.addEventListener("click", () =>
   api("/api/convert/fallback-software", { method: "POST" })
     .then(() => showToast("Switched to software encoder."))
     .catch((e) => notifyError(e.message || String(e)))
+);
+document.getElementById("btn-convert-bulk-remove")?.addEventListener("click", () =>
+  bulkRemoveConvertSelected().catch((e) => notifyError(e.message || String(e)))
 );
 document.getElementById("btn-convert-retry-skipped").onclick = () =>
   convertRetrySkipped().catch((e) => alert(e.message || String(e)));

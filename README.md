@@ -104,6 +104,13 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - **Video Converter** mode for local file/folder transcoding to AV1 (default), H.265, or H.264 with queue progress, dry-run, cancel, and encoder auto-detect.
 - Optional: enqueue each completed video download into the Video Converter queue (Settings → Downloader).
 - Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → **Web UI**).
+- **Command palette** (`Ctrl+K` / `Cmd+K`): keyboard shortcuts, layout presets (Compact / Review / Minimal), dock/float panels, export log, and quick navigation.
+- **Watch folders**: auto-enqueue URLs from `.url` / `.txt` files (Downloader) and auto-scan new videos into the convert queue (Settings).
+- **Queue templates** and **convert encoding presets** saved under your config directory.
+- **Download library** (desktop window and LAN **Library** tab): browse completed downloads and re-queue URLs.
+- Headless queue modes: `--enqueue`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the GUI.
+- **Scheduled download start** (Settings → Downloader): optional daily `HH:MM` local time to start ready downloads.
+- **GPU encode fairness** and **parallel conversions** (`1..=6`) when running Video Converter batches.
 
 ## LAN web UI
 

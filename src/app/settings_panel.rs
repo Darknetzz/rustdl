@@ -615,6 +615,16 @@ impl PydlApp {
                                 "Auto-start downloads when new items become ready",
                                 &mut self.settings.auto_start_downloads,
                             );
+                            ui.label("Scheduled start (local HH:MM)");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.scheduled_download_start,
+                                    )
+                                    .hint_text("empty = disabled, e.g. 08:30"),
+                                )
+                                .changed();
+                            ui.end_row();
                             changed |= settings_checkbox(
                                 ui,
                                 "Enqueue completed downloads in Video Converter queue",

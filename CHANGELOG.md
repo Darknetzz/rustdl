@@ -10,8 +10,29 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-17
+
+### Added
+
+- LAN web UI: convert queue bulk remove, Ready-row reorder, session restore prompt, and shared log-filter rules from `/api/status`.
+- Scheduled download start (Settings → Downloader): optional daily `HH:MM` local time to start ready downloads (desktop, web, headless).
+- `POST /api/convert/reorder`, `POST /api/convert/bulk-remove`, and `POST /api/session-restore/apply|discard` API endpoints.
+
 ### Changed
+
+- Web and desktop queues auto-switch to list layout when there are more than 50 items (same threshold as the desktop app).
+- Desktop downloader **Clear list** routes through the download core for consistent cancel flags and persistence.
+- Convert queue list rendering avoids cloning full items each row; convert progress sync uses dirty-item mirroring like downloads.
+- Web downloader queue refreshes patch in-place progress when the queue structure is unchanged (less DOM churn on SSE).
+- Activity log filter keywords are shared between desktop and LAN web via `log_filter_rules` in `/api/status`.
+- Downloader footer action buttons share one implementation for grouped and fused layouts.
+- Convert-mode queue search shows a filename/path hint; re-download failures appear in the activity log.
+- About dialog on non-Windows clarifies using GitHub Releases when an update is available.
 - Main header: executable PATH checks and CPU/RAM/GPU usage are shown in two compact vertical columns to use less horizontal space.
+
+### Documentation
+
+- README documents command palette, watch folders, templates/presets, library, headless queue flags, scheduled start, and parallel/GPU convert options.
 
 ## [0.7.3] - 2026-06-15
 

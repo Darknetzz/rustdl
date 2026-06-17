@@ -99,8 +99,144 @@ impl PydlApp {
         });
     }
 
-    /// Pause/import-export/recheck/clear — split into wrap-friendly groups for narrow footers.
-    fn draw_downloader_queue_action_groups(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn clear_inactive_downloader_queue(&mut self) {
+        use crate::service::core::QueueClearFilter;
+        self.download_core_action(|core| {
+            core.clear_queue(QueueClearFilter::Inactive);
+        });
+    }
+
+    fn draw_dl_queue_transport_group(
+        &mut self,
+        g: &mut crate::app_ui::ButtonGroup<'_>,
+        has_idle_ready: bool,
+        can_cancel_all: bool,
+        cancel_all_ready: &mut bool,
+        cancel_all_remove: &mut bool,
+    ) {
+        if has_idle_ready
+            && g.success(
+                &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                true,
+            )
+            .clicked()
+        {
+            self.start_downloads();
+        }
+        if self.downloads_paused {
+            if g.success(
+                &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                true,
+            )
+            .clicked()
+            {
+                self.resume_all_downloads();
+            }
+        } else if g
+            .warning(
+                &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                self.status_queued > 0 || self.status_active > 0,
+            )
+            .clicked()
+        {
+            self.pause_all_downloads();
+        }
+        g.cancel_all_menu(can_cancel_all, cancel_all_ready, cancel_all_remove);
+    }
+
+    fn draw_dl_queue_io_group(
+        &mut self,
+        g: &mut crate::app_ui::ButtonGroup<'_>,
+        export_queue: &mut bool,
+        import_queue: &mut bool,
+    ) {
+        if g.secondary(
+            &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
+            true,
+        )
+        .clicked()
+        {
+            self.open_output_folder();
+        }
+        g.import_export_menu(!self.items.is_empty() || !self.add_in_progress, |ui| {
+            if ui
+                .add_enabled(
+                    !self.items.is_empty(),
+                    egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
+                )
+                .clicked()
+            {
+                *export_queue = true;
+            }
+            if ui
+                .add_enabled(
+                    !self.add_in_progress,
+                    egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
+                )
+                .on_hover_text("Load URLs from a .txt file directly into the download queue")
+                .clicked()
+            {
+                *import_queue = true;
+            }
+        });
+    }
+
+    fn draw_dl_queue_maint_group(&mut self, g: &mut crate::app_ui::ButtonGroup<'_>) {
+        if !self.selected_item_ids.is_empty() {
+            if g.danger(
+                &format!(
+                    "{} Remove selected ({})",
+                    ui_icons::REMOVE,
+                    self.selected_item_ids.len()
+                ),
+                true,
+            )
+            .clicked()
+            {
+                self.remove_selected_items();
+            }
+            if self.status_failed > 0
+                && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
+                    .clicked()
+            {
+                self.retry_selected_failed();
+            }
+        }
+        if self.status_failed > 0
+            && g
+                .warning(
+                    &format!("{} Retry all failed", ui_icons::RETRY),
+                    true,
+                )
+                .on_hover_text(
+                    "Retry every failed download that still has a URL (same as each card's Retry download).",
+                )
+                .clicked()
+        {
+            self.retry_failed_items();
+        }
+        if g
+            .warning(
+                &format!("{} Re-check saved files", ui_icons::RECHECK),
+                self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
+            )
+            .on_hover_text(
+                "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
+            )
+            .on_disabled_hover_text("Requires ffprobe. Disabled while MP3 extraction is enabled.")
+            .clicked()
+        {
+            self.recheck_all_saved_downloads();
+        }
+        if g.danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
+            .clicked()
+        {
+            self.clear_inactive_downloader_queue();
+        }
+    }
+
+    /// Pause/import-export/recheck/clear — split or fused groups for narrow footers.
+    fn draw_downloader_queue_actions(&mut self, ui: &mut egui::Ui, compact: bool, fused: bool) {
         let mut export_queue = false;
         let mut import_queue = false;
         let mut cancel_all_ready = false;
@@ -119,133 +255,35 @@ impl PydlApp {
                 button_group(ui, id, |g| add(g));
             }
         };
-        draw(ui, "dl_queue_transport", &mut |g| {
-            if has_idle_ready
-                && g.success(
-                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                    true,
-                )
-                .clicked()
-            {
-                self.start_downloads();
-            }
-            if self.downloads_paused {
-                if g.success(
-                    &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
-                    true,
-                )
-                .clicked()
-                {
-                    self.resume_all_downloads();
-                }
-            } else if g
-                .warning(
-                    &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
-                    self.status_queued > 0 || self.status_active > 0,
-                )
-                .clicked()
-            {
-                self.pause_all_downloads();
-            }
-            g.cancel_all_menu(
-                can_cancel_all,
-                &mut cancel_all_ready,
-                &mut cancel_all_remove,
-            );
-        });
-        draw(ui, "dl_queue_io", &mut |g| {
-            if g.secondary(
-                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                true,
-            )
-            .clicked()
-            {
-                self.open_output_folder();
-            }
-            g.import_export_menu(!self.items.is_empty() || !self.add_in_progress, |ui| {
-                if ui
-                    .add_enabled(
-                        !self.items.is_empty(),
-                        egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
-                    )
-                    .clicked()
-                {
-                    export_queue = true;
-                }
-                if ui
-                    .add_enabled(
-                        !self.add_in_progress,
-                        egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
-                    )
-                    .on_hover_text("Load URLs from a .txt file directly into the download queue")
-                    .clicked()
-                {
-                    import_queue = true;
-                }
+        if fused {
+            draw(ui, "dl_queue_actions", &mut |g| {
+                self.draw_dl_queue_transport_group(
+                    g,
+                    has_idle_ready,
+                    can_cancel_all,
+                    &mut cancel_all_ready,
+                    &mut cancel_all_remove,
+                );
+                self.draw_dl_queue_io_group(g, &mut export_queue, &mut import_queue);
+                self.draw_dl_queue_maint_group(g);
             });
-        });
-        draw(ui, "dl_queue_maint", &mut |g| {
-            if !self.selected_item_ids.is_empty() {
-                if g.danger(
-                    &format!(
-                        "{} Remove selected ({})",
-                        ui_icons::REMOVE,
-                        self.selected_item_ids.len()
-                    ),
-                    true,
-                )
-                .clicked()
-                {
-                    self.remove_selected_items();
-                }
-                if self.status_failed > 0
-                    && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
-                        .clicked()
-                {
-                    self.retry_selected_failed();
-                }
-            }
-            if self.status_failed > 0
-                && g
-                    .warning(
-                        &format!("{} Retry all failed", ui_icons::RETRY),
-                        true,
-                    )
-                    .on_hover_text(
-                        "Retry every failed download that still has a URL (same as each card's Retry download).",
-                    )
-                    .clicked()
-            {
-                self.retry_failed_items();
-            }
-            if g
-                .warning(
-                    &format!("{} Re-check saved files", ui_icons::RECHECK),
-                    self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
-                )
-                .on_hover_text(
-                    "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
-                )
-                .on_disabled_hover_text(
-                    "Requires ffprobe. Disabled while MP3 extraction is enabled.",
-                )
-                .clicked()
-            {
-                self.recheck_all_saved_downloads();
-            }
-            if g.danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
-                .clicked()
-            {
-                self.items
-                    .retain(|x| matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading));
-                self.pending_resolve_ids
-                    .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
-                self.update_status();
-                self.refresh_input_line_info();
-                self.schedule_queue_save();
-                self.mark_queue_dirty();
-            }
-        });
+        } else {
+            draw(ui, "dl_queue_transport", &mut |g| {
+                self.draw_dl_queue_transport_group(
+                    g,
+                    has_idle_ready,
+                    can_cancel_all,
+                    &mut cancel_all_ready,
+                    &mut cancel_all_remove,
+                );
+            });
+            draw(ui, "dl_queue_io", &mut |g| {
+                self.draw_dl_queue_io_group(g, &mut export_queue, &mut import_queue);
+            });
+            draw(ui, "dl_queue_maint", &mut |g| {
+                self.draw_dl_queue_maint_group(g);
+            });
+        }
         if export_queue {
             self.export_queue_to_file();
         }
@@ -262,157 +300,11 @@ impl PydlApp {
 
     /// Single fused action row for the docked queue footer (stable height for panel resize).
     fn draw_downloader_queue_action_fused(&mut self, ui: &mut egui::Ui, compact: bool) {
-        let mut export_queue = false;
-        let mut import_queue = false;
-        let mut cancel_all_ready = false;
-        let mut cancel_all_remove = false;
-        let can_cancel_all = self.status_queued > 0 || self.status_active > 0;
-        let has_idle_ready = self
-            .items
-            .iter()
-            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
-        let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
-            if compact {
-                compact_button_group(ui, "dl_queue_actions", |g| add(g));
-            } else {
-                button_group(ui, "dl_queue_actions", |g| add(g));
-            }
-        };
-        draw(ui, &mut |g| {
-            if has_idle_ready
-                && g.success(
-                    &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                    true,
-                )
-                .clicked()
-            {
-                self.start_downloads();
-            }
-            if self.downloads_paused {
-                if g.success(
-                    &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
-                    true,
-                )
-                .clicked()
-                {
-                    self.resume_all_downloads();
-                }
-            } else if g
-                .warning(
-                    &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
-                    self.status_queued > 0 || self.status_active > 0,
-                )
-                .clicked()
-            {
-                self.pause_all_downloads();
-            }
-            g.cancel_all_menu(
-                can_cancel_all,
-                &mut cancel_all_ready,
-                &mut cancel_all_remove,
-            );
-            if g.secondary(
-                &format!("{} Open output folder", ui_icons::OPEN_FOLDER),
-                true,
-            )
-            .clicked()
-            {
-                self.open_output_folder();
-            }
-            g.import_export_menu(!self.items.is_empty() || !self.add_in_progress, |ui| {
-                if ui
-                    .add_enabled(
-                        !self.items.is_empty(),
-                        egui::Button::new(format!("{} Export URLs", ui_icons::EXPORT)),
-                    )
-                    .clicked()
-                {
-                    export_queue = true;
-                }
-                if ui
-                    .add_enabled(
-                        !self.add_in_progress,
-                        egui::Button::new(format!("{} Import queue", ui_icons::IMPORT_FILE)),
-                    )
-                    .on_hover_text("Load URLs from a .txt file directly into the download queue")
-                    .clicked()
-                {
-                    import_queue = true;
-                }
-            });
-            if !self.selected_item_ids.is_empty() {
-                if g.danger(
-                    &format!(
-                        "{} Remove selected ({})",
-                        ui_icons::REMOVE,
-                        self.selected_item_ids.len()
-                    ),
-                    true,
-                )
-                .clicked()
-                {
-                    self.remove_selected_items();
-                }
-                if self.status_failed > 0
-                    && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
-                        .clicked()
-                {
-                    self.retry_selected_failed();
-                }
-            }
-            if self.status_failed > 0
-                && g
-                    .warning(
-                        &format!("{} Retry all failed", ui_icons::RETRY),
-                        true,
-                    )
-                    .on_hover_text(
-                        "Retry every failed download that still has a URL (same as each card's Retry download).",
-                    )
-                    .clicked()
-            {
-                self.retry_failed_items();
-            }
-            if g
-                .warning(
-                    &format!("{} Re-check saved files", ui_icons::RECHECK),
-                    self.has_ffprobe && !self.settings.ffmpeg_extract_audio_mp3,
-                )
-                .on_hover_text(
-                    "Run ffprobe on each finished download on disk; mark rows failed if video or audio is missing.",
-                )
-                .on_disabled_hover_text(
-                    "Requires ffprobe. Disabled while MP3 extraction is enabled.",
-                )
-                .clicked()
-            {
-                self.recheck_all_saved_downloads();
-            }
-            if g.danger(&format!("{} Clear list", ui_icons::CLEAR_QUEUE), true)
-                .clicked()
-            {
-                self.items
-                    .retain(|x| matches!(x.status, ItemStatus::Queued | ItemStatus::Downloading));
-                self.pending_resolve_ids
-                    .retain(|_, iid| self.items.iter().any(|x| x.item_id == *iid));
-                self.update_status();
-                self.refresh_input_line_info();
-                self.schedule_queue_save();
-                self.mark_queue_dirty();
-            }
-        });
-        if export_queue {
-            self.export_queue_to_file();
-        }
-        if import_queue {
-            self.import_queue_from_file();
-        }
-        if cancel_all_ready {
-            self.cancel_all_active(super::CancelPostAction::Ready);
-        }
-        if cancel_all_remove {
-            self.cancel_all_active(super::CancelPostAction::Remove);
-        }
+        self.draw_downloader_queue_actions(ui, compact, true);
+    }
+
+    fn draw_downloader_queue_action_groups(&mut self, ui: &mut egui::Ui, compact: bool) {
+        self.draw_downloader_queue_actions(ui, compact, false);
     }
 
     fn draw_downloader_queue_list_scroll(
@@ -554,11 +446,16 @@ impl PydlApp {
     }
 
     fn draw_queue_search_row(&mut self, ui: &mut egui::Ui) {
+        let hint = if self.convert_mode {
+            "Filename, path…"
+        } else {
+            "Title, URL, uploader…"
+        };
         ui.horizontal(|ui| {
             ui.label("Search");
             let search = ui.add(
                 egui::TextEdit::singleline(&mut self.queue_search)
-                    .hint_text("Title, URL, uploader…")
+                    .hint_text(hint)
                     .desired_width(220.0),
             );
             if self.focus_queue_search {
@@ -866,10 +763,8 @@ impl PydlApp {
                 });
                 let budget = height_to_bottom(ui, body_bottom).max(80.0);
                 let max_log = (budget - UNDOCKED_DOCKED_LOG_CHROME).max(80.0);
-                self.draw_log_height_slider(ui, max_log);
-                self.draw_activity_log_toolbar(ui);
                 let log_h = height_to_bottom(ui, body_bottom).max(60.0);
-                self.draw_activity_log_lines_scroll(ui, log_h);
+                self.draw_docked_activity_log_body_with_height(ui, max_log, log_h, false);
             });
     }
 

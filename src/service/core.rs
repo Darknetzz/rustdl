@@ -201,6 +201,7 @@ pub struct DownloadCore {
     /// Thumbnail image bytes shared between the desktop GUI and LAN `/api/thumbnail` proxy.
     pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
     pub dirty_queue_item_ids: HashSet<u64>,
+    pub dirty_convert_item_ids: HashSet<u64>,
     /// Incremented when web or GUI sync pushes state; GUI pulls when this changes.
     pub generation: u64,
     /// Incremented when settings or profile store change; GUI pulls settings when this differs.
@@ -235,6 +236,9 @@ pub struct DownloadCore {
     pub pending_session_restore: Option<PendingSessionRestore>,
 
     pub watch_folder_state: crate::watch_folder::WatchFolderState,
+
+    /// Local calendar day (`YYYY-MM-DD`) when scheduled download start last fired.
+    pub scheduled_download_last_fire_day: Option<String>,
 }
 
 impl DownloadCore {
@@ -341,6 +345,7 @@ impl DownloadCore {
             convert_progress_throttle: HashMap::new(),
             thumbnail_cache: HashMap::new(),
             dirty_queue_item_ids: HashSet::new(),
+            dirty_convert_item_ids: HashSet::new(),
             generation: 1,
             settings_generation: 1,
             config_load_issues: Vec::new(),
@@ -365,6 +370,7 @@ impl DownloadCore {
             shutdown_notify: None,
             pending_session_restore,
             watch_folder_state: crate::watch_folder::WatchFolderState::new(),
+            scheduled_download_last_fire_day: None,
         };
         core.rebuild_item_index();
         core.update_status();
@@ -516,6 +522,45 @@ impl DownloadCore {
     pub fn mark_queue_item_dirty(&mut self, item_id: u64) {
         self.dirty_queue_item_ids.insert(item_id);
         self.bump_generation();
+    }
+
+    pub fn mark_convert_item_dirty(&mut self, item_id: u64) {
+        self.dirty_convert_item_ids.insert(item_id);
+        self.bump_generation();
+    }
+
+    /// When local time reaches `settings.scheduled_download_start` (`HH:MM`), start ready downloads once per day.
+    pub fn poll_scheduled_download_start(&mut self) {
+        let schedule = self.settings.scheduled_download_start.trim();
+        let Some((hour, minute)) = crate::config::parse_scheduled_time_hhmm(schedule) else {
+            return;
+        };
+        let now = chrono::Local::now();
+        use chrono::Timelike;
+        let today = now.format("%Y-%m-%d").to_string();
+        if self.scheduled_download_last_fire_day.as_deref() == Some(today.as_str()) {
+            return;
+        }
+        let now_h = now.hour();
+        let now_m = now.minute();
+        if now_h < hour || (now_h == hour && now_m < minute) {
+            return;
+        }
+        if self.downloads_paused || self.status_ready == 0 || self.queue_running > 0 {
+            return;
+        }
+        let has_idle = self
+            .items
+            .iter()
+            .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
+        if !has_idle {
+            return;
+        }
+        self.scheduled_download_last_fire_day = Some(today);
+        self.append_log(&format!(
+            "Scheduled download start triggered ({schedule} local)."
+        ));
+        self.start_downloads();
     }
 
     /// Keeps monotonic item IDs when reusing an existing row (e.g. Refetch metadata).

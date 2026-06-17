@@ -466,6 +466,24 @@ impl DownloadCore {
         self.bump_generation();
     }
 
+    /// Removes convert queue rows by id; returns count removed.
+    pub fn remove_convert_items(&mut self, item_ids: &[u64]) -> usize {
+        if item_ids.is_empty() {
+            return 0;
+        }
+        let id_set: std::collections::HashSet<u64> = item_ids.iter().copied().collect();
+        let before = self.convert_items.len();
+        self.convert_items
+            .retain(|it| !id_set.contains(&it.item_id));
+        let removed = before - self.convert_items.len();
+        if removed > 0 {
+            self.update_convert_status();
+            self.schedule_convert_queue_save();
+            self.bump_generation();
+        }
+        removed
+    }
+
     /// Reorders Ready (Idle) convert rows by drag-and-drop; returns false when ids are invalid.
     pub fn reorder_convert_ready_items(&mut self, dragged_id: u64, target_id: u64) -> bool {
         if dragged_id == target_id {

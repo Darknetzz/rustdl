@@ -133,7 +133,7 @@ impl PydlApp {
                             if self.update_has_update {
                                 ui.label(
                                     RichText::new(
-                                        "One-click download is Windows-only; use the release page on this platform.",
+                                        "In-app download is Windows-only. Use Open release page, then download rustdl for your platform from GitHub Releases.",
                                     )
                                     .small()
                                     .color(Color32::GRAY),

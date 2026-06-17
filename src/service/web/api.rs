@@ -106,6 +106,21 @@ struct StatusResponse {
     system_usage: SystemUsageJson,
     output_disk_space: Option<DiskSpaceJson>,
     config_warnings: Vec<String>,
+    log_filter_rules: LogFilterRulesJson,
+    session_restore: SessionRestoreJson,
+}
+
+#[derive(Serialize)]
+struct LogFilterRulesJson {
+    error_keywords: Vec<&'static str>,
+    important_keywords: Vec<&'static str>,
+}
+
+#[derive(Serialize)]
+struct SessionRestoreJson {
+    pending: bool,
+    downloader_count: usize,
+    convert_count: usize,
 }
 
 #[derive(Serialize)]
@@ -293,6 +308,11 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/tools/refresh", post(tools_refresh))
         .route("/api/logs", get(logs_get))
         .route("/api/shutdown", post(app_shutdown))
+        .route("/api/session-restore/apply", post(session_restore_apply))
+        .route(
+            "/api/session-restore/discard",
+            post(session_restore_discard),
+        )
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/:id", get(thumbnail_proxy))
         .route("/api/media/:id", get(media_stream));
@@ -355,6 +375,19 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             )
         })
         .collect();
+    let session_restore = if let Some(pending) = &c.pending_session_restore {
+        SessionRestoreJson {
+            pending: true,
+            downloader_count: pending.downloader_count(),
+            convert_count: pending.convert_count(),
+        }
+    } else {
+        SessionRestoreJson {
+            pending: false,
+            downloader_count: 0,
+            convert_count: 0,
+        }
+    };
     Json(StatusResponse {
         version: crate::pkg_version::VERSION,
         build_date: crate::pkg_version::build_date_local(),
@@ -379,7 +412,30 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         system_usage: system_usage_json(&mut st.system_usage.lock()),
         output_disk_space: disk_space_json(&output_dir),
         config_warnings,
+        log_filter_rules: LogFilterRulesJson {
+            error_keywords: crate::log_filter::ERROR_KEYWORDS.to_vec(),
+            important_keywords: crate::log_filter::IMPORTANT_KEYWORDS.to_vec(),
+        },
+        session_restore,
     })
+}
+
+async fn session_restore_apply(State(st): State<ApiState>) -> Result<StatusCode, StatusCode> {
+    let mut c = st.core.lock();
+    if c.apply_pending_session_restore() {
+        Ok(StatusCode::OK)
+    } else {
+        Err(StatusCode::BAD_REQUEST)
+    }
+}
+
+async fn session_restore_discard(State(st): State<ApiState>) -> Result<StatusCode, StatusCode> {
+    let mut c = st.core.lock();
+    if c.discard_pending_session_restore() {
+        Ok(StatusCode::OK)
+    } else {
+        Err(StatusCode::BAD_REQUEST)
+    }
 }
 
 async fn profiles_list(State(st): State<ApiState>) -> Json<ProfilesResponse> {

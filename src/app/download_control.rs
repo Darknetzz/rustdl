@@ -65,7 +65,9 @@ impl PydlApp {
 
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
         self.download_core_action(|core| {
-            let _ = core.redownload_item_id(item_id);
+            if let Err(err) = core.redownload_item_id(item_id) {
+                core.append_log(&format!("Re-download failed: {err:?}"));
+            }
         });
     }
 

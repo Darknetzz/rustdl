@@ -81,6 +81,8 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/pause", post(convert_pause))
         .route("/api/convert/resume", post(convert_resume))
         .route("/api/convert/clear", post(convert_clear))
+        .route("/api/convert/reorder", post(convert_reorder))
+        .route("/api/convert/bulk-remove", post(convert_bulk_remove))
         .route("/api/convert/retry-skipped", post(convert_retry_skipped))
         .route(
             "/api/convert/fallback-software",
@@ -214,6 +216,48 @@ async fn convert_clear(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.clear_convert_queue();
     StatusCode::OK
+}
+
+#[derive(Deserialize)]
+struct ConvertReorderBody {
+    dragged_id: u64,
+    target_id: u64,
+}
+
+#[derive(Deserialize)]
+struct ConvertBulkRemoveBody {
+    item_ids: Vec<u64>,
+}
+
+#[derive(Serialize)]
+struct ConvertBulkRemoveResponse {
+    removed: usize,
+}
+
+async fn convert_reorder(
+    State(st): State<ApiState>,
+    Json(body): Json<ConvertReorderBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    if c.reorder_convert_ready_items(body.dragged_id, body.target_id) {
+        Ok(StatusCode::OK)
+    } else {
+        Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: "Invalid reorder (items must be Ready).".to_owned(),
+            }),
+        ))
+    }
+}
+
+async fn convert_bulk_remove(
+    State(st): State<ApiState>,
+    Json(body): Json<ConvertBulkRemoveBody>,
+) -> Json<ConvertBulkRemoveResponse> {
+    let mut c = st.core.lock();
+    let removed = c.remove_convert_items(&body.item_ids);
+    Json(ConvertBulkRemoveResponse { removed })
 }
 
 async fn convert_retry_skipped(State(st): State<ApiState>) -> StatusCode {
@@ -426,5 +470,182 @@ async fn convert_thumbnail(
             Ok(thumbnail_response(bytes, "image/png"))
         }
         None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use tokio::runtime::Runtime;
+    use tower::ServiceExt;
+
+    use crate::models::{ConvertQueueItem, ItemStatus};
+    use crate::service::core::DownloadCore;
+    use crate::service::web::api::{api_router, ApiState};
+
+    fn test_state(rt: Arc<Runtime>) -> ApiState {
+        let (core, _rx) = DownloadCore::new_shared(rt, true);
+        {
+            let mut c = core.lock();
+            c.settings.web_auth_token = "test-token".to_owned();
+            c.convert_items.clear();
+            c.bump_generation();
+        }
+        ApiState::new(core)
+    }
+
+    fn authed_post(uri: &str, body: &str) -> Request<Body> {
+        Request::builder()
+            .method("POST")
+            .uri(uri)
+            .header("Authorization", "Bearer test-token")
+            .header("Content-Type", "application/json")
+            .body(Body::from(body.to_owned()))
+            .unwrap()
+    }
+
+    #[test]
+    fn convert_queue_requires_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/convert/queue")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        });
+    }
+
+    #[test]
+    fn convert_queue_with_token() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/api/convert/queue")
+                        .header("Authorization", "Bearer test-token")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+        });
+    }
+
+    #[test]
+    fn convert_reorder_rejects_invalid() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state);
+            let response = app
+                .oneshot(authed_post(
+                    "/api/convert/reorder",
+                    r#"{"dragged_id":1,"target_id":2}"#,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        });
+    }
+
+    #[test]
+    fn convert_reorder_ready_items() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        {
+            let mut c = state.core.lock();
+            c.convert_items = vec![
+                ConvertQueueItem {
+                    item_id: 1,
+                    status: ItemStatus::Idle,
+                    source_path: "a.mkv".to_owned(),
+                    ..Default::default()
+                },
+                ConvertQueueItem {
+                    item_id: 2,
+                    status: ItemStatus::Idle,
+                    source_path: "b.mkv".to_owned(),
+                    ..Default::default()
+                },
+            ];
+            c.rebuild_convert_item_index();
+        }
+        rt.block_on(async move {
+            let app = api_router(state.clone());
+            let response = app
+                .oneshot(authed_post(
+                    "/api/convert/reorder",
+                    r#"{"dragged_id":2,"target_id":1}"#,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let order: Vec<u64> = state
+                .core
+                .lock()
+                .convert_items
+                .iter()
+                .map(|it| it.item_id)
+                .collect();
+            assert_eq!(order, vec![2, 1]);
+        });
+    }
+
+    #[test]
+    fn convert_bulk_remove() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        {
+            let mut c = state.core.lock();
+            c.convert_items = vec![
+                ConvertQueueItem {
+                    item_id: 10,
+                    status: ItemStatus::Idle,
+                    source_path: "a.mkv".to_owned(),
+                    ..Default::default()
+                },
+                ConvertQueueItem {
+                    item_id: 11,
+                    status: ItemStatus::Done,
+                    source_path: "b.mkv".to_owned(),
+                    ..Default::default()
+                },
+            ];
+            c.rebuild_convert_item_index();
+        }
+        rt.block_on(async move {
+            let app = api_router(state.clone());
+            let response = app
+                .oneshot(authed_post(
+                    "/api/convert/bulk-remove",
+                    r#"{"item_ids":[10,99]}"#,
+                ))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let ids: Vec<u64> = state
+                .core
+                .lock()
+                .convert_items
+                .iter()
+                .map(|it| it.item_id)
+                .collect();
+            assert_eq!(ids, vec![11]);
+        });
     }
 }
