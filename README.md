@@ -22,7 +22,7 @@ Paste URLs, preview metadata cards, then start downloads. Switch to **Video Conv
 
 The built-in web interface mirrors the downloader queue, Video Converter, and library. Enable it under **Settings → Web UI** (or run `rustdl --web-only`).
 
-To refresh these images locally: `python scripts/capture_readme_screenshots.py` (desktop capture is Windows-only; see the script for web UI steps).
+To refresh these images locally: `python scripts/capture_readme_screenshots.py` (maximizes the desktop window, pre-seeds YouTube thumbnails, and uses Playwright for the web UI when installed).
 
 ## Requirements
 

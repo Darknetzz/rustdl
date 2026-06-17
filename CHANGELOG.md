@@ -13,6 +13,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - LAN web UI: saving the API token now validates it before connecting, shows errors for empty or rejected tokens, and auto-connects when opened via a QR link (`?token=…`).
+- LAN web UI: fixed a duplicate script declaration that could prevent the page from loading.
+
+### Documentation
+
+- README screenshots refreshed: desktop capture uses a fixed 1440×900 window and screen grab so card thumbnails render; demo queue uses real YouTube previews; web UI capture is automated via the screenshot script.
 
 ### Changed
 

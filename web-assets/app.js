@@ -738,7 +738,6 @@ let cachedHasYtDlp = false;
 /** Last queue generation from `/api/queue` (skip rebuild when unchanged). */
 let lastQueueGeneration = 0;
 let lastQueueStructureKey = "";
-let lastQueueStructureKey = "";
 /** Last status generation from `/api/status`. */
 let lastStatusGeneration = 0;
 let sseConnected = false;

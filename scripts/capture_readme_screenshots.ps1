@@ -1,5 +1,6 @@
 # Capture README screenshots (desktop + web UI helper).
 # Requires: release binary, Python 3, Pillow, pywin32 (Windows desktop capture).
+# Optional: playwright + chromium for automated web UI capture.
 #
 # Usage (from repo root):
 #   .\scripts\capture_readme_screenshots.ps1
