@@ -1,9 +1,9 @@
 use super::*;
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
-    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, left_button_row,
-    patch_resizable_panel_state_height, show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    bounded_ui_height, button_group, button_toolbar_wrapped, dock_panel_horizontal_frame,
+    draw_mode_nav_bar, draw_navbar_status_badge, patch_resizable_panel_state_height,
+    show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -408,98 +408,24 @@ impl eframe::App for PydlApp {
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
 
-                let options_id = ui.make_persistent_id("downloader_options");
-                let options_expanded = egui::collapsing_header::CollapsingState::load_with_default_open(
-                    ui.ctx(),
-                    options_id,
-                    self.settings.downloader_options_expanded,
-                )
-                .is_open();
-                let options_header = downloader_options_collapsing_label(
-                    &self.output_dir,
-                    &self.settings.active_profile,
-                    options_expanded,
-                );
-                let options_resp = egui::CollapsingHeader::new(options_header)
-                    .id_salt("downloader_options")
-                    .default_open(self.settings.downloader_options_expanded)
-                    .show(ui, |ui| {
-                        self.constrain_content(ui);
-                        ui.horizontal(|ui| {
-                            ui.label("Output folder");
-                            let path_w = content_width(ui).max(120.0);
-                            let output_dir_edit = ui.add(
-                                egui::TextEdit::singleline(&mut self.output_dir)
-                                    .desired_width(path_w),
-                            );
-                            attach_paste_context_menu(
-                                &output_dir_edit,
-                                &mut self.deferred_menu_paste_output_dir,
-                            );
-                            if output_dir_edit.changed() {
-                                self.persist_settings();
-                                self.last_done_lookup_poll = None;
-                                self.invalidate_output_disk_space();
-                            }
-                        });
-                        left_button_row(ui, |ui| {
-                            button_group(ui, "output_dir", |g| {
-                                if g.secondary(
-                                    &format!("{} Use Downloads", ui_icons::USE_DOWNLOADS),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    self.output_dir =
-                                        default_downloads().to_string_lossy().to_string();
-                                    self.persist_settings();
-                                    self.last_done_lookup_poll = None;
-                                    self.invalidate_output_disk_space();
-                                }
-                            });
-                        });
-                        ui.add_space(4.0);
-                        let profiles = crate::profiles::all_profiles(&self.profile_store);
-                        if !profiles.is_empty() {
-                            ui.horizontal(|ui| {
-                                ui.label("Profile");
-                                egui::ComboBox::from_id_salt("toolbar_profile")
-                                    .selected_text(self.settings.active_profile.clone())
-                                    .show_ui(ui, |ui| {
-                                        for p in &profiles {
-                                            if ui
-                                                .selectable_value(
-                                                    &mut self.settings.active_profile,
-                                                    p.name.clone(),
-                                                    &p.name,
-                                                )
-                                                .clicked()
-                                            {
-                                                if let Some(prof) =
-                                                    crate::profiles::find_profile(
-                                                        &self.profile_store,
-                                                        &p.name,
-                                                    )
-                                                {
-                                                    self.apply_download_profile(&prof);
-                                                }
-                                            }
-                                        }
-                                    });
-                            });
-                        }
-                    });
-                if options_resp.header_response.changed() {
-                    if let Some(state) =
-                        egui::collapsing_header::CollapsingState::load(ui.ctx(), options_id)
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("Downloads to").small());
+                    ui.label(
+                        RichText::new(Self::downloader_options_summary(
+                            &self.output_dir,
+                            &self.settings.active_profile,
+                        ))
+                        .strong(),
+                    );
+                    if ui
+                        .small_button(format!("{} Edit…", ui_icons::SETTINGS))
+                        .on_hover_text("Change output folder and download profile")
+                        .clicked()
                     {
-                        let open = state.is_open();
-                        if open != self.settings.downloader_options_expanded {
-                            self.settings.downloader_options_expanded = open;
-                            self.persist_settings();
-                        }
+                        self.downloader_options_edit_open = true;
                     }
-                }
+                });
+                ui.add_space(4.0);
 
                 button_toolbar_wrapped(ui, |ui| {
                     let downloads_active =
@@ -608,6 +534,7 @@ impl eframe::App for PydlApp {
         self.draw_session_restore_dialog(ctx);
         self.draw_exit_confirm_dialog(ctx);
         self.draw_playlist_preview_dialog(ctx);
+        self.draw_downloader_options_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
         {
             let shared = self.shared_core.clone();
@@ -791,22 +718,4 @@ impl PydlApp {
             });
         });
     }
-}
-
-fn downloader_options_collapsing_label(output_dir: &str, profile: &str, expanded: bool) -> String {
-    if expanded {
-        return "Download options".to_owned();
-    }
-    let folder = std::path::Path::new(output_dir)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(output_dir);
-    let folder = if folder.chars().count() > 36 {
-        let short: String = folder.chars().take(33).collect();
-        format!("{short}…")
-    } else {
-        folder.to_owned()
-    };
-    format!("Download options — {folder} · {profile}")
 }

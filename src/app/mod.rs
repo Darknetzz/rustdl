@@ -48,7 +48,8 @@ use crate::app_parsing::parse_urls_from_text_blob;
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, button_group, centered_button_row, content_panel_frame,
-    modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    content_width, left_button_row, modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT,
+    ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_settings, rustdl_config_dir, save_settings,
@@ -183,6 +184,7 @@ pub struct PydlApp {
     playlist_preview_title: Option<String>,
     playlist_preview_urls: Vec<String>,
     playlist_preview_error: Option<String>,
+    downloader_options_edit_open: bool,
     web_server_start_error: Option<String>,
     web_server_banner_dismissed: bool,
     /// After the user confirms quit, allow the next viewport close through.
@@ -412,6 +414,7 @@ impl PydlApp {
             playlist_preview_title: None,
             playlist_preview_urls: Vec::new(),
             playlist_preview_error: None,
+            downloader_options_edit_open: false,
             web_server_start_error: None,
             web_server_banner_dismissed: false,
             exit_allowed: false,
@@ -1222,6 +1225,139 @@ impl PydlApp {
         } else if add_all {
             self.confirm_playlist_preview_add();
         }
+    }
+
+    pub(super) fn draw_downloader_options_dialog(&mut self, ctx: &egui::Context) {
+        if !self.downloader_options_edit_open {
+            return;
+        }
+        let _ = modal_backdrop(ctx, egui::Id::new("downloader_options_backdrop"));
+        let mut open = true;
+        let mut close = false;
+        let mut modal_frame = egui::Frame::window(&ctx.style());
+        modal_frame.fill = crate::theme::BG_LOG;
+        modal_frame.stroke = egui::Stroke::new(1.0, crate::theme::BORDER_PANEL);
+        modal_frame.inner_margin = egui::Margin::same(20.0);
+        modal_frame.rounding = egui::Rounding::same(8.0);
+        egui::Window::new("Download options")
+            .open(&mut open)
+            .frame(modal_frame)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(480.0)
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .show(ctx, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(
+                    RichText::new("Output folder and download profile for new queue items.")
+                        .small()
+                        .color(crate::theme::TEXT_MUTED),
+                );
+                ui.add_space(8.0);
+                self.draw_downloader_options_editor(ui);
+                ui.add_space(12.0);
+                centered_button_row(ui, "downloader_options_done", |ui| {
+                    button_group(ui, "downloader_options_done", |g| {
+                        if g.success(&format!("{} Done", ui_icons::DISMISS), true)
+                            .clicked()
+                        {
+                            close = true;
+                        }
+                    });
+                });
+            });
+        if !open || close {
+            self.downloader_options_edit_open = false;
+        }
+    }
+
+    fn draw_downloader_options_editor(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Output folder");
+            let path_w = content_width(ui).max(160.0);
+            let output_dir_edit =
+                ui.add(egui::TextEdit::singleline(&mut self.output_dir).desired_width(path_w));
+            attach_paste_context_menu(&output_dir_edit, &mut self.deferred_menu_paste_output_dir);
+            if output_dir_edit.changed() {
+                self.persist_settings();
+                self.last_done_lookup_poll = None;
+                self.invalidate_output_disk_space();
+            }
+        });
+        left_button_row(ui, |ui| {
+            button_group(ui, "dl_options_output", |g| {
+                if g.secondary(&format!("{} Browse…", ui_icons::OPEN_FOLDER), true)
+                    .clicked()
+                {
+                    let mut dialog = rfd::FileDialog::new().set_title("Choose output folder");
+                    let trimmed = self.output_dir.trim();
+                    if !trimmed.is_empty() {
+                        let path = Path::new(trimmed);
+                        if path.is_dir() {
+                            dialog = dialog.set_directory(path);
+                        } else if let Some(parent) = path.parent().filter(|p| p.is_dir()) {
+                            dialog = dialog.set_directory(parent);
+                        }
+                    }
+                    if let Some(path) = dialog.pick_folder() {
+                        self.output_dir = path.to_string_lossy().to_string();
+                        self.persist_settings();
+                        self.last_done_lookup_poll = None;
+                        self.invalidate_output_disk_space();
+                    }
+                }
+                if g.secondary(&format!("{} Use Downloads", ui_icons::USE_DOWNLOADS), true)
+                    .clicked()
+                {
+                    self.output_dir = default_downloads().to_string_lossy().to_string();
+                    self.persist_settings();
+                    self.last_done_lookup_poll = None;
+                    self.invalidate_output_disk_space();
+                }
+            });
+        });
+        ui.add_space(6.0);
+        let profiles = crate::profiles::all_profiles(&self.profile_store);
+        if !profiles.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label("Profile");
+                egui::ComboBox::from_id_salt("downloader_options_profile")
+                    .selected_text(self.settings.active_profile.clone())
+                    .show_ui(ui, |ui| {
+                        for p in &profiles {
+                            if ui
+                                .selectable_value(
+                                    &mut self.settings.active_profile,
+                                    p.name.clone(),
+                                    &p.name,
+                                )
+                                .clicked()
+                            {
+                                if let Some(prof) =
+                                    crate::profiles::find_profile(&self.profile_store, &p.name)
+                                {
+                                    self.apply_download_profile(&prof);
+                                }
+                            }
+                        }
+                    });
+            });
+        }
+    }
+
+    pub(super) fn downloader_options_summary(output_dir: &str, profile: &str) -> String {
+        let folder = if output_dir.trim().is_empty() {
+            "(not set)".to_owned()
+        } else {
+            output_dir.trim().to_owned()
+        };
+        let folder = if folder.chars().count() > 48 {
+            let short: String = folder.chars().take(45).collect();
+            format!("{short}…")
+        } else {
+            folder
+        };
+        format!("{folder} · {profile}")
     }
 
     pub(super) fn draw_web_server_banner(&mut self, ui: &mut egui::Ui) {

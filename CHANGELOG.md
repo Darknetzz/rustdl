@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- Downloader main panel: output folder and profile show as a one-line summary with **Edit…** opening a modal (replaces the expandable options block).
+
 ## [0.8.1] - 2026-06-17
 
 ### Added
