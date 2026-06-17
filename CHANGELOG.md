@@ -13,6 +13,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Changed
 
 - Downloader main panel: output folder and profile show as a one-line summary with **Edit…** opening a modal (replaces the expandable options block).
+- Downloader panel uses less vertical space: merged destination/profile with Start/Pause into one toolbar row, shorter URL field, and scroll area shrinks to content instead of filling empty space above the queue.
 
 ## [0.8.1] - 2026-06-17
 

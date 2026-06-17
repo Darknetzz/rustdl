@@ -1348,14 +1348,14 @@ impl PydlApp {
     pub(super) fn downloader_options_summary(output_dir: &str, profile: &str) -> String {
         let folder = if output_dir.trim().is_empty() {
             "(not set)".to_owned()
+        } else if let Some(name) = Path::new(output_dir.trim())
+            .file_name()
+            .and_then(|n| n.to_str())
+            .filter(|s| !s.is_empty())
+        {
+            name.to_owned()
         } else {
             output_dir.trim().to_owned()
-        };
-        let folder = if folder.chars().count() > 48 {
-            let short: String = folder.chars().take(45).collect();
-            format!("{short}…")
-        } else {
-            folder
         };
         format!("{folder} · {profile}")
     }

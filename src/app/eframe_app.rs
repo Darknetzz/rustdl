@@ -1,9 +1,9 @@
 use super::*;
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, dock_panel_horizontal_frame,
-    draw_mode_nav_bar, draw_navbar_status_badge, patch_resizable_panel_state_height,
-    show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
-    VIDEOS_DOCK_PANEL_ID,
+    bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
+    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
+    patch_resizable_panel_state_height, show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -164,7 +164,7 @@ impl eframe::App for PydlApp {
                 let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, false])
+                    .auto_shrink([true, true])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
@@ -265,15 +265,6 @@ impl eframe::App for PydlApp {
                     10.0,
                     |ui| {
                 with_full_width(ui, |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Downloader").heading());
-                    ui.label(
-                        RichText::new("Queue and download media with yt-dlp.")
-                            .small()
-                            .color(egui::Color32::GRAY),
-                    );
-                });
-                ui.separator();
                 ui.label("URLs (one per line)");
                 #[cfg(not(windows))]
                 {
@@ -298,7 +289,7 @@ impl eframe::App for PydlApp {
                 }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
                 let url_edit = ui.add_sized(
-                    [content_width(ui), 120.0],
+                    [content_width(ui), 88.0],
                     egui::TextEdit::multiline(&mut self.input_urls)
                         .hint_text(
                             "https://... — paste, drag from browser, or drop .url / .webloc / list (.txt, .m3u)",
@@ -402,110 +393,11 @@ impl eframe::App for PydlApp {
 
                 self.constrain_content(ui);
 
-                ui.separator();
                 let has_idle_items = self
                     .items
                     .iter()
                     .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
-
-                ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new("Downloads to").small());
-                    ui.label(
-                        RichText::new(Self::downloader_options_summary(
-                            &self.output_dir,
-                            &self.settings.active_profile,
-                        ))
-                        .strong(),
-                    );
-                    if ui
-                        .small_button(format!("{} Edit…", ui_icons::SETTINGS))
-                        .on_hover_text("Change output folder and download profile")
-                        .clicked()
-                    {
-                        self.downloader_options_edit_open = true;
-                    }
-                });
-                ui.add_space(4.0);
-
-                button_toolbar_wrapped(ui, |ui| {
-                    let downloads_active =
-                        self.status_queued > 0 || self.status_active > 0;
-                    if has_idle_items || self.downloads_paused || downloads_active {
-                        button_group(ui, "dl_actions", |g| {
-                            if has_idle_items
-                                && !self.downloads_paused
-                                && g
-                                    .success(
-                                        &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
-                                        true,
-                                    )
-                                    .clicked()
-                            {
-                                self.start_downloads();
-                            }
-                            if self.downloads_paused {
-                                if g
-                                    .success(
-                                        &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
-                                        true,
-                                    )
-                                    .clicked()
-                                {
-                                    self.resume_all_downloads();
-                                }
-                            } else if downloads_active
-                                && g
-                                    .warning(
-                                        &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
-                                        true,
-                                    )
-                                    .clicked()
-                            {
-                                self.pause_all_downloads();
-                            }
-                        });
-                    }
-                    if !self.selected_item_ids.is_empty() {
-                        button_group(ui, "dl_sel", |g| {
-                            if g.danger(
-                                &format!(
-                                    "{} Remove selected ({})",
-                                    ui_icons::REMOVE,
-                                    self.selected_item_ids.len()
-                                ),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.remove_selected_items();
-                            }
-                            if self.status_failed > 0
-                                && g.warning(
-                                    &format!("{} Retry selected", ui_icons::RETRY),
-                                    true,
-                                )
-                                .clicked()
-                            {
-                                self.retry_selected_failed();
-                            }
-                        });
-                    }
-                    if self.status_failed > 0 {
-                        button_group(ui, "dl_retry_all", |g| {
-                            if g.warning(
-                                &format!("{} Retry all failed", ui_icons::RETRY),
-                                true,
-                            )
-                            .on_hover_text(
-                                "Retry every failed download that still has a URL (same as each card's Retry download).",
-                            )
-                            .clicked()
-                            {
-                                self.retry_failed_items();
-                            }
-                        });
-                    }
-                });
+                self.draw_downloader_compact_action_row(ui, has_idle_items);
                 if trigger_add && !self.add_in_progress {
                     self.add_urls(ctx.input(|i| i.time));
                 }
@@ -716,6 +608,97 @@ impl PydlApp {
                     },
                 );
             });
+        });
+    }
+
+    fn draw_downloader_compact_action_row(&mut self, ui: &mut egui::Ui, has_idle_items: bool) {
+        button_toolbar_wrapped(ui, |ui| {
+            button_group(ui, "dl_options_summary", |g| {
+                let summary = Self::downloader_options_summary(
+                    &self.output_dir,
+                    &self.settings.active_profile,
+                );
+                if g.secondary(&format!("{} {summary}", ui_icons::OPEN_FOLDER), true)
+                    .on_hover_text(self.output_dir.as_str())
+                    .clicked()
+                {
+                    self.downloader_options_edit_open = true;
+                }
+                if g.secondary(&format!("{} Edit", ui_icons::SETTINGS), true)
+                    .on_hover_text("Change output folder and download profile")
+                    .clicked()
+                {
+                    self.downloader_options_edit_open = true;
+                }
+            });
+            let downloads_active = self.status_queued > 0 || self.status_active > 0;
+            if has_idle_items || self.downloads_paused || downloads_active {
+                button_group(ui, "dl_actions", |g| {
+                    if has_idle_items
+                        && !self.downloads_paused
+                        && g.success(
+                            &format!("{} Start downloads", ui_icons::USE_DOWNLOADS),
+                            true,
+                        )
+                        .clicked()
+                    {
+                        self.start_downloads();
+                    }
+                    if self.downloads_paused {
+                        if g.success(
+                            &format!("{} Resume downloads", ui_icons::USE_DOWNLOADS),
+                            true,
+                        )
+                        .clicked()
+                        {
+                            self.resume_all_downloads();
+                        }
+                    } else if downloads_active
+                        && g.warning(
+                            &format!("{} Pause downloads", ui_icons::CANCEL_TO_READY),
+                            true,
+                        )
+                        .clicked()
+                    {
+                        self.pause_all_downloads();
+                    }
+                });
+            }
+            if !self.selected_item_ids.is_empty() {
+                button_group(ui, "dl_sel", |g| {
+                    if g.danger(
+                        &format!(
+                            "{} Remove selected ({})",
+                            ui_icons::REMOVE,
+                            self.selected_item_ids.len()
+                        ),
+                        true,
+                    )
+                    .clicked()
+                    {
+                        self.remove_selected_items();
+                    }
+                    if self.status_failed > 0
+                        && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
+                            .clicked()
+                    {
+                        self.retry_selected_failed();
+                    }
+                });
+            }
+            if self.status_failed > 0 {
+                button_group(ui, "dl_retry_all", |g| {
+                    if g
+                        .warning(&format!("{} Retry all failed", ui_icons::RETRY), true)
+                        .on_hover_text(
+                            "Retry every failed download that still has a URL (same as each card's Retry download).",
+                        )
+                        .clicked()
+                    {
+                        self.retry_failed_items();
+                    }
+                });
+            }
         });
     }
 }
