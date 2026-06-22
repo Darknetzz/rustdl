@@ -42,6 +42,58 @@ fn settings_checkbox(ui: &mut egui::Ui, label: &str, value: &mut bool) -> bool {
     changed
 }
 
+fn size_limit_kind_options() -> [(&'static str, &'static str); 4] {
+    use crate::convert_size_limit::{
+        KIND_MAX_OUTPUT_BYTES, KIND_MAX_PERCENT_OF_SOURCE, KIND_MIN_SHRINK_PERCENT, KIND_NONE,
+    };
+    [
+        (KIND_NONE, "Off"),
+        (KIND_MIN_SHRINK_PERCENT, "Min shrink from source (%)"),
+        (KIND_MAX_PERCENT_OF_SOURCE, "Max % of source size"),
+        (KIND_MAX_OUTPUT_BYTES, "Max output size"),
+    ]
+}
+
+fn size_limit_kind_label(kind: &str) -> &'static str {
+    size_limit_kind_options()
+        .iter()
+        .find(|(k, _)| *k == kind)
+        .map(|(_, label)| *label)
+        .unwrap_or("Off")
+}
+
+fn size_limit_value_hint(kind: &str) -> &'static str {
+    use crate::convert_size_limit::{
+        KIND_MAX_OUTPUT_BYTES, KIND_MAX_PERCENT_OF_SOURCE, KIND_MIN_SHRINK_PERCENT,
+    };
+    match kind {
+        KIND_MIN_SHRINK_PERCENT => "e.g. 50",
+        KIND_MAX_PERCENT_OF_SOURCE => "e.g. 60",
+        KIND_MAX_OUTPUT_BYTES => "e.g. 500M, 1.5GiB",
+        _ => "",
+    }
+}
+
+fn size_limit_violation_options() -> [(&'static str, &'static str); 4] {
+    use crate::convert_size_limit::{
+        VIOLATION_ENCODE_DELETE, VIOLATION_FAIL, VIOLATION_KEEP, VIOLATION_SKIP,
+    };
+    [
+        (VIOLATION_SKIP, "Skip before encode (estimate)"),
+        (VIOLATION_FAIL, "Fail"),
+        (VIOLATION_ENCODE_DELETE, "Encode, then delete if over"),
+        (VIOLATION_KEEP, "Keep anyway (warn)"),
+    ]
+}
+
+fn size_limit_violation_label(violation: &str) -> &'static str {
+    size_limit_violation_options()
+        .iter()
+        .find(|(v, _)| *v == violation)
+        .map(|(_, label)| *label)
+        .unwrap_or("Skip before encode (estimate)")
+}
+
 fn organize_folder_label(value: &str) -> &'static str {
     match value {
         crate::download_organize::FOLDER_UPLOADER => "By uploader / channel",
@@ -1568,15 +1620,58 @@ impl PydlApp {
                                 )
                                 .changed();
                             ui.end_row();
-                            ui.label("Min shrink %");
-                            changed |= ui
-                                .add(
-                                    egui::DragValue::new(&mut self.settings.convert_min_shrink_percent)
-                                        .range(0.0_f32..=95.0_f32)
-                                        .speed(0.5),
-                                )
-                                .changed();
+                            ui.label("Output size limit");
+                            egui::ComboBox::from_id_salt("settings_convert_size_limit_kind")
+                                .selected_text(size_limit_kind_label(
+                                    &self.settings.convert_size_limit_kind,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (kind, label) in size_limit_kind_options() {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_size_limit_kind,
+                                                kind.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
                             ui.end_row();
+                            if self.settings.convert_size_limit_kind
+                                != crate::convert_size_limit::KIND_NONE
+                            {
+                                ui.label("Limit value");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.convert_size_limit_value,
+                                        )
+                                        .hint_text(size_limit_value_hint(
+                                            &self.settings.convert_size_limit_kind,
+                                        )),
+                                    )
+                                    .changed();
+                                ui.end_row();
+                                ui.label("If limit exceeded");
+                                egui::ComboBox::from_id_salt(
+                                    "settings_convert_size_limit_violation",
+                                )
+                                .selected_text(size_limit_violation_label(
+                                    &self.settings.convert_size_limit_violation,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (action, label) in size_limit_violation_options() {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_size_limit_violation,
+                                                action.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                                ui.end_row();
+                            }
                             ui.label("Size preset");
                             egui::ComboBox::from_id_salt("settings_av1_preset")
                                 .selected_text(self.settings.convert_size_preset.clone())
@@ -1932,8 +2027,7 @@ impl PydlApp {
             self.settings.output_dir = self.output_dir.clone();
             self.settings.playlist_preview_cap = self.settings.playlist_preview_cap.clamp(1, 500);
             self.settings.convert_max_width = self.settings.convert_max_width.clamp(320, 7680);
-            self.settings.convert_min_shrink_percent =
-                self.settings.convert_min_shrink_percent.clamp(0.0, 95.0);
+            crate::convert_size_limit::normalize_settings_limits(&mut self.settings);
             let max_cpus = crate::external_tools::logical_cpu_count();
             if self.settings.convert_cpu_threads > 0 {
                 self.settings.convert_cpu_threads =

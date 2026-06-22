@@ -9,6 +9,9 @@ use tokio::sync::broadcast::error::RecvError;
 use crate::app_parsing::{
     convert_detail_is_user_cancellation, parse_speed_eta, reset_convert_item_to_ready,
 };
+use crate::convert_size_limit::{
+    post_encode_decision, ConvertSizeLimit, PostEncodeDecision, VIOLATION_KEEP,
+};
 use crate::convert_state::{
     convert_source_path_missing, format_convert_progress_detail, format_convert_saved_detail,
 };
@@ -307,18 +310,45 @@ impl super::core::DownloadCore {
                 if ok && !skipped {
                     if let Ok(meta) = std::fs::metadata(&it.output_path) {
                         let output_bytes = meta.len();
-                        it.output_bytes = Some(output_bytes);
-                        it.detail = if it.input_bytes > 0 {
-                            format_convert_saved_detail(it.input_bytes, output_bytes)
-                        } else {
-                            detail.clone()
-                        };
+                        let input_bytes = it.input_bytes;
+                        let limit = ConvertSizeLimit::for_item(&self.settings, it);
+                        let limit_msg = limit.violation_message(input_bytes, output_bytes);
+                        match post_encode_decision(&limit, input_bytes, output_bytes) {
+                            PostEncodeDecision::Skip => {
+                                let _ = std::fs::remove_file(&it.output_path);
+                                it.output_bytes = None;
+                                it.detail = format!("Skipped: {limit_msg}");
+                            }
+                            PostEncodeDecision::Fail => {
+                                let _ = std::fs::remove_file(&it.output_path);
+                                it.output_bytes = None;
+                                it.status = ItemStatus::Failed;
+                                it.detail = format!("Failed: {limit_msg}");
+                                self.append_log(&format!("[convert {item_id}] Failed: {limit_msg}"));
+                            }
+                            PostEncodeDecision::Keep => {
+                                it.output_bytes = Some(output_bytes);
+                                let mut saved_detail = if input_bytes > 0 {
+                                    format_convert_saved_detail(input_bytes, output_bytes)
+                                } else {
+                                    detail.clone()
+                                };
+                                if limit.is_active()
+                                    && limit.violation == VIOLATION_KEEP
+                                    && limit.violates(input_bytes, output_bytes)
+                                {
+                                    saved_detail =
+                                        format!("{saved_detail} · WARNING: {limit_msg}");
+                                }
+                                it.detail = saved_detail;
+                                let source = it.source_path.clone();
+                                let out = it.output_path.clone();
+                                self.apply_convert_post_encode_actions(&source, &out);
+                            }
+                        }
                     } else {
                         it.detail = detail.clone();
                     }
-                    let source = it.source_path.clone();
-                    let out = it.output_path.clone();
-                    self.apply_convert_post_encode_actions(&source, &out);
                 } else {
                     it.detail = detail.clone();
                 }

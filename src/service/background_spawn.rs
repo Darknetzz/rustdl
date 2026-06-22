@@ -569,7 +569,7 @@ pub(crate) fn spawn_convert_worker(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     cfg: ConvertConfig,
-    jobs: Vec<(u64, ConvertInput, String)>,
+    jobs: Vec<(u64, ConvertInput, String, crate::convert_size_limit::ConvertSizeLimit)>,
     cancel_flag: Arc<AtomicBool>,
     parallel: usize,
 ) {
@@ -589,7 +589,7 @@ pub(crate) fn spawn_convert_worker(
             if cancel_flag.load(Ordering::Relaxed) {
                 return false;
             }
-            let Some((item_id, input, output_path)) = jobs.next() else {
+            let Some((item_id, input, output_path, size_limit)) = jobs.next() else {
                 return false;
             };
             let item = transcode::ConvertPlanItem {
@@ -597,7 +597,8 @@ pub(crate) fn spawn_convert_worker(
                 output: std::path::PathBuf::from(output_path),
             };
             let bus = bus.clone();
-            let cfg = cfg.clone();
+            let mut cfg = cfg.clone();
+            cfg.size_limit = size_limit;
             let enc = enc.clone();
             let cancel_flag = cancel_flag.clone();
             join_set.spawn(async move {

@@ -10,6 +10,7 @@ use crate::external_tools::{
     apply_subprocess_launch, logical_cpu_count, no_console_window, normalize_subprocess_priority,
     resolve_executable,
 };
+use crate::convert_size_limit::{pre_encode_decision, ConvertSizeLimit, PreEncodeDecision};
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
 const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
@@ -52,7 +53,7 @@ pub struct ConvertConfig {
     pub target_bitrate: String,
     pub max_width: u32,
     pub size_preset: String,
-    pub min_shrink_percent: f32,
+    pub size_limit: ConvertSizeLimit,
     pub encoder_override: String,
     /// `0` = ffmpeg default (all cores).
     pub cpu_threads: u32,
@@ -883,7 +884,7 @@ where
         return Ok(plan.output.clone());
     }
     let target_bitrate_bps = effective_target_bitrate_bps(cfg);
-    if cfg.min_shrink_percent > 0.0 {
+    if cfg.size_limit.is_active() {
         if let Ok(meta) = std::fs::metadata(&plan.input) {
             let input_bytes = meta.len();
             if input_bytes > 0 {
@@ -894,18 +895,27 @@ where
                     .map(|ms| ms as f64 / 1000.0)
                     .filter(|s| *s > 0.0)
                     .unwrap_or(3600.0);
-                let estimated_out = (target_bitrate_bps as f64 * duration_secs / 8.0).max(1.0);
-                let max_allowed =
-                    input_bytes as f64 * (1.0 - cfg.min_shrink_percent as f64 / 100.0);
-                if estimated_out > max_allowed {
-                    on_line(format!(
-                        "skip_reason=estimated output {:.0} B exceeds shrink target ({:.0}% of source)",
-                        estimated_out, 100.0 - cfg.min_shrink_percent
-                    ));
-                    return Err(anyhow!(
-                        "Skipped: estimated output would not shrink by at least {:.0}%",
-                        cfg.min_shrink_percent
-                    ));
+                let estimated_out =
+                    (target_bitrate_bps as f64 * duration_secs / 8.0).max(1.0) as u64;
+                match pre_encode_decision(&cfg.size_limit, input_bytes, estimated_out) {
+                    PreEncodeDecision::Proceed => {}
+                    PreEncodeDecision::Skip => {
+                        let msg = cfg
+                            .size_limit
+                            .violation_message(input_bytes, estimated_out);
+                        on_line(format!(
+                            "skip_reason=estimated output exceeds size limit ({})",
+                            cfg.size_limit.limit_label(input_bytes)
+                        ));
+                        return Err(anyhow!("Skipped: estimated {msg}"));
+                    }
+                    PreEncodeDecision::Fail => {
+                        let msg = cfg
+                            .size_limit
+                            .violation_message(input_bytes, estimated_out);
+                        on_line(format!("size_limit=estimated output exceeds limit ({msg})"));
+                        return Err(anyhow!("Failed: estimated {msg}"));
+                    }
                 }
             }
         }
@@ -1034,7 +1044,7 @@ mod tests {
             target_bitrate: String::new(),
             max_width: 1920,
             size_preset: "balanced".to_owned(),
-            min_shrink_percent: 0.0,
+            size_limit: ConvertSizeLimit::default(),
             encoder_override: String::new(),
             cpu_threads: 0,
             subprocess_priority: "normal".to_owned(),

@@ -93,6 +93,7 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/export-summary", get(convert_export_summary))
         .route("/api/convert/thumbnail/:id", get(convert_thumbnail))
         .route("/api/convert/media/:id", get(convert_media))
+        .route("/api/convert/:id/size-limit", post(convert_item_size_limit))
         .route("/api/convert/:id/open", post(convert_open))
 }
 
@@ -264,6 +265,31 @@ async fn convert_retry_skipped(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.retry_skipped_convert_items();
     StatusCode::OK
+}
+
+#[derive(Deserialize)]
+struct ConvertItemSizeLimitBody {
+    kind: Option<String>,
+    value: Option<String>,
+    violation: Option<String>,
+}
+
+async fn convert_item_size_limit(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+    Json(body): Json<ConvertItemSizeLimitBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    if c.set_item_convert_size_limit_overrides(id, body.kind, body.value, body.violation) {
+        Ok(StatusCode::OK)
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "Convert queue item not found.".to_owned(),
+            }),
+        ))
+    }
 }
 
 async fn convert_fallback_software(State(st): State<ApiState>) -> StatusCode {

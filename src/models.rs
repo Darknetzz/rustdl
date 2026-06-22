@@ -251,6 +251,15 @@ pub struct ConvertQueueItem {
     /// Cached at enqueue/probe time so the UI does not stat paths every frame.
     #[serde(default)]
     pub source_missing: bool,
+    /// Per-item size limit kind; `None` uses global settings. `"none"` disables the limit.
+    #[serde(default)]
+    pub size_limit_kind_override: Option<String>,
+    /// Per-item limit value (percent or human size, depending on kind).
+    #[serde(default)]
+    pub size_limit_value_override: Option<String>,
+    /// Per-item violation action; `None` uses global settings.
+    #[serde(default)]
+    pub size_limit_violation_override: Option<String>,
 }
 
 impl Default for ConvertQueueItem {
@@ -270,6 +279,9 @@ impl Default for ConvertQueueItem {
             fps: None,
             bitrate_bps: None,
             source_missing: false,
+            size_limit_kind_override: None,
+            size_limit_value_override: None,
+            size_limit_violation_override: None,
         }
     }
 }

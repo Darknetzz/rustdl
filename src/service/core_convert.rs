@@ -12,6 +12,7 @@ use std::time::{Duration, Instant};
 use crate::app::background_spawn;
 use crate::app_parsing::human_bytes_ui;
 use crate::config::{save_convert_queue_snapshot, ConvertQueueSnapshot};
+use crate::convert_size_limit::ConvertSizeLimit;
 use crate::convert_state::{
     normalize_convert_source_key, remove_scanned_convert_input_lines, reset_skipped_convert_items,
 };
@@ -45,7 +46,7 @@ impl DownloadCore {
             target_bitrate: self.settings.convert_target_bitrate.clone(),
             max_width: self.settings.convert_max_width,
             size_preset: self.settings.convert_size_preset.clone(),
-            min_shrink_percent: self.settings.convert_min_shrink_percent,
+            size_limit: ConvertSizeLimit::from_settings(&self.settings),
             encoder_override: self.settings.convert_encoder_override.clone(),
             cpu_threads: transcode::resolve_convert_cpu_threads(
                 self.settings.convert_cpu_threads,
@@ -208,6 +209,9 @@ impl DownloadCore {
                 fps: None,
                 bitrate_bps: None,
                 source_missing: !plan_item.input.is_file(),
+                size_limit_kind_override: None,
+                size_limit_value_override: None,
+                size_limit_violation_override: None,
             });
             added += 1;
         }
@@ -266,7 +270,7 @@ impl DownloadCore {
             self.append_log("Convert: batch is paused. Click Resume first.");
             return;
         }
-        let jobs: Vec<(u64, ConvertInput, String)> = self
+        let jobs: Vec<(u64, ConvertInput, String, ConvertSizeLimit)> = self
             .convert_items
             .iter()
             .filter(|item| item.status == ItemStatus::Idle)
@@ -277,6 +281,7 @@ impl DownloadCore {
                         source_path: item.source_path.clone(),
                     },
                     item.output_path.clone(),
+                    ConvertSizeLimit::for_item(&self.settings, item),
                 )
             })
             .collect();
@@ -289,7 +294,7 @@ impl DownloadCore {
         self.convert_cancel_flag.store(false, Ordering::Relaxed);
         let cfg = self.convert_config();
 
-        for (item_id, _, _) in &jobs {
+        for (item_id, _, _, _) in &jobs {
             if let Some(item) = self
                 .convert_items
                 .iter_mut()
@@ -548,5 +553,25 @@ impl DownloadCore {
         if let Err(err) = save_convert_queue_snapshot(&snapshot) {
             self.append_log(&format!("Failed to clear converter queue state: {err}"));
         }
+    }
+
+    pub fn set_item_convert_size_limit_overrides(
+        &mut self,
+        item_id: u64,
+        kind: Option<String>,
+        value: Option<String>,
+        violation: Option<String>,
+    ) -> bool {
+        let Some(idx) = self.convert_item_idx(item_id) else {
+            return false;
+        };
+        let item = &mut self.convert_items[idx];
+        item.size_limit_kind_override = kind.map(|k| crate::convert_size_limit::normalize_kind(&k));
+        item.size_limit_value_override = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+        item.size_limit_violation_override = violation
+            .map(|v| crate::convert_size_limit::normalize_violation(&v));
+        self.schedule_convert_queue_save();
+        self.bump_generation();
+        true
     }
 }

@@ -7,6 +7,10 @@ use crate::app_ui::{
     show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
+use crate::convert_size_limit::{
+    ConvertSizeLimit, KIND_MAX_OUTPUT_BYTES, KIND_MAX_PERCENT_OF_SOURCE, KIND_MIN_SHRINK_PERCENT,
+    KIND_NONE, VIOLATION_ENCODE_DELETE, VIOLATION_FAIL, VIOLATION_KEEP, VIOLATION_SKIP,
+};
 use crate::convert_state::{
     convert_batch_totals_grew, convert_item_is_skipped, convert_item_open_targets,
     convert_item_status_label, convert_item_will_skip_already_target, convert_skip_hint_label,
@@ -108,7 +112,6 @@ fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings
         settings.convert_target_bitrate.clone()
     };
     let max_width = format!("{}w", settings.convert_max_width);
-    let min_shrink = format!("{:.0}%", settings.convert_min_shrink_percent);
     ui.spacing_mut().item_spacing = egui::vec2(8.0, 4.0);
     draw_labeled_meta_badge(ui, "Bitrate:", &bitrate, MetaBadgeKind::Bitrate, muted);
     ui.label(RichText::new("·").small().color(muted));
@@ -128,10 +131,16 @@ fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings
         muted,
     );
     ui.label(RichText::new("·").small().color(muted));
+    let limit = ConvertSizeLimit::from_settings(settings);
+    let limit_label = if limit.is_active() {
+        format!("{} · {}", limit.summary_label(), limit.violation_label())
+    } else {
+        "off".to_owned()
+    };
     draw_labeled_meta_badge(
         ui,
-        "Min shrink:",
-        &min_shrink,
+        "Size limit:",
+        &limit_label,
         MetaBadgeKind::ShrinkPercent,
         muted,
     );
@@ -149,6 +158,137 @@ fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings
         MetaBadgeKind::SizePreset,
         muted,
     );
+}
+
+fn convert_item_size_limit_override_label(
+    item: &ConvertQueueItem,
+    settings: &AppSettings,
+) -> Option<String> {
+    if item.size_limit_kind_override.is_none() {
+        return None;
+    }
+    let limit = ConvertSizeLimit::for_item(settings, item);
+    Some(if limit.is_active() {
+        format!("Size limit override: {}", limit.summary_label())
+    } else {
+        "Size limit override: off".to_owned()
+    })
+}
+
+fn draw_convert_item_size_limit_menu(app: &mut PydlApp, ui: &mut egui::Ui, item_id: u64) {
+    let Some(idx) = app.convert_item_index_by_id.get(&item_id).copied() else {
+        return;
+    };
+    let settings = app.settings.clone();
+    ui.menu_button("Size limit…", |ui| {
+        let Some(item) = app.convert_items.get(idx).cloned() else {
+            return;
+        };
+        let mut use_global = item.size_limit_kind_override.is_none();
+        if ui.checkbox(&mut use_global, "Use global default").changed() {
+            if use_global {
+                app.convert_core_action(|core| {
+                    core.set_item_convert_size_limit_overrides(item_id, None, None, None);
+                });
+            } else {
+                app.convert_core_action(|core| {
+                    core.set_item_convert_size_limit_overrides(
+                        item_id,
+                        Some(settings.convert_size_limit_kind.clone()),
+                        Some(settings.convert_size_limit_value.clone()),
+                        Some(settings.convert_size_limit_violation.clone()),
+                    );
+                });
+            }
+        }
+        if item.size_limit_kind_override.is_some() {
+            let mut kind = item
+                .size_limit_kind_override
+                .clone()
+                .unwrap_or_else(|| KIND_NONE.to_owned());
+            let mut value = item.size_limit_value_override.clone().unwrap_or_default();
+            let mut violation = item
+                .size_limit_violation_override
+                .clone()
+                .unwrap_or_else(|| VIOLATION_SKIP.to_owned());
+            egui::ComboBox::from_id_salt(("convert_item_limit_kind", item_id))
+                .selected_text(match kind.as_str() {
+                    KIND_MIN_SHRINK_PERCENT => "Min shrink (%)",
+                    KIND_MAX_PERCENT_OF_SOURCE => "Max % of source",
+                    KIND_MAX_OUTPUT_BYTES => "Max output size",
+                    _ => "Off",
+                })
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut kind, KIND_NONE.to_owned(), "Off");
+                    ui.selectable_value(
+                        &mut kind,
+                        KIND_MIN_SHRINK_PERCENT.to_owned(),
+                        "Min shrink (%)",
+                    );
+                    ui.selectable_value(
+                        &mut kind,
+                        KIND_MAX_PERCENT_OF_SOURCE.to_owned(),
+                        "Max % of source",
+                    );
+                    ui.selectable_value(
+                        &mut kind,
+                        KIND_MAX_OUTPUT_BYTES.to_owned(),
+                        "Max output size",
+                    );
+                });
+            if kind != KIND_NONE {
+                ui.label("Value");
+                ui.text_edit_singleline(&mut value);
+                egui::ComboBox::from_id_salt(("convert_item_limit_violation", item_id))
+                    .selected_text(match violation.as_str() {
+                        VIOLATION_FAIL => "Fail",
+                        VIOLATION_ENCODE_DELETE => "Encode, delete if over",
+                        VIOLATION_KEEP => "Keep anyway",
+                        _ => "Skip (estimate)",
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(
+                            &mut violation,
+                            VIOLATION_SKIP.to_owned(),
+                            "Skip (estimate)",
+                        );
+                        ui.selectable_value(&mut violation, VIOLATION_FAIL.to_owned(), "Fail");
+                        ui.selectable_value(
+                            &mut violation,
+                            VIOLATION_ENCODE_DELETE.to_owned(),
+                            "Encode, delete if over",
+                        );
+                        ui.selectable_value(
+                            &mut violation,
+                            VIOLATION_KEEP.to_owned(),
+                            "Keep anyway",
+                        );
+                    });
+            }
+            if ui.button("Apply override").clicked() {
+                let kind_opt = Some(kind);
+                let value_opt = if kind_opt.as_deref() == Some(KIND_NONE) {
+                    None
+                } else {
+                    Some(value)
+                };
+                let violation_opt = if kind_opt.as_deref() == Some(KIND_NONE) {
+                    None
+                } else {
+                    Some(violation)
+                };
+                app.convert_core_action(|core| {
+                    core.set_item_convert_size_limit_overrides(
+                        item_id,
+                        kind_opt,
+                        value_opt,
+                        violation_opt,
+                    );
+                });
+                ui.close_menu();
+            }
+        }
+    });
 }
 
 fn draw_convert_will_skip_notice(ui: &mut egui::Ui, target_codec: &str) {
@@ -994,6 +1134,11 @@ impl PydlApp {
                             draw_convert_will_skip_notice(ui, &self.settings.convert_target_codec);
                         }
                         draw_convert_media_badges(ui, it, probing, &theme);
+                        if let Some(label) =
+                            convert_item_size_limit_override_label(it, &self.settings)
+                        {
+                            draw_meta_badge(ui, &label, MetaBadgeKind::ShrinkPercent);
+                        }
 
                         draw_convert_path_line(ui, "in:", &it.source_path, &theme);
                         draw_convert_path_line(ui, "out:", &it.output_path, &theme);
@@ -1024,9 +1169,16 @@ impl PydlApp {
                         }
 
                         let targets = convert_item_open_targets(it);
-                        if targets.file.is_some() || targets.folder.is_some() {
+                        if targets.file.is_some()
+                            || targets.folder.is_some()
+                            || it.status == ItemStatus::Idle
+                        {
                             left_button_row(ui, |ui| {
-                                button_group(ui, ("convert_open", it.item_id), |g| {
+                                if it.status == ItemStatus::Idle {
+                                    draw_convert_item_size_limit_menu(self, ui, id);
+                                }
+                                if targets.file.is_some() || targets.folder.is_some() {
+                                    button_group(ui, ("convert_open", it.item_id), |g| {
                                     let mut open_file = false;
                                     let mut open_folder = false;
                                     g.open_menu(
@@ -1052,6 +1204,7 @@ impl PydlApp {
                                         }
                                     }
                                 });
+                                }
                             });
                         }
                     });

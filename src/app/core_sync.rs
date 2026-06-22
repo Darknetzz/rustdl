@@ -203,6 +203,9 @@ fn convert_item_mirror_changed(
         || app_it.input_bytes != core_it.input_bytes
         || app_it.output_bytes != core_it.output_bytes
         || app_it.source_missing != core_it.source_missing
+        || app_it.size_limit_kind_override != core_it.size_limit_kind_override
+        || app_it.size_limit_value_override != core_it.size_limit_value_override
+        || app_it.size_limit_violation_override != core_it.size_limit_violation_override
 }
 
 fn sync_convert_from_core(

@@ -24,6 +24,13 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Downloader main panel: output folder and profile show as a one-line summary with **Edit…** opening a modal (replaces the expandable options block).
 - Downloader panel uses less vertical space: merged destination/profile with Start/Pause into one toolbar row, shorter URL field, and scroll area shrinks to content instead of filling empty space above the queue.
 
+## [0.8.2] - 2026-06-23
+
+### Added
+
+- Video Converter **output size limits** (Settings → Convert, desktop and LAN web UI): choose **min shrink %**, **max % of source**, or **max output size** (e.g. `500M`), plus what to do when exceeded — **skip before encode**, **fail**, **encode then delete**, or **keep anyway (warn)**. Existing **Min shrink %** settings migrate automatically.
+- Per-file size limit overrides on convert queue rows (desktop **Size limit…** menu; LAN API `POST /api/convert/:id/size-limit`).
+
 ## [0.8.1] - 2026-06-17
 
 ### Added
@@ -524,7 +531,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...dev
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.2...dev
+[0.8.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...rustdl-v0.8.2
 [0.8.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.0...rustdl-v0.8.1
 [0.8.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...rustdl-v0.8.0
 [0.4.7]: https://github.com/Darknetzz/rustdl/compare/b76f00b...rustdl-v0.4.7

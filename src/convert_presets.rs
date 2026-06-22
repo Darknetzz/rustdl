@@ -14,6 +14,9 @@ pub struct ConvertPresetFields {
     pub convert_target_bitrate: String,
     pub convert_max_width: u32,
     pub convert_size_preset: String,
+    pub convert_size_limit_kind: String,
+    pub convert_size_limit_value: String,
+    pub convert_size_limit_violation: String,
     pub convert_min_shrink_percent: f32,
     pub convert_cpu_threads: u32,
     pub convert_parallel: usize,
@@ -40,6 +43,9 @@ impl Default for ConvertPresetFields {
             convert_target_bitrate: String::new(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
+            convert_size_limit_kind: String::new(),
+            convert_size_limit_value: String::new(),
+            convert_size_limit_violation: crate::convert_size_limit::VIOLATION_SKIP.to_owned(),
             convert_min_shrink_percent: 0.0,
             convert_cpu_threads: 0,
             convert_parallel: 1,
@@ -98,6 +104,9 @@ impl ConvertPresetFields {
             convert_target_bitrate: settings.convert_target_bitrate.clone(),
             convert_max_width: settings.convert_max_width,
             convert_size_preset: settings.convert_size_preset.clone(),
+            convert_size_limit_kind: settings.convert_size_limit_kind.clone(),
+            convert_size_limit_value: settings.convert_size_limit_value.clone(),
+            convert_size_limit_violation: settings.convert_size_limit_violation.clone(),
             convert_min_shrink_percent: settings.convert_min_shrink_percent,
             convert_cpu_threads: settings.convert_cpu_threads,
             convert_parallel: settings.convert_parallel,
@@ -123,6 +132,9 @@ impl ConvertPresetFields {
         settings.convert_target_bitrate = self.convert_target_bitrate.clone();
         settings.convert_max_width = self.convert_max_width;
         settings.convert_size_preset = self.convert_size_preset.clone();
+        settings.convert_size_limit_kind = self.convert_size_limit_kind.clone();
+        settings.convert_size_limit_value = self.convert_size_limit_value.clone();
+        settings.convert_size_limit_violation = self.convert_size_limit_violation.clone();
         settings.convert_min_shrink_percent = self.convert_min_shrink_percent;
         settings.convert_cpu_threads = self.convert_cpu_threads;
         settings.convert_parallel = self.convert_parallel.clamp(1, 6);

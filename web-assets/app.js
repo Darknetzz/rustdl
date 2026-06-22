@@ -3053,6 +3053,23 @@ function populateProfiles(profilesResp) {
   }
 }
 
+function updateConvertSizeLimitFieldsVisibility() {
+  const kind = document.getElementById("set-convert-size-limit-kind")?.value || "none";
+  const on = kind !== "none";
+  for (const id of [
+    "set-convert-size-limit-value-wrap",
+    "set-convert-size-limit-violation-wrap",
+  ]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = !on;
+  }
+  const valueEl = document.getElementById("set-convert-size-limit-value");
+  if (valueEl) {
+    valueEl.placeholder =
+      kind === "max_output_bytes" ? "e.g. 500M, 1.5GiB" : "e.g. 50";
+  }
+}
+
 function populateSettingsForm(s, commandPreview) {
   setCheck("set-show-thumbnails", s.show_thumbnails);
   setCheck("set-compact-cards", s.compact_cards);
@@ -3131,7 +3148,15 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-convert-bitrate", s.convert_target_bitrate);
   setVal("set-convert-max-width", s.convert_max_width);
   setVal("set-convert-preset", s.convert_size_preset);
-  setVal("set-convert-min-shrink", s.convert_min_shrink_percent);
+  let sizeLimitKind = s.convert_size_limit_kind || "none";
+  if (sizeLimitKind === "none" && (s.convert_min_shrink_percent || 0) > 0) {
+    sizeLimitKind = "min_shrink_percent";
+    s.convert_size_limit_value = String(s.convert_min_shrink_percent);
+  }
+  setVal("set-convert-size-limit-kind", sizeLimitKind);
+  setVal("set-convert-size-limit-value", s.convert_size_limit_value || "");
+  setVal("set-convert-size-limit-violation", s.convert_size_limit_violation || "skip");
+  updateConvertSizeLimitFieldsVisibility();
   setVal("set-convert-cpu-threads", s.convert_cpu_threads ?? 0);
   setVal("set-convert-parallel", s.convert_parallel ?? 1);
   setVal("set-convert-encoder-override", s.convert_encoder_override);
@@ -3232,8 +3257,19 @@ function collectSettingsForm(base) {
   s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
   s.convert_max_width = parseInt(document.getElementById("set-convert-max-width").value, 10) || 1920;
   s.convert_size_preset = document.getElementById("set-convert-preset").value;
-  s.convert_min_shrink_percent =
-    parseFloat(document.getElementById("set-convert-min-shrink").value) || 0;
+  s.convert_size_limit_kind =
+    document.getElementById("set-convert-size-limit-kind").value || "none";
+  s.convert_size_limit_value = document
+    .getElementById("set-convert-size-limit-value")
+    .value.trim();
+  s.convert_size_limit_violation =
+    document.getElementById("set-convert-size-limit-violation").value || "skip";
+  if (s.convert_size_limit_kind === "min_shrink_percent") {
+    s.convert_min_shrink_percent =
+      parseFloat(s.convert_size_limit_value) || 0;
+  } else {
+    s.convert_min_shrink_percent = 0;
+  }
   s.convert_cpu_threads =
     parseInt(document.getElementById("set-convert-cpu-threads").value, 10) || 0;
   s.convert_parallel =
@@ -3268,7 +3304,14 @@ function collectSettingsForm(base) {
 
   if (s.ffmpeg_extract_audio_mp3) s.ffmpeg_remux_mp4 = false;
   s.convert_max_width = Math.min(7680, Math.max(320, s.convert_max_width));
-  s.convert_min_shrink_percent = Math.min(95, Math.max(0, s.convert_min_shrink_percent));
+  if (s.convert_size_limit_kind === "min_shrink_percent") {
+    s.convert_min_shrink_percent = Math.min(
+      95,
+      Math.max(0, parseFloat(s.convert_size_limit_value) || 0),
+    );
+  } else {
+    s.convert_min_shrink_percent = 0;
+  }
   s.convert_cpu_threads = Math.max(0, s.convert_cpu_threads);
   s.convert_parallel = Math.min(6, Math.max(1, s.convert_parallel));
   const allowedPriority = new Set(["normal", "below_normal", "idle"]);
@@ -4381,7 +4424,7 @@ async function refreshConvert() {
     retrySkippedBtn.disabled = data.running || skippedCount === 0;
     retrySkippedBtn.title =
       skippedCount > 0
-        ? `Reset ${skippedCount} skipped item(s) to ready (adjust Min shrink % first if needed)`
+        ? `Reset ${skippedCount} skipped item(s) to ready (adjust size limit settings first if needed)`
         : "No skipped items";
   }
 
@@ -5055,3 +5098,7 @@ async function bootstrapAuth() {
 }
 
 bootstrapAuth().catch(() => showAuthPanel());
+
+document
+  .getElementById("set-convert-size-limit-kind")
+  ?.addEventListener("change", updateConvertSizeLimitFieldsVisibility);

@@ -215,8 +215,18 @@ pub struct AppSettings {
     #[serde(default, alias = "av1_size_preset")]
     pub convert_size_preset: String,
     /// Require minimum shrink percentage relative to source. Zero disables.
+    /// Legacy alias; synced from [`Self::convert_size_limit_kind`] when that is `min_shrink_percent`.
     #[serde(default, alias = "av1_min_shrink_percent")]
     pub convert_min_shrink_percent: f32,
+    /// Output size limit kind: `none`, `min_shrink_percent`, `max_percent_of_source`, or `max_output_bytes`.
+    #[serde(default, alias = "av1_size_limit_kind")]
+    pub convert_size_limit_kind: String,
+    /// Limit value (percent or human size such as `500M`, depending on kind).
+    #[serde(default, alias = "av1_size_limit_value")]
+    pub convert_size_limit_value: String,
+    /// When a limit is violated: `skip`, `fail`, `encode_delete`, or `keep`.
+    #[serde(default = "default_convert_size_limit_violation", alias = "av1_size_limit_violation")]
+    pub convert_size_limit_violation: String,
     /// Keep converter queue items across app restarts until manually cleared.
     #[serde(
         default = "default_convert_remember_queue",
@@ -545,6 +555,10 @@ fn default_convert_max_width() -> u32 {
     1920
 }
 
+fn default_convert_size_limit_violation() -> String {
+    "skip".to_owned()
+}
+
 fn default_verify_output_video_audio() -> bool {
     true
 }
@@ -625,6 +639,9 @@ impl Default for AppSettings {
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
             convert_min_shrink_percent: 0.0,
+            convert_size_limit_kind: String::new(),
+            convert_size_limit_value: String::new(),
+            convert_size_limit_violation: default_convert_size_limit_violation(),
             convert_remember_queue: true,
             last_mode: default_last_mode(),
             settings_tab: default_settings_tab(),
@@ -791,6 +808,7 @@ pub fn load_settings() -> AppSettings {
     cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
     cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);
     cfg.convert_max_width = cfg.convert_max_width.clamp(320, 7680);
+    crate::convert_size_limit::normalize_settings_limits(&mut cfg);
     cfg.convert_min_shrink_percent = cfg.convert_min_shrink_percent.clamp(0.0, 95.0);
     let preset = cfg.convert_size_preset.trim().to_ascii_lowercase();
     if !matches!(preset.as_str(), "light" | "balanced" | "aggressive") {

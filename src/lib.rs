@@ -9,6 +9,7 @@ pub mod app_ui;
 pub mod cli;
 pub mod config;
 pub mod convert_presets;
+pub mod convert_size_limit;
 pub mod convert_state;
 pub mod disk_space;
 pub mod domain;
