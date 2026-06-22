@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::models::QueueItem;
 use crate::ytdlp;
@@ -12,6 +12,9 @@ pub const DONE_LOOKUP_MAX_ENTRIES: usize = 50_000;
 /// Subfolder depth when indexing the output directory (playlist/uploader templates).
 const DONE_LOOKUP_MAX_DEPTH: u32 = 8;
 
+/// Avoid rescanning a large output tree on every mtime tick while downloads are active.
+const DONE_LOOKUP_RESCAN_DEBOUNCE: Duration = Duration::from_secs(2);
+
 /// Indexes `video_id` → output file path and last-modified time using `[id]` segments in filenames.
 #[derive(Clone)]
 pub struct DoneFileIndex {
@@ -20,6 +23,9 @@ pub struct DoneFileIndex {
     cached_dir_mtime: Option<SystemTime>,
     force_refresh: bool,
     pub scan_truncated: bool,
+    /// Bumped when the lookup map is rebuilt; GUI mirrors skip cloning when unchanged.
+    pub generation: u64,
+    last_rescan_at: Option<Instant>,
 }
 
 impl Default for DoneFileIndex {
@@ -36,6 +42,8 @@ impl DoneFileIndex {
             cached_dir_mtime: None,
             force_refresh: true,
             scan_truncated: false,
+            generation: 0,
+            last_rescan_at: None,
         }
     }
 
@@ -51,13 +59,24 @@ impl DoneFileIndex {
         } else {
             None
         };
-        self.force_refresh || self.cached_output_dir != output_dir || self.cached_dir_mtime != mtime
+        if self.force_refresh || self.cached_output_dir != output_dir || self.cached_dir_mtime != mtime
+        {
+            return true;
+        }
+        false
     }
 
     /// Refreshes the index when the output folder path or its mtime changes.
     pub(crate) fn refresh(&mut self, output_dir: &str) {
         if !self.will_refresh(output_dir) {
             return;
+        }
+        if !self.force_refresh {
+            if let Some(t) = self.last_rescan_at {
+                if t.elapsed() < DONE_LOOKUP_RESCAN_DEBOUNCE {
+                    return;
+                }
+            }
         }
         let path = Path::new(output_dir);
         let mtime = if path.is_dir() {
@@ -71,6 +90,8 @@ impl DoneFileIndex {
         self.cached_dir_mtime = mtime;
         self.lookup.clear();
         self.scan_truncated = false;
+        self.generation = self.generation.saturating_add(1);
+        self.last_rescan_at = Some(Instant::now());
 
         if !path.is_dir() {
             return;

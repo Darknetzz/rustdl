@@ -146,6 +146,22 @@ fn is_success_line(line: &str) -> bool {
 }
 
 impl PydlApp {
+    fn refresh_log_filtered_indices_if_needed(&mut self) {
+        let slug = self.log_filter.slug();
+        if self.log_filter_cache_len == self.log_lines.len() && self.log_filter_cache_slug == slug {
+            return;
+        }
+        self.log_filtered_indices = self
+            .log_lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| self.log_filter.accepts(line))
+            .map(|(i, _)| i)
+            .collect();
+        self.log_filter_cache_len = self.log_lines.len();
+        self.log_filter_cache_slug = slug.to_owned();
+    }
+
     pub(super) fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
         let max_log = max_log.max(80.0).round();
         let mut px = self.settings.log_dock_height.round().clamp(80.0, max_log) as i32;
@@ -443,12 +459,22 @@ impl PydlApp {
                     }
                     ui.spacing_mut().item_spacing.y = 3.0;
                     let relative = self.settings.log_relative_time;
-                    let filtered: Vec<&String> = self
-                        .log_lines
-                        .iter()
-                        .filter(|line| self.log_filter.accepts(line))
-                        .collect();
-                    if filtered.is_empty() {
+                    let matching_total;
+                    let start;
+                    let window_lines: Vec<&String> = if self.log_filter == LogFilter::All {
+                        matching_total = self.log_lines.len();
+                        start = matching_total.saturating_sub(self.log_render_line_limit);
+                        self.log_lines.iter().skip(start).collect()
+                    } else {
+                        self.refresh_log_filtered_indices_if_needed();
+                        matching_total = self.log_filtered_indices.len();
+                        start = matching_total.saturating_sub(self.log_render_line_limit);
+                        self.log_filtered_indices[start..]
+                            .iter()
+                            .filter_map(|&i| self.log_lines.get(i))
+                            .collect()
+                    };
+                    if matching_total == 0 && !self.log_lines.is_empty() {
                         ui.label(
                             RichText::new(format!(
                                 "No lines match the \"{}\" filter ({} hidden). Switch to All.",
@@ -460,12 +486,7 @@ impl PydlApp {
                         );
                         ui.add_space(4.0);
                     }
-                    let start = filtered.len().saturating_sub(self.log_render_line_limit);
-                    let window = if filtered.is_empty() {
-                        &filtered[..]
-                    } else {
-                        &filtered[start..]
-                    };
+                    let window = window_lines;
                     egui::ScrollArea::vertical()
                         .id_salt("rustdl_log_lines_scroll")
                         .max_height(inner_h)
@@ -480,7 +501,7 @@ impl PydlApp {
                                         RichText::new(format!(
                                             "Showing last {} of {} matching lines",
                                             window.len(),
-                                            filtered.len()
+                                            matching_total
                                         ))
                                         .small()
                                         .color(text_hint(&self.settings.theme)),

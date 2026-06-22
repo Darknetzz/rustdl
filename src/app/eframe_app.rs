@@ -54,7 +54,21 @@ impl eframe::App for PydlApp {
         self.poll_done_file_lookup();
         self.poll_output_disk_space();
         self.poll_system_usage();
-        ctx.request_repaint_after(std::time::Duration::from_millis(1500));
+        let background_busy = self.add_in_progress
+            || self.convert_running
+            || self.status_resolving > 0
+            || self.status_active > 0
+            || self.queue_running > 0
+            || self.update_check_in_progress
+            || self.update_download_in_progress
+            || !self.thumbnail_inflight.is_empty()
+            || !self.pending_thumbnail_uploads.is_empty()
+            || self.auto_add_after.is_some()
+            || self.queue_save_deadline.is_some()
+            || self.convert_save_deadline.is_some();
+        if !background_busy {
+            ctx.request_repaint_after(std::time::Duration::from_millis(1500));
+        }
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
             if !self.add_in_progress && now >= deadline {

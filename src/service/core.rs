@@ -198,6 +198,7 @@ pub struct DownloadCore {
     pub download_progress_throttle: HashMap<u64, (f64, f32)>,
     /// Last UI sync bump per convert item: `(unix_secs, percent)`.
     pub convert_progress_throttle: HashMap<u64, (f64, f32)>,
+    pub(crate) last_convert_aggregate_update_at: f64,
     /// Thumbnail image bytes shared between the desktop GUI and LAN `/api/thumbnail` proxy.
     pub thumbnail_cache: HashMap<u64, CachedThumbnail>,
     pub dirty_queue_item_ids: HashSet<u64>,
@@ -343,6 +344,7 @@ impl DownloadCore {
             download_log_throttle: HashMap::new(),
             download_progress_throttle: HashMap::new(),
             convert_progress_throttle: HashMap::new(),
+            last_convert_aggregate_update_at: -1_000.0,
             thumbnail_cache: HashMap::new(),
             dirty_queue_item_ids: HashSet::new(),
             dirty_convert_item_ids: HashSet::new(),

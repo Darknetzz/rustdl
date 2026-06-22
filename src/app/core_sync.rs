@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::time::{Duration, Instant};
 
 use super::PydlApp;
 use crate::service::core::{DownloadCore, SharedCore};
@@ -179,10 +180,19 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
             .filter(|it| !previous_item_ids.contains(&it.item_id))
             .map(|it| it.item_id)
             .collect();
-        for item_id in new_item_ids {
-            app.queue_thumbnail_load(item_id);
+        for item_id in &new_item_ids {
+            app.queue_thumbnail_load(*item_id);
         }
-        app.ensure_downloader_thumbnails();
+        const ENSURE_INTERVAL: Duration = Duration::from_secs(2);
+        let should_ensure = !new_item_ids.is_empty()
+            || app
+                .last_downloader_thumbnail_ensure_at
+                .map(|t| Instant::now().saturating_duration_since(t) >= ENSURE_INTERVAL)
+                .unwrap_or(true);
+        if should_ensure {
+            app.ensure_downloader_thumbnails();
+            app.last_downloader_thumbnail_ensure_at = Some(Instant::now());
+        }
     }
 }
 
@@ -274,30 +284,42 @@ fn sync_convert_from_core(
             .filter(|it| !previous_convert_ids.contains(&it.item_id))
             .map(|it| it.item_id)
             .collect();
-        for item_id in new_item_ids {
-            if let Some(idx) = app.convert_item_idx(item_id) {
+        for item_id in &new_item_ids {
+            if let Some(idx) = app.convert_item_idx(*item_id) {
                 let path = app.convert_items[idx].source_path.clone();
                 if !app.convert_items[idx].source_missing {
                     app.queue_convert_local_thumbnail(
-                        item_id,
+                        *item_id,
                         std::path::PathBuf::from(path),
                         app.settings.ffmpeg_path.clone(),
                     );
                 }
             }
         }
-        app.ensure_convert_thumbnails();
+        const ENSURE_INTERVAL: Duration = Duration::from_secs(2);
+        let should_ensure = !new_item_ids.is_empty()
+            || app
+                .last_convert_thumbnail_ensure_at
+                .map(|t| Instant::now().saturating_duration_since(t) >= ENSURE_INTERVAL)
+                .unwrap_or(true);
+        if should_ensure {
+            app.ensure_convert_thumbnails();
+            app.last_convert_thumbnail_ensure_at = Some(Instant::now());
+        }
     }
 }
 
 pub fn sync_core_to_app(core: &mut DownloadCore, app: &mut PydlApp) {
-    let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
-    let previous_convert_ids: HashSet<u64> =
-        app.convert_items.iter().map(|it| it.item_id).collect();
     sync_shared_fields_from_core(core, app);
-    app.done_file_index = core.done_file_index.clone();
-    app.done_lookup_truncation_logged = core.done_lookup_truncation_logged;
+    if core.done_file_index.generation != app.synced_done_file_index_generation {
+        app.done_file_index = core.done_file_index.clone();
+        app.synced_done_file_index_generation = core.done_file_index.generation;
+        app.done_lookup_truncation_logged = core.done_lookup_truncation_logged;
+    }
     if core.generation != app.core_generation {
+        let previous_item_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
+        let previous_convert_ids: HashSet<u64> =
+            app.convert_items.iter().map(|it| it.item_id).collect();
         sync_queue_from_core(core, app, &previous_item_ids);
         sync_convert_from_core(core, app, &previous_convert_ids);
         core.dirty_queue_item_ids.clear();

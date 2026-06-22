@@ -105,6 +105,7 @@ pub(crate) use crate::service::CancelPostAction;
 pub struct PydlApp {
     pub(crate) shared_core: crate::service::SharedCore,
     pub(crate) core_generation: u64,
+    pub(crate) synced_done_file_index_generation: u64,
     /// Set when the desktop UI mutates the queue; pushed to [`DownloadCore`] on the next sync.
     pub(crate) queue_dirty: bool,
     /// Set when the desktop UI mutates settings; pushed to [`DownloadCore`] on the next sync.
@@ -255,6 +256,12 @@ pub struct PydlApp {
     pending_thumbnail_uploads: VecDeque<(u64, egui::ColorImage)>,
     /// Rate-limits output-folder scans for the done-file index (hot path is every frame).
     last_done_lookup_poll: Option<Instant>,
+    last_downloader_thumbnail_ensure_at: Option<Instant>,
+    last_convert_thumbnail_ensure_at: Option<Instant>,
+    /// Cached filtered log line indices (rebuilt when log length or filter changes).
+    log_filtered_indices: Vec<usize>,
+    log_filter_cache_len: usize,
+    log_filter_cache_slug: String,
     /// Cached free/total space for the output folder volume.
     output_disk_space: Option<crate::disk_space::DiskSpace>,
     output_disk_space_polled_at: Option<Instant>,
@@ -339,11 +346,13 @@ impl PydlApp {
         let applied_theme = settings.theme.clone();
 
         let core_generation = shared_core.lock().generation;
+        let synced_done_file_index_generation = shared_core.lock().done_file_index.generation;
         let synced_settings_generation = shared_core.lock().settings_generation;
 
         let mut app = Self {
             shared_core: shared_core.clone(),
             core_generation,
+            synced_done_file_index_generation,
             queue_dirty: false,
             settings_dirty: false,
             synced_log_len: log_lines.len(),
@@ -458,6 +467,11 @@ impl PydlApp {
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
             last_done_lookup_poll: None,
+            last_downloader_thumbnail_ensure_at: None,
+            last_convert_thumbnail_ensure_at: None,
+            log_filtered_indices: Vec::new(),
+            log_filter_cache_len: 0,
+            log_filter_cache_slug: log_filter.slug().to_owned(),
             output_disk_space: None,
             output_disk_space_polled_at: None,
             system_usage: crate::system_usage::SystemUsageMonitor::new(),
@@ -889,11 +903,19 @@ impl PydlApp {
         if !self.should_poll_done_lookup() {
             return;
         }
-        const INTERVAL: Duration = Duration::from_millis(400);
+        let busy = self.queue_running > 0
+            || self.status_active > 0
+            || self.convert_running
+            || self.add_in_progress;
+        let interval = if busy {
+            Duration::from_secs(2)
+        } else {
+            Duration::from_millis(400)
+        };
         let now = Instant::now();
         let should_poll = match self.last_done_lookup_poll {
             None => true,
-            Some(t) => now.saturating_duration_since(t) >= INTERVAL,
+            Some(t) => now.saturating_duration_since(t) >= interval,
         };
         if should_poll {
             self.refresh_done_file_lookup();
@@ -1508,6 +1530,7 @@ impl PydlApp {
             let mut core = self.shared_core.lock();
             core.refresh_done_file_lookup();
             self.done_file_index = core.done_file_index.clone();
+            self.synced_done_file_index_generation = core.done_file_index.generation;
             core.done_file_index.scan_truncated
         };
         if scan_truncated {

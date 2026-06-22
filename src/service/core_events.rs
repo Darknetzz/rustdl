@@ -255,8 +255,12 @@ impl super::core::DownloadCore {
             percent,
             force_bump,
         ) {
-            self.update_convert_status();
             self.mark_convert_item_dirty(item_id);
+            let now = unix_now_secs();
+            if force_bump || now - self.last_convert_aggregate_update_at >= 0.5 {
+                self.update_convert_status();
+                self.last_convert_aggregate_update_at = now;
+            }
         }
     }
 
