@@ -10,6 +10,7 @@ repo_root=$(git rev-parse --show-toplevel) || exit 0
 
 schedule_publish() {
 	commit="$1"
+	echo "rustdl: scheduling dev release publish in background (log: rustdl-dev-release.log in TEMP)" >&2
 	if command -v pwsh >/dev/null 2>&1; then
 		pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/wait_and_publish_dev.ps1" -Remote "$remote" -Commit "$commit" &
 	elif command -v powershell >/dev/null 2>&1; then

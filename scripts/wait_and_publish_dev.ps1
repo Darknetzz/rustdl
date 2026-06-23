@@ -66,6 +66,7 @@ try {
     }
 
     Write-Log "Stable release step finished for $Commit"
+    Write-Host "Dev release publish finished (log: $LogFile)"
 }
 catch {
     Write-Log "Error: $($_.Exception.Message)"

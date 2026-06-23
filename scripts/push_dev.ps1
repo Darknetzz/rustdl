@@ -73,6 +73,9 @@ try {
     if ($DryRun) {
         Write-Host ''
         Write-Host 'Dry run complete.'
+    } else {
+        Write-Host ''
+        Write-Host 'Push and publish complete.'
     }
 }
 finally {
