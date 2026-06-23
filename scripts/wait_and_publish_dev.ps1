@@ -10,7 +10,8 @@ param(
     [string] $Remote = 'github',
     [Parameter(Mandatory = $true)]
     [string] $Commit,
-    [int] $TimeoutSec = 180
+    [int] $TimeoutSec = 180,
+    [switch] $Quiet
 )
 
 Set-StrictMode -Version Latest
@@ -23,6 +24,9 @@ function Write-Log {
     param([string] $Message)
     $line = "{0} {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
     Add-Content -LiteralPath $LogFile -Value $line
+    if (-not $Quiet) {
+        Write-Host $Message
+    }
 }
 
 Push-Location -LiteralPath $RepoRoot
@@ -66,7 +70,9 @@ try {
     }
 
     Write-Log "Stable release step finished for $Commit"
-    Write-Host "Dev release publish finished (log: $LogFile)"
+    if (-not $Quiet) {
+        Write-Host "Dev release publish finished (log: $LogFile)"
+    }
 }
 catch {
     Write-Log "Error: $($_.Exception.Message)"

@@ -7,14 +7,47 @@
 
 remote="$1"
 repo_root=$(git rev-parse --show-toplevel) || exit 0
+wait_script="$repo_root/scripts/wait_and_publish_dev.ps1"
+log_hint="${TMPDIR:-/tmp}/rustdl-dev-release.log"
+case "$(uname -s 2>/dev/null)" in
+MINGW* | MSYS* | CYGWIN* | Windows*)
+	log_hint="${TEMP:-/tmp}/rustdl-dev-release.log"
+	;;
+esac
 
 schedule_publish() {
 	commit="$1"
-	echo "rustdl: scheduling dev release publish in background (log: rustdl-dev-release.log in TEMP)" >&2
+	echo "rustdl: scheduling dev release publish in background (log: $log_hint)" >&2
 	if command -v pwsh >/dev/null 2>&1; then
-		pwsh -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/wait_and_publish_dev.ps1" -Remote "$remote" -Commit "$commit" &
+		case "$(uname -s 2>/dev/null)" in
+		MINGW* | MSYS* | CYGWIN* | Windows*)
+			# Detach from the terminal: plain '&' still shares stdout with git push / pushall.
+			pwsh -NoProfile -ExecutionPolicy Bypass -Command "
+				Start-Process -FilePath pwsh -WindowStyle Hidden -ArgumentList @(
+					'-NoProfile',
+					'-ExecutionPolicy', 'Bypass',
+					'-File', '$wait_script',
+					'-Remote', '$remote',
+					'-Commit', '$commit',
+					'-Quiet'
+				) | Out-Null
+			"
+			;;
+		*)
+			pwsh -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
+			;;
+		esac
 	elif command -v powershell >/dev/null 2>&1; then
-		powershell -NoProfile -ExecutionPolicy Bypass -File "$repo_root/scripts/wait_and_publish_dev.ps1" -Remote "$remote" -Commit "$commit" &
+		powershell -NoProfile -ExecutionPolicy Bypass -Command "
+			Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @(
+				'-NoProfile',
+				'-ExecutionPolicy', 'Bypass',
+				'-File', '$wait_script',
+				'-Remote', '$remote',
+				'-Commit', '$commit',
+				'-Quiet'
+			) | Out-Null
+		"
 	elif [ -x "$repo_root/scripts/wait_and_publish_dev.sh" ]; then
 		"$repo_root/scripts/wait_and_publish_dev.sh" "$remote" "$commit" &
 	else
