@@ -333,6 +333,15 @@ pub fn push_app_to_core(app: &mut PydlApp, shared: &SharedCore) {
     sync_app_to_core(app, &mut core);
 }
 
+/// Pushes GUI state into the core when the lock is free; skips rather than blocking the UI thread.
+pub fn try_push_app_to_core(app: &mut PydlApp, shared: &SharedCore) -> bool {
+    let Some(mut core) = shared.try_lock() else {
+        return false;
+    };
+    sync_app_to_core(app, &mut core);
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

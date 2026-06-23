@@ -1,6 +1,8 @@
 //! Applies download-queue `UiEvent`s to [`DownloadCore`] so web API and GUI stay in sync.
 
 use std::sync::Arc;
+
+use super::core::{DownloadCore, SharedCore};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use tokio::runtime::Runtime;
@@ -19,8 +21,6 @@ use crate::domain::events::is_throttled_download_log_line;
 use crate::domain::UiEvent;
 use crate::models::{ItemStatus, QueueItem};
 use crate::ytdlp;
-
-use super::core::SharedCore;
 
 /// Minimum interval between full-queue UI syncs for a single convert progress stream.
 const CONVERT_PROGRESS_BUMP_MIN_SECS: f64 = 0.25;
@@ -82,6 +82,7 @@ pub fn spawn_core_event_loop(runtime: Arc<Runtime>, core: SharedCore) {
                     c.maybe_flush_queue_save();
                     c.maybe_flush_convert_queue_save();
                     c.maybe_flush_log_save();
+                    DownloadCore::spawn_done_file_lookup_refresh_if_due(&core);
                 }
                 Err(RecvError::Lagged(n)) => {
                     eprintln!("rustdl: SSE event buffer lagged ({n} events dropped)");
@@ -100,6 +101,7 @@ pub fn spawn_watch_folder_loop(runtime: Arc<Runtime>, core: SharedCore) {
             let mut c = core.lock();
             c.poll_watch_folders();
             c.poll_scheduled_download_start();
+            DownloadCore::spawn_done_file_lookup_refresh_if_due(&core);
         }
     });
 }
@@ -538,8 +540,7 @@ impl super::core::DownloadCore {
         let mut completed = ok;
         let mut final_detail = detail.to_owned();
         if completed {
-            self.done_file_index.force_refresh();
-            self.refresh_done_file_lookup();
+            self.schedule_done_file_lookup_refresh();
             self.bind_local_path_for_item(item_id);
             self.apply_post_download_organize_for_item(item_id);
             if let Some(msg) = self.verify_done_item_streams(item_id) {

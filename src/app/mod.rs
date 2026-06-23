@@ -34,7 +34,6 @@ mod videos_panel;
 mod web_qr;
 
 pub(crate) use crate::domain::events::UiEvent;
-pub(crate) use done_file_index::DONE_LOOKUP_MAX_ENTRIES;
 pub(crate) use input_lines::{InputLineInfo, InputLineKind};
 pub(crate) use log_panel::LogFilter;
 pub(crate) use log_panel::{
@@ -58,6 +57,7 @@ use crate::config::{
 use crate::models::ConvertQueueItem;
 use crate::models::{ItemStatus, QueueItem};
 use crate::profiles::{find_profile, load_profiles, DownloadProfile, ProfileStore};
+use crate::service::DownloadCore;
 use crate::theme::{self, BG_LOG, BORDER_PANEL};
 use crate::ui_icons;
 use crate::ytdlp;
@@ -910,17 +910,31 @@ impl PydlApp {
         let interval = if busy {
             Duration::from_secs(2)
         } else {
-            Duration::from_millis(400)
+            Duration::from_secs(1)
         };
         let now = Instant::now();
         let should_poll = match self.last_done_lookup_poll {
             None => true,
             Some(t) => now.saturating_duration_since(t) >= interval,
         };
-        if should_poll {
-            self.refresh_done_file_lookup();
-            self.last_done_lookup_poll = Some(now);
+        if !should_poll {
+            return;
         }
+        self.last_done_lookup_poll = Some(now);
+        let output_dir = if self.output_dir.trim().is_empty() {
+            self.settings.output_dir.clone()
+        } else {
+            self.output_dir.clone()
+        };
+        let needs_refresh = {
+            let core = self.shared_core.lock();
+            core.done_file_index.will_refresh(&output_dir)
+        };
+        if needs_refresh {
+            let mut core = self.shared_core.lock();
+            core.schedule_done_file_lookup_refresh_force();
+        }
+        DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
     }
 
     pub(super) fn invalidate_output_disk_space(&mut self) {
@@ -1526,25 +1540,11 @@ impl PydlApp {
     }
 
     pub(super) fn refresh_done_file_lookup(&mut self) {
-        let scan_truncated = {
+        {
             let mut core = self.shared_core.lock();
-            core.refresh_done_file_lookup();
-            self.done_file_index = core.done_file_index.clone();
-            self.synced_done_file_index_generation = core.done_file_index.generation;
-            core.done_file_index.scan_truncated
-        };
-        if scan_truncated {
-            if !self.done_lookup_truncation_logged {
-                self.done_lookup_truncation_logged = true;
-                self.append_log(&format!(
-                    "Output folder listing truncated after {} entries; some files may not appear in Open/Reveal until you reduce folder size or move downloads.",
-                    DONE_LOOKUP_MAX_ENTRIES
-                ));
-            }
-        } else {
-            self.done_lookup_truncation_logged = false;
+            core.schedule_done_file_lookup_refresh_force();
         }
-        self.shared_core.lock().done_lookup_truncation_logged = self.done_lookup_truncation_logged;
+        DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
     }
 
     pub(super) fn find_downloaded_file_for_item(

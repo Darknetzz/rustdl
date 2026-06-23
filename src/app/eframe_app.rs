@@ -1,4 +1,5 @@
 use super::*;
+use crate::service::DownloadCore;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
@@ -9,8 +10,11 @@ impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         {
             let shared = self.shared_core.clone();
-            let mut core = shared.lock();
-            core_sync::sync_core_to_app(&mut core, self);
+            if let Some(mut core) = shared.try_lock() {
+                core_sync::sync_core_to_app(&mut core, self);
+            } else {
+                ctx.request_repaint();
+            };
         }
         #[cfg(windows)]
         {
@@ -442,10 +446,8 @@ impl eframe::App for PydlApp {
         self.draw_playlist_preview_dialog(ctx);
         self.draw_downloader_options_dialog(ctx);
         self.request_repaint_if_background_busy(ctx);
-        {
-            let shared = self.shared_core.clone();
-            core_sync::push_app_to_core(self, &shared);
-        }
+        DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
+        core_sync::try_push_app_to_core(self, &self.shared_core.clone());
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {

@@ -15,17 +15,19 @@ impl PydlApp {
         if let Some(deadline) = self.queue_save_deadline {
             if Instant::now() >= deadline {
                 self.queue_save_deadline = None;
-                self.flush_queue_to_disk();
+                self.spawn_queue_save_to_disk();
             }
         }
-        let mut core = self.shared_core.lock();
-        core.maybe_flush_queue_save();
+        if let Some(mut core) = self.shared_core.try_lock() {
+            core.maybe_flush_queue_save();
+        }
     }
 
     pub(super) fn maybe_flush_convert_queue_save(&mut self) {
-        let mut core = self.shared_core.lock();
-        core.maybe_flush_convert_queue_save();
-        self.convert_save_deadline = core.convert_save_deadline;
+        if let Some(mut core) = self.shared_core.try_lock() {
+            core.maybe_flush_convert_queue_save();
+            self.convert_save_deadline = core.convert_save_deadline;
+        }
     }
 
     pub(super) fn flush_queue_to_disk(&mut self) {
@@ -35,16 +37,39 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn maybe_flush_log_save(&mut self) {
-        let mut core = self.shared_core.lock();
-        if let Some(deadline) = core.log_save_deadline {
-            if Instant::now() >= deadline {
-                core.log_save_deadline = None;
-                if let Err(err) = save_activity_log(&core.log_lines) {
-                    eprintln!("rustdl: failed to save activity log: {err}");
-                }
+    fn spawn_queue_save_to_disk(&mut self) {
+        let items = self.items.clone();
+        let rt = self.runtime.clone();
+        rt.spawn(async move {
+            let save_result = tokio::task::spawn_blocking(move || save_queue_items(&items)).await;
+            if let Ok(Err(err)) = save_result {
+                eprintln!("rustdl: failed to save queue state: {err}");
             }
-        }
+        });
+    }
+
+    pub(super) fn maybe_flush_log_save(&mut self) {
+        let snapshot = {
+            let Some(mut core) = self.shared_core.try_lock() else {
+                return;
+            };
+            let Some(deadline) = core.log_save_deadline else {
+                return;
+            };
+            if Instant::now() < deadline {
+                return;
+            }
+            core.log_save_deadline = None;
+            core.log_lines.clone()
+        };
+        let rt = self.runtime.clone();
+        rt.spawn(async move {
+            if let Ok(Err(err)) = tokio::task::spawn_blocking(move || save_activity_log(&snapshot))
+                .await
+            {
+                eprintln!("rustdl: failed to save activity log: {err}");
+            }
+        });
     }
 
     pub(super) fn flush_log_to_disk(&mut self) {

@@ -38,6 +38,8 @@ use tokio::sync::Semaphore;
 pub type SharedCore = Arc<Mutex<DownloadCore>>;
 
 const QUEUE_SAVE_DEBOUNCE: Duration = Duration::from_millis(400);
+/// Debounce full output-folder scans so bursts of finished downloads do not block the UI.
+const DONE_LOOKUP_REFRESH_DEBOUNCE: Duration = Duration::from_millis(750);
 
 #[derive(Clone, Copy)]
 pub enum CancelPostAction {
@@ -193,6 +195,8 @@ pub struct DownloadCore {
     pub http_client: reqwest::Client,
     pub done_file_index: DoneFileIndex,
     pub done_lookup_truncation_logged: bool,
+    done_lookup_refresh_deadline: Option<Instant>,
+    done_lookup_refresh_inflight: Arc<AtomicBool>,
     pub download_log_throttle: HashMap<u64, f64>,
     /// Last UI sync bump per download item: `(unix_secs, percent)`.
     pub download_progress_throttle: HashMap<u64, (f64, f32)>,
@@ -341,6 +345,8 @@ impl DownloadCore {
             http_client,
             done_file_index: DoneFileIndex::new(),
             done_lookup_truncation_logged: false,
+            done_lookup_refresh_deadline: None,
+            done_lookup_refresh_inflight: Arc::new(AtomicBool::new(false)),
             download_log_throttle: HashMap::new(),
             download_progress_throttle: HashMap::new(),
             convert_progress_throttle: HashMap::new(),
@@ -821,6 +827,73 @@ impl DownloadCore {
         }
     }
 
+    /// Schedule a debounced rescan of the output folder (runs on a background thread).
+    pub fn schedule_done_file_lookup_refresh(&mut self) {
+        let due = Instant::now() + DONE_LOOKUP_REFRESH_DEBOUNCE;
+        self.done_lookup_refresh_deadline = Some(
+            self.done_lookup_refresh_deadline
+                .map(|existing| existing.min(due))
+                .unwrap_or(due),
+        );
+    }
+
+    /// Schedule an immediate rescan (still off the UI thread when polled via [`spawn_done_file_lookup_refresh_if_due`]).
+    pub fn schedule_done_file_lookup_refresh_force(&mut self) {
+        self.done_file_index.force_refresh();
+        self.done_lookup_refresh_deadline = Some(Instant::now());
+    }
+
+    fn resolve_item_on_disk_path(&self, item: &QueueItem) -> Option<std::path::PathBuf> {
+        let output_dir = self.effective_output_dir();
+        if let Some(rel) = &item.local_path {
+            if let Some(path) =
+                crate::domain::done_file_index::resolve_path_under_output(&output_dir, rel)
+            {
+                if path.is_file() {
+                    return Some(path);
+                }
+            }
+        }
+        self.done_file_index
+            .find_path_for_queue_item(&output_dir, item)
+            .or_else(|| self.done_file_index.find_path_in_index(item))
+            .map(|(path, _)| path)
+    }
+
+    /// Starts a background output-folder scan when a refresh was scheduled and is due.
+    pub fn spawn_done_file_lookup_refresh_if_due(shared: &SharedCore) {
+        let (due, inflight, runtime) = {
+            let core = shared.lock();
+            let due = core
+                .done_lookup_refresh_deadline
+                .is_some_and(|deadline| Instant::now() >= deadline);
+            (
+                due,
+                core.done_lookup_refresh_inflight.clone(),
+                core.runtime.clone(),
+            )
+        };
+        if !due || inflight.load(Ordering::Relaxed) {
+            return;
+        }
+        inflight.store(true, Ordering::Relaxed);
+        let shared = shared.clone();
+        let inflight_done = inflight;
+        runtime.spawn(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                let mut core = shared.lock();
+                core.done_lookup_refresh_deadline = None;
+                core.refresh_done_file_lookup();
+                core.bump_generation();
+            })
+            .await;
+            if result.is_err() {
+                eprintln!("rustdl: done-file lookup refresh task failed");
+            }
+            inflight_done.store(false, Ordering::Relaxed);
+        });
+    }
+
     /// Poll configured watch folders for new URL files and video files (headless + GUI).
     pub fn poll_watch_folders(&mut self) {
         if self.settings.watch_folder_enabled {
@@ -982,7 +1055,7 @@ impl DownloadCore {
         ) {
             Ok(Some(path)) => {
                 self.items[idx].local_path = item_mut.local_path.clone();
-                self.done_file_index.force_refresh();
+                self.schedule_done_file_lookup_refresh();
                 self.append_log(&format!("[item {item_id}] Organized download → {}", path));
             }
             Ok(None) => {}
@@ -1189,12 +1262,7 @@ impl DownloadCore {
         };
         let item = self.items[idx].clone();
         self.items[idx].local_path = None;
-        let output_dir = self.output_dir.clone();
-        let path_to_remove = self
-            .done_file_index
-            .find_path_for_queue_item(&output_dir, &item)
-            .or_else(|| self.done_file_index.find_path_in_index(&item))
-            .map(|(p, _)| p);
+        let path_to_remove = self.resolve_item_on_disk_path(&item);
         if let Some(path) = path_to_remove {
             if let Err(e) = fs::remove_file(&path) {
                 self.append_log(&format!(
@@ -1204,8 +1272,7 @@ impl DownloadCore {
             } else {
                 self.append_log(&format!("Removed old file: {}", path.to_string_lossy()));
             }
-            self.done_file_index.force_refresh();
-            self.refresh_done_file_lookup();
+            self.schedule_done_file_lookup_refresh_force();
         }
         let archive = self.settings.yt_download_archive.trim();
         if !archive.is_empty() {
@@ -1273,9 +1340,8 @@ impl DownloadCore {
             return Err(RedownloadError::NoYtDlp);
         }
         self.persist_settings();
-        self.refresh_done_file_lookup();
+        self.schedule_done_file_lookup_refresh_force();
         self.prepare_item_redownload_reset(item_id);
-        self.refresh_done_file_lookup();
         self.update_status();
         self.schedule_queue_save();
         self.bump_generation();
@@ -1407,22 +1473,16 @@ impl DownloadCore {
         let Some(idx) = self.item_idx(item_id) else {
             return false;
         };
-        self.refresh_done_file_lookup();
         let item = self.items[idx].clone();
-        let output_dir = self.output_dir.clone();
-        let Some(path) = self
-            .done_file_index
-            .find_path_for_queue_item(&output_dir, &item)
-            .or_else(|| self.done_file_index.find_path_in_index(&item))
-            .map(|(p, _)| p)
-        else {
+        let Some(path) = self.resolve_item_on_disk_path(&item) else {
+            self.schedule_done_file_lookup_refresh_force();
             return false;
         };
         match fs::remove_file(&path) {
             Ok(()) => {
                 self.append_log(&format!("Deleted file: {}", path.to_string_lossy()));
                 self.items[idx].local_path = None;
-                self.done_file_index.force_refresh();
+                self.schedule_done_file_lookup_refresh_force();
                 self.bump_generation();
                 true
             }
@@ -1622,11 +1682,10 @@ impl DownloadCore {
             return;
         }
         self.persist_settings();
-        self.refresh_done_file_lookup();
+        self.schedule_done_file_lookup_refresh_force();
         for id in &ids {
             self.prepare_item_redownload_reset(*id);
         }
-        self.refresh_done_file_lookup();
         self.update_status();
         self.schedule_queue_save();
         self.append_log(&format!(
@@ -1883,7 +1942,7 @@ impl DownloadCore {
             self.append_log("Skipping re-check: MP3 extraction mode is enabled.");
             return;
         }
-        self.refresh_done_file_lookup();
+        self.schedule_done_file_lookup_refresh_force();
         let ids: Vec<u64> = self
             .items
             .iter()
