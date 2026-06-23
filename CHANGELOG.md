@@ -21,6 +21,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Activity log panel: **Hide log** sits next to **Dock log** / **Undock log** (main header control unchanged).
 - Desktop UI stays more responsive under load: skips cloning the done-file index every frame, debounces output-folder rescans during active downloads/converts, throttles thumbnail queue rescans and convert batch aggregate updates, speeds up activity log rendering when the filter is **All**, and avoids redundant idle repaints while batches are running.
 - Downloader panel uses less vertical space: merged destination/profile with Start/Pause into one toolbar row, shorter URL field, and scroll area shrinks to content instead of filling empty space above the queue.
 

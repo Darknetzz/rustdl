@@ -262,7 +262,6 @@ impl PydlApp {
         button_toolbar_wrapped(ui, |ui| self.draw_log_dock_controls_inner(ui, false));
     }
 
-    /// Dock/undock only — show/hide is in the main header.
     pub(super) fn draw_log_dock_controls_compact(&mut self, ui: &mut egui::Ui) {
         self.draw_log_dock_controls_inner(ui, true);
     }
@@ -291,6 +290,13 @@ impl PydlApp {
                 .clicked()
             {
                 self.settings.logs_docked = !self.settings.logs_docked;
+                self.persist_settings();
+            }
+            if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
+                .on_hover_text("Close the activity log")
+                .clicked()
+            {
+                self.settings.logs_open = false;
                 self.persist_settings();
             }
         });
