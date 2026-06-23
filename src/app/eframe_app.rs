@@ -19,10 +19,13 @@ impl eframe::App for PydlApp {
         #[cfg(windows)]
         {
             crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
-            crate::win_window::maybe_restore_main_window(frame, ctx);
+            if !self.hidden_to_tray {
+                crate::win_window::maybe_restore_main_window(frame, ctx);
+            }
         }
         #[cfg(not(windows))]
         let _ = frame;
+        self.sync_system_tray(ctx);
         self.ensure_main_viewport_visible(ctx);
         ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
         if let Some(text) = self.deferred_menu_paste_urls.take() {
@@ -50,6 +53,7 @@ impl eframe::App for PydlApp {
             self.apply_dropped_shortcut_files(ctx);
         }
         self.handle_viewport_close_request(ctx);
+        self.maybe_hide_to_tray_on_minimize(ctx);
         self.maybe_adjust_videos_dock_for_viewport(ctx);
         if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
             self.exit_pending_after_cancel = false;

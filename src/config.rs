@@ -142,6 +142,9 @@ pub struct AppSettings {
     /// Lower repaint rate, denser queue rows, and lighter log rendering during active work.
     #[serde(default)]
     pub ui_power_save: bool,
+    /// Minimize and close hide the window to the system tray instead of the taskbar / quit dialog.
+    #[serde(default)]
+    pub minimize_to_tray: bool,
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
     pub card_list_layout: bool,
@@ -616,6 +619,7 @@ impl Default for AppSettings {
             enqueue_downloads_to_convert: false,
             ui_scale: 1.08,
             ui_power_save: false,
+            minimize_to_tray: false,
             card_list_layout: false,
             downloader_options_expanded: true,
             videos_docked: true,

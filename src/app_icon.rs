@@ -64,6 +64,17 @@ fn icon_rgba_64() -> Vec<u8> {
     rgba
 }
 
+/// Icon for the system tray.
+pub fn tray_icon() -> tray_icon::Icon {
+    let icon = window_icon();
+    tray_icon::Icon::from_rgba(
+        icon.rgba,
+        icon.width as u32,
+        icon.height as u32,
+    )
+    .expect("tray icon rgba")
+}
+
 /// Icon for the native window / taskbar (high resolution for Windows scaling).
 pub fn window_icon() -> IconData {
     let rgba = icon_rgba_64();

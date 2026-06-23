@@ -290,6 +290,11 @@ pub struct PydlApp {
     /// Frames elapsed since startup; used to recover invisible Wayland windows.
     #[cfg(target_os = "linux")]
     gui_startup_frames: u8,
+    /// Native tray icon when **Minimize to system tray** is enabled.
+    #[cfg(any(windows, target_os = "linux"))]
+    system_tray: Option<crate::tray::SystemTray>,
+    /// Main window was hidden via minimize/close-to-tray (not a real quit).
+    hidden_to_tray: bool,
 }
 
 impl PydlApp {
@@ -497,6 +502,9 @@ impl PydlApp {
             videos_dock_user_prefers_docked: false,
             #[cfg(target_os = "linux")]
             gui_startup_frames: 0,
+            #[cfg(any(windows, target_os = "linux"))]
+            system_tray: None,
+            hidden_to_tray: false,
         };
         {
             let core = shared_core.lock();
@@ -1011,6 +1019,9 @@ impl PydlApp {
     /// Re-assert visibility/size for the first second after launch.
     #[cfg(target_os = "linux")]
     pub(super) fn ensure_main_viewport_visible(&mut self, ctx: &egui::Context) {
+        if self.hidden_to_tray {
+            return;
+        }
         const STARTUP_FRAMES: u8 = 60;
         if self.gui_startup_frames >= STARTUP_FRAMES {
             return;
@@ -1043,6 +1054,54 @@ impl PydlApp {
 
     #[cfg(not(target_os = "linux"))]
     pub(super) fn ensure_main_viewport_visible(&mut self, _ctx: &egui::Context) {}
+
+    #[cfg(any(windows, target_os = "linux"))]
+    pub(super) fn sync_system_tray(&mut self, ctx: &egui::Context) {
+        crate::tray::SystemTray::register_wake_context(ctx);
+        if self.settings.minimize_to_tray {
+            if self.system_tray.is_none() {
+                self.system_tray = crate::tray::SystemTray::try_build();
+            }
+        } else {
+            self.system_tray = None;
+        }
+        if let Some(action) = crate::tray::SystemTray::poll() {
+            match action {
+                crate::tray::TrayAction::Show => self.show_main_window_from_tray(ctx),
+                crate::tray::TrayAction::Quit => self.open_exit_confirm(),
+            }
+        }
+    }
+
+    #[cfg(not(any(windows, target_os = "linux")))]
+    pub(super) fn sync_system_tray(&mut self, _ctx: &egui::Context) {}
+
+    pub(super) fn hide_main_window_to_tray(&mut self, ctx: &egui::Context) {
+        self.hidden_to_tray = true;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+    }
+
+    pub(super) fn show_main_window_from_tray(&mut self, ctx: &egui::Context) {
+        self.hidden_to_tray = false;
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        #[cfg(windows)]
+        ctx.send_viewport_cmd(egui::ViewportCommand::RequestUserAttention(
+            egui::UserAttentionType::Informational,
+        ));
+        ctx.request_repaint();
+    }
+
+    pub(super) fn maybe_hide_to_tray_on_minimize(&mut self, ctx: &egui::Context) {
+        if !self.settings.minimize_to_tray || self.hidden_to_tray {
+            return;
+        }
+        if ctx.input(|i| i.viewport().minimized == Some(true)) {
+            self.hide_main_window_to_tray(ctx);
+        }
+    }
 
     fn maybe_adjust_videos_dock_for_viewport(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.viewport().minimized == Some(true)) {
@@ -2352,6 +2411,10 @@ impl PydlApp {
             return;
         }
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+        if self.settings.minimize_to_tray {
+            self.hide_main_window_to_tray(ctx);
+            return;
+        }
         self.open_exit_confirm();
     }
 

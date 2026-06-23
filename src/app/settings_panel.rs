@@ -282,6 +282,24 @@ impl PydlApp {
                                      use denser queue rows sooner, and lighter activity-log rendering",
                                 )
                                 .changed();
+                            let tray_hover = if cfg!(target_os = "linux") {
+                                "Hide the window in the notification area when you minimize or \
+                                 click the close button; use the tray icon to show rustdl again \
+                                 or choose Quit to exit. On Linux, requires a desktop with a \
+                                 system tray (libappindicator); disabling the option may require \
+                                 a restart to remove the tray icon."
+                            } else {
+                                "Hide the window in the notification area when you minimize or \
+                                 click the close button; use the tray icon to show rustdl again \
+                                 or choose Quit to exit"
+                            };
+                            changed |= ui
+                                .checkbox(
+                                    &mut self.settings.minimize_to_tray,
+                                    "Minimize to system tray",
+                                )
+                                .on_hover_text(tray_hover)
+                                .changed();
                             changed |= settings_checkbox(
                                 ui,
                                 "Autoscroll log to latest line",
