@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::app_state::{self, TransferTotals};
@@ -10,6 +10,31 @@ const TRANSFER_TOTALS_REFRESH: Duration = Duration::from_millis(500);
 pub(super) const MAX_TEXTURES: usize = 128;
 pub(super) const THUMBNAIL_QUEUE_SOFT_CAP: usize = 50;
 pub(super) const THUMBNAIL_DECODE_MAX_WIDTH: u32 = 320;
+
+/// Cached per-group queue row ids (avoids re-filtering/sorting every frame on large queues).
+#[derive(Clone, Default)]
+pub(super) struct QueueGroupCache {
+    pub(super) core_generation: u64,
+    pub(super) queue_search: String,
+    pub(super) history_filter_days: Option<u32>,
+    pub(super) queue_group_focus: Option<String>,
+    pub(super) groups: HashMap<String, Vec<u64>>,
+}
+
+impl QueueGroupCache {
+    pub(super) fn is_current(
+        &self,
+        core_generation: u64,
+        queue_search: &str,
+        history_filter_days: Option<u32>,
+        queue_group_focus: Option<&str>,
+    ) -> bool {
+        self.core_generation == core_generation
+            && self.queue_search == queue_search
+            && self.history_filter_days == history_filter_days
+            && self.queue_group_focus.as_deref() == queue_group_focus
+    }
+}
 
 impl PydlApp {
     pub(super) fn mark_queue_dirty(&mut self) {
@@ -123,6 +148,65 @@ impl PydlApp {
 
     pub(super) fn should_poll_done_lookup(&self) -> bool {
         self.status_done > 0 || self.items.iter().any(|it| it.status == ItemStatus::Done)
+    }
+
+    pub(super) fn is_background_work_busy(&self) -> bool {
+        self.add_in_progress
+            || self.convert_running
+            || self.status_resolving > 0
+            || self.status_active > 0
+            || self.queue_running > 0
+            || self.update_check_in_progress
+            || self.update_download_in_progress
+            || !self.thumbnail_inflight.is_empty()
+            || !self.pending_thumbnail_uploads.is_empty()
+            || self.auto_add_after.is_some()
+            || self.queue_save_deadline.is_some()
+            || self.convert_save_deadline.is_some()
+    }
+
+    pub(super) fn background_busy_repaint_hz(&self) -> f32 {
+        if !self.is_background_work_busy() {
+            return 0.0;
+        }
+        if self.settings.ui_power_save {
+            if self.convert_running
+                && !self.add_in_progress
+                && self.status_active == 0
+                && self.queue_running == 0
+            {
+                return 8.0;
+            }
+            if self.queue_running > 0 || self.status_active > 0 {
+                return 12.0;
+            }
+            return 15.0;
+        }
+        if self.convert_running
+            && !self.add_in_progress
+            && self.status_active == 0
+            && self.queue_running == 0
+        {
+            15.0
+        } else {
+            30.0
+        }
+    }
+
+    pub(super) fn auto_list_layout_threshold(&self) -> usize {
+        if self.settings.ui_power_save {
+            25
+        } else {
+            50
+        }
+    }
+
+    pub(super) fn queue_card_list_fallback_threshold(&self) -> usize {
+        if self.settings.ui_power_save {
+            24
+        } else {
+            48
+        }
     }
 }
 

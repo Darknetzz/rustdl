@@ -201,6 +201,7 @@ pub struct PydlApp {
     queue_search: String,
     /// When set, Done group shows only items completed within this many days.
     history_filter_days: Option<u32>,
+    queue_group_cache: queue_cache::QueueGroupCache,
     selected_item_ids: HashSet<u64>,
     downloads_paused: bool,
     /// Avoid repeating desktop notifications for the same idle spell.
@@ -433,6 +434,7 @@ impl PydlApp {
             scroll_to_queue_group: None,
             queue_search,
             history_filter_days: None,
+            queue_group_cache: queue_cache::QueueGroupCache::default(),
             selected_item_ids: HashSet::new(),
             downloads_paused: false,
             session_complete_notified: false,
@@ -548,31 +550,17 @@ impl PydlApp {
             && self
                 .input_line_info_hold_until
                 .is_some_and(|until| now < until);
-        let busy = self.add_in_progress
-            || self.convert_running
-            || self.status_resolving > 0
-            || self.status_active > 0
-            || self.queue_running > 0
-            || self.update_check_in_progress
-            || self.update_download_in_progress
-            || !self.thumbnail_inflight.is_empty()
-            || !self.pending_thumbnail_uploads.is_empty()
-            || self.auto_add_after.is_some()
-            || self.queue_save_deadline.is_some()
-            || self.convert_save_deadline.is_some()
-            || input_summary_hold_active;
-        if busy {
-            // Cap idle repaint rate during heavy background work to reduce full UI passes.
-            let hz = if self.convert_running
-                && !self.add_in_progress
-                && self.status_active == 0
-                && self.queue_running == 0
-            {
-                15.0
+        if !self.is_background_work_busy() && !input_summary_hold_active {
+            return;
+        }
+        let hz = self.background_busy_repaint_hz();
+        if hz > 0.0 || input_summary_hold_active {
+            let rate = if input_summary_hold_active && hz <= 0.0 {
+                20.0
             } else {
-                30.0
+                hz.max(8.0)
             };
-            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / hz));
+            ctx.request_repaint_after(Duration::from_secs_f64(1.0 / f64::from(rate)));
         }
     }
 
@@ -603,13 +591,13 @@ impl PydlApp {
 
     /// True when list layout should be used (user preference or large queue auto-switch).
     pub(super) fn effective_card_list_layout(&self) -> bool {
-        const AUTO_LIST_THRESHOLD: usize = 50;
-        self.settings.card_list_layout || self.items.len() > AUTO_LIST_THRESHOLD
+        let threshold = self.auto_list_layout_threshold();
+        self.settings.card_list_layout || self.items.len() > threshold
     }
 
     pub(super) fn effective_convert_list_layout(&self) -> bool {
-        const AUTO_LIST_THRESHOLD: usize = 50;
-        self.settings.card_list_layout || self.convert_items.len() > AUTO_LIST_THRESHOLD
+        let threshold = self.auto_list_layout_threshold();
+        self.settings.card_list_layout || self.convert_items.len() > threshold
     }
 
     pub(super) fn item_matches_history_filter(&self, item: &QueueItem) -> bool {

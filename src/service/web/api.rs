@@ -34,6 +34,7 @@ pub(super) struct ApiState {
     /// Set in `--web-only` mode; signals the headless process to exit after graceful shutdown.
     pub process_exit: Arc<Mutex<Option<tokio::sync::oneshot::Sender<()>>>>,
     system_usage: Arc<Mutex<crate::system_usage::SystemUsageMonitor>>,
+    status_cache: Arc<Mutex<Option<StatusResponse>>>,
 }
 
 impl ApiState {
@@ -42,6 +43,7 @@ impl ApiState {
             core,
             process_exit: Arc::new(Mutex::new(None)),
             system_usage: Arc::new(Mutex::new(crate::system_usage::SystemUsageMonitor::new())),
+            status_cache: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -50,7 +52,7 @@ impl ApiState {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct DiskSpaceJson {
     available_bytes: u64,
     total_bytes: u64,
@@ -59,7 +61,7 @@ struct DiskSpaceJson {
     level: &'static str,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct SystemUsageJson {
     cpu_percent: Option<f32>,
     ram_percent: Option<f32>,
@@ -67,7 +69,7 @@ struct SystemUsageJson {
     show_gpu: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub(super) struct BatchProgressJson {
     fraction: f32,
     percent: f32,
@@ -88,7 +90,7 @@ impl From<crate::app_state::BatchProgress> for BatchProgressJson {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct StatusResponse {
     version: &'static str,
     build_date: String,
@@ -110,20 +112,20 @@ struct StatusResponse {
     session_restore: SessionRestoreJson,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct LogFilterRulesJson {
     error_keywords: Vec<&'static str>,
     important_keywords: Vec<&'static str>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct SessionRestoreJson {
     pending: bool,
     downloader_count: usize,
     convert_count: usize,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 struct StatusCountsJson {
     resolving: usize,
     ready: usize,
@@ -361,8 +363,10 @@ fn system_usage_json(monitor: &mut crate::system_usage::SystemUsageMonitor) -> S
     }
 }
 
-async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
-    let c = st.core.lock();
+fn build_status_response(
+    c: &DownloadCore,
+    system_usage: &mut crate::system_usage::SystemUsageMonitor,
+) -> StatusResponse {
     let output_dir = c.effective_output_dir();
     let config_warnings = c
         .config_load_issues
@@ -388,7 +392,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             convert_count: 0,
         }
     };
-    Json(StatusResponse {
+    StatusResponse {
         version: crate::pkg_version::VERSION,
         build_date: crate::pkg_version::build_date_local(),
         generation: c.generation,
@@ -409,7 +413,7 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
         },
         download_batch: crate::app_state::compute_download_batch_progress(&c.items).into(),
         tools: c.tools_status_json(),
-        system_usage: system_usage_json(&mut st.system_usage.lock()),
+        system_usage: system_usage_json(system_usage),
         output_disk_space: disk_space_json(&output_dir),
         config_warnings,
         log_filter_rules: LogFilterRulesJson {
@@ -417,6 +421,57 @@ async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
             important_keywords: crate::log_filter::IMPORTANT_KEYWORDS.to_vec(),
         },
         session_restore,
+    }
+}
+
+async fn status(State(st): State<ApiState>) -> Json<StatusResponse> {
+    if let Some(c) = st.core.try_lock_for(Duration::from_millis(50)) {
+        let response = build_status_response(&c, &mut st.system_usage.lock());
+        *st.status_cache.lock() = Some(response.clone());
+        return Json(response);
+    }
+    if let Some(cached) = st.status_cache.lock().clone() {
+        return Json(cached);
+    }
+    Json(StatusResponse {
+        version: crate::pkg_version::VERSION,
+        build_date: crate::pkg_version::build_date_local(),
+        generation: 0,
+        downloads_paused: false,
+        queue_running: 0,
+        add_in_progress: false,
+        auto_add_pasted_urls: true,
+        auto_start_downloads: true,
+        shutdown_pending: false,
+        convert_running: false,
+        status: StatusCountsJson {
+            resolving: 0,
+            ready: 0,
+            queued: 0,
+            active: 0,
+            done: 0,
+            failed: 0,
+        },
+        download_batch: BatchProgressJson {
+            fraction: 0.0,
+            percent: 0.0,
+            finished: 0,
+            total: 0,
+            active: 0,
+        },
+        tools: serde_json::json!({}),
+        system_usage: system_usage_json(&mut st.system_usage.lock()),
+        output_disk_space: None,
+        config_warnings: Vec::new(),
+        log_filter_rules: LogFilterRulesJson {
+            error_keywords: crate::log_filter::ERROR_KEYWORDS.to_vec(),
+            important_keywords: crate::log_filter::IMPORTANT_KEYWORDS.to_vec(),
+        },
+        session_restore: SessionRestoreJson {
+            pending: false,
+            downloader_count: 0,
+            convert_count: 0,
+        },
     })
 }
 

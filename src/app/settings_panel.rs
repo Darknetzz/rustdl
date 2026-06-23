@@ -272,6 +272,16 @@ impl PydlApp {
                                 "List layout for queue cards (denser)",
                                 &mut self.settings.card_list_layout,
                             );
+                            changed |= ui
+                                .checkbox(
+                                    &mut self.settings.ui_power_save,
+                                    "Power save during active work",
+                                )
+                                .on_hover_text(
+                                    "Lower UI refresh rate while downloading or converting, \
+                                     use denser queue rows sooner, and lighter activity-log rendering",
+                                )
+                                .changed();
                             changed |= settings_checkbox(
                                 ui,
                                 "Autoscroll log to latest line",

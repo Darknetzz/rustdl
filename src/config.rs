@@ -139,6 +139,9 @@ pub struct AppSettings {
     #[serde(default, alias = "enqueue_downloads_to_av1")]
     pub enqueue_downloads_to_convert: bool,
     pub ui_scale: f32,
+    /// Lower repaint rate, denser queue rows, and lighter log rendering during active work.
+    #[serde(default)]
+    pub ui_power_save: bool,
     /// List rows instead of horizontal preview cards in the queue.
     #[serde(default)]
     pub card_list_layout: bool,
@@ -612,6 +615,7 @@ impl Default for AppSettings {
             auto_start_downloads: true,
             enqueue_downloads_to_convert: false,
             ui_scale: 1.08,
+            ui_power_save: false,
             card_list_layout: false,
             downloader_options_expanded: true,
             videos_docked: true,

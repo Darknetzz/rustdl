@@ -598,7 +598,15 @@ impl DownloadCore {
         if let Some(deadline) = self.queue_save_deadline {
             if Instant::now() >= deadline {
                 self.queue_save_deadline = None;
-                self.flush_queue_to_disk();
+                let items = self.items.clone();
+                let rt = self.runtime.clone();
+                rt.spawn(async move {
+                    if let Ok(Err(err)) =
+                        tokio::task::spawn_blocking(move || save_queue_items(&items)).await
+                    {
+                        eprintln!("rustdl: failed to save queue state: {err}");
+                    }
+                });
             }
         }
     }
@@ -611,9 +619,15 @@ impl DownloadCore {
         if let Some(deadline) = self.log_save_deadline {
             if Instant::now() >= deadline {
                 self.log_save_deadline = None;
-                if let Err(err) = save_activity_log(&self.log_lines) {
-                    eprintln!("rustdl: failed to save activity log: {err}");
-                }
+                let lines = self.log_lines.clone();
+                let rt = self.runtime.clone();
+                rt.spawn(async move {
+                    if let Ok(Err(err)) =
+                        tokio::task::spawn_blocking(move || save_activity_log(&lines)).await
+                    {
+                        eprintln!("rustdl: failed to save activity log: {err}");
+                    }
+                });
             }
         }
     }

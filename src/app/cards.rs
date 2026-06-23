@@ -661,7 +661,8 @@ impl PydlApp {
         if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
             return true;
         }
-        if label == "Done" && self.items.len() > 30 {
+        let done_collapse = if self.settings.ui_power_save { 15 } else { 30 };
+        if label == "Done" && self.items.len() > done_collapse {
             return false;
         }
         match label {
@@ -678,15 +679,12 @@ impl PydlApp {
         }
     }
 
-    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
-        if self.item_index_by_id.len() != self.items.len() {
-            self.rebuild_item_index();
-        }
+    fn rebuild_queue_group_cache(&mut self) {
+        use std::collections::HashMap;
+
         let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
+        let mut map = HashMap::new();
         for label in groups {
-            if self.queue_group_focus.is_some_and(|f| f != label) {
-                continue;
-            }
             let mut ids: Vec<u64> = self
                 .items
                 .iter()
@@ -716,6 +714,45 @@ impl PydlApp {
                     key(*b).cmp(&key(*a))
                 });
             }
+            map.insert(label.to_owned(), ids);
+        }
+        self.queue_group_cache = super::queue_cache::QueueGroupCache {
+            core_generation: self.core_generation,
+            queue_search: self.queue_search.clone(),
+            history_filter_days: self.history_filter_days,
+            queue_group_focus: self.queue_group_focus.map(|s| s.to_owned()),
+            groups: map,
+        };
+    }
+
+    fn ensure_queue_group_cache(&mut self) {
+        if self.queue_group_cache.is_current(
+            self.core_generation,
+            &self.queue_search,
+            self.history_filter_days,
+            self.queue_group_focus,
+        ) {
+            return;
+        }
+        self.rebuild_queue_group_cache();
+    }
+
+    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
+        if self.item_index_by_id.len() != self.items.len() {
+            self.rebuild_item_index();
+        }
+        self.ensure_queue_group_cache();
+        let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
+        for label in groups {
+            if self.queue_group_focus.is_some_and(|f| f != label) {
+                continue;
+            }
+            let ids = self
+                .queue_group_cache
+                .groups
+                .get(label)
+                .cloned()
+                .unwrap_or_default();
             if ids.is_empty() {
                 continue;
             }
@@ -790,7 +827,9 @@ impl PydlApp {
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
                     let allow_reorder = label == "Ready";
-                    if self.effective_card_list_layout() {
+                    let use_list = self.effective_card_list_layout()
+                        || ids.len() >= self.queue_card_list_fallback_threshold();
+                    if use_list {
                         const LIST_ROW_H: f32 = 42.0;
                         let row_count = ids.len().max(1);
                         let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 600.0);

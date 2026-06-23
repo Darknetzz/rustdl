@@ -151,15 +151,43 @@ impl PydlApp {
         if self.log_filter_cache_len == self.log_lines.len() && self.log_filter_cache_slug == slug {
             return;
         }
-        self.log_filtered_indices = self
+        if self.log_filter_cache_len > self.log_lines.len() || self.log_filter_cache_slug != slug {
+            self.log_filtered_indices = self
+                .log_lines
+                .iter()
+                .enumerate()
+                .filter(|(_, line)| self.log_filter.accepts(line))
+                .map(|(i, _)| i)
+                .collect();
+            self.log_filter_cache_len = self.log_lines.len();
+            self.log_filter_cache_slug = slug.to_owned();
+            return;
+        }
+        for (i, line) in self
             .log_lines
             .iter()
             .enumerate()
-            .filter(|(_, line)| self.log_filter.accepts(line))
-            .map(|(i, _)| i)
-            .collect();
+            .skip(self.log_filter_cache_len)
+        {
+            if self.log_filter.accepts(line) {
+                self.log_filtered_indices.push(i);
+            }
+        }
         self.log_filter_cache_len = self.log_lines.len();
-        self.log_filter_cache_slug = slug.to_owned();
+    }
+
+    fn effective_log_render_line_limit(&self) -> usize {
+        let mut limit = self.log_render_line_limit;
+        if self.settings.ui_power_save && self.log_lines.len() > 800 {
+            limit = limit.min(160);
+        } else if self.log_lines.len() > 4_000 {
+            limit = limit.min(240);
+        }
+        limit
+    }
+
+    fn use_compact_log_lines(&self) -> bool {
+        self.settings.ui_power_save || self.log_lines.len() > 2_500
     }
 
     pub(super) fn draw_log_height_slider(&mut self, ui: &mut egui::Ui, max_log: f32) -> bool {
@@ -465,16 +493,18 @@ impl PydlApp {
                     }
                     ui.spacing_mut().item_spacing.y = 3.0;
                     let relative = self.settings.log_relative_time;
+                    let render_limit = self.effective_log_render_line_limit();
+                    let compact_lines = self.use_compact_log_lines();
                     let matching_total;
                     let start;
                     let window_lines: Vec<&String> = if self.log_filter == LogFilter::All {
                         matching_total = self.log_lines.len();
-                        start = matching_total.saturating_sub(self.log_render_line_limit);
+                        start = matching_total.saturating_sub(render_limit);
                         self.log_lines.iter().skip(start).collect()
                     } else {
                         self.refresh_log_filtered_indices_if_needed();
                         matching_total = self.log_filtered_indices.len();
-                        start = matching_total.saturating_sub(self.log_render_line_limit);
+                        start = matching_total.saturating_sub(render_limit);
                         self.log_filtered_indices[start..]
                             .iter()
                             .filter_map(|&i| self.log_lines.get(i))
@@ -525,22 +555,34 @@ impl PydlApp {
                             }
                             for line in window {
                                 let color = log_line_color(line);
-                                let widget = log_line_widget(line, color, ui, relative);
-                                let label = egui::Label::new(widget).wrap().selectable(true);
-                                let r = ui.add(label);
-                                r.context_menu(|ui| {
-                                    button_group(ui, "log_copy_line", |g| {
-                                        if g.secondary(
-                                            &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
-                                            true,
-                                        )
-                                        .clicked()
-                                        {
-                                            g.ui().ctx().copy_text((*line).clone());
-                                            g.ui().close_menu();
-                                        }
+                                if compact_lines {
+                                    let display =
+                                        format_log_timestamp_display(line, relative);
+                                    ui.label(
+                                        RichText::new(display)
+                                            .small()
+                                            .monospace()
+                                            .color(color),
+                                    );
+                                } else {
+                                    let widget = log_line_widget(line, color, ui, relative);
+                                    let label =
+                                        egui::Label::new(widget).wrap().selectable(true);
+                                    let r = ui.add(label);
+                                    r.context_menu(|ui| {
+                                        button_group(ui, "log_copy_line", |g| {
+                                            if g.secondary(
+                                                &format!("{} Copy line", ui_icons::COPY_CLIPBOARD),
+                                                true,
+                                            )
+                                            .clicked()
+                                            {
+                                                g.ui().ctx().copy_text((*line).clone());
+                                                g.ui().close_menu();
+                                            }
+                                        });
                                     });
-                                });
+                                }
                             }
                         });
                 });
