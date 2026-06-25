@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Fixed a startup hang on Windows where the window never appeared (output-folder indexing could block the UI thread; tray hooks now initialize only when **Minimize to system tray** is enabled).
 - LAN web UI: saving the API token now validates it before connecting, shows errors for empty or rejected tokens, and auto-connects when opened via a QR link (`?token=…`).
 - LAN web UI: fixed a duplicate script declaration that could prevent the page from loading.
 

@@ -33,8 +33,14 @@ impl SystemTray {
 
     pub fn try_build() -> Option<Self> {
         let icon = crate::app_icon::tray_icon();
-        let menu = build_menu();
-        Some(build_tray(icon, menu))
+        let menu = build_menu()?;
+        match build_tray(icon, menu) {
+            Ok(tray) => Some(tray),
+            Err(e) => {
+                eprintln!("rustdl: failed to create system tray icon: {e}");
+                None
+            }
+        }
     }
 
     pub fn poll() -> Option<TrayAction> {
@@ -71,26 +77,25 @@ fn wake_ui() {
     }
 }
 
-fn build_menu() -> Menu {
+fn build_menu() -> Option<Menu> {
     let show = MenuItem::with_id(MENU_SHOW_ID, "Show rustdl", true, None);
     let quit = MenuItem::with_id(MENU_QUIT_ID, "Quit", true, None);
     let separator = PredefinedMenuItem::separator();
-    Menu::with_items(&[&show, &separator, &quit]).expect("tray menu")
+    Menu::with_items(&[&show, &separator, &quit]).ok()
 }
 
 #[cfg(not(target_os = "linux"))]
-fn build_tray(icon: tray_icon::Icon, menu: Menu) -> SystemTray {
+fn build_tray(icon: tray_icon::Icon, menu: Menu) -> Result<SystemTray, tray_icon::Error> {
     let icon = TrayIconBuilder::new()
         .with_menu(Box::new(menu))
         .with_tooltip("rustdl")
         .with_icon(icon)
-        .build()
-        .expect("tray icon");
-    SystemTray { _icon: icon }
+        .build()?;
+    Ok(SystemTray { _icon: icon })
 }
 
 #[cfg(target_os = "linux")]
-fn build_tray(icon: tray_icon::Icon, menu: Menu) -> SystemTray {
+fn build_tray(icon: tray_icon::Icon, menu: Menu) -> Result<SystemTray, tray_icon::Error> {
     static LINUX_TRAY: OnceCell<()> = OnceCell::new();
     LINUX_TRAY.get_or_init(|| {
         std::thread::spawn(move || {
@@ -98,14 +103,17 @@ fn build_tray(icon: tray_icon::Icon, menu: Menu) -> SystemTray {
                 eprintln!("rustdl: failed to initialize GTK for the system tray");
                 return;
             }
-            let _tray = TrayIconBuilder::new()
+            let tray = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
                 .with_tooltip("rustdl")
                 .with_icon(icon)
-                .build()
-                .expect("tray icon");
+                .build();
+            if let Err(e) = tray {
+                eprintln!("rustdl: failed to create system tray icon: {e}");
+                return;
+            }
             gtk::main();
         });
     });
-    SystemTray {}
+    Ok(SystemTray {})
 }

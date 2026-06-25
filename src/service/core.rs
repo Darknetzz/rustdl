@@ -877,7 +877,9 @@ impl DownloadCore {
     /// Starts a background output-folder scan when a refresh was scheduled and is due.
     pub fn spawn_done_file_lookup_refresh_if_due(shared: &SharedCore) {
         let (due, inflight, runtime) = {
-            let core = shared.lock();
+            let Some(core) = shared.try_lock() else {
+                return;
+            };
             let due = core
                 .done_lookup_refresh_deadline
                 .is_some_and(|deadline| Instant::now() >= deadline);

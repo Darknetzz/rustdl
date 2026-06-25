@@ -295,6 +295,8 @@ pub struct PydlApp {
     system_tray: Option<crate::tray::SystemTray>,
     /// Main window was hidden via minimize/close-to-tray (not a real quit).
     hidden_to_tray: bool,
+    /// Avoid retrying tray creation every frame after a failed attempt.
+    tray_build_failed: bool,
 }
 
 impl PydlApp {
@@ -505,6 +507,7 @@ impl PydlApp {
             #[cfg(any(windows, target_os = "linux"))]
             system_tray: None,
             hidden_to_tray: false,
+            tray_build_failed: false,
         };
         {
             let core = shared_core.lock();
@@ -923,12 +926,16 @@ impl PydlApp {
             self.output_dir.clone()
         };
         let needs_refresh = {
-            let core = self.shared_core.lock();
+            let Some(core) = self.shared_core.try_lock() else {
+                DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
+                return;
+            };
             core.done_file_index.will_refresh(&output_dir)
         };
         if needs_refresh {
-            let mut core = self.shared_core.lock();
-            core.schedule_done_file_lookup_refresh_force();
+            if let Some(mut core) = self.shared_core.try_lock() {
+                core.schedule_done_file_lookup_refresh_force();
+            }
         }
         DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
     }
@@ -1057,13 +1064,21 @@ impl PydlApp {
 
     #[cfg(any(windows, target_os = "linux"))]
     pub(super) fn sync_system_tray(&mut self, ctx: &egui::Context) {
-        crate::tray::SystemTray::register_wake_context(ctx);
-        if self.settings.minimize_to_tray {
-            if self.system_tray.is_none() {
-                self.system_tray = crate::tray::SystemTray::try_build();
-            }
-        } else {
+        if !self.settings.minimize_to_tray {
             self.system_tray = None;
+            return;
+        }
+
+        crate::tray::SystemTray::register_wake_context(ctx);
+        if self.system_tray.is_none() && !self.tray_build_failed {
+            if let Some(tray) = crate::tray::SystemTray::try_build() {
+                self.system_tray = Some(tray);
+            } else {
+                self.tray_build_failed = true;
+                eprintln!(
+                    "rustdl: system tray unavailable; turn off 'Minimize to system tray' in Settings → Shared"
+                );
+            }
         }
         if let Some(action) = crate::tray::SystemTray::poll() {
             match action {
