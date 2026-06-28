@@ -175,4 +175,10 @@ mod tests {
             &[" ".to_owned(), "127.0.0.1".to_owned()]
         ));
     }
+
+    #[test]
+    fn loopback_ipv6_whitelist_match() {
+        let ip = "::1".parse().unwrap();
+        assert!(ip_whitelisted(ip, &["::1".to_owned()]));
+    }
 }

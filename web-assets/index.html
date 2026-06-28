@@ -523,8 +523,9 @@
           <label class="check"><input type="checkbox" id="set-web-ui-enabled" /> Enable web UI (restart rustdl to apply bind changes)</label>
           <label>Bind address <input type="text" id="set-web-bind-address" placeholder="0.0.0.0:8765" /></label>
           <label>IP whitelist
-            <textarea id="set-web-ip-whitelist" rows="4" placeholder="127.0.0.1&#10;192.168.1.0/24" spellcheck="false"></textarea>
+            <textarea id="set-web-ip-whitelist" rows="4" placeholder="127.0.0.1&#10;::1&#10;192.168.1.0/24" spellcheck="false"></textarea>
           </label>
+          <p class="hint">Matching clients skip the API token. Default includes 127.0.0.1 and ::1 for this PC.</p>
           <p class="hint">One IP or CIDR per line. Matching clients skip the API token (full API access). Other clients still need the token from the desktop app.</p>
           <label class="check"><input type="checkbox" id="set-web-browser-notifications" /> Browser notifications on session complete</label>
           <p class="hint">Shows a browser notification when download or convert batches finish (requires permission).</p>

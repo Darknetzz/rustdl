@@ -339,7 +339,7 @@ pub struct AppSettings {
     #[serde(default)]
     pub web_auth_token: String,
     /// Client IPs or CIDR ranges that may use the web API without a token (e.g. `192.168.1.0/24`).
-    #[serde(default)]
+    #[serde(default = "default_web_auth_ip_whitelist")]
     pub web_auth_ip_whitelist: Vec<String>,
     /// Show browser notifications when download or convert sessions complete (LAN web UI).
     #[serde(default = "default_web_browser_notifications")]
@@ -406,6 +406,11 @@ pub struct AppSettings {
 
 fn default_web_bind_address() -> String {
     "0.0.0.0:8765".to_owned()
+}
+
+/// Loopback addresses allowed to use the LAN web UI without an API token.
+pub fn default_web_auth_ip_whitelist() -> Vec<String> {
+    vec!["127.0.0.1".to_owned(), "::1".to_owned()]
 }
 
 fn default_web_browser_notifications() -> bool {
@@ -728,7 +733,7 @@ impl Default for AppSettings {
             web_ui_enabled: false,
             web_bind_address: default_web_bind_address(),
             web_auth_token: String::new(),
-            web_auth_ip_whitelist: Vec::new(),
+            web_auth_ip_whitelist: default_web_auth_ip_whitelist(),
             web_browser_notifications: default_web_browser_notifications(),
             github_token: String::new(),
             queue_search: String::new(),
@@ -917,6 +922,17 @@ pub fn validate_web_tls_settings(settings: &AppSettings) -> Result<(), String> {
     Ok(())
 }
 
+/// Trims whitelist entries; empty lists get default loopback hosts.
+pub fn normalize_web_auth_ip_whitelist(whitelist: &mut Vec<String>) {
+    whitelist.retain(|entry| !entry.trim().is_empty());
+    for entry in whitelist.iter_mut() {
+        *entry = entry.trim().to_owned();
+    }
+    if whitelist.is_empty() {
+        *whitelist = default_web_auth_ip_whitelist();
+    }
+}
+
 /// Clamps and normalizes all persisted settings fields.
 pub fn normalize_settings(cfg: &mut AppSettings) {
     cfg.web_tls_cert_path = cfg.web_tls_cert_path.trim().to_owned();
@@ -1008,6 +1024,7 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
     cfg.playlist_preview_cap = cfg.playlist_preview_cap.clamp(1, 500);
     cfg.download_min_height = cfg.download_min_height.clamp(0, 4320);
     cfg.download_min_fps = cfg.download_min_fps.clamp(0, 240);
+    normalize_web_auth_ip_whitelist(&mut cfg.web_auth_ip_whitelist);
     if cfg.active_profile.trim().is_empty() {
         cfg.active_profile = default_active_profile();
     }
@@ -1265,5 +1282,19 @@ mod tests {
         s.web_ui_enabled = false;
         s.web_auth_token.clear();
         assert!(!ensure_web_auth_token_if_enabled(&mut s));
+    }
+
+    #[test]
+    fn normalize_web_auth_ip_whitelist_defaults_to_loopback() {
+        let mut list = Vec::new();
+        normalize_web_auth_ip_whitelist(&mut list);
+        assert_eq!(list, default_web_auth_ip_whitelist());
+    }
+
+    #[test]
+    fn normalize_web_auth_ip_whitelist_preserves_custom_entries() {
+        let mut list = vec!["192.168.1.0/24".to_owned()];
+        normalize_web_auth_ip_whitelist(&mut list);
+        assert_eq!(list, vec!["192.168.1.0/24".to_owned()]);
     }
 }

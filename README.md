@@ -114,7 +114,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 
 ## LAN web UI
 
-When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings (unless your IP is on the whitelist), then use the page to control the **Downloader** queue, **Video Converter** queue, and **Library** of completed downloads.
+When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings (unless your IP is on the whitelist), then use the page to control the **Downloader** queue, **Video Converter** queue, and **Library** of completed downloads. **127.0.0.1** and **::1** are whitelisted by default so the web UI on this PC does not require a token.
 
 **Still desktop-only:** native queue/settings file pickers (web uses API import/export), desktop notifications on session complete, in-app update download (Windows only), browser URL drag-and-drop (Windows only).
 

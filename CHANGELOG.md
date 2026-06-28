@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- LAN web UI **IP whitelist** defaults to **127.0.0.1** and **::1** so browsers on this PC can connect without the API token; other clients still need the token unless you add their IP or subnet.
+
 ### Added
 
 - **Settings → Downloader → Quality & network**: optional **Minimum height** and **Minimum FPS** for downloads (yt-dlp `height>=` / `fps>=` filters on quality presets and custom `-f` strings; audio-only preset unchanged).

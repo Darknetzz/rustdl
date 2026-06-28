@@ -2213,7 +2213,8 @@ impl PydlApp {
                             ui.vertical(|ui| {
                                 ui.label(
                                     RichText::new(
-                                        "Optional. One IP or CIDR per line; matching clients skip the API token.",
+                                        "Optional. One IP or CIDR per line; matching clients skip the API token. \
+                                         Default includes 127.0.0.1 and ::1 for this PC.",
                                     )
                                     .small()
                                     .color(ui.visuals().weak_text_color()),
