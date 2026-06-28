@@ -9,7 +9,8 @@ use crate::app_ui::{
     allocate_top_down_rect, button_group, button_toolbar_wrapped, compact_button_group,
     consume_remaining_ui_space, content_width, fill_allocated_rect, finite_ui_span,
     height_to_bottom, left_button_row, persist_resizable_window_size, secondary_button,
-    with_full_width,
+    with_full_width, ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN, ACTIVITY_LOG_LINES_FRAME_STROKE,
+    ACTIVITY_LOG_LINES_SCROLL_CHROME_H,
 };
 use crate::theme::{log_bg, text_hint, BG_CANVAS, BORDER_PANEL, BORDER_SUBTLE, TEXT_MUTED};
 use crate::time_format::{format_relative_ago, log_message_body, split_log_line};
@@ -330,10 +331,6 @@ impl PydlApp {
         });
     }
 
-    pub(super) fn draw_activity_log_toolbar(&mut self, ui: &mut egui::Ui) {
-        self.draw_activity_log_toolbar_inner(ui, false);
-    }
-
     fn draw_activity_log_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
@@ -450,35 +447,20 @@ impl PydlApp {
         self.draw_activity_log_lines_scroll(ui, log_h);
     }
 
-    /// Activity log body with explicit scroll height (main-column undocked footer).
-    pub(super) fn draw_docked_activity_log_body_with_height(
-        &mut self,
-        ui: &mut egui::Ui,
-        max_log_h: f32,
-        log_h: f32,
-        compact_toolbar: bool,
-    ) {
-        let max_log = max_log_h.clamp(80.0, 480.0);
-        self.draw_log_height_slider(ui, max_log);
-        if compact_toolbar {
-            self.draw_activity_log_toolbar_inner(ui, true);
-        } else {
-            self.draw_activity_log_toolbar(ui);
-        }
-        self.draw_activity_log_lines_scroll(ui, log_h.max(60.0));
-    }
-
     /// Scrollable log lines only (toolbar is separate).
     pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
         let scroll_h = finite_ui_span(scroll_h, 80.0).max(60.0);
         let w = content_width(ui).max(1.0);
-        let inner_h = (scroll_h - 22.0).max(40.0);
+        let inner_h = (scroll_h - ACTIVITY_LOG_LINES_SCROLL_CHROME_H).max(40.0);
         ui.allocate_ui(egui::vec2(w, scroll_h), |ui| {
             ui.set_min_size(egui::vec2(w, scroll_h));
             egui::Frame::dark_canvas(ui.style())
                 .fill(log_bg(&self.settings.theme))
-                .stroke(egui::Stroke::new(1.0, BORDER_SUBTLE))
-                .inner_margin(egui::Margin::same(10.0))
+                .stroke(egui::Stroke::new(
+                    ACTIVITY_LOG_LINES_FRAME_STROKE,
+                    BORDER_SUBTLE,
+                ))
+                .inner_margin(egui::Margin::same(ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN))
                 .rounding(egui::Rounding::same(6.0))
                 .show(ui, |ui| {
                     ui.set_min_height(inner_h);

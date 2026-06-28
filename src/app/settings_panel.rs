@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{button_group, left_button_row};
+use crate::app_ui::{bounded_ui_height, button_group, left_button_row};
 use crate::config::{export_settings_json, import_settings_json, trim_activity_log, AppSettings};
 use crate::profiles::{
     all_profiles, delete_user_profile, find_profile, rename_user_profile, save_user_profile,
@@ -203,6 +203,8 @@ impl PydlApp {
             .resizable(true)
             .default_width(620.0)
             .default_height(560.0)
+            .min_width(480.0)
+            .min_height(400.0)
             .show(ctx, |ui| {
                 let prev_settings_tab = self.settings_tab;
                 left_button_row(ui, |ui| {
@@ -241,7 +243,7 @@ impl PydlApp {
                     self.sync_settings_tab_to_disk();
                 }
                 ui.separator();
-                let scroll_h = ui.available_height().max(240.0);
+                let scroll_h = bounded_ui_height(ui, 240.0).max(240.0);
                 egui::ScrollArea::vertical()
                     .id_salt(super::settings_tab_to_str(self.settings_tab))
                     .auto_shrink([false, false])

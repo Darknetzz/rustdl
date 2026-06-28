@@ -1081,17 +1081,99 @@ pub struct MainColumnSplit {
 /// Compact Videos strip in the main window when the queue is undocked (no docked log).
 pub const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 /// Header row, height slider, and filter toolbar above docked log lines.
-const DOCKED_LOG_CHROME_H: f32 = 100.0;
+pub const DOCKED_LOG_CHROME_H: f32 = 100.0;
+/// Spacing + separator above the activity log when docked under the video queue.
+pub const DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H: f32 = 11.0;
+/// Main header switches from one row to stacked layout at this content width.
+pub const LAYOUT_WIDE_BREAKPOINT: f32 = 1040.0;
+/// Footer toolbar reserve uses a taller wrapped layout below this width.
+pub const LAYOUT_FOOTER_WIDE_BREAKPOINT: f32 = 900.0;
+/// Footer toolbar reserve uses the tallest wrapped layout below this width.
+pub const LAYOUT_FOOTER_MEDIUM_BREAKPOINT: f32 = 600.0;
+/// Inner margin on each side of the activity log lines frame (see `log_panel.rs`).
+pub const ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN: f32 = 10.0;
+/// Stroke width around the activity log lines frame.
+pub const ACTIVITY_LOG_LINES_FRAME_STROKE: f32 = 1.0;
+/// Vertical chrome inside the log scroll allocation (frame margins + stroke).
+pub const ACTIVITY_LOG_LINES_SCROLL_CHROME_H: f32 =
+    ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN * 2.0 + ACTIVITY_LOG_LINES_FRAME_STROKE;
 
 /// Estimated vertical space for the video queue footer toolbar (dock/hide + batch actions).
-pub fn queue_footer_toolbar_reserve(content_width: f32) -> f32 {
-    if content_width >= 900.0 {
+pub fn queue_footer_toolbar_reserve(content_width: f32, convert_mode: bool, docked: bool) -> f32 {
+    let base = if content_width >= LAYOUT_FOOTER_WIDE_BREAKPOINT {
         72.0
-    } else if content_width >= 600.0 {
+    } else if content_width >= LAYOUT_FOOTER_MEDIUM_BREAKPOINT {
         96.0
     } else {
         130.0
+    };
+    let convert_extra = if convert_mode { 40.0 } else { 0.0 };
+    let docked_extra = if docked && !convert_mode && content_width < LAYOUT_FOOTER_WIDE_BREAKPOINT {
+        24.0
+    } else {
+        0.0
+    };
+    base + convert_extra + docked_extra
+}
+
+/// Heights for the pinned queue body regions (list scroll, footer, optional docked log).
+pub struct QueueBodyLayout {
+    pub list_h: f32,
+    pub footer_h: f32,
+    pub log_block_h: f32,
+}
+
+/// Compute queue list height from remaining body space and pinned footer/log blocks.
+pub fn queue_body_layout_heights(
+    available_h: f32,
+    content_width: f32,
+    dock_log: bool,
+    log_dock_height: f32,
+    convert_mode: bool,
+    docked: bool,
+    measured_footer_h: Option<f32>,
+) -> QueueBodyLayout {
+    let footer_h = measured_footer_h.unwrap_or_else(|| {
+        queue_footer_toolbar_reserve(content_width, convert_mode, docked) + 2.0
+    });
+    let log_block_h = if dock_log {
+        log_dock_height.clamp(80.0, 480.0)
+            + DOCKED_LOG_CHROME_H
+            + DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
+    } else {
+        0.0
+    };
+    let bottom_stack = footer_h + log_block_h;
+    let list_h = (available_h - bottom_stack).max(0.0);
+    QueueBodyLayout {
+        list_h,
+        footer_h,
+        log_block_h,
     }
+}
+
+/// Clamp persisted dock panel heights when the main viewport shrinks (skip while dragging).
+pub fn clamp_dock_heights_for_viewport(
+    viewport_height: f32,
+    videos_dock_height: &mut f32,
+    undocked_footer_height: &mut f32,
+    pointer_down: bool,
+) -> bool {
+    if pointer_down || !viewport_height.is_finite() || viewport_height < 1.0 {
+        return false;
+    }
+    let max_docked = (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).max(180.0);
+    let max_undocked = (viewport_height * 0.45).max(180.0);
+    let mut changed = false;
+    if *videos_dock_height > max_docked {
+        *videos_dock_height = max_docked;
+        changed = true;
+    }
+    if *undocked_footer_height > max_undocked {
+        *undocked_footer_height = max_undocked;
+        changed = true;
+    }
+    changed
 }
 
 pub fn compute_main_column_split(
@@ -1975,11 +2057,50 @@ mod tests {
 
     #[test]
     fn queue_footer_reserve_scales_with_width() {
-        assert_eq!(queue_footer_toolbar_reserve(1000.0), 72.0);
-        assert_eq!(queue_footer_toolbar_reserve(900.0), 72.0);
-        assert_eq!(queue_footer_toolbar_reserve(750.0), 96.0);
-        assert_eq!(queue_footer_toolbar_reserve(600.0), 96.0);
-        assert_eq!(queue_footer_toolbar_reserve(480.0), 130.0);
+        assert_eq!(queue_footer_toolbar_reserve(1000.0, false, true), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(900.0, false, true), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(750.0, false, true), 96.0 + 24.0);
+        assert_eq!(queue_footer_toolbar_reserve(600.0, false, true), 96.0 + 24.0);
+        assert_eq!(queue_footer_toolbar_reserve(480.0, false, true), 130.0 + 24.0);
+    }
+
+    #[test]
+    fn queue_footer_reserve_convert_mode_taller() {
+        assert_eq!(queue_footer_toolbar_reserve(1000.0, true, true), 72.0 + 40.0);
+        assert_eq!(queue_footer_toolbar_reserve(480.0, true, false), 130.0 + 40.0);
+    }
+
+    #[test]
+    fn queue_body_layout_never_negative_list() {
+        let layout = queue_body_layout_heights(400.0, 800.0, true, 180.0, false, true, None);
+        assert!(layout.list_h >= 0.0);
+        assert!(layout.footer_h > 0.0);
+        assert!(layout.log_block_h > 0.0);
+    }
+
+    #[test]
+    fn queue_body_layout_uses_measured_footer() {
+        let est = queue_body_layout_heights(500.0, 800.0, false, 120.0, false, true, None);
+        let measured = queue_body_layout_heights(500.0, 800.0, false, 120.0, false, true, Some(140.0));
+        assert!(measured.list_h < est.list_h);
+        assert_eq!(measured.footer_h, 140.0);
+    }
+
+    #[test]
+    fn clamp_dock_heights_for_viewport_helper() {
+        let mut dock = 800.0;
+        let mut undock = 600.0;
+        assert!(super::clamp_dock_heights_for_viewport(
+            760.0, &mut dock, &mut undock, false
+        ));
+        assert!(dock <= 760.0 * VIDEOS_DOCKED_HEIGHT_RATIO + 0.01);
+        assert!(undock <= 760.0 * 0.45 + 0.01);
+        let mut dock2 = 200.0;
+        let mut undock2 = 200.0;
+        assert!(!super::clamp_dock_heights_for_viewport(
+            760.0, &mut dock2, &mut undock2, true
+        ));
+        assert_eq!(dock2, 200.0);
     }
 
     #[test]

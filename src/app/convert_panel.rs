@@ -719,6 +719,7 @@ impl PydlApp {
         ui: &mut egui::Ui,
         scroll_max: f32,
         min_h: f32,
+        outer_scroll_h: f32,
     ) {
         let scroll_h = scroll_max.max(min_h);
         egui::ScrollArea::vertical()
@@ -748,7 +749,7 @@ impl PydlApp {
                 }
                 let profile = std::env::var("RUSTDL_PROFILE").ok().as_deref() == Some("1");
                 let t0 = profile.then(std::time::Instant::now);
-                self.draw_convert_grouped_cards(ui);
+                self.draw_convert_grouped_cards(ui, outer_scroll_h);
                 if let Some(t0) = t0 {
                     let ms = t0.elapsed().as_secs_f64() * 1000.0;
                     if ms > 8.0 {
@@ -797,7 +798,7 @@ impl PydlApp {
         }
     }
 
-    fn draw_convert_grouped_cards(&mut self, ui: &mut egui::Ui) {
+    fn draw_convert_grouped_cards(&mut self, ui: &mut egui::Ui, outer_scroll_h: f32) {
         let groups = ["Active", "Ready", "Failed", "Skipped", "Done"];
         for label in groups {
             if self.queue_group_focus.is_some_and(|f| f != label) {
@@ -845,7 +846,10 @@ impl PydlApp {
                     if self.effective_convert_list_layout() {
                         const LIST_ROW_H: f32 = 118.0;
                         let row_count = ids.len().max(1);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 600.0);
+                        let outer_cap = outer_scroll_h.max(LIST_ROW_H);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0)
+                            .clamp(LIST_ROW_H, 600.0)
+                            .min(outer_cap);
                         egui::ScrollArea::vertical()
                             .id_salt(format!("rustdl_convert_list_{label}"))
                             .max_height(max_h)

@@ -737,7 +737,7 @@ impl PydlApp {
         self.rebuild_queue_group_cache();
     }
 
-    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui, outer_scroll_h: f32) {
         if self.item_index_by_id.len() != self.items.len() {
             self.rebuild_item_index();
         }
@@ -832,7 +832,10 @@ impl PydlApp {
                     if use_list {
                         const LIST_ROW_H: f32 = 42.0;
                         let row_count = ids.len().max(1);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0).clamp(LIST_ROW_H, 600.0);
+                        let outer_cap = outer_scroll_h.max(LIST_ROW_H);
+                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0)
+                            .clamp(LIST_ROW_H, 600.0)
+                            .min(outer_cap);
                         egui::ScrollArea::vertical()
                             .id_salt(format!("rustdl_list_{label}"))
                             .max_height(max_h)

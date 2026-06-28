@@ -16,9 +16,17 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Docked and floating video queue panels no longer overlap the footer toolbar or docked activity log when the window or panel is resized (layout uses measured footer height and mode-aware reserves; log height slider applies consistently when the log is docked under the queue or in the main footer).
+- Queue group list scroll areas stay within the outer queue scroll height on short panels (avoids awkward nested double-scroll).
+- Resizing the main window clamps persisted dock panel heights so a previously tall queue panel does not dominate the viewport before auto-undock kicks in.
 - Fixed a startup hang on Windows where the window never appeared (output-folder indexing could block the UI thread; tray hooks now initialize only when **Minimize to system tray** is enabled).
 - LAN web UI: saving the API token now validates it before connecting, shows errors for empty or rejected tokens, and auto-connects when opened via a QR link (`?token=…`).
 - LAN web UI: fixed a duplicate script declaration that could prevent the page from loading.
+
+### Changed
+
+- Settings window has a minimum size and safer scroll height calculation when resized small.
+- Shared layout breakpoints for header and queue footer wrapping (wide at 1040px content width; footer reserve tiers at 900px and 600px).
 
 ### Documentation
 

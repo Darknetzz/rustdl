@@ -1126,6 +1126,15 @@ impl PydlApp {
         if size.x < 1.0 || size.y < 1.0 {
             return;
         }
+        let pointer_down = ctx.input(|i| i.pointer.any_down());
+        if crate::app_ui::clamp_dock_heights_for_viewport(
+            size.y,
+            &mut self.settings.videos_dock_height,
+            &mut self.settings.undocked_footer_height,
+            pointer_down,
+        ) {
+            self.persist_settings();
+        }
         if self.settings.videos_docked {
             if crate::app_ui::viewport_too_small_for_docked_videos(size)
                 && !self.videos_dock_user_prefers_docked

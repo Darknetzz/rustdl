@@ -3,8 +3,8 @@ use crate::service::DownloadCore;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_width,
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
-    patch_resizable_panel_state_height, show_mode_panel, with_full_width, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    patch_resizable_panel_state_height, show_mode_panel, with_full_width, LAYOUT_WIDE_BREAKPOINT,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -468,8 +468,7 @@ impl PydlApp {
         self.constrain_content(ui);
         with_full_width(ui, |ui| {
             let row_w = ui.available_width();
-            const HEADER_WIDE_BREAKPOINT: f32 = 1040.0;
-            if row_w >= HEADER_WIDE_BREAKPOINT {
+            if row_w >= LAYOUT_WIDE_BREAKPOINT {
                 self.draw_main_header_wide(ui, row_w);
             } else {
                 self.draw_main_header_narrow(ui);
