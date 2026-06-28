@@ -1856,6 +1856,57 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("Post-encode options").strong());
                         settings_form_grid(ui, "convert_post_encode", |ui| {
+                            ui.label("Subtitle handling (during encode)")
+                                .on_hover_text(
+                                    "During encode: copy subtitle streams into the output file or burn the first \
+                                     subtitle track into the video. Sidecar copy below runs after encode.",
+                                );
+                            egui::ComboBox::from_id_salt("settings_convert_subtitle_mode")
+                                .selected_text(match self.settings.convert_subtitle_mode.as_str() {
+                                    "soft" => "Soft copy (in container)",
+                                    "burn" => "Burn into video",
+                                    _ => "None",
+                                })
+                                .show_ui(ui, |ui| {
+                                    for (value, label) in [
+                                        ("none", "None"),
+                                        ("soft", "Soft copy (in container)"),
+                                        ("burn", "Burn into video (first subtitle track)"),
+                                    ] {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_subtitle_mode,
+                                                value.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                            ui.label("Extract audio sidecar").on_hover_text(
+                                "After a successful encode, write a separate audio-only file next to the output.",
+                            );
+                            egui::ComboBox::from_id_salt("settings_convert_audio_extract")
+                                .selected_text(match self.settings.convert_audio_extract.as_str() {
+                                    "flac" => "FLAC",
+                                    "aac" => "AAC",
+                                    "opus" => "Opus",
+                                    _ => "None",
+                                })
+                                .show_ui(ui, |ui| {
+                                    for (value, label) in
+                                        [("none", "None"), ("flac", "FLAC"), ("aac", "AAC"), ("opus", "Opus")]
+                                    {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_audio_extract,
+                                                value.to_owned(),
+                                                label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
                             changed |= settings_checkbox(
                                 ui,
                                 "Copy subtitle sidecars after encode",
@@ -1928,7 +1979,7 @@ impl PydlApp {
                         ui.label(RichText::new("LAN web UI").strong());
                         ui.label(
                             RichText::new(
-                                "HTTP on your local network with a shared token. Not encrypted — use only on networks you trust.",
+                                "HTTP on your local network with a shared token. Optional TLS certificate paths enable HTTPS when both files exist.",
                             )
                             .color(crate::app_ui::ALERT_WARNING_TEXT),
                         );
@@ -1950,6 +2001,65 @@ impl PydlApp {
                                         .hint_text("0.0.0.0:8765"),
                                 )
                                 .changed();
+                            ui.end_row();
+                            ui.label("TLS certificate");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.web_tls_cert_path)
+                                        .hint_text("fullchain.pem (optional)"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            ui.label("TLS private key");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.settings.web_tls_key_path)
+                                        .hint_text("privkey.pem (optional)"),
+                                )
+                                .changed();
+                            ui.end_row();
+                            left_button_row(ui, |ui| {
+                                button_group(ui, "web_tls_browse", |g| {
+                                    if g
+                                        .secondary(&format!("{} Browse cert…", ui_icons::OPEN_FILE), true)
+                                        .clicked()
+                                    {
+                                        if let Some(path) = rfd::FileDialog::new()
+                                            .add_filter("Certificate", &["pem", "crt"])
+                                            .pick_file()
+                                        {
+                                            self.settings.web_tls_cert_path =
+                                                path.to_string_lossy().into_owned();
+                                            changed = true;
+                                        }
+                                    }
+                                    if g
+                                        .secondary(&format!("{} Browse key…", ui_icons::OPEN_FILE), true)
+                                        .clicked()
+                                    {
+                                        if let Some(path) = rfd::FileDialog::new()
+                                            .add_filter("Private key", &["pem", "key"])
+                                            .pick_file()
+                                        {
+                                            self.settings.web_tls_key_path =
+                                                path.to_string_lossy().into_owned();
+                                            changed = true;
+                                        }
+                                    }
+                                });
+                            });
+                            if let Err(err) = crate::config::validate_web_tls_settings(&self.settings)
+                            {
+                                ui.label(
+                                    RichText::new(err).small().color(crate::app_ui::ALERT_DANGER_TEXT),
+                                );
+                            } else if crate::config::web_tls_enabled(&self.settings) {
+                                ui.label(
+                                    RichText::new("TLS enabled — web UI serves HTTPS when running.")
+                                        .small()
+                                        .color(crate::theme::TEXT_MUTED),
+                                );
+                            }
                             ui.end_row();
                             ui.label("IP whitelist");
                             ui.vertical(|ui| {
@@ -2065,7 +2175,7 @@ impl PydlApp {
                         }
                         if self.settings.web_ui_enabled {
                             let url =
-                                crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+                                crate::service::web::web_ui_browser_url(&self.settings);
                             ui.horizontal_wrapped(|ui| {
                                 ui.label("Open");
                                 ui.hyperlink_to(&url, &url);

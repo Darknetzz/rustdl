@@ -1,25 +1,32 @@
 use std::net::SocketAddr;
+use std::path::Path;
 use std::sync::Arc;
 
 use tokio::runtime::Runtime;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 
-use crate::config::AppSettings;
+use crate::config::{validate_web_tls_settings, web_tls_enabled, AppSettings};
 use crate::service::core::SharedCore;
 use crate::service::web::api::{api_router, ApiState};
 
 /// Browser-openable URL for the LAN web UI (maps `0.0.0.0` to this machine).
-pub fn web_ui_browser_url(bind_address: &str) -> String {
-    let bind = bind_address.trim();
-    let with_scheme = if bind.starts_with("http://") || bind.starts_with("https://") {
-        if bind.ends_with('/') {
-            bind.to_owned()
-        } else {
-            format!("{bind}/")
-        }
+pub fn web_ui_browser_url(settings: &AppSettings) -> String {
+    let bind = settings.web_bind_address.trim();
+    let scheme = if web_tls_enabled(settings) {
+        "https"
     } else {
-        format!("http://{bind}/")
+        "http"
+    };
+    let with_scheme = if bind.starts_with("http://") || bind.starts_with("https://") {
+        let stripped = bind
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
+        format!("{scheme}://{stripped}/")
+    } else if bind.ends_with('/') {
+        format!("{scheme}://{bind}")
+    } else {
+        format!("{scheme}://{bind}/")
     };
     with_scheme.replace("://0.0.0.0", "://127.0.0.1")
 }
@@ -52,6 +59,8 @@ pub enum WebServerStartError {
     InvalidBind(String),
     EmptyToken,
     BindFailed(String),
+    TlsConfig(String),
+    TlsLoadFailed(String),
 }
 
 impl WebServerStartError {
@@ -67,6 +76,8 @@ impl WebServerStartError {
                     "web UI failed to bind: {detail} (another rustdl instance may already be using this port)"
                 )
             }
+            Self::TlsConfig(detail) => detail.clone(),
+            Self::TlsLoadFailed(detail) => format!("web TLS configuration failed: {detail}"),
         }
     }
 }
@@ -104,11 +115,23 @@ pub fn try_spawn_web_server(
     if !settings.web_ui_enabled {
         return Ok(None);
     }
+    validate_web_tls_settings(settings).map_err(WebServerStartError::TlsConfig)?;
+    let tls = web_tls_enabled(settings);
     spawn_web_server_at(
         runtime,
         core,
         settings.web_bind_address.trim(),
         settings.web_auth_token.trim(),
+        if tls {
+            Some(settings.web_tls_cert_path.as_str())
+        } else {
+            None
+        },
+        if tls {
+            Some(settings.web_tls_key_path.as_str())
+        } else {
+            None
+        },
         None,
     )
     .map(Some)
@@ -119,6 +142,8 @@ pub fn spawn_web_server_at(
     core: SharedCore,
     bind: &str,
     auth_token: &str,
+    tls_cert: Option<&str>,
+    tls_key: Option<&str>,
     process_exit: Option<tokio::sync::oneshot::Sender<()>>,
 ) -> Result<WebServerHandle, WebServerStartError> {
     let bind = bind.trim();
@@ -131,16 +156,6 @@ pub fn spawn_web_server_at(
     if auth_token.trim().is_empty() {
         return Err(WebServerStartError::EmptyToken);
     }
-    {
-        let c = core.lock();
-        if !c.settings.web_tls_cert_path.trim().is_empty()
-            || !c.settings.web_tls_key_path.trim().is_empty()
-        {
-            eprintln!(
-                "rustdl: web TLS paths are configured; bind plain HTTP and terminate TLS with a reverse proxy (see README LAN notes)."
-            );
-        }
-    }
 
     let state = ApiState::new(core.clone());
     if let Some(tx) = process_exit {
@@ -148,30 +163,66 @@ pub fn spawn_web_server_at(
     }
     let app = api_router(state);
 
-    let std_listener = std::net::TcpListener::bind(addr)
-        .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
-    std_listener
-        .set_nonblocking(true)
-        .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
-
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-    let join = runtime.spawn(async move {
-        let listener = match tokio::net::TcpListener::from_std(std_listener) {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("rustdl: web UI failed to start listener on {addr}: {e}");
-                return;
+
+    let join = if let (Some(cert), Some(key)) = (tls_cert, tls_key) {
+        let cert_path = cert.trim().to_owned();
+        let key_path = key.trim().to_owned();
+        runtime.spawn(async move {
+            let config = match axum_server::tls_rustls::RustlsConfig::from_pem_file(
+                Path::new(&cert_path),
+                Path::new(&key_path),
+            )
+            .await
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("rustdl: web UI TLS load failed ({cert_path}, {key_path}): {e}");
+                    return;
+                }
+            };
+            let handle = axum_server::Handle::new();
+            let graceful = handle.clone();
+            let shutdown = async move {
+                let _ = shutdown_rx.await;
+                graceful.graceful_shutdown(None);
+            };
+            let serve = axum_server::bind_rustls(addr, config)
+                .handle(handle)
+                .serve(app.into_make_service_with_connect_info::<SocketAddr>());
+            tokio::select! {
+                result = serve => {
+                    if let Err(e) = result {
+                        eprintln!("rustdl: web UI HTTPS server error on {addr}: {e}");
+                    }
+                }
+                _ = shutdown => {},
             }
-        };
-        let serve = axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        );
-        tokio::select! {
-            _ = serve => {},
-            _ = shutdown_rx => {},
-        }
-    });
+        })
+    } else {
+        let std_listener = std::net::TcpListener::bind(addr)
+            .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
+        std_listener
+            .set_nonblocking(true)
+            .map_err(|e| WebServerStartError::BindFailed(format!("{addr}: {e}")))?;
+        runtime.spawn(async move {
+            let listener = match tokio::net::TcpListener::from_std(std_listener) {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("rustdl: web UI failed to start listener on {addr}: {e}");
+                    return;
+                }
+            };
+            let serve = axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            );
+            tokio::select! {
+                _ = serve => {},
+                _ = shutdown_rx => {},
+            }
+        })
+    };
 
     Ok(WebServerHandle {
         shutdown_tx: Some(shutdown_tx),
@@ -182,18 +233,41 @@ pub fn spawn_web_server_at(
 #[cfg(test)]
 mod tests {
     use super::{resolve_web_bind_address, web_ui_browser_url};
+    use crate::config::AppSettings;
 
     #[test]
     fn web_ui_browser_url_maps_wildcard_bind() {
-        assert_eq!(web_ui_browser_url("0.0.0.0:8765"), "http://127.0.0.1:8765/");
+        assert_eq!(
+            web_ui_browser_url(&AppSettings::default()),
+            "http://127.0.0.1:8765/"
+        );
     }
 
     #[test]
     fn web_ui_browser_url_adds_scheme() {
-        assert_eq!(
-            web_ui_browser_url("127.0.0.1:8765"),
-            "http://127.0.0.1:8765/"
-        );
+        let mut s = AppSettings::default();
+        s.web_bind_address = "127.0.0.1:8765".to_owned();
+        assert_eq!(web_ui_browser_url(&s), "http://127.0.0.1:8765/");
+    }
+
+    #[test]
+    fn web_ui_browser_url_uses_https_when_tls_enabled() {
+        let mut s = AppSettings::default();
+        s.web_bind_address = "127.0.0.1:8765".to_owned();
+        s.web_tls_cert_path = "/nonexistent/cert.pem".to_owned();
+        s.web_tls_key_path = "/nonexistent/key.pem".to_owned();
+        assert_eq!(web_ui_browser_url(&s), "http://127.0.0.1:8765/");
+        let dir = std::env::temp_dir().join(format!("rustdl_tls_url_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("tmpdir");
+        let cert = dir.join("cert.pem");
+        let key = dir.join("key.pem");
+        std::fs::write(&cert, "dummy").expect("cert");
+        std::fs::write(&key, "dummy").expect("key");
+        s.web_tls_cert_path = cert.to_string_lossy().into_owned();
+        s.web_tls_key_path = key.to_string_lossy().into_owned();
+        assert_eq!(web_ui_browser_url(&s), "https://127.0.0.1:8765/");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

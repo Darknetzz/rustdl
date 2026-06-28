@@ -58,6 +58,10 @@ pub struct ConvertConfig {
     /// `0` = ffmpeg default (all cores).
     pub cpu_threads: u32,
     pub subprocess_priority: String,
+    /// Extra audio output after encode: `none`, `flac`, `aac`, or `opus`.
+    pub audio_extract: String,
+    /// In-encode subtitle handling: `none`, `soft`, or `burn`.
+    pub subtitle_mode: String,
 }
 
 #[derive(Clone, Debug)]
@@ -598,6 +602,7 @@ struct FfprobeMediaFormat {
 
 #[derive(serde::Deserialize)]
 struct FfprobeMediaStream {
+    codec_type: Option<String>,
     codec_name: Option<String>,
     width: Option<u32>,
     height: Option<u32>,
@@ -707,6 +712,144 @@ pub fn input_codec(file_path: &Path, ffprobe_path: &str) -> Option<String> {
 
 pub fn input_duration_ms(file_path: &Path, ffprobe_path: &str) -> Option<u64> {
     probe_input_media(file_path, ffprobe_path).and_then(|m| m.duration_ms)
+}
+
+/// True when the input has at least one subtitle stream.
+pub fn input_has_subtitle_streams(file_path: &Path, ffprobe_path: &str) -> bool {
+    let ffprobe = resolve_executable(ffprobe_path, "ffprobe");
+    let mut cmd = Command::new(ffprobe);
+    no_console_window(&mut cmd);
+    let out = cmd
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "s",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+            &file_path.to_string_lossy(),
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .output();
+    match out {
+        Ok(o) if o.status.success() => !String::from_utf8_lossy(&o.stdout).trim().is_empty(),
+        _ => false,
+    }
+}
+
+fn escape_ffmpeg_subtitle_path(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/").replace(':', "\\:")
+}
+
+/// Appends a burn-in subtitle filter when subtitle mode is `burn`.
+pub fn build_video_filter_with_subtitles(
+    hw_type: &str,
+    max_video_width: u32,
+    pix_fmt: &str,
+    subtitle_mode: &str,
+    input: &Path,
+    has_subtitles: bool,
+) -> String {
+    let mut vf = build_video_filter_chain(hw_type, max_video_width, pix_fmt);
+    if subtitle_mode == "burn" && has_subtitles {
+        let escaped = escape_ffmpeg_subtitle_path(input);
+        vf = format!("{vf},subtitles='{escaped}'");
+    }
+    vf
+}
+
+/// Maps subtitle streams during encode when mode is `soft`.
+pub fn append_soft_subtitle_maps(cmd: &mut Command) {
+    cmd.args(["-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:s", "copy"]);
+}
+
+fn audio_extract_output_path(video_output: &Path, mode: &str) -> Option<PathBuf> {
+    let stem = video_output.file_stem()?;
+    let parent = video_output.parent()?;
+    let ext = match mode {
+        "flac" => "flac",
+        "aac" => "m4a",
+        "opus" => "opus",
+        _ => return None,
+    };
+    Some(parent.join(format!("{}.{}", stem.to_string_lossy(), ext)))
+}
+
+fn audio_extract_codec_args(mode: &str) -> Option<(&'static str, Vec<&'static str>)> {
+    match mode {
+        "flac" => Some(("flac", vec![])),
+        "aac" => Some(("aac", vec!["-b:a", "192k"])),
+        "opus" => Some(("libopus", vec!["-b:a", "128k"])),
+        _ => None,
+    }
+}
+
+/// Extracts an audio sidecar next to the encoded video output.
+pub fn extract_audio_sidecar<F>(
+    source: &Path,
+    video_output: &Path,
+    cfg: &ConvertConfig,
+    cancel_flag: Option<Arc<AtomicBool>>,
+    mut on_line: F,
+) -> Result<PathBuf>
+where
+    F: FnMut(String),
+{
+    let mode = crate::config::normalize_convert_audio_extract(&cfg.audio_extract);
+    let Some(out_path) = audio_extract_output_path(video_output, &mode) else {
+        return Err(anyhow!("Audio extract disabled"));
+    };
+    let Some((codec, extra)) = audio_extract_codec_args(&mode) else {
+        return Err(anyhow!("Audio extract disabled"));
+    };
+    if out_path.exists() && !cfg.overwrite {
+        return Err(anyhow!(
+            "Audio extract output already exists: {}",
+            out_path.display()
+        ));
+    }
+    let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
+    let mut cmd = Command::new(ffmpeg);
+    apply_subprocess_launch(
+        &mut cmd,
+        normalize_subprocess_priority(&cfg.subprocess_priority),
+    );
+    cmd.arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg(if cfg.overwrite { "-y" } else { "-n" })
+        .arg("-i")
+        .arg(source)
+        .arg("-vn")
+        .arg("-c:a")
+        .arg(codec);
+    for arg in extra {
+        cmd.arg(arg);
+    }
+    cmd.arg(&out_path);
+    let mut child = cmd.spawn()?;
+    let st = loop {
+        if cancel_flag
+            .as_ref()
+            .is_some_and(|f| f.load(Ordering::Relaxed))
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(anyhow!("Cancelled by user."));
+        }
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    if !st.success() {
+        return Err(anyhow!("Audio extract failed with status {st}"));
+    }
+    on_line(format!("audio_extract={}", out_path.display()));
+    Ok(out_path)
 }
 
 pub fn parse_ffmpeg_out_time_secs(value: &str) -> Option<f64> {
@@ -925,7 +1068,18 @@ where
     }
     let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
     let pix_fmt = select_pixel_format(enc.hw_type);
-    let vf = build_video_filter_chain(enc.hw_type, cfg.max_width, pix_fmt);
+    let subtitle_mode =
+        crate::config::normalize_convert_subtitle_mode(&cfg.subtitle_mode);
+    let has_subtitles = subtitle_mode != "none"
+        && input_has_subtitle_streams(&plan.input, &cfg.ffprobe_path);
+    let vf = build_video_filter_with_subtitles(
+        enc.hw_type,
+        cfg.max_width,
+        pix_fmt,
+        &subtitle_mode,
+        &plan.input,
+        has_subtitles,
+    );
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
     apply_subprocess_launch(
@@ -953,6 +1107,9 @@ where
         cmd.args(["-tag:v", "hvc1"]);
     }
     append_encoder_rate_control(&mut cmd, enc, target_bitrate_bps);
+    if subtitle_mode == "soft" && has_subtitles {
+        append_soft_subtitle_maps(&mut cmd);
+    }
     let (audio_codec, audio_bitrate) = default_audio_for_output(&plan.output, target);
     cmd.arg("-c:a")
         .arg(audio_codec)
@@ -1048,6 +1205,8 @@ mod tests {
             encoder_override: String::new(),
             cpu_threads: 0,
             subprocess_priority: "normal".to_owned(),
+            audio_extract: "none".to_owned(),
+            subtitle_mode: "none".to_owned(),
         }
     }
 
@@ -1238,5 +1397,40 @@ mod tests {
         );
         assert_eq!(parse_ffprobe_fraction("24/1"), Some(24.0));
         assert!(parse_ffprobe_fraction("0/0").is_none());
+    }
+
+    #[test]
+    fn subtitle_burn_filter_appends_to_chain() {
+        let input = Path::new("C:/videos/sample.mkv");
+        let vf = build_video_filter_with_subtitles("cpu", 1920, "yuv420p", "burn", input, true);
+        assert!(vf.contains("subtitles="));
+        assert!(vf.contains("sample.mkv"));
+    }
+
+    #[test]
+    fn soft_subtitle_maps_include_copy() {
+        let mut cmd = Command::new("ffmpeg");
+        append_soft_subtitle_maps(&mut cmd);
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.contains(&"-map".to_owned()));
+        assert!(args.contains(&"0:s?".to_owned()));
+        assert!(args.contains(&"-c:s".to_owned()));
+        assert!(args.contains(&"copy".to_owned()));
+    }
+
+    #[test]
+    fn audio_extract_output_paths() {
+        let out = Path::new("C:/out/video.mkv");
+        assert_eq!(
+            audio_extract_output_path(out, "flac")
+                .unwrap()
+                .extension()
+                .and_then(|e| e.to_str()),
+            Some("flac")
+        );
+        assert!(audio_extract_output_path(out, "none").is_none());
     }
 }

@@ -6,7 +6,10 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 
 use crate::app_state::is_queueable_http_url;
-use crate::config::{generate_web_auth_token, load_settings, save_settings, AppSettings};
+use crate::config::{
+    generate_web_auth_token, load_settings, save_settings, validate_web_tls_settings,
+    web_tls_enabled, AppSettings,
+};
 use crate::profiles::{all_profiles, find_profile, load_profiles};
 use crate::service::web::{resolve_web_bind_address, spawn_web_server_at, web_ui_browser_url};
 use crate::service::RustdlService;
@@ -206,11 +209,29 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
     }
 
     let token = settings.web_auth_token.trim();
+    validate_web_tls_settings(&settings).map_err(|e| anyhow!(e))?;
+    let tls = web_tls_enabled(&settings);
     let (exit_tx, exit_rx) = tokio::sync::oneshot::channel::<()>();
-    let mut handle = spawn_web_server_at(rt.clone(), core.clone(), &bind, token, Some(exit_tx))
-        .map_err(|e| anyhow!(e.message()))?;
+    let mut handle = spawn_web_server_at(
+        rt.clone(),
+        core.clone(),
+        &bind,
+        token,
+        if tls {
+            Some(settings.web_tls_cert_path.as_str())
+        } else {
+            None
+        },
+        if tls {
+            Some(settings.web_tls_key_path.as_str())
+        } else {
+            None
+        },
+        Some(exit_tx),
+    )
+    .map_err(|e| anyhow!(e.message()))?;
 
-    let local_url = web_ui_browser_url(&bind);
+    let local_url = web_ui_browser_url(&settings);
     {
         use std::io::{self, Write};
         let mut out = io::stdout().lock();

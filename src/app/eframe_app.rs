@@ -418,6 +418,8 @@ impl eframe::App for PydlApp {
 
                 self.constrain_content(ui);
 
+                self.draw_downloader_options_collapsible(ui);
+
                 let has_idle_items = self
                     .items
                     .iter()
@@ -499,7 +501,7 @@ impl PydlApp {
     fn draw_main_header_web_and_status(&mut self, ui: &mut egui::Ui) {
         ui.add_space(4.0);
         if self.settings.web_ui_enabled {
-            let url = crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+            let url = crate::service::web::web_ui_browser_url(&self.settings);
             let running = self.web_server.is_some();
             if draw_web_ui_header_button(ui, running, &url) {
                 self.open_web_ui_in_browser();
@@ -641,16 +643,20 @@ impl PydlApp {
                     &self.settings.active_profile,
                 );
                 if g.secondary(&format!("{} {summary}", ui_icons::OPEN_FOLDER), true)
-                    .on_hover_text(self.output_dir.as_str())
+                    .on_hover_text(format!(
+                        "{}\nClick to change output folder. Expand Download options above for profile.",
+                        self.output_dir.as_str()
+                    ))
                     .clicked()
                 {
                     self.downloader_options_edit_open = true;
                 }
-                if g.secondary(&format!("{} Edit", ui_icons::SETTINGS), true)
-                    .on_hover_text("Change output folder, profile, and network retry settings")
+                if g.secondary(&format!("{} Settings", ui_icons::SETTINGS), true)
+                    .on_hover_text("Open Settings → Downloader for retries, profiles, and organize options")
                     .clicked()
                 {
-                    self.downloader_options_edit_open = true;
+                    self.settings_open = true;
+                    self.settings_tab = super::SettingsTab::Downloader;
                 }
             });
             let downloads_active = self.status_queued > 0 || self.status_active > 0;

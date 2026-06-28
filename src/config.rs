@@ -849,9 +849,58 @@ pub fn bump_ui_scale(scale: &mut f32, delta: f32) {
     *scale = snap_ui_scale(*scale + delta);
 }
 
-pub fn load_settings() -> AppSettings {
-    let path = config_path();
-    let mut cfg: AppSettings = load_json_file(path.clone(), "settings");
+/// Normalizes stored converter audio extract mode (`none`, `flac`, `aac`, `opus`).
+pub fn normalize_convert_audio_extract(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "flac" | "aac" | "opus" => raw.trim().to_ascii_lowercase(),
+        _ => "none".to_owned(),
+    }
+}
+
+/// Normalizes stored converter subtitle mode (`none`, `soft`, `burn`).
+pub fn normalize_convert_subtitle_mode(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "soft" | "burn" => raw.trim().to_ascii_lowercase(),
+        _ => "none".to_owned(),
+    }
+}
+
+/// True when both TLS paths are set and the files exist.
+pub fn web_tls_enabled(settings: &AppSettings) -> bool {
+    let cert = settings.web_tls_cert_path.trim();
+    let key = settings.web_tls_key_path.trim();
+    !cert.is_empty()
+        && !key.is_empty()
+        && PathBuf::from(cert).is_file()
+        && PathBuf::from(key).is_file()
+}
+
+/// Validates TLS path pairing and file presence when partially configured.
+pub fn validate_web_tls_settings(settings: &AppSettings) -> Result<(), String> {
+    let cert = settings.web_tls_cert_path.trim();
+    let key = settings.web_tls_key_path.trim();
+    if cert.is_empty() && key.is_empty() {
+        return Ok(());
+    }
+    if cert.is_empty() || key.is_empty() {
+        return Err(
+            "Web TLS requires both certificate and private key paths (or leave both empty)."
+                .to_owned(),
+        );
+    }
+    if !PathBuf::from(cert).is_file() {
+        return Err(format!("Web TLS certificate not found: {cert}"));
+    }
+    if !PathBuf::from(key).is_file() {
+        return Err(format!("Web TLS private key not found: {key}"));
+    }
+    Ok(())
+}
+
+/// Clamps and normalizes all persisted settings fields.
+pub fn normalize_settings(cfg: &mut AppSettings) {
+    cfg.web_tls_cert_path = cfg.web_tls_cert_path.trim().to_owned();
+    cfg.web_tls_key_path = cfg.web_tls_key_path.trim().to_owned();
     if cfg.output_dir.trim().is_empty() || !PathBuf::from(&cfg.output_dir).is_dir() {
         cfg.output_dir = default_downloads().to_string_lossy().to_string();
     }
@@ -870,7 +919,7 @@ pub fn load_settings() -> AppSettings {
     cfg.video_float_width = cfg.video_float_width.clamp(480.0, 2400.0);
     cfg.video_float_height = cfg.video_float_height.clamp(320.0, 1600.0);
     cfg.convert_max_width = cfg.convert_max_width.clamp(320, 7680);
-    crate::convert_size_limit::normalize_settings_limits(&mut cfg);
+    crate::convert_size_limit::normalize_settings_limits(cfg);
     cfg.convert_min_shrink_percent = cfg.convert_min_shrink_percent.clamp(0.0, 95.0);
     let preset = cfg.convert_size_preset.trim().to_ascii_lowercase();
     if !matches!(preset.as_str(), "light" | "balanced" | "aggressive") {
@@ -880,6 +929,8 @@ pub fn load_settings() -> AppSettings {
     }
     cfg.convert_target_codec =
         crate::transcode::normalize_target_codec(&cfg.convert_target_codec).to_owned();
+    cfg.convert_audio_extract = normalize_convert_audio_extract(&cfg.convert_audio_extract);
+    cfg.convert_subtitle_mode = normalize_convert_subtitle_mode(&cfg.convert_subtitle_mode);
     let max_cpus = crate::external_tools::logical_cpu_count();
     if cfg.convert_cpu_threads > 0 {
         cfg.convert_cpu_threads = cfg.convert_cpu_threads.clamp(1, max_cpus);
@@ -938,6 +989,12 @@ pub fn load_settings() -> AppSettings {
     if cfg.active_profile.trim().is_empty() {
         cfg.active_profile = default_active_profile();
     }
+}
+
+pub fn load_settings() -> AppSettings {
+    let path = config_path();
+    let mut cfg: AppSettings = load_json_file(path.clone(), "settings");
+    normalize_settings(&mut cfg);
     cfg
 }
 
@@ -968,9 +1025,7 @@ pub fn import_settings_json(path: &std::path::Path) -> Result<AppSettings> {
     let raw = fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.to_string_lossy()))?;
     let mut cfg = serde_json::from_str::<AppSettings>(&raw).context("invalid settings JSON")?;
-    if cfg.output_dir.trim().is_empty() || !PathBuf::from(&cfg.output_dir).is_dir() {
-        cfg.output_dir = default_downloads().to_string_lossy().to_string();
-    }
+    normalize_settings(&mut cfg);
     Ok(cfg)
 }
 
@@ -1160,5 +1215,21 @@ mod tests {
         let raw = fs::read_to_string(&path).expect("read");
         assert_eq!(raw, "{\"ok\":true}");
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn normalize_convert_enum_fields() {
+        assert_eq!(normalize_convert_audio_extract("opus"), "opus");
+        assert_eq!(normalize_convert_audio_extract("bogus"), "none");
+        assert_eq!(normalize_convert_subtitle_mode("burn"), "burn");
+        assert_eq!(normalize_convert_subtitle_mode(""), "none");
+    }
+
+    #[test]
+    fn validate_web_tls_requires_both_paths() {
+        let mut s = AppSettings::default();
+        assert!(validate_web_tls_settings(&s).is_ok());
+        s.web_tls_cert_path = "/tmp/cert.pem".to_owned();
+        assert!(validate_web_tls_settings(&s).is_err());
     }
 }

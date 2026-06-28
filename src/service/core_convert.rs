@@ -53,6 +53,8 @@ impl DownloadCore {
                 self.settings.convert_parallel,
             ),
             subprocess_priority: self.settings.subprocess_priority.clone(),
+            audio_extract: self.settings.convert_audio_extract.clone(),
+            subtitle_mode: self.settings.convert_subtitle_mode.clone(),
         }
     }
 
@@ -451,6 +453,23 @@ impl DownloadCore {
                     sidecar,
                     format!("size={} path={}\n", meta.len(), output.display()),
                 );
+            }
+        }
+        if crate::config::normalize_convert_audio_extract(&self.settings.convert_audio_extract)
+            != "none"
+            && source.is_file()
+            && output.is_file()
+        {
+            let cfg = self.convert_config();
+            match transcode::extract_audio_sidecar(source, output, &cfg, None, |line| {
+                self.append_log(&format!("Convert: {line}"));
+            }) {
+                Ok(path) => {
+                    self.append_log(&format!("Convert: extracted audio to {}", path.display()));
+                }
+                Err(err) => {
+                    self.append_log(&format!("Convert: audio extract failed: {err:#}"));
+                }
             }
         }
     }

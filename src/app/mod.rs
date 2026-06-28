@@ -1401,14 +1401,12 @@ impl PydlApp {
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
                 ui.label(
-                    RichText::new(
-                        "Output folder, download profile, and network retry settings for downloads.",
-                    )
+                    RichText::new("Choose the output folder for downloads.")
                     .small()
                     .color(crate::theme::TEXT_MUTED),
                 );
                 ui.add_space(8.0);
-                self.draw_downloader_options_editor(ui);
+                self.draw_downloader_output_folder_row(ui, "modal");
                 ui.add_space(12.0);
                 centered_button_row(ui, "downloader_options_done", |ui| {
                     button_group(ui, "downloader_options_done", |g| {
@@ -1425,12 +1423,43 @@ impl PydlApp {
         }
     }
 
-    fn draw_downloader_options_editor(&mut self, ui: &mut egui::Ui) {
+    pub(super) fn draw_downloader_options_collapsible(&mut self, ui: &mut egui::Ui) {
+        let id = ui.id().with("downloader_options");
+        let default_open = self.settings.downloader_options_expanded;
+        egui::CollapsingHeader::new("Download options")
+            .id_salt(id)
+            .default_open(default_open)
+            .show_unindented(ui, |ui| {
+                self.draw_downloader_output_folder_row(ui, "main");
+                self.draw_downloader_profile_picker(ui, "main");
+                ui.label(
+                    RichText::new(
+                        "Retries, profiles, and other download settings are in Settings → Downloader.",
+                    )
+                    .small()
+                    .color(crate::theme::TEXT_MUTED),
+                );
+            });
+        let state = egui::collapsing_header::CollapsingState::load_with_default_open(
+            ui.ctx(),
+            id,
+            default_open,
+        );
+        if state.is_open() != default_open {
+            self.settings.downloader_options_expanded = state.is_open();
+            self.persist_settings();
+        }
+    }
+
+    fn draw_downloader_output_folder_row(&mut self, ui: &mut egui::Ui, id_suffix: &str) {
         ui.horizontal(|ui| {
             ui.label("Output folder");
             let path_w = content_width(ui).max(160.0);
-            let output_dir_edit =
-                ui.add(egui::TextEdit::singleline(&mut self.output_dir).desired_width(path_w));
+            let output_dir_edit = ui.add(
+                egui::TextEdit::singleline(&mut self.output_dir)
+                    .id_salt(format!("downloader_output_dir_{id_suffix}"))
+                    .desired_width(path_w),
+            );
             attach_paste_context_menu(&output_dir_edit, &mut self.deferred_menu_paste_output_dir);
             if output_dir_edit.changed() {
                 self.persist_settings();
@@ -1439,7 +1468,7 @@ impl PydlApp {
             }
         });
         left_button_row(ui, |ui| {
-            button_group(ui, "dl_options_output", |g| {
+            button_group(ui, &format!("dl_options_output_{id_suffix}"), |g| {
                 if g.secondary(&format!("{} Browse…", ui_icons::OPEN_FOLDER), true)
                     .clicked()
                 {
@@ -1470,39 +1499,37 @@ impl PydlApp {
                 }
             });
         });
-        ui.add_space(6.0);
+    }
+
+    fn draw_downloader_profile_picker(&mut self, ui: &mut egui::Ui, id_suffix: &str) {
         let profiles = crate::profiles::all_profiles(&self.profile_store);
-        if !profiles.is_empty() {
-            ui.horizontal(|ui| {
-                ui.label("Profile");
-                egui::ComboBox::from_id_salt("downloader_options_profile")
-                    .selected_text(self.settings.active_profile.clone())
-                    .show_ui(ui, |ui| {
-                        for p in &profiles {
-                            if ui
-                                .selectable_value(
-                                    &mut self.settings.active_profile,
-                                    p.name.clone(),
-                                    &p.name,
-                                )
-                                .clicked()
+        if profiles.is_empty() {
+            return;
+        }
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.label("Profile");
+            egui::ComboBox::from_id_salt(format!("downloader_options_profile_{id_suffix}"))
+                .selected_text(self.settings.active_profile.clone())
+                .show_ui(ui, |ui| {
+                    for p in &profiles {
+                        if ui
+                            .selectable_value(
+                                &mut self.settings.active_profile,
+                                p.name.clone(),
+                                &p.name,
+                            )
+                            .clicked()
+                        {
+                            if let Some(prof) =
+                                crate::profiles::find_profile(&self.profile_store, &p.name)
                             {
-                                if let Some(prof) =
-                                    crate::profiles::find_profile(&self.profile_store, &p.name)
-                                {
-                                    self.apply_download_profile(&prof);
-                                }
+                                self.apply_download_profile(&prof);
                             }
                         }
-                    });
-            });
-        }
-        ui.add_space(8.0);
-        ui.separator();
-        ui.label(RichText::new("Retries & network").strong());
-        if self.draw_download_retry_settings(ui, "downloader_options_retries") {
-            self.persist_settings();
-        }
+                    }
+                });
+        });
     }
 
     pub(super) fn downloader_options_summary(output_dir: &str, profile: &str) -> String {
@@ -1824,7 +1851,7 @@ impl PydlApp {
     }
 
     fn open_web_ui_in_browser(&mut self) {
-        let url = crate::service::web::web_ui_browser_url(&self.settings.web_bind_address);
+        let url = crate::service::web::web_ui_browser_url(&self.settings);
         if let Err(e) = app_actions::open_browser(&url) {
             self.append_log(&format!("Failed to open web UI: {e}"));
         }

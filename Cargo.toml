@@ -39,6 +39,7 @@ url = "2"
 which = "8"
 notify-rust = "4"
 axum = "0.7"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 tower = "0.5"
 tower-http = { version = "0.5", features = ["cors"] }
 parking_lot = "0.12"

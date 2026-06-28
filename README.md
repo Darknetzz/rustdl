@@ -120,7 +120,8 @@ When enabled in **Settings → Web UI**, rustdl serves a built-in web interface 
 
 **Security notes:**
 
-- Traffic is plain **HTTP** (no TLS). Anyone who can reach the bind address and knows the token can control downloads and read queue metadata.
+- Traffic is plain **HTTP** by default (no TLS). Anyone who can reach the bind address and knows the token can control downloads and read queue metadata.
+- Optional **TLS certificate + private key** paths in Settings → Web UI serve **HTTPS** when both PEM files exist on disk.
 - Optional **IP whitelist** (Settings → Web UI): clients on listed IPs or CIDR ranges may connect without the API token.
 - Use only on a **trusted home LAN**. Do not expose the port to the public internet without a reverse proxy, TLS, and stronger authentication.
 - Generate a new token if you suspect it was leaked. Disabling the web UI stops the HTTP server on the next settings save (or when you restart the app).
