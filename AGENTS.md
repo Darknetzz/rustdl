@@ -150,7 +150,7 @@ When you bump `version` in `Cargo.toml` (via the bump scripts or by hand), **alw
 
 ### Changelog finalization (optional)
 
-`release.ps1` / `release.sh` are **optional** helpers when you want to move `[Unreleased]` bullets into a dated `## [X.Y.Z]` section and refresh compare links at the bottom of `CHANGELOG.md`. They are **not** required to publish — `publish_stable_release` reads the matching changelog section (or `[Unreleased]`) and creates the GitHub release on push.
+`release.ps1` / `release.sh` are **optional** helpers when you want to move `[Unreleased]` bullets into a dated `## [X.Y.Z]` section and refresh compare links at the bottom of `CHANGELOG.md`. They are **not** required to publish — `publish_stable_release` reads the matching `## [X.Y.Z]` section from `CHANGELOG.md` (via `extract_release_notes`); it no longer falls back to `[Unreleased]`. Add the dated version section before publishing. To fix older GitHub releases: `.\scripts\refresh_release_notes.ps1`.
 
 ### Manual release script (changelog housekeeping)
 

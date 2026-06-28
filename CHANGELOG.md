@@ -22,6 +22,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Web UI start errors and banners use plain-text navigation hints (no missing arrow glyph in the default UI font).
 - Enabling the LAN web UI with an empty API token auto-generates a token when the server starts (same as first launch).
+- GitHub stable release descriptions no longer show **`[Unreleased]`** when a version was published before its `CHANGELOG.md` section existed (`extract_release_notes` + `refresh_release_notes` scripts).
 
 ## [0.9.1] - 2026-06-28
 
@@ -59,6 +60,16 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Settings **UI scale** always uses 5% steps (85%–150%); existing configs snap on load; default is 100% instead of 108%.
 - Settings window no longer jumps to full viewport width when opening the **Shared** tab (UI scale stepper layout).
 - Dismissible banners use the same grouped button styling as dialogs.
+
+## [0.8.8] - 2026-06-28
+
+### Changed
+
+- Settings **UI scale** uses 5% steps and snaps stored values on load (default 100%).
+
+### Fixed
+
+- Settings window no longer jumps to full viewport width when opening the **Shared** tab (UI scale stepper layout).
 
 ## [0.8.7]
 
@@ -657,6 +668,7 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...dev
 [0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
 [0.9.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.8...rustdl-v0.9.0
+[0.8.8]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.7...rustdl-v0.8.8
 [0.8.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...rustdl-v0.8.2
 [0.8.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.0...rustdl-v0.8.1
 [0.8.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...rustdl-v0.8.0

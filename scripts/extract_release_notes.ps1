@@ -1,12 +1,14 @@
 # Extract GitHub release notes from CHANGELOG.md for a rustdl tag.
-# Prefers the dated ## [X.Y.Z] section matching the tag; falls back to ## [Unreleased].
+# Uses the ## [X.Y.Z] section matching the tag (date suffix optional).
+# Does not use ## [Unreleased] — finalize CHANGELOG before publishing stable releases.
 #
 # Usage: .\scripts\extract_release_notes.ps1 [-Changelog CHANGELOG.md] -Tag rustdl-v0.5.0 [-OutFile release-notes.md]
 param(
     [string]$Changelog = "CHANGELOG.md",
     [Parameter(Mandatory = $true)]
     [string]$Tag,
-    [string]$OutFile = ""
+    [string]$OutFile = "",
+    [switch]$IncludeHeading
 )
 
 $ErrorActionPreference = "Stop"
@@ -60,17 +62,33 @@ function Test-SectionHasBody {
     return $false
 }
 
+function Format-ReleaseNotesBody {
+    param([System.Collections.Generic.List[string]]$Section)
+
+    if ($IncludeHeading) {
+        return ($Section -join "`n").TrimEnd() + "`n"
+    }
+
+    $start = 0
+    if ($Section.Count -gt 0 -and $Section[0] -match '^## \[') {
+        $start = 1
+    }
+
+    $body = ($Section | Select-Object -Skip $start | ForEach-Object { $_ }) -join "`n"
+    return $body.Trim() + "`n"
+}
+
 $versionPattern = "^## \[$([regex]::Escape($ver))\]( - [0-9]{4}-[0-9]{2}-[0-9]{2})?$"
 $notes = Get-ChangelogSection -HeadingPattern $versionPattern
-if (-not ($notes -and (Test-SectionHasBody $notes))) {
-    $notes = Get-ChangelogSection -HeadingPattern '^## \[Unreleased\]$'
-}
 
 if (-not ($notes -and (Test-SectionHasBody $notes))) {
-    throw "No release notes found for $Tag in $Changelog"
+    throw @"
+No ## [$ver] section with release notes found in $Changelog for tag $Tag.
+Add a dated ## [$ver] - YYYY-MM-DD section (move bullets out of [Unreleased]) before publishing.
+"@
 }
 
-$text = ($notes -join "`n") + "`n"
+$text = Format-ReleaseNotesBody -Section $notes
 if ($OutFile) {
     Set-Content -LiteralPath $OutFile -Value $text -NoNewline -Encoding utf8
     Write-Host "Wrote $OutFile"
