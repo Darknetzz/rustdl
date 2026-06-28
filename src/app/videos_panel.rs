@@ -93,7 +93,7 @@ impl PydlApp {
         if scroll_h < 1.0 {
             return;
         }
-        let w = content_width(ui).max(1.0);
+        let w = crate::app_ui::clip_bounded_width(ui);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             ui.set_min_height(scroll_h);
             self.constrain_content(ui);
@@ -331,7 +331,7 @@ impl PydlApp {
             .drag_to_scroll(true)
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
             .show(ui, |ui| {
-                ui.set_width(content_width(ui).max(1.0));
+                ui.set_width(crate::app_ui::clip_bounded_width(ui));
                 ui.spacing_mut().item_spacing.y = 2.0;
                 if self.items.is_empty() {
                     ui.vertical_centered(|ui| {
@@ -675,6 +675,12 @@ impl PydlApp {
     }
 
     pub(super) fn draw_download_batch_progress_row(&mut self, ui: &mut egui::Ui) {
+        crate::app_ui::with_full_width(ui, |ui| {
+            self.draw_download_batch_progress_row_inner(ui);
+        });
+    }
+
+    fn draw_download_batch_progress_row_inner(&mut self, ui: &mut egui::Ui) {
         let progress = compute_download_batch_progress(&self.items);
         if progress.is_empty() {
             return;
@@ -735,6 +741,12 @@ impl PydlApp {
     }
 
     pub(super) fn draw_convert_batch_progress_row(&self, ui: &mut egui::Ui) {
+        crate::app_ui::with_full_width(ui, |ui| {
+            self.draw_convert_batch_progress_row_inner(ui);
+        });
+    }
+
+    fn draw_convert_batch_progress_row_inner(&self, ui: &mut egui::Ui) {
         let progress = self.convert_batch_progress;
         if progress.is_empty() {
             return;

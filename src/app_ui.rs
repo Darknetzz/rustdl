@@ -195,7 +195,9 @@ pub fn draw_batch_progress_bar(
     fill: Color32,
     animate: bool,
 ) -> Response {
-    ui.add(
+    let w = clip_bounded_width(ui);
+    ui.add_sized(
+        [w, ui.spacing().interact_size.y],
         egui::ProgressBar::new(fraction.clamp(0.0, 1.0))
             .fill(fill)
             .animate(animate)
@@ -802,6 +804,7 @@ pub fn show_queue_group_section<R>(
     accent: Color32,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> egui::InnerResponse<R> {
+    let max_w = clip_bounded_width(ui);
     egui::Frame::none()
         .fill(queue_group_section_fill(theme))
         .stroke(Stroke::new(1.0, mode_border(accent)))
@@ -813,7 +816,10 @@ pub fn show_queue_group_section<R>(
             bottom: 8.0,
         })
         .rounding(egui::Rounding::same(8.0))
-        .show(ui, add_contents)
+        .show(ui, |ui| {
+            ui.set_max_width(max_w);
+            add_contents(ui)
+        })
 }
 
 fn mode_panel_gradient_shape(rect: egui::Rect, left: Color32, right: Color32) -> Shape {
@@ -1250,7 +1256,7 @@ pub fn draw_mode_nav_bar(
     let convert_accent = mode_accent_for(true, &colors);
     let mut dl_clicked = false;
     let mut av1_clicked = false;
-    let row_w = content_width(ui).max(1.0);
+    let row_w = clip_bounded_width(ui);
     let muted = text_muted(theme);
     let group_border = panel_border(theme);
     let group_fill = if theme == "light" {
@@ -1340,9 +1346,23 @@ pub fn content_width(ui: &egui::Ui) -> f32 {
     ui.clip_rect().width().max(0.0)
 }
 
+/// [`content_width`] capped by the current clip rect and remaining horizontal space.
+pub fn clip_bounded_width(ui: &egui::Ui) -> f32 {
+    let mut w = content_width(ui);
+    let clip = ui.clip_rect().width();
+    if clip.is_finite() && clip > 0.0 {
+        w = w.min(clip);
+    }
+    let avail = ui.available_width();
+    if avail.is_finite() && avail > 0.0 && avail < w {
+        w = avail;
+    }
+    w.max(1.0)
+}
+
 /// Cap layout width without forcing horizontal expansion (preserves panel margins).
 pub fn constrain_content_width(ui: &mut egui::Ui, max_content_width: f32) -> f32 {
-    let mut w = content_width(ui);
+    let mut w = clip_bounded_width(ui);
     if max_content_width > 0.0 {
         w = w.min(max_content_width);
     }
@@ -1393,7 +1413,7 @@ pub fn height_to_bottom(ui: &egui::Ui, bottom_y: f32) -> f32 {
 
 /// Lay out children across the full width of the parent (egui vertical layouts default to shrink-wrap).
 pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    let width = content_width(ui);
+    let width = clip_bounded_width(ui);
     ui.allocate_ui_with_layout(
         egui::vec2(width, 0.0),
         egui::Layout::top_down(egui::Align::Min),

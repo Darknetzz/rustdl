@@ -573,7 +573,6 @@ impl PydlApp {
     fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
         let id = self.items[idx].item_id;
         let status = self.items[idx].status;
-        let title = ellipsize(&self.items[idx].title, 80);
         let pct = self.items[idx].percent;
         let selected = self.selected_item_ids.contains(&id);
         let output_ready = Path::new(&self.output_dir).is_dir();
@@ -589,6 +588,12 @@ impl PydlApp {
             && self.has_yt_dlp
             && !self.add_in_progress
             && !self.items[idx].source_line.trim().is_empty();
+        let row_w = crate::app_ui::clip_bounded_width(ui);
+        ui.set_max_width(row_w);
+        let title = ellipsize(
+            &self.items[idx].title,
+            ((row_w / 7.0).floor() as usize).clamp(24, 80),
+        );
         let row_response = ui.horizontal(|ui| {
             if allow_reorder && status == ItemStatus::Idle {
                 let drag_id = egui::Id::new(("ready_drag", id));
@@ -605,17 +610,26 @@ impl PydlApp {
                 }
             }
             draw_status_chip(ui, status);
-            ui.label(RichText::new(title).strong());
+            let title_w = ui.available_width().max(40.0);
+            ui.add_sized(
+                [title_w, ui.spacing().interact_size.y],
+                egui::Label::new(RichText::new(title).strong()).truncate(),
+            );
             if status == ItemStatus::Downloading || status == ItemStatus::Queued {
-                ui.add(egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage());
+                let bar_w = ui.available_width().clamp(48.0, 120.0);
+                ui.add_sized(
+                    [bar_w, ui.spacing().interact_size.y],
+                    egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage(),
+                );
             }
             if status == ItemStatus::Idle {
                 let current = self.items[idx].format_override.clone().unwrap_or_default();
                 let mut fmt_buf = current.clone();
-                let response = ui.add(
+                let fmt_w = ui.available_width().clamp(72.0, 140.0);
+                let response = ui.add_sized(
+                    [fmt_w, ui.spacing().interact_size.y],
                     egui::TextEdit::singleline(&mut fmt_buf)
-                        .hint_text("Format (-f)")
-                        .desired_width(140.0),
+                        .hint_text("Format (-f)"),
                 );
                 if response.lost_focus() && fmt_buf.trim() != current.trim() {
                     let trimmed = fmt_buf.trim();
@@ -837,52 +851,70 @@ impl PydlApp {
                     default_open,
                 )
                 .show_header(ui, |ui| {
-                    status_dot_with_label(ui, &header_text, header_color, true);
-                    if label == "Done" && !ids.is_empty() {
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui
-                                .small_button("Re-queue visible")
-                                .on_hover_text("Move visible Done items back to Ready")
-                                .clicked()
-                            {
-                                let n = self.requeue_done_items(&ids);
-                                if n > 0 {
-                                    self.append_log(&format!("Re-queued {n} done item(s)."));
-                                }
+                    ui.horizontal(|ui| {
+                        status_dot_with_label(ui, &header_text, header_color, true);
+                        if label == "Done" && !ids.is_empty() {
+                            let tail_w = ui.available_width().max(0.0);
+                            if tail_w > 0.0 {
+                                ui.allocate_ui_with_layout(
+                                    egui::vec2(tail_w, 0.0),
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        ui.set_max_width(tail_w);
+                                        ui.spacing_mut().item_spacing.x = 6.0;
+                                        if ui
+                                            .small_button("Re-queue visible")
+                                            .on_hover_text(
+                                                "Move visible Done items back to Ready",
+                                            )
+                                            .clicked()
+                                        {
+                                            let n = self.requeue_done_items(&ids);
+                                            if n > 0 {
+                                                self.append_log(&format!(
+                                                    "Re-queued {n} done item(s)."
+                                                ));
+                                            }
+                                        }
+                                        ui.label("History:");
+                                        egui::ComboBox::from_id_salt(format!(
+                                            "history_filter_{label}"
+                                        ))
+                                        .width(tail_w.min(120.0).max(88.0))
+                                        .selected_text(match self.history_filter_days {
+                                            None => "All time".to_owned(),
+                                            Some(1) => "Last 24h".to_owned(),
+                                            Some(7) => "Last 7 days".to_owned(),
+                                            Some(30) => "Last 30 days".to_owned(),
+                                            Some(d) => format!("Last {d} days"),
+                                        })
+                                        .show_ui(ui, |ui| {
+                                            ui.selectable_value(
+                                                &mut self.history_filter_days,
+                                                None,
+                                                "All time",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.history_filter_days,
+                                                Some(1),
+                                                "Last 24h",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.history_filter_days,
+                                                Some(7),
+                                                "Last 7 days",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.history_filter_days,
+                                                Some(30),
+                                                "Last 30 days",
+                                            );
+                                        });
+                                    },
+                                );
                             }
-                            ui.label("History:");
-                            egui::ComboBox::from_id_salt(format!("history_filter_{label}"))
-                                .selected_text(match self.history_filter_days {
-                                    None => "All time".to_owned(),
-                                    Some(1) => "Last 24h".to_owned(),
-                                    Some(7) => "Last 7 days".to_owned(),
-                                    Some(30) => "Last 30 days".to_owned(),
-                                    Some(d) => format!("Last {d} days"),
-                                })
-                                .show_ui(ui, |ui| {
-                                    ui.selectable_value(
-                                        &mut self.history_filter_days,
-                                        None,
-                                        "All time",
-                                    );
-                                    ui.selectable_value(
-                                        &mut self.history_filter_days,
-                                        Some(1),
-                                        "Last 24h",
-                                    );
-                                    ui.selectable_value(
-                                        &mut self.history_filter_days,
-                                        Some(7),
-                                        "Last 7 days",
-                                    );
-                                    ui.selectable_value(
-                                        &mut self.history_filter_days,
-                                        Some(30),
-                                        "Last 30 days",
-                                    );
-                                });
-                        });
-                    }
+                        }
+                    });
                 });
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
