@@ -4955,6 +4955,19 @@ const PALETTE_COMMANDS = [
   { label: "Pause downloads", keywords: "pause hold stop", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
   { label: "Resume downloads", keywords: "resume continue", run: () => api("/api/downloads/resume", { method: "POST" }).then(refreshAll) },
   { label: "Retry all failed", keywords: "retry failed download again", run: () => postAction("/api/downloads/retry-failed", "Could not retry failed downloads.").then(refreshAll).catch(() => {}) },
+  {
+    label: "Remove selected",
+    keywords: "remove delete selected queue bulk",
+    run: () => {
+      if (currentView === "convert") {
+        bulkRemoveConvertSelected().catch((e) => notifyError(e.message || String(e)));
+      } else if (currentView === "downloader") {
+        bulkRemoveSelected().catch((e) => notifyError(e.message || String(e)));
+      } else {
+        showToast("Switch to Downloader or Video Converter to remove selected queue items.");
+      }
+    },
+  },
   { label: "Clear completed downloads", keywords: "clear done finished remove completed", run: () => clearQueue("done") },
   { label: "Start Convert batch", keywords: "convert encode start", run: () => convertStart() },
   { label: "Pause Convert batch", keywords: "convert pause hold", run: () => convertPause() },

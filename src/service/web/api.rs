@@ -1596,6 +1596,40 @@ mod tests {
     }
 
     #[test]
+    fn settings_patch_normalizes_invalid_enum_fields() {
+        let rt = Arc::new(Runtime::new().expect("runtime"));
+        let state = test_state(rt.clone());
+        rt.block_on(async move {
+            let app = api_router(state.clone());
+            let body = Body::from(
+                r#"{"settings":{"convert_subtitle_mode":"bogus","convert_audio_extract":"wav","ui_scale":1.07}}"#,
+            );
+            let response = app
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri("/api/settings")
+                        .header("Authorization", "Bearer test-token")
+                        .header("Content-Type", "application/json")
+                        .body(body)
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            let bytes = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let parsed: SettingsResponse = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(parsed.settings.convert_subtitle_mode, "none");
+            assert_eq!(parsed.settings.convert_audio_extract, "none");
+            assert!((parsed.settings.ui_scale - 1.05).abs() < f32::EPSILON);
+            let c = state.core.lock();
+            assert_eq!(c.settings.convert_subtitle_mode, "none");
+            assert_eq!(c.settings.convert_audio_extract, "none");
+            assert!((c.settings.ui_scale - 1.05).abs() < f32::EPSILON);
+        });
+    }
+
+    #[test]
     fn library_list_with_token() {
         let rt = Arc::new(Runtime::new().expect("runtime"));
         let state = test_state(rt.clone());

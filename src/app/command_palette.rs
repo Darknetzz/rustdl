@@ -1,5 +1,5 @@
 use eframe::egui;
-use eframe::egui::{Color32, RichText};
+use eframe::egui::{Align, Color32, RichText};
 
 use crate::app_ui::{bounded_ui_height, modal_backdrop};
 use crate::config::snap_ui_scale;
@@ -277,7 +277,11 @@ impl PydlApp {
                                 }
                             }
                             let selected = idx == self.command_palette_selection;
-                            if ui.selectable_label(selected, cmd.label).clicked() {
+                            let row = ui.selectable_label(selected, cmd.label);
+                            if selected {
+                                row.scroll_to_me(Some(Align::Center));
+                            }
+                            if row.clicked() {
                                 run = Some(cmd.label);
                             }
                         }
