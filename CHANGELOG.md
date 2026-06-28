@@ -10,6 +10,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-28
+
 ### Fixed
 
 - LAN web command palette: **Remove selected** for the active queue (downloader or convert view).
@@ -639,7 +641,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...dev
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...dev
+[0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
 [0.9.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.8...rustdl-v0.9.0
 [0.8.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...rustdl-v0.8.2
 [0.8.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.0...rustdl-v0.8.1
