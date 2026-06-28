@@ -16,6 +16,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Video queue layout anchors the footer and docked activity log from the panel bottom (list height follows status rows and remaining space; log slider cap respects available height).
+- Main column scroll fills the space above the docked queue panel when you resize the bottom panel.
 - Docked and floating video queue panels no longer overlap the footer toolbar or docked activity log when the window or panel is resized (layout uses measured footer height and mode-aware reserves; log height slider applies consistently when the log is docked under the queue or in the main footer).
 - Queue group list scroll areas stay within the outer queue scroll height on short panels (avoids awkward nested double-scroll).
 - Resizing the main window clamps persisted dock panel heights so a previously tall queue panel does not dominate the viewport before auto-undock kicks in.
@@ -25,6 +27,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- First-run docked queue height scales with window size on ultrawide monitors (instead of always using the fixed factory default).
+- Preview cards in the queue use a modest fluid width on wide panels (280–360px) so card grids use horizontal space better.
+- About, Download library, command palette, and confirmation dialogs have minimum window sizes and safer scroll sizing when resized small.
 - Settings window has a minimum size and safer scroll height calculation when resized small.
 - Shared layout breakpoints for header and queue footer wrapping (wide at 1040px content width; footer reserve tiers at 900px and 600px).
 

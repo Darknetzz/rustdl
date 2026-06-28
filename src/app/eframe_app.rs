@@ -186,7 +186,7 @@ impl eframe::App for PydlApp {
                 let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([true, true])
+                    .auto_shrink([false, false])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {

@@ -48,8 +48,10 @@ impl PydlApp {
         let mut about_open = self.about_open;
         egui::Window::new("About rustdl")
             .open(&mut about_open)
-            .resizable(false)
+            .resizable(true)
             .default_width(480.0)
+            .min_width(420.0)
+            .min_height(320.0)
             .show(ctx, |ui| {
                 ui.label(RichText::new("rustdl").strong());
                 ui.label(format!("Version: {}", pkg_version::VERSION));

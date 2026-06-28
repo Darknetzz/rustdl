@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::modal_backdrop;
+use crate::app_ui::{bounded_ui_height, modal_backdrop};
 use crate::ui_icons;
 
 use super::{PydlApp, SettingsTab};
@@ -145,8 +145,10 @@ impl PydlApp {
         egui::Window::new(format!("{} Command palette", ui_icons::RECHECK))
             .open(&mut palette_open)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
             .default_width(480.0)
+            .min_width(360.0)
+            .min_height(120.0)
             .anchor(egui::Align2::CENTER_TOP, [0.0, 80.0])
             .show(ctx, |ui| {
                 ui.label(
@@ -165,8 +167,9 @@ impl PydlApp {
                 }
 
                 let mut run: Option<&'static str> = None;
+                let scroll_h = bounded_ui_height(ui, 120.0).max(120.0).min(280.0);
                 egui::ScrollArea::vertical()
-                    .max_height(280.0)
+                    .max_height(scroll_h)
                     .show(ui, |ui| {
                         for cmd in COMMANDS {
                             if !matches_query(cmd.label, cmd.keywords, &self.command_palette_query)

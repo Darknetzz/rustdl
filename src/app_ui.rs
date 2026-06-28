@@ -915,7 +915,6 @@ pub fn show_mode_panel<R>(
         })
 }
 
-const MIN_CONTROLS_SCROLL_H: f32 = 100.0;
 const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
 
 /// Minimum main-window inner width (see [`VIEWPORT_MIN_INNER`]).
@@ -1071,13 +1070,6 @@ pub fn bounded_ui_height(ui: &egui::Ui, min_h: f32) -> f32 {
     finite_ui_span(h, min_h)
 }
 
-/// Split remaining main-panel height between scrollable controls and a pinned footer.
-pub struct MainColumnSplit {
-    pub controls_max_height: f32,
-    /// Height reserved for the pinned footer (docked video queue and/or undocked strip + docked log).
-    pub footer_height: f32,
-}
-
 /// Compact Videos strip in the main window when the queue is undocked (no docked log).
 pub const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 /// Header row, height slider, and filter toolbar above docked log lines.
@@ -1176,42 +1168,67 @@ pub fn clamp_dock_heights_for_viewport(
     changed
 }
 
-pub fn compute_main_column_split(
-    available_height: f32,
-    videos_docked: bool,
-    compact_cards: bool,
-    log_docked_separate: bool,
-    log_docked_under_videos: bool,
-    log_dock_height: f32,
-) -> MainColumnSplit {
-    let h = available_height.max(0.0);
-    let log_h = log_dock_height.clamp(80.0, 480.0) + DOCKED_LOG_CHROME_H;
-    let log_footer = if log_docked_separate { log_h } else { 0.0 };
-    if !videos_docked {
-        let footer = UNDOCKED_VIDEOS_STRIP_H + log_footer;
-        return MainColumnSplit {
-            controls_max_height: (h - footer).max(MIN_CONTROLS_SCROLL_H),
-            footer_height: footer,
-        };
+/// Suggested docked queue panel height for a main-window viewport (factory default scaling).
+pub fn default_videos_dock_height_for_viewport(viewport_height: f32) -> f32 {
+    if !viewport_height.is_finite() || viewport_height < 1.0 {
+        return 360.0;
     }
-    let log_reserve = if log_docked_under_videos { log_h } else { 0.0 };
-    let min_videos = if compact_cards { 180.0 } else { 220.0 };
-    let min_videos = min_videos + log_reserve;
-    if h <= MIN_CONTROLS_SCROLL_H + min_videos {
-        let videos_h = (h * 0.45).clamp(120.0, (h - 60.0).max(120.0));
-        let controls_h = (h - videos_h).max(60.0);
-        return MainColumnSplit {
-            controls_max_height: controls_h,
-            footer_height: videos_h,
-        };
+    (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).clamp(180.0, 800.0)
+}
+
+/// Vertical space for the docked log block (lines + chrome + separator), excluding the heading row.
+pub fn queue_log_block_height(dock_log: bool, log_dock_height: f32) -> f32 {
+    if !dock_log {
+        return 0.0;
     }
-    let videos_h = (h * VIDEOS_DOCKED_HEIGHT_RATIO)
-        .max(min_videos)
-        .min(h - MIN_CONTROLS_SCROLL_H);
-    MainColumnSplit {
-        controls_max_height: h - videos_h,
-        footer_height: videos_h,
+    log_dock_height.clamp(80.0, 480.0)
+        + DOCKED_LOG_CHROME_H
+        + DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
+}
+
+/// List scroll height between fixed `content_top` and a bottom stack (footer + optional log).
+pub fn queue_list_height_from_layout(
+    content_top: f32,
+    body_bottom: f32,
+    footer_h: f32,
+    log_block_h: f32,
+) -> f32 {
+    if !content_top.is_finite() || !body_bottom.is_finite() {
+        return 0.0;
     }
+    let stack_h = footer_h + log_block_h;
+    let stack_top = body_bottom - stack_h;
+    finite_ui_span(stack_top - content_top, 0.0)
+}
+
+/// Max activity-log scroll height (slider cap) from remaining panel budget below chrome.
+pub fn docked_log_lines_max_h(remaining_h: f32) -> f32 {
+    (remaining_h - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0)
+}
+
+/// Allocate a fixed-height region anchored to `body_bottom` (bottom-up layout).
+pub fn allocate_bottom_up_rect<R>(
+    ui: &mut egui::Ui,
+    body_bottom: f32,
+    width: f32,
+    height: f32,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let height = finite_ui_span(height, 1.0).max(1.0);
+    let width = finite_ui_span(width, 1.0).max(1.0);
+    let left = ui.max_rect().min.x;
+    let top = (body_bottom - height).max(ui.clip_rect().min.y);
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(left, top),
+        egui::pos2(left + width, body_bottom),
+    );
+    ui.allocate_new_ui(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+        add,
+    )
+    .inner
 }
 
 /// Full-width Downloader / Video Converter tabs with a fixed 50/50 split.
@@ -2015,37 +2032,22 @@ mod tests {
     }
 
     #[test]
-    fn main_column_split_fits_viewport() {
-        let split = compute_main_column_split(600.0, true, false, false, false, 120.0);
-        assert!(split.controls_max_height >= 100.0);
-        assert!(split.footer_height >= 220.0);
-        assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
+    fn queue_list_height_from_layout_with_status_block() {
+        let list_h = queue_list_height_from_layout(100.0, 500.0, 72.0, 200.0);
+        assert!((list_h - 128.0).abs() < 0.01);
+        assert!(queue_list_height_from_layout(400.0, 500.0, 72.0, 200.0) >= 0.0);
     }
 
     #[test]
-    fn main_column_split_never_exceeds_available() {
-        let split = compute_main_column_split(280.0, true, false, false, false, 120.0);
-        assert!(split.controls_max_height + split.footer_height <= 280.0 + 0.01);
+    fn docked_log_lines_max_h_respects_chrome() {
+        assert_eq!(docked_log_lines_max_h(200.0), (200.0 - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0));
+        assert_eq!(docked_log_lines_max_h(50.0), 80.0);
     }
 
     #[test]
-    fn main_column_split_undocked_uses_full_height() {
-        let split = compute_main_column_split(600.0, false, false, false, false, 120.0);
-        assert_eq!(
-            split.controls_max_height,
-            (500.0_f32).max(MIN_CONTROLS_SCROLL_H)
-        );
-        assert_eq!(split.footer_height, UNDOCKED_VIDEOS_STRIP_H);
-    }
-
-    #[test]
-    fn main_column_split_undocked_reserves_docked_log() {
-        let split = compute_main_column_split(600.0, false, false, true, false, 120.0);
-        assert_eq!(
-            split.footer_height,
-            UNDOCKED_VIDEOS_STRIP_H + 120.0 + DOCKED_LOG_CHROME_H
-        );
-        assert!((split.controls_max_height + split.footer_height - 600.0).abs() < 0.01);
+    fn default_videos_dock_height_scales_with_viewport() {
+        assert_eq!(default_videos_dock_height_for_viewport(880.0), 880.0 * VIDEOS_DOCKED_HEIGHT_RATIO);
+        assert!(default_videos_dock_height_for_viewport(300.0) >= 180.0);
     }
 
     #[test]

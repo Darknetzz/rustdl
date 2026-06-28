@@ -46,9 +46,9 @@ use crate::app_icon;
 use crate::app_parsing::parse_urls_from_text_blob;
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
-    alert_danger, alert_warning, button_group, centered_button_row, content_panel_frame,
-    content_width, left_button_row, modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT,
-    ALERT_WARNING_TEXT,
+    alert_danger, alert_warning, bounded_ui_height, button_group, centered_button_row,
+    content_panel_frame, content_width, left_button_row, modal_backdrop, NavbarStatusInputs,
+    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_settings, rustdl_config_dir, save_settings,
@@ -307,6 +307,16 @@ impl PydlApp {
         let shared_core = rustdl_service.shared_core();
         let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
+        if (settings.videos_dock_height - 360.0).abs() < 0.5 {
+            let vp_h = cc.egui_ctx.input(|i| {
+                i.viewport()
+                    .inner_rect
+                    .map(|r| r.height())
+                    .unwrap_or(880.0)
+            });
+            settings.videos_dock_height =
+                crate::app_ui::default_videos_dock_height_for_viewport(vp_h);
+        }
         if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
             settings.web_auth_token = crate::config::generate_web_auth_token();
             let _ = save_settings(&settings);
@@ -1257,8 +1267,10 @@ impl PydlApp {
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
             .default_width(440.0)
+            .min_width(360.0)
+            .min_height(160.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
@@ -1350,8 +1362,10 @@ impl PydlApp {
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
             .default_width(480.0)
+            .min_width(360.0)
+            .min_height(160.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
@@ -2334,8 +2348,10 @@ impl PydlApp {
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
             .default_width(420.0)
+            .min_width(360.0)
+            .min_height(160.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
@@ -2462,8 +2478,10 @@ impl PydlApp {
             .open(&mut exit_confirm_open)
             .frame(modal_frame)
             .collapsible(false)
-            .resizable(false)
+            .resizable(true)
             .default_width(420.0)
+            .min_width(360.0)
+            .min_height(160.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
@@ -2556,6 +2574,8 @@ impl PydlApp {
             .open(&mut open)
             .default_width(560.0)
             .default_height(480.0)
+            .min_width(480.0)
+            .min_height(360.0)
             .resizable(true)
             .show(ctx, |ui| {
                 ui.label(
@@ -2599,7 +2619,9 @@ impl PydlApp {
                             );
                         });
                 });
-                egui::ScrollArea::vertical().show(ui, |ui| {
+                egui::ScrollArea::vertical()
+                    .max_height(bounded_ui_height(ui, 200.0).max(200.0))
+                    .show(ui, |ui| {
                     let done: Vec<&QueueItem> = self
                         .items
                         .iter()

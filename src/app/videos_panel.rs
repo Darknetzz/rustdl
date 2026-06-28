@@ -5,12 +5,12 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
-    allocate_top_down_rect, bounded_ui_height, button_group, button_toolbar_wrapped,
-    compact_button_group, consume_remaining_ui_space, content_width, draw_batch_progress_bar,
-    draw_status_dot, fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
-    note_resizable_panel_height, persist_resizable_window_size, queue_body_layout_heights,
-    show_mode_panel, status_color, with_full_width, DOCKED_LOG_CHROME_H, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    allocate_bottom_up_rect, allocate_top_down_rect, bounded_ui_height, button_group,
+    button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space, content_width,
+    docked_log_lines_max_h, draw_batch_progress_bar, draw_status_dot, fill_allocated_rect,
+    finite_ui_span, height_to_bottom, left_button_row, note_resizable_panel_height,
+    persist_resizable_window_size, queue_footer_toolbar_reserve, queue_list_height_from_layout,
+    queue_log_block_height, show_mode_panel, status_color, with_full_width, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -40,10 +40,6 @@ impl VideosQueueLayout<'_> {
     fn is_docked(&self) -> bool {
         self.scroll_id.contains("dock")
     }
-}
-
-fn queue_footer_height_id(scroll_id: &str) -> egui::Id {
-    egui::Id::new("queue_footer_h").with(scroll_id)
 }
 
 fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
@@ -480,7 +476,7 @@ impl PydlApp {
         ui.add_space(2.0);
     }
 
-    /// Status row, scrollable cards, toolbar, optional docked log — footer/log pinned to body bottom.
+    /// Status row, scrollable cards, toolbar, optional docked log — bottom stack pinned to body bottom.
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
@@ -508,47 +504,26 @@ impl PydlApp {
             self.draw_download_batch_progress_row(ui);
         }
 
-        let available_h = height_to_bottom(ui, body_bottom);
-        let cw = content_width(ui);
-        let measured_footer = ui.ctx().data(|d| {
-            d.get_temp::<f32>(queue_footer_height_id(layout.scroll_id))
-        });
-        let body_layout = queue_body_layout_heights(
-            available_h,
-            cw,
-            layout.dock_log,
-            layout.log_dock_height,
-            self.convert_mode,
-            layout.is_docked(),
-            measured_footer,
-        );
-        let min_list = queue_list_min_scroll_h(layout.scroll_id);
-        let list_h = if body_layout.list_h >= min_list {
-            body_layout.list_h
-        } else {
-            (available_h - body_layout.footer_h - body_layout.log_block_h).max(0.0)
-        };
-
+        let content_top = ui.cursor().min.y;
+        let cw = content_width(ui).max(1.0);
+        let footer_est =
+            queue_footer_toolbar_reserve(cw, self.convert_mode, layout.is_docked()) + 2.0;
+        let log_block_est = queue_log_block_height(layout.dock_log, layout.log_dock_height);
+        let list_h = queue_list_height_from_layout(content_top, body_bottom, footer_est, log_block_est);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id);
 
-        ui.add_space(2.0);
-        let footer_top = ui.cursor().min.y;
-        self.draw_videos_footer_toolbar(ui, !layout.is_docked());
-        let footer_h = (ui.min_rect().max.y - footer_top).max(body_layout.footer_h - 2.0);
-        ui.ctx().data_mut(|d| {
-            d.insert_temp(
-                queue_footer_height_id(layout.scroll_id),
-                footer_h + 2.0,
-            );
+        let stack_h = footer_est + log_block_est;
+        allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
+            ui.add_space(2.0);
+            self.draw_videos_footer_toolbar(ui, !layout.is_docked());
+            if layout.dock_log {
+                ui.add_space(6.0);
+                ui.separator();
+                ui.add_space(4.0);
+                let max_log = docked_log_lines_max_h(height_to_bottom(ui, body_bottom));
+                self.draw_docked_log_under_videos(ui, max_log);
+            }
         });
-
-        if layout.dock_log {
-            ui.add_space(6.0);
-            ui.separator();
-            ui.add_space(4.0);
-            let max_log = layout.log_dock_height.clamp(80.0, 480.0);
-            self.draw_docked_log_under_videos(ui, max_log);
-        }
     }
 
     /// Compact strip when the queue lives in a floating window.
@@ -777,7 +752,7 @@ impl PydlApp {
                     );
                 });
                 let budget = height_to_bottom(ui, body_bottom).max(80.0);
-                let max_log = (budget - DOCKED_LOG_CHROME_H).max(80.0);
+                let max_log = docked_log_lines_max_h(budget);
                 self.draw_docked_activity_log_body(ui, max_log, false);
             });
     }

@@ -71,12 +71,19 @@ impl PydlApp {
 
         let card_inner = |ui: &mut egui::Ui| {
             let compact = self.settings.compact_cards;
-            let card_w = if compact { 320.0 } else { 360.0 };
-            let inner_w = (card_w - 20.0_f32).max(1.0);
-            let thumb = if compact {
-                egui::vec2(296.0, 104.0)
+            let avail = ui.available_width().max(1.0);
+            let (card_min, card_max) = if compact {
+                (260.0, 320.0)
             } else {
-                egui::vec2(332.0, 158.0)
+                (280.0, 360.0)
+            };
+            let card_w = (avail * 0.45).clamp(card_min, card_max);
+            let inner_w = (card_w - 20.0).max(1.0);
+            let thumb_w = (card_w - 24.0).max(1.0);
+            let thumb = if compact {
+                egui::vec2(thumb_w, thumb_w * (104.0 / 296.0))
+            } else {
+                egui::vec2(thumb_w, thumb_w * (158.0 / 332.0))
             };
             let subtitle_h = 15.0;
             let detail_h = if compact { 0.0 } else { 15.0 };

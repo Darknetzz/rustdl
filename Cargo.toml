@@ -1,6 +1,6 @@
 [package]
 name = "rustdl"
-version = "0.8.3"
+version = "0.8.4"
 edition = "2021"
 rust-version = "1.76"
 description = "Desktop GUI for yt-dlp (egui)"

@@ -57,7 +57,7 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | Path | Role |
 |------|------|
 | `src/app/` | egui UI: `eframe_app.rs` (main window), `videos_panel.rs`, `cards.rs`, `settings_panel.rs`, `log_panel.rs`, `convert_panel.rs` |
-| `src/app_ui.rs` | Shared UI helpers (buttons, badges, layout, `compute_main_column_split`) |
+| `src/app_ui.rs` | Shared UI helpers (buttons, badges, layout, `queue_body_layout_heights`, viewport dock clamp) |
 | `src/service/` | Background core + Tokio; `web/` for LAN API and static assets |
 | `src/ytdlp.rs`, `src/ytdlp_download_args.rs` | yt-dlp invocation and argument building |
 | `src/config.rs`, `src/models.rs`, `src/profiles.rs` | Settings, queue models, download profiles |
