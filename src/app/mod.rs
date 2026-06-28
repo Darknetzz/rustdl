@@ -1460,7 +1460,7 @@ impl PydlApp {
             }
         });
         left_button_row(ui, |ui| {
-            button_group(ui, &format!("dl_options_output_{id_suffix}"), |g| {
+            button_group(ui, format!("dl_options_output_{id_suffix}"), |g| {
                 if g.secondary(&format!("{} Browse…", ui_icons::OPEN_FOLDER), true)
                     .clicked()
                 {

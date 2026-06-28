@@ -243,17 +243,19 @@ mod tests {
 
     #[test]
     fn web_ui_browser_url_adds_scheme() {
-        let mut s = AppSettings::default();
-        s.web_bind_address = "127.0.0.1:8765".to_owned();
+        let s = AppSettings {
+            web_bind_address: "127.0.0.1:8765".to_owned(),
+            ..Default::default()
+        };
         assert_eq!(web_ui_browser_url(&s), "http://127.0.0.1:8765/");
     }
 
     #[test]
     fn web_ui_browser_url_uses_https_when_tls_enabled() {
-        let mut s = AppSettings::default();
-        s.web_bind_address = "127.0.0.1:8765".to_owned();
-        s.web_tls_cert_path = "/nonexistent/cert.pem".to_owned();
-        s.web_tls_key_path = "/nonexistent/key.pem".to_owned();
+        let s = AppSettings {
+            web_bind_address: "127.0.0.1:8765".to_owned(),
+            ..Default::default()
+        };
         assert_eq!(web_ui_browser_url(&s), "http://127.0.0.1:8765/");
         let dir = std::env::temp_dir().join(format!("rustdl_tls_url_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -262,8 +264,12 @@ mod tests {
         let key = dir.join("key.pem");
         std::fs::write(&cert, "dummy").expect("cert");
         std::fs::write(&key, "dummy").expect("key");
-        s.web_tls_cert_path = cert.to_string_lossy().into_owned();
-        s.web_tls_key_path = key.to_string_lossy().into_owned();
+        let s = AppSettings {
+            web_bind_address: "127.0.0.1:8765".to_owned(),
+            web_tls_cert_path: cert.to_string_lossy().into_owned(),
+            web_tls_key_path: key.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
         assert_eq!(web_ui_browser_url(&s), "https://127.0.0.1:8765/");
         let _ = std::fs::remove_dir_all(&dir);
     }
