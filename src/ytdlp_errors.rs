@@ -10,7 +10,6 @@ pub fn is_transient_download_error(err: &str) -> bool {
         "connection refused",
         "connection aborted",
         "temporary failure",
-        "unable to download",
         "read timed out",
         "http error 408",
         "http error 502",
@@ -34,6 +33,15 @@ pub fn is_transient_download_error(err: &str) -> bool {
     NEEDLES.iter().any(|needle| msg.contains(needle))
 }
 
+/// Returns true when yt-dlp rejected the selected `-f` / quality format.
+pub fn is_format_unavailable_error(err: &str) -> bool {
+    let msg = err.to_ascii_lowercase();
+    msg.contains("requested format is not available")
+        || msg.contains("format is not available")
+        || msg.contains("no video formats found")
+        || msg.contains("no formats found")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -54,5 +62,16 @@ mod tests {
         assert!(!is_transient_download_error("Video unavailable"));
         assert!(!is_transient_download_error("Private video"));
         assert!(!is_transient_download_error("Cancelled by user."));
+        assert!(!is_transient_download_error(
+            "ERROR: [youtube] abc: Requested format is not available."
+        ));
+    }
+
+    #[test]
+    fn format_unavailable_errors() {
+        assert!(is_format_unavailable_error(
+            "ERROR: [youtube] xh5ASlG: Requested format is not available. Use --list-formats for a list of available formats"
+        ));
+        assert!(!is_format_unavailable_error("Video unavailable"));
     }
 }

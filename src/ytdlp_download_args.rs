@@ -192,6 +192,16 @@ pub fn build_download_extra_args_for_item(
     args
 }
 
+/// Drops `-f` / `--format` selectors and appends a permissive `-f best` fallback.
+pub fn with_fallback_format_args(args: &[String]) -> Vec<String> {
+    let mut out = args.to_vec();
+    strip_cli_flag_pair(&mut out, "-f");
+    strip_cli_flag_pair(&mut out, "--format");
+    out.push("-f".to_owned());
+    out.push("best".to_owned());
+    out
+}
+
 /// Args for re-downloading: bypass archive skip and replace an existing output file.
 pub fn build_redownload_extra_args(settings: &AppSettings) -> Vec<String> {
     let mut args = build_download_extra_args(settings);
@@ -342,6 +352,21 @@ mod tests {
         let mut s2 = s.clone();
         prof.apply_to(&mut s2);
         assert_eq!(tpl_with_profile, compose_output_template(&s2));
+    }
+
+    #[test]
+    fn with_fallback_format_args_replaces_selector() {
+        let args = vec![
+            "-f".to_owned(),
+            "bestvideo+bestaudio/best".to_owned(),
+            "--continue".to_owned(),
+        ];
+        let fallback = with_fallback_format_args(&args);
+        assert!(!fallback.contains(&"bestvideo+bestaudio/best".to_owned()));
+        assert_eq!(
+            fallback.windows(2).find(|w| w[0] == "-f").map(|w| w[1].as_str()),
+            Some("best")
+        );
     }
 
     #[test]

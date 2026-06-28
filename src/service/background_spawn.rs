@@ -9,7 +9,8 @@ use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
-use crate::ytdlp_errors::is_transient_download_error;
+use crate::ytdlp_download_args::with_fallback_format_args;
+use crate::ytdlp_errors::{is_format_unavailable_error, is_transient_download_error};
 
 type DownloadJob = (u64, String, Arc<AtomicBool>, Vec<String>, String);
 
@@ -366,8 +367,53 @@ pub(crate) fn spawn_download_worker(
                     );
                 }
                 Err(err_text) => {
-                    if should_retry_without_embed_thumbnail(&extra_args, &err_text) {
-                        let retry_args = remove_embed_thumbnail_arg(&extra_args);
+                    let mut err_text = err_text;
+                    let mut active_args = extra_args.clone();
+
+                    if is_format_unavailable_error(&err_text) {
+                        active_args = with_fallback_format_args(&extra_args);
+                        try_send_ui(
+                            &bus,
+                            UiEvent::DownloadLine {
+                                item_id,
+                                line: "Requested format not available; retrying with -f best."
+                                    .to_owned(),
+                            },
+                        );
+                        match download_with_transient_retries(
+                            item_id,
+                            &target_url,
+                            &output_dir,
+                            &output_filename_template,
+                            &active_args,
+                            &yt_bin,
+                            &ffmpeg_path,
+                            &subprocess_priority,
+                            cancel_flag.clone(),
+                            &bus,
+                            download_auto_retries,
+                            retry_sleep_secs,
+                        )
+                        .await
+                        {
+                            Ok(()) => {
+                                try_send_ui(
+                                    &bus,
+                                    UiEvent::DownloadDone {
+                                        item_id,
+                                        ok: true,
+                                        detail: "Completed (used -f best after format error)."
+                                            .to_owned(),
+                                    },
+                                );
+                                continue;
+                            }
+                            Err(retry_e) => err_text = retry_e,
+                        }
+                    }
+
+                    if should_retry_without_embed_thumbnail(&active_args, &err_text) {
+                        let retry_args = remove_embed_thumbnail_arg(&active_args);
                         try_send_ui(
                             &bus,
                             UiEvent::DownloadLine {

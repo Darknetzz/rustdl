@@ -19,6 +19,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Transient download timeouts and connection errors can recover automatically instead of requiring a manual retry that deletes partial output.
+- Downloads that fail with **Requested format is not available** automatically retry once with `-f best` instead of stopping on strict quality or per-item format overrides.
 
 - Video queue footer height now uses the larger of the width estimate and last frame's measured height, so wrapped convert footers no longer overlap the list after resize.
 - Docked activity log reserves include the heading row; log height slider caps respect remaining panel space in both docked placements.
