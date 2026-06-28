@@ -321,8 +321,7 @@ impl PydlApp {
             settings.videos_dock_height =
                 crate::app_ui::default_videos_dock_height_for_viewport(vp_h);
         }
-        if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
-            settings.web_auth_token = crate::config::generate_web_auth_token();
+        if crate::config::ensure_web_auth_token_if_enabled(&mut settings) {
             if let Err(e) = save_settings(&settings) {
                 eprintln!("rustdl: failed to save generated web API token: {e}");
             }
@@ -1195,6 +1194,9 @@ impl PydlApp {
             self.append_log("Web UI disabled.");
             return;
         }
+        if crate::config::ensure_web_auth_token_if_enabled(&mut self.settings) {
+            self.persist_settings();
+        }
         match crate::service::web::try_spawn_web_server(
             self.runtime.clone(),
             self.shared_core.clone(),
@@ -1551,7 +1553,7 @@ impl PydlApp {
             ui.label(RichText::new(err).color(ALERT_DANGER_TEXT));
             ui.label(
                 RichText::new(
-                    "Check Settings → Web UI (bind address, auth token, and port conflicts).",
+                    "Check Settings, Web UI tab (bind address, auth token, and port conflicts).",
                 )
                 .small(),
             );

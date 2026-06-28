@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 
 use crate::app_state::is_queueable_http_url;
 use crate::config::{
-    generate_web_auth_token, load_settings, save_settings, validate_web_tls_settings,
+    ensure_web_auth_token_if_enabled, load_settings, save_settings, validate_web_tls_settings,
     web_tls_enabled, AppSettings,
 };
 use crate::profiles::{all_profiles, find_profile, load_profiles};
@@ -183,8 +183,7 @@ pub async fn run_headless_web(opts: CliWebOnlyOptions) -> Result<()> {
             .map_err(|e| anyhow!(e.message()))?;
     settings.web_bind_address = bind.clone();
     settings.web_ui_enabled = true;
-    if settings.web_auth_token.trim().is_empty() {
-        settings.web_auth_token = generate_web_auth_token();
+    if ensure_web_auth_token_if_enabled(&mut settings) {
         save_settings(&settings)?;
         eprintln!("rustdl: generated a new API token (saved to settings).");
     }

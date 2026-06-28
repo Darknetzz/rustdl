@@ -10,6 +10,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- Web UI start errors and banners use plain-text navigation hints (no missing arrow glyph in the default UI font).
+- Enabling the LAN web UI with an empty API token auto-generates a token when the server starts (same as first launch).
+
 ## [0.9.1] - 2026-06-28
 
 ### Fixed

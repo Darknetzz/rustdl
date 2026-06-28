@@ -464,6 +464,17 @@ pub fn generate_web_auth_token() -> String {
     uuid::Uuid::new_v4().to_string()
 }
 
+/// Fills in a web API token when the LAN web UI is enabled but the token field is empty.
+/// Returns `true` when a new token was generated.
+pub fn ensure_web_auth_token_if_enabled(settings: &mut AppSettings) -> bool {
+    if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
+        settings.web_auth_token = generate_web_auth_token();
+        true
+    } else {
+        false
+    }
+}
+
 pub const DEFAULT_OUTPUT_FILENAME_TEMPLATE: &str = "%(title)s [%(id)s].%(ext)s";
 pub const DEFAULT_PLAYLIST_PREVIEW_CAP: usize = 20;
 
@@ -1232,5 +1243,17 @@ mod tests {
         assert!(validate_web_tls_settings(&s).is_ok());
         s.web_tls_cert_path = "/tmp/cert.pem".to_owned();
         assert!(validate_web_tls_settings(&s).is_err());
+    }
+
+    #[test]
+    fn ensure_web_auth_token_if_enabled_generates_when_missing() {
+        let mut s = AppSettings::default();
+        s.web_ui_enabled = true;
+        assert!(ensure_web_auth_token_if_enabled(&mut s));
+        assert!(!s.web_auth_token.trim().is_empty());
+        assert!(!ensure_web_auth_token_if_enabled(&mut s));
+        s.web_ui_enabled = false;
+        s.web_auth_token.clear();
+        assert!(!ensure_web_auth_token_if_enabled(&mut s));
     }
 }
