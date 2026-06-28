@@ -647,7 +647,7 @@ impl Default for AppSettings {
             auto_add_pasted_urls: true,
             auto_start_downloads: true,
             enqueue_downloads_to_convert: false,
-            ui_scale: 1.08,
+            ui_scale: 1.0,
             ui_power_save: false,
             minimize_to_tray: false,
             card_list_layout: false,
@@ -828,6 +828,27 @@ pub fn default_downloads() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
+pub const UI_SCALE_MIN: f32 = 0.85;
+pub const UI_SCALE_MAX: f32 = 1.5;
+pub const UI_SCALE_STEP: f32 = 0.05;
+
+/// Snap UI scale to the nearest 5% step within [`UI_SCALE_MIN`]..=[`UI_SCALE_MAX`].
+pub fn snap_ui_scale(scale: f32) -> f32 {
+    const STEP_PCT: i32 = 5;
+    const MIN_PCT: i32 = 85;
+    const MAX_PCT: i32 = 150;
+    let pct = (scale * 100.0).round() as i32;
+    let snapped = ((pct as f64 / STEP_PCT as f64)
+        .round() as i32
+        * STEP_PCT)
+        .clamp(MIN_PCT, MAX_PCT);
+    snapped as f32 / 100.0
+}
+
+pub fn bump_ui_scale(scale: &mut f32, delta: f32) {
+    *scale = snap_ui_scale(*scale + delta);
+}
+
 pub fn load_settings() -> AppSettings {
     let path = config_path();
     let mut cfg: AppSettings = load_json_file(path.clone(), "settings");
@@ -836,7 +857,7 @@ pub fn load_settings() -> AppSettings {
     }
     cfg.worker_count = cfg.worker_count.clamp(1, 6);
     cfg.log_max_chars = cfg.log_max_chars.clamp(2_000, 200_000);
-    cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
+    cfg.ui_scale = snap_ui_scale(cfg.ui_scale);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.yt_dlp_socket_timeout_secs = cfg.yt_dlp_socket_timeout_secs.clamp(0, 3600);
     cfg.yt_dlp_retry_sleep_secs = cfg.yt_dlp_retry_sleep_secs.clamp(0, 300);
@@ -1085,6 +1106,19 @@ pub fn save_convert_queue_snapshot(snapshot: &ConvertQueueSnapshot) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ui_scale_snaps_to_five_percent_steps() {
+        assert!((snap_ui_scale(1.08) - 1.10).abs() < f32::EPSILON);
+        assert!((snap_ui_scale(0.98) - 1.0).abs() < f32::EPSILON);
+        assert!((snap_ui_scale(0.84) - UI_SCALE_MIN).abs() < f32::EPSILON);
+        assert!((snap_ui_scale(1.55) - UI_SCALE_MAX).abs() < f32::EPSILON);
+        let mut scale = 1.0;
+        bump_ui_scale(&mut scale, UI_SCALE_STEP);
+        assert!((scale - 1.05).abs() < f32::EPSILON);
+        bump_ui_scale(&mut scale, -UI_SCALE_STEP);
+        assert!((scale - 1.0).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn settings_default_round_trips_json() {

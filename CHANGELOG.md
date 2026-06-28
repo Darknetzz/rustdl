@@ -12,6 +12,22 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- Command palette: **Remove selected**, **Clear completed downloads**, and **Reset UI scale to 100%** on desktop; LAN web palette adds matching queue, layout, panel, and host-app settings commands.
+- Settings **UI scale**: click the percentage label to reset to 100%.
+
+### Changed
+
+- Command palette (desktop and LAN web): arrow-key navigation, highlighted selection, multi-word search, section headings, empty-state message, and backdrop click to close (desktop).
+- LAN web command palette scrolls the active row into view while navigating with the keyboard.
+
+### Fixed
+
+- Settings **UI scale** always uses 5% steps (85%–150%); existing configs snap on load; default is 100% instead of 108%.
+
+## [0.8.7]
+
+### Added
+
 - **Settings → Shared → Minimize to system tray** (Windows and Linux): hide the window in the notification area when you minimize or click the close button; click the tray icon to restore, or use **Quit** in the tray menu to exit.
 - **Settings → Download → Retries**: socket timeout, sleep between yt-dlp retries, and auto-retry on connection errors (0–5 whole-download retries that keep partial files).
 - **Download options** dialog (toolbar under the URL box): same retry and network settings alongside output folder and profile.

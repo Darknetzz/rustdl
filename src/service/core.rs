@@ -1863,6 +1863,7 @@ impl DownloadCore {
 
     pub fn apply_settings_patch(&mut self, patch: AppSettings) {
         self.settings = patch;
+        self.settings.ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
         self.output_dir = self.settings.output_dir.clone();
         self.worker_count = self.settings.worker_count.clamp(1, 6);
         self.persist_settings();

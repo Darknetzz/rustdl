@@ -27,7 +27,7 @@ impl eframe::App for PydlApp {
         let _ = frame;
         self.sync_system_tray(ctx);
         self.ensure_main_viewport_visible(ctx);
-        ctx.set_zoom_factor(self.settings.ui_scale.clamp(0.85, 1.5));
+        ctx.set_zoom_factor(crate::config::snap_ui_scale(self.settings.ui_scale));
         if let Some(text) = self.deferred_menu_paste_urls.take() {
             ctx.input_mut(|inp| inp.events.push(egui::Event::Paste(text)));
         }
@@ -115,6 +115,7 @@ impl eframe::App for PydlApp {
         if trigger_palette {
             self.command_palette_open = true;
             self.command_palette_query.clear();
+            self.command_palette_selection = 0;
         }
         if trigger_escape {
             if self.command_palette_open {

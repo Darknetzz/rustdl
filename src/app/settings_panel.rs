@@ -2,7 +2,10 @@ use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
 use crate::app_ui::{bounded_ui_height, button_group, left_button_row};
-use crate::config::{export_settings_json, import_settings_json, trim_activity_log, AppSettings};
+use crate::config::{
+    bump_ui_scale, export_settings_json, import_settings_json, snap_ui_scale, trim_activity_log,
+    AppSettings, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP,
+};
 use crate::profiles::{
     all_profiles, delete_user_profile, find_profile, rename_user_profile, save_user_profile,
     DownloadProfile,
@@ -13,14 +16,6 @@ use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
 const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
-const UI_SCALE_MIN: f32 = 0.85;
-const UI_SCALE_MAX: f32 = 1.5;
-const UI_SCALE_STEP: f32 = 0.05;
-
-fn bump_ui_scale(scale: &mut f32, delta: f32) {
-    *scale = (*scale + delta).clamp(UI_SCALE_MIN, UI_SCALE_MAX);
-    *scale = ((*scale * 100.0).round()) / 100.0;
-}
 
 fn settings_form_grid<R>(
     ui: &mut egui::Ui,
@@ -396,28 +391,41 @@ impl PydlApp {
                                 &mut self.settings.log_relative_time,
                             );
                             ui.label("UI scale");
-                            left_button_row(ui, |ui| {
+                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 let pct = (self.settings.ui_scale * 100.0).round() as i32;
                                 let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
                                 let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
                                 button_group(ui, "ui_scale", |g| {
-                                    if g
-                                        .secondary("−", !at_min)
-                                        .on_hover_text("Decrease UI scale")
-                                        .clicked()
-                                    {
-                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
-                                        changed = true;
-                                    }
-                                    g.add(|ui| {
-                                        ui.label(RichText::new(format!("{pct}%")).strong())
-                                    });
                                     if g
                                         .secondary("+", !at_max)
                                         .on_hover_text("Increase UI scale")
                                         .clicked()
                                     {
                                         bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
+                                        changed = true;
+                                    }
+                                    if g
+                                        .add(|ui| {
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(format!("{pct:>3}%")).strong(),
+                                                )
+                                                .sense(egui::Sense::click()),
+                                            )
+                                            .on_hover_text("Reset to 100%")
+                                        })
+                                        .clicked()
+                                        && (self.settings.ui_scale - 1.0).abs() > f32::EPSILON
+                                    {
+                                        self.settings.ui_scale = snap_ui_scale(1.0);
+                                        changed = true;
+                                    }
+                                    if g
+                                        .secondary("−", !at_min)
+                                        .on_hover_text("Decrease UI scale")
+                                        .clicked()
+                                    {
+                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
                                         changed = true;
                                     }
                                 });

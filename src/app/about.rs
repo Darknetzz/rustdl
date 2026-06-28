@@ -76,7 +76,11 @@ impl PydlApp {
                     );
                 });
                 ui.separator();
-                ui.label(RichText::new("Keyboard shortcuts").strong());
+                let shortcuts_heading = ui.label(RichText::new("Keyboard shortcuts").strong());
+                if self.about_scroll_to_shortcuts {
+                    shortcuts_heading.scroll_to_me(Some(egui::Align::TOP));
+                    self.about_scroll_to_shortcuts = false;
+                }
                 ui.add_space(2.0);
                 let theme = self.settings.theme.clone();
                 const SHORTCUTS: [(&[&str], Option<&[&str]>, &str); 7] = [

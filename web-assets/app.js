@@ -3395,7 +3395,7 @@ async function loadConvertPresetsRow() {
   }
 }
 
-async function openSettingsDialog() {
+async function openSettingsDialog(tab) {
   const [settingsRes, profilesRes] = await Promise.all([
     api("/api/settings"),
     api("/api/profiles"),
@@ -3407,6 +3407,46 @@ async function openSettingsDialog() {
   populateProfiles(profilesData);
   refreshQueueTemplatesList().catch(() => {});
   document.getElementById("settings-dialog").showModal();
+  if (tab) switchSettingsTab(tab);
+}
+
+async function patchHostSettings(patch) {
+  const res = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({ patch }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Could not update settings."));
+  }
+  const data = await res.json();
+  cachedSettings = data.settings;
+  return data;
+}
+
+async function applyLayoutPresetViaApi(preset) {
+  if (!cachedSettings) {
+    const res = await api("/api/settings");
+    cachedSettings = (await res.json()).settings;
+  }
+  const patch = { ...cachedSettings };
+  applyLayoutPreset(patch, preset);
+  const res = await api("/api/settings", {
+    method: "POST",
+    body: JSON.stringify({ settings: patch }),
+  });
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Could not apply layout preset."));
+  }
+  const data = await res.json();
+  cachedSettings = data.settings;
+  await refreshAll();
+}
+
+function toggleActivityLogExpanded() {
+  logExpanded = !logExpanded;
+  document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
+  const btn = document.getElementById("btn-expand-log");
+  if (btn) btn.textContent = logExpanded ? "Collapse log" : "Expand log";
 }
 
 async function applyProfile(name) {
@@ -4882,19 +4922,34 @@ document.getElementById("library-history-filter")?.addEventListener("change", ()
 });
 
 const PALETTE_COMMANDS = [
-  { label: "Open Settings", keywords: "settings preferences", run: () => openSettingsDialog() },
-  { label: "Start downloads", keywords: "start run download", run: () => postAction("/api/downloads/start", "Downloads could not start.").then(refreshAll).catch(() => {}) },
-  { label: "Pause downloads", keywords: "pause hold", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
+  { label: "Open Settings", keywords: "settings preferences options", section: "Settings", run: () => openSettingsDialog() },
+  { label: "Settings → Shared tab", keywords: "shared global theme layout", run: () => openSettingsDialog("shared") },
+  { label: "Settings → Downloader tab", keywords: "download yt-dlp profile", run: () => openSettingsDialog("downloader") },
+  { label: "Settings → Converter tab", keywords: "convert av1 encode video", run: () => openSettingsDialog("convert") },
+  { label: "Settings → Web UI tab", keywords: "web lan api token bind", run: () => openSettingsDialog("webui") },
+  { label: "Reset UI scale to 100% (host app)", keywords: "ui scale zoom reset desktop host", run: () => patchHostSettings({ ui_scale: 1.0 }) },
+  { label: "Start downloads", keywords: "start run download ready", section: "Queue", run: () => postAction("/api/downloads/start", "Downloads could not start.").then(refreshAll).catch(() => {}) },
+  { label: "Pause downloads", keywords: "pause hold stop", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
   { label: "Resume downloads", keywords: "resume continue", run: () => api("/api/downloads/resume", { method: "POST" }).then(refreshAll) },
+  { label: "Retry all failed", keywords: "retry failed download again", run: () => postAction("/api/downloads/retry-failed", "Could not retry failed downloads.").then(refreshAll).catch(() => {}) },
+  { label: "Clear completed downloads", keywords: "clear done finished remove completed", run: () => clearQueue("done") },
   { label: "Start Convert batch", keywords: "convert encode start", run: () => convertStart() },
-  { label: "Pause Convert batch", keywords: "convert pause", run: () => convertPause() },
-  { label: "Resume Convert batch", keywords: "convert resume", run: () => convertResume() },
+  { label: "Pause Convert batch", keywords: "convert pause hold", run: () => convertPause() },
+  { label: "Resume Convert batch", keywords: "convert resume continue", run: () => convertResume() },
   { label: "Switch to Downloader", keywords: "mode download", run: () => setView("downloader") },
-  { label: "Switch to Video Converter", keywords: "mode convert", run: () => setView("convert") },
-  { label: "Switch to Library", keywords: "library done", run: () => setView("library") },
-  { label: "Focus queue search", keywords: "search find filter", run: () => focusActiveSearch() },
-  { label: "Export activity log", keywords: "export log", run: () => exportActivityLog() },
-  { label: "Open About", keywords: "about version", run: () => document.getElementById("about-dialog")?.showModal() },
+  { label: "Switch to Video Converter", keywords: "mode convert av1", run: () => setView("convert") },
+  { label: "Switch to Library", keywords: "library done history", run: () => setView("library") },
+  { label: "Focus queue search", keywords: "search find filter queue", run: () => focusActiveSearch() },
+  { label: "Toggle activity log", keywords: "log show hide expand activity", run: () => toggleActivityLogExpanded() },
+  { label: "Export activity log", keywords: "export log save file", run: () => exportActivityLog() },
+  { label: "Layout: Compact queue", keywords: "layout compact list small", section: "Layout", run: () => applyLayoutPresetViaApi("compact") },
+  { label: "Layout: Review mode", keywords: "layout review cards thumbnails", run: () => applyLayoutPresetViaApi("review") },
+  { label: "Layout: Minimal", keywords: "layout minimal no thumbnails", run: () => applyLayoutPresetViaApi("minimal") },
+  { label: "Dock Videos panel (host app)", keywords: "dock videos queue panel desktop host", section: "Panels", run: () => patchHostSettings({ videos_docked: true, videos_open: true }) },
+  { label: "Float Videos window (host app)", keywords: "float undock videos window desktop host", run: () => patchHostSettings({ videos_docked: false, videos_open: true }) },
+  { label: "Dock activity log (host app)", keywords: "dock log panel bottom desktop host", run: () => patchHostSettings({ logs_docked: true, logs_open: true }) },
+  { label: "Float activity log (host app)", keywords: "float undock log window desktop host", run: () => patchHostSettings({ logs_open: true, logs_docked: false }) },
+  { label: "Open About", keywords: "about version help", section: "Help", run: () => document.getElementById("about-dialog")?.showModal() },
   { label: "Refresh page data", keywords: "refresh reload sync", run: () => refreshAll() },
 ];
 
@@ -4911,19 +4966,45 @@ function focusActiveSearch() {
 }
 
 function filterPaletteCommands(query) {
-  const q = String(query || "").trim().toLowerCase();
-  if (!q) return PALETTE_COMMANDS;
-  return PALETTE_COMMANDS.filter(
-    (cmd) =>
-      cmd.label.toLowerCase().includes(q) || cmd.keywords.toLowerCase().includes(q),
-  );
+  const tokens = String(query || "")
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!tokens.length) return PALETTE_COMMANDS;
+  return PALETTE_COMMANDS.filter((cmd) => {
+    const hay = `${cmd.label} ${cmd.keywords}`.toLowerCase();
+    return tokens.every((token) => hay.includes(token));
+  });
 }
 
-function renderCommandPaletteList(commands) {
+function scrollPaletteActiveIntoView() {
+  const list = document.getElementById("command-palette-list");
+  list?.querySelector("li.active")?.scrollIntoView({ block: "nearest" });
+}
+
+function renderCommandPaletteList(commands, query = "") {
   const list = document.getElementById("command-palette-list");
   if (!list) return;
   list.innerHTML = "";
+  if (!commands.length) {
+    const li = document.createElement("li");
+    li.className = "command-palette-empty";
+    li.textContent = query.trim()
+      ? `No commands match "${query.trim()}"`
+      : "No commands available";
+    list.appendChild(li);
+    return;
+  }
+  let lastSection = null;
   commands.forEach((cmd, idx) => {
+    if (cmd.section && cmd.section !== lastSection) {
+      const heading = document.createElement("li");
+      heading.className = "command-palette-section";
+      heading.textContent = cmd.section;
+      list.appendChild(heading);
+      lastSection = cmd.section;
+    }
     const li = document.createElement("li");
     li.textContent = cmd.label;
     li.dataset.index = String(idx);
@@ -4934,6 +5015,7 @@ function renderCommandPaletteList(commands) {
     });
     list.appendChild(li);
   });
+  scrollPaletteActiveIntoView();
 }
 
 function openCommandPalette() {
@@ -4964,7 +5046,7 @@ document.getElementById("command-palette-backdrop")?.addEventListener("click", c
 
 document.getElementById("command-palette-input")?.addEventListener("input", (e) => {
   paletteActiveIndex = 0;
-  renderCommandPaletteList(filterPaletteCommands(e.target.value));
+  renderCommandPaletteList(filterPaletteCommands(e.target.value), e.target.value);
 });
 
 document.getElementById("command-palette-input")?.addEventListener("keydown", (e) => {
@@ -4977,13 +5059,13 @@ document.getElementById("command-palette-input")?.addEventListener("keydown", (e
   if (e.key === "ArrowDown") {
     e.preventDefault();
     paletteActiveIndex = Math.min(paletteActiveIndex + 1, Math.max(0, commands.length - 1));
-    renderCommandPaletteList(commands);
+    renderCommandPaletteList(commands, e.target.value);
     return;
   }
   if (e.key === "ArrowUp") {
     e.preventDefault();
     paletteActiveIndex = Math.max(paletteActiveIndex - 1, 0);
-    renderCommandPaletteList(commands);
+    renderCommandPaletteList(commands, e.target.value);
     return;
   }
   if (e.key === "Enter") {
@@ -4994,10 +5076,7 @@ document.getElementById("command-palette-input")?.addEventListener("keydown", (e
 });
 
 document.getElementById("btn-expand-log")?.addEventListener("click", () => {
-  logExpanded = !logExpanded;
-  document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
-  const btn = document.getElementById("btn-expand-log");
-  if (btn) btn.textContent = logExpanded ? "Collapse log" : "Expand log";
+  toggleActivityLogExpanded();
 });
 
 document.querySelectorAll(".layout-preset-btn").forEach((btn) => {
@@ -5041,8 +5120,7 @@ document.addEventListener("keydown", (e) => {
     focusActiveSearch();
   } else if (mod && e.key === "l") {
     e.preventDefault();
-    logExpanded = !logExpanded;
-    document.getElementById("log-view")?.classList.toggle("log-expanded", logExpanded);
+    toggleActivityLogExpanded();
   } else if (e.key === "Escape") {
     if (!document.getElementById("command-palette")?.classList.contains("hidden")) {
       closeCommandPalette();

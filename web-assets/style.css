@@ -1722,6 +1722,31 @@ body.view-convert .card-progress-fill:not([class*="status-"]) {
   overflow-y: auto;
 }
 
+.command-palette-list li.command-palette-section {
+  padding: 0.45rem 1rem 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #888);
+  cursor: default;
+}
+
+.command-palette-list li.command-palette-section:hover {
+  background: transparent;
+}
+
+.command-palette-list li.command-palette-empty {
+  padding: 0.75rem 1rem;
+  color: var(--muted, #888);
+  font-size: 0.88rem;
+  cursor: default;
+}
+
+.command-palette-list li.command-palette-empty:hover {
+  background: transparent;
+}
+
 .command-palette-list li {
   padding: 0.55rem 1rem;
   cursor: pointer;

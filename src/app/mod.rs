@@ -177,6 +177,7 @@ pub struct PydlApp {
     session_restore_convert_count: usize,
     library_open: bool,
     about_open: bool,
+    about_scroll_to_shortcuts: bool,
     queue_template_name_buf: String,
     exit_confirm_open: bool,
     playlist_preview_open: bool,
@@ -278,6 +279,7 @@ pub struct PydlApp {
     config_load_banner_dismissed: bool,
     command_palette_open: bool,
     command_palette_query: String,
+    command_palette_selection: usize,
     /// Max matching log lines rendered in docked/floating log panels (user can load more).
     log_render_line_limit: usize,
     /// Set by keyboard shortcut; consumed by queue search field.
@@ -440,6 +442,7 @@ impl PydlApp {
             session_restore_convert_count,
             library_open: false,
             about_open: false,
+            about_scroll_to_shortcuts: false,
             queue_template_name_buf: String::new(),
             exit_confirm_open: false,
             playlist_preview_open: false,
@@ -514,6 +517,7 @@ impl PydlApp {
             config_load_banner_dismissed: false,
             command_palette_open: false,
             command_palette_query: String::new(),
+            command_palette_selection: 0,
             log_render_line_limit: crate::app::log_panel::DEFAULT_LOG_RENDER_LINES,
             focus_queue_search: false,
             profile_rename_buffer: None,
@@ -765,7 +769,21 @@ impl PydlApp {
         }
     }
 
-    fn remove_selected_items(&mut self) {
+    pub(super) fn clear_completed_downloads(&mut self) {
+        use crate::service::core::QueueClearFilter;
+        self.download_core_action(|core| {
+            let removed = core.clear_queue(QueueClearFilter::Done);
+            if removed > 0 {
+                core.append_log(&format!(
+                    "Removed {removed} completed download(s) from the queue."
+                ));
+            } else {
+                core.append_log("No completed downloads to remove.");
+            }
+        });
+    }
+
+    pub(super) fn remove_selected_items(&mut self) {
         let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
         if ids.is_empty() {
             self.append_log("No items selected.");
