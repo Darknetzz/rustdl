@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 use super::PydlApp;
@@ -76,6 +77,10 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
     app.yt_dlp_version = core.yt_dlp_version.clone();
     app.ffmpeg_version = core.ffmpeg_version.clone();
     app.ffprobe_version = core.ffprobe_version.clone();
+
+    app.ui_event_channel_degraded = core
+        .ui_event_channel_degraded
+        .load(Ordering::Relaxed);
 
     // Incremental log sync: append only new lines instead of cloning the full deque.
     if core.log_lines.len() < app.synced_log_len {

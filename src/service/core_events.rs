@@ -560,6 +560,10 @@ impl super::core::DownloadCore {
             if completed {
                 self.items[idx].percent = 100.0;
                 self.items[idx].eta_text = "0s".to_owned();
+                self.items[idx].error = None;
+            } else {
+                self.items[idx].error =
+                    Some(crate::app_state::queue_item_error_summary(&final_detail));
             }
             self.items[idx].detail = final_detail.clone();
         }
@@ -626,7 +630,7 @@ impl super::core::DownloadCore {
             .iter()
             .any(|x| x.status == ItemStatus::Idle && x.error.is_none());
         if has_idle {
-            self.start_downloads();
+            let _ = self.start_downloads();
         }
     }
 

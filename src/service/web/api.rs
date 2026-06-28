@@ -20,7 +20,7 @@ use crate::domain::UiEvent;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
 use crate::service::core::DownloadCore;
-use crate::service::core::{CancelPostAction, QueueClearFilter, SharedCore};
+use crate::service::core::{CancelPostAction, DownloadStartError, QueueClearFilter, RetryFailedError, SharedCore};
 use crate::service::web::media;
 use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
@@ -155,6 +155,18 @@ struct QueueResponse {
 #[derive(Serialize)]
 pub(super) struct ApiErrorBody {
     pub error: String,
+}
+
+pub(super) fn api_err(
+    status: StatusCode,
+    msg: impl Into<String>,
+) -> (StatusCode, Json<ApiErrorBody>) {
+    (
+        status,
+        Json(ApiErrorBody {
+            error: msg.into(),
+        }),
+    )
 }
 
 #[derive(Deserialize)]
@@ -630,10 +642,26 @@ async fn profiles_import(
         )
     })?;
     let mut c = st.core.lock();
+    let mut save_errors = Vec::new();
     for p in imported.user_profiles {
         if !p.builtin {
-            let _ = crate::profiles::save_user_profile(&mut c.profile_store, p);
+            if let Err(e) = crate::profiles::save_user_profile(&mut c.profile_store, p) {
+                save_errors.push(e.to_string());
+            }
         }
+    }
+    if !save_errors.is_empty() {
+        c.append_log(&format!(
+            "Profile import: {} profile(s) could not be saved.",
+            save_errors.len()
+        ));
+        return Err(api_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!(
+                "failed to save {} imported profile(s)",
+                save_errors.len()
+            ),
+        ));
     }
     c.bump_generation();
     Ok(StatusCode::OK)
@@ -1103,10 +1131,13 @@ async fn logs_clear(State(st): State<ApiState>) -> StatusCode {
     StatusCode::OK
 }
 
-async fn downloads_start(State(st): State<ApiState>) -> StatusCode {
+async fn downloads_start(
+    State(st): State<ApiState>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
-    c.start_downloads();
-    StatusCode::OK
+    c.start_downloads()
+        .map_err(|e: DownloadStartError| api_err(StatusCode::CONFLICT, e.message()))?;
+    Ok(StatusCode::OK)
 }
 
 async fn downloads_pause(State(st): State<ApiState>) -> StatusCode {
@@ -1158,10 +1189,13 @@ async fn downloads_redownload(
     }
 }
 
-async fn downloads_retry_failed(State(st): State<ApiState>) -> StatusCode {
+async fn downloads_retry_failed(
+    State(st): State<ApiState>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
-    c.retry_failed_items();
-    StatusCode::OK
+    c.retry_failed_items()
+        .map_err(|e: RetryFailedError| api_err(StatusCode::CONFLICT, e.message()))?;
+    Ok(StatusCode::OK)
 }
 
 async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {

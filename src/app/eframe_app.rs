@@ -167,6 +167,7 @@ impl eframe::App for PydlApp {
                 self.draw_main_header(ui);
                 self.draw_config_load_banner(ui);
                 self.draw_videos_auto_undock_banner(ui);
+                self.draw_ui_event_channel_banner(ui);
                 self.draw_web_server_banner(ui);
                 let (dl_nav, av1_nav) = draw_mode_nav_bar(
                     ui,

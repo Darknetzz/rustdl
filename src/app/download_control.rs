@@ -35,7 +35,9 @@ impl PydlApp {
     }
 
     pub(super) fn start_downloads(&mut self) {
-        self.download_core_action(|core| core.start_downloads());
+        self.download_core_action(|core| {
+            let _ = core.start_downloads();
+        });
     }
 
     pub(super) fn remove_item_by_id(&mut self, item_id: u64) -> bool {
@@ -66,7 +68,7 @@ impl PydlApp {
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
         self.download_core_action(|core| {
             if let Err(err) = core.redownload_item_id(item_id) {
-                core.append_log(&format!("Re-download failed: {err:?}"));
+                core.append_log(&format!("Re-download failed: {}", err.message()));
             }
         });
     }
@@ -76,7 +78,9 @@ impl PydlApp {
     }
 
     pub(super) fn retry_failed_items(&mut self) {
-        self.download_core_action(|core| core.retry_failed_items());
+        self.download_core_action(|core| {
+            let _ = core.retry_failed_items();
+        });
     }
 
     pub(super) fn set_item_download_overrides(

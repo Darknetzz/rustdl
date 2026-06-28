@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Once;
 
 use crossbeam_channel::Sender;
@@ -13,11 +15,24 @@ static UI_CHANNEL_CLOSED_WARN: Once = Once::new();
 pub struct UiEventBus {
     tx: Sender<UiEvent>,
     broadcast: broadcast::Sender<UiEvent>,
+    channel_degraded: Arc<AtomicBool>,
 }
 
 impl UiEventBus {
-    pub fn new(tx: Sender<UiEvent>, broadcast: broadcast::Sender<UiEvent>) -> Self {
-        Self { tx, broadcast }
+    pub fn new(
+        tx: Sender<UiEvent>,
+        broadcast: broadcast::Sender<UiEvent>,
+        channel_degraded: Arc<AtomicBool>,
+    ) -> Self {
+        Self {
+            tx,
+            broadcast,
+            channel_degraded,
+        }
+    }
+
+    pub fn is_channel_degraded(&self) -> bool {
+        self.channel_degraded.load(Ordering::Relaxed)
     }
 
     pub fn publish(&self, event: UiEvent) -> bool {
@@ -25,6 +40,7 @@ impl UiEventBus {
         match self.tx.send(event) {
             Ok(()) => true,
             Err(_) => {
+                self.channel_degraded.store(true, Ordering::Relaxed);
                 UI_CHANNEL_CLOSED_WARN.call_once(|| {
                     eprintln!(
                         "rustdl: UI event channel closed; background tasks may not update the window."

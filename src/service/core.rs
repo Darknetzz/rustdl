@@ -68,6 +68,61 @@ impl RedownloadError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DownloadStartError {
+    Paused,
+    EmptyQueue,
+    InvalidOutputDir,
+}
+
+impl DownloadStartError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Paused => "Downloads are paused. Click Resume first.",
+            Self::EmptyQueue => "Add URLs first.",
+            Self::InvalidOutputDir => "Choose a valid output folder.",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConvertStartError {
+    Paused,
+    NoReadyItems,
+}
+
+impl ConvertStartError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::Paused => "Convert: batch is paused. Click Resume first.",
+            Self::NoReadyItems => "Convert: no ready items to convert.",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetryFailedError {
+    InvalidOutputDir,
+    NoYtDlp,
+    DownloadsPaused,
+    NothingToRetry,
+    NoUrlOnFailed,
+}
+
+impl RetryFailedError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::InvalidOutputDir => "Choose a valid output folder.",
+            Self::NoYtDlp => "yt-dlp not found (check PATH or Settings executable path).",
+            Self::DownloadsPaused => "Downloads are paused. Click Resume first.",
+            Self::NothingToRetry => "No failed downloads to retry.",
+            Self::NoUrlOnFailed => {
+                "No failed items have a video URL to retry. Check the row or re-add the link."
+            }
+        }
+    }
+}
+
 /// LAN web / desktop-shared thumbnail bytes keyed by queue or AV1 item id.
 #[derive(Clone, Debug)]
 pub struct CachedThumbnail {
@@ -155,6 +210,7 @@ pub struct DownloadCore {
     pub runtime: Arc<Runtime>,
     pub tx: Sender<UiEvent>,
     pub event_broadcast: broadcast::Sender<UiEvent>,
+    pub ui_event_channel_degraded: Arc<AtomicBool>,
 
     pub output_dir: String,
     pub worker_count: usize,
@@ -253,6 +309,7 @@ impl DownloadCore {
     ) -> (SharedCore, Receiver<UiEvent>) {
         let (tx, rx) = unbounded();
         let (event_broadcast, _) = broadcast::channel(512);
+        let ui_event_channel_degraded = Arc::new(AtomicBool::new(false));
         let settings = load_settings();
         let profile_store = load_profiles();
         let log_lines = load_activity_log(settings.log_max_chars);
@@ -306,6 +363,7 @@ impl DownloadCore {
             runtime,
             tx,
             event_broadcast,
+            ui_event_channel_degraded,
             output_dir: settings.output_dir.clone(),
             worker_count: settings.worker_count.clamp(1, 6),
             status_resolving: 0,
@@ -439,7 +497,11 @@ impl DownloadCore {
     }
 
     pub fn ui_event_bus(&self) -> UiEventBus {
-        UiEventBus::new(self.tx.clone(), self.event_broadcast.clone())
+        UiEventBus::new(
+            self.tx.clone(),
+            self.event_broadcast.clone(),
+            self.ui_event_channel_degraded.clone(),
+        )
     }
 
     pub fn emit_event(&self, event: UiEvent) {
@@ -568,7 +630,7 @@ impl DownloadCore {
         self.append_log(&format!(
             "Scheduled download start triggered ({schedule} local)."
         ));
-        self.start_downloads();
+        let _ = self.start_downloads();
     }
 
     /// Keeps monotonic item IDs when reusing an existing row (e.g. Refetch metadata).
@@ -936,7 +998,7 @@ impl DownloadCore {
                     let n = paths.len();
                     self.scan_convert_paths_into_queue(&paths);
                     if auto_start {
-                        self.start_convert_batch();
+                        let _ = self.start_convert_batch();
                     }
                     self.append_log(&format!(
                         "Convert watch folder: added {n} file(s) from {path}"
@@ -1234,7 +1296,7 @@ impl DownloadCore {
         self.downloads_paused = false;
         self.session_complete_notified = false;
         self.append_log("Downloads resumed.");
-        self.start_downloads();
+        let _ = self.start_downloads();
     }
 
     fn collect_idle_download_item_ids(&self) -> Vec<u64> {
@@ -1431,23 +1493,24 @@ impl DownloadCore {
         }
     }
 
-    pub fn start_downloads(&mut self) {
+    pub fn start_downloads(&mut self) -> Result<(), DownloadStartError> {
         if self.downloads_paused {
             self.append_log("Downloads are paused. Click Resume first.");
-            return;
+            return Err(DownloadStartError::Paused);
         }
         if self.items.is_empty() {
             self.append_log("Add URLs first.");
-            return;
+            return Err(DownloadStartError::EmptyQueue);
         }
         if !Path::new(&self.output_dir).is_dir() {
             self.append_log("Choose a valid output folder.");
-            return;
+            return Err(DownloadStartError::InvalidOutputDir);
         }
         self.persist_settings();
         let pending_ids = self.collect_idle_download_item_ids();
         self.bump_generation();
         self.spawn_download_workers(pending_ids, false);
+        Ok(())
     }
 
     pub fn remove_item_by_id(&mut self, item_id: u64) -> bool {
@@ -1664,17 +1727,21 @@ impl DownloadCore {
         let _ = self.redownload_item_id(item_id);
     }
 
-    pub fn retry_failed_items(&mut self) {
+    pub fn retry_failed_items(&mut self) -> Result<(), RetryFailedError> {
+        if self.downloads_paused {
+            self.append_log("Downloads are paused. Click Resume first.");
+            return Err(RetryFailedError::DownloadsPaused);
+        }
         if !self.output_dir_is_valid() {
             self.append_log("Choose a valid output folder.");
-            return;
+            return Err(RetryFailedError::InvalidOutputDir);
         }
         if !self.has_yt_dlp {
             self.refresh_deps();
         }
         if !self.has_yt_dlp {
             self.append_log("yt-dlp not found (check PATH or Settings executable path).");
-            return;
+            return Err(RetryFailedError::NoYtDlp);
         }
         let failed_no_url = self
             .items
@@ -1692,10 +1759,10 @@ impl DownloadCore {
                 self.append_log(
                     "No failed items have a video URL to retry. Check the row or re-add the link.",
                 );
-            } else {
-                self.append_log("No failed downloads to retry.");
+                return Err(RetryFailedError::NoUrlOnFailed);
             }
-            return;
+            self.append_log("No failed downloads to retry.");
+            return Err(RetryFailedError::NothingToRetry);
         }
         self.persist_settings();
         self.schedule_done_file_lookup_refresh_force();
@@ -1715,6 +1782,7 @@ impl DownloadCore {
         ));
         self.bump_generation();
         self.spawn_download_workers(ids, true);
+        Ok(())
     }
 
     pub fn queue_urls_for_resolve(&mut self, lines: Vec<String>) -> UrlLineFilterStats {
@@ -2040,7 +2108,7 @@ impl DownloadCore {
     }
 
     pub fn start_downloads_from_queue(&mut self) {
-        self.start_downloads();
+        let _ = self.start_downloads();
     }
 }
 

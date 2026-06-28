@@ -787,7 +787,16 @@ impl PydlApp {
                                         if let Ok(tpl) = crate::queue_templates::load_queue_template(name) {
                                             let urls = crate::queue_templates::template_item_urls(&tpl);
                                             self.download_core_action(|core| {
-                                                let _ = core.queue_urls_for_resolve(urls);
+                                                let stats = core.queue_urls_for_resolve(urls);
+                                                if stats.accepted == 0 {
+                                                    core.append_log(&format!(
+                                                        "Queue template \"{name}\": no new URLs added \
+                                                         ({} duplicate(s), {} invalid).",
+                                                        stats.duplicate_in_input
+                                                            + stats.duplicate_existing,
+                                                        stats.invalid
+                                                    ));
+                                                }
                                             });
                                             self.append_log(&format!("Loaded queue template \"{name}\"."));
                                         }

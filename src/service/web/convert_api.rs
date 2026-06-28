@@ -17,8 +17,10 @@ use crate::models::ConvertQueueItem;
 use crate::transcode::{encoder_indicator_label, encoder_uses_hardware, target_codec_label};
 
 use super::api::{
-    extract_local_video_thumbnail, thumbnail_response, ApiErrorBody, ApiState, BatchProgressJson,
+    api_err, extract_local_video_thumbnail, thumbnail_response, ApiErrorBody, ApiState,
+    BatchProgressJson,
 };
+use crate::service::core::ConvertStartError;
 
 #[derive(Serialize)]
 struct ConvertItemView {
@@ -168,31 +170,32 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
     })
 }
 
-async fn convert_scan(State(st): State<ApiState>, Json(body): Json<ConvertScanBody>) -> StatusCode {
+async fn convert_scan(
+    State(st): State<ApiState>,
+    Json(body): Json<ConvertScanBody>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let lines: Vec<String> = body
         .paths
         .into_iter()
         .map(|s| s.trim().to_owned())
         .filter(|s| !s.is_empty())
         .collect();
-    let mut c = st.core.lock();
-    c.convert_input_paths = if lines.is_empty() {
-        String::new()
-    } else {
-        format!("{}\n", lines.join("\n"))
-    };
-    if !lines.is_empty() {
-        c.scan_convert_paths_into_queue(&lines);
-    } else {
-        c.bump_generation();
+    if lines.is_empty() {
+        return Err(api_err(StatusCode::BAD_REQUEST, "no paths provided"));
     }
-    StatusCode::OK
+    let mut c = st.core.lock();
+    c.convert_input_paths = format!("{}\n", lines.join("\n"));
+    c.scan_convert_paths_into_queue(&lines);
+    Ok(StatusCode::OK)
 }
 
-async fn convert_start(State(st): State<ApiState>) -> StatusCode {
+async fn convert_start(
+    State(st): State<ApiState>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
     let mut c = st.core.lock();
-    c.start_convert_batch();
-    StatusCode::OK
+    c.start_convert_batch()
+        .map_err(|e: ConvertStartError| api_err(StatusCode::CONFLICT, e.message()))?;
+    Ok(StatusCode::OK)
 }
 
 async fn convert_cancel(State(st): State<ApiState>) -> StatusCode {

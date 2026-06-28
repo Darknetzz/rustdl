@@ -287,6 +287,9 @@ pub struct PydlApp {
     videos_auto_undocked_for_size: bool,
     /// User dismissed the auto-undock info banner in the main column.
     videos_auto_undock_banner_dismissed: bool,
+    /// Background UI events could not be delivered (channel closed).
+    ui_event_channel_degraded: bool,
+    ui_event_channel_banner_dismissed: bool,
     /// User chose docked layout (toolbar or Settings); skip auto-undock until they undock manually.
     videos_dock_user_prefers_docked: bool,
     /// Frames elapsed since startup; used to recover invisible Wayland windows.
@@ -321,7 +324,9 @@ impl PydlApp {
         }
         if settings.web_ui_enabled && settings.web_auth_token.trim().is_empty() {
             settings.web_auth_token = crate::config::generate_web_auth_token();
-            let _ = save_settings(&settings);
+            if let Err(e) = save_settings(&settings) {
+                eprintln!("rustdl: failed to save generated web API token: {e}");
+            }
         }
         theme::apply_ui_theme(&cc.egui_ctx, &settings.theme);
         let profile_store = load_profiles();
@@ -514,6 +519,8 @@ impl PydlApp {
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,
             videos_auto_undock_banner_dismissed: false,
+            ui_event_channel_degraded: false,
+            ui_event_channel_banner_dismissed: false,
             videos_dock_user_prefers_docked: false,
             #[cfg(target_os = "linux")]
             gui_startup_frames: 0,
@@ -2294,6 +2301,28 @@ impl PydlApp {
         ui.add_space(4.0);
     }
 
+    pub(super) fn draw_ui_event_channel_banner(&mut self, ui: &mut egui::Ui) {
+        if !self.ui_event_channel_degraded || self.ui_event_channel_banner_dismissed {
+            return;
+        }
+        alert_danger(ui, |ui| {
+            ui.label(
+                RichText::new(
+                    "Background updates may not appear in the window. Restart rustdl if the queue \
+                     or activity log stops updating.",
+                )
+                .color(ALERT_DANGER_TEXT),
+            );
+            if ui
+                .button(format!("{} Dismiss", ui_icons::DISMISS))
+                .clicked()
+            {
+                self.ui_event_channel_banner_dismissed = true;
+            }
+        });
+        ui.add_space(4.0);
+    }
+
     fn session_restore_prompt_body(&self) -> String {
         let mut parts = Vec::new();
         if self.session_restore_downloader_count > 0 {
@@ -2682,11 +2711,18 @@ impl PydlApp {
                     }
                     if let Some(url) = requeue_url {
                         self.download_core_action(|core| {
-                            let _ = core.queue_urls_for_resolve(vec![url]);
+                            let stats = core.queue_urls_for_resolve(vec![url]);
+                            if stats.accepted == 0 {
+                                core.append_log(
+                                    "Library re-queue: URL was not added (duplicate or invalid).",
+                                );
+                            }
                         });
                     }
                     if let Some(p) = open_path {
-                        let _ = crate::app_actions::open_path(std::path::Path::new(&p));
+                        if let Err(e) = crate::app_actions::open_path(std::path::Path::new(&p)) {
+                            self.append_log(&format!("Failed to open path: {e}"));
+                        }
                     }
                 });
             });

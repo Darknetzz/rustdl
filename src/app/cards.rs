@@ -318,47 +318,19 @@ impl PydlApp {
                 let can_retry_download = status == ItemStatus::Failed
                     && output_ready
                     && self.has_yt_dlp
-                    && {
-                        let it = &self.items[idx];
-                        self.item_has_redownload_target(it)
-                    };
+                    && self.item_has_redownload_target(&self.items[idx]);
                 let can_retry_metadata = matches!(status, ItemStatus::Idle)
                     && has_error.is_some()
                     && self.has_yt_dlp
                     && !self.add_in_progress
                     && !self.items[idx].source_line.trim().is_empty();
-                if can_retry_download || can_retry_metadata {
-                    left_button_row(ui, |ui| {
-                        compact_button_group(ui, ("card_retry", id), |g| {
-                            if can_retry_download {
-                                let btn = g
-                                    .warning(
-                                        &format!("{} Retry", ui_icons::RETRY),
-                                        true,
-                                    )
-                                    .on_hover_text(
-                                        "Queue this video for download again using the same URL as this row.",
-                                    );
-                                if btn.clicked() {
-                                    self.retry_download_item_id(id);
-                                }
-                            }
-                            if can_retry_metadata {
-                                let btn = g
-                                    .secondary(
-                                        &format!("{} Refetch", ui_icons::RETRY),
-                                        true,
-                                    )
-                                    .on_hover_text(
-                                        "Run yt-dlp metadata again for this URL (after errors or no preview).",
-                                    );
-                                if btn.clicked() {
-                                    self.retry_metadata_item_id(id);
-                                }
-                            }
-                        });
-                    });
-                }
+                self.draw_card_retry_buttons(
+                    ui,
+                    id,
+                    "card_retry",
+                    can_retry_download,
+                    can_retry_metadata,
+                );
 
                 if show_saved_file_actions {
                     left_button_row(ui, |ui| {
@@ -420,7 +392,11 @@ impl PydlApp {
                                 &mut delete_file,
                             );
                             if remove_from_queue {
-                                let _ = self.remove_item_by_id(id);
+                                if !self.remove_item_by_id(id) {
+                                    self.append_log(&format!(
+                                        "[item {id}] Could not remove item from the queue."
+                                    ));
+                                }
                                 self.update_status();
                                 self.refresh_input_line_info();
                                 self.schedule_queue_save();
@@ -530,7 +506,11 @@ impl PydlApp {
                                 )
                                 .clicked()
                             {
-                                let _ = self.remove_item_by_id(id);
+                                if !self.remove_item_by_id(id) {
+                                    self.append_log(&format!(
+                                        "[item {id}] Could not remove item from the queue."
+                                    ));
+                                }
                                 self.update_status();
                                 self.refresh_input_line_info();
                                 self.schedule_queue_save();
@@ -553,12 +533,62 @@ impl PydlApp {
         }
     }
 
+    fn draw_card_retry_buttons(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: u64,
+        group_key: &str,
+        can_retry_download: bool,
+        can_retry_metadata: bool,
+    ) {
+        if !can_retry_download && !can_retry_metadata {
+            return;
+        }
+        left_button_row(ui, |ui| {
+            compact_button_group(ui, (group_key, id), |g| {
+                if can_retry_download {
+                    let btn = g
+                        .warning(&format!("{} Retry", ui_icons::RETRY), true)
+                        .on_hover_text(
+                            "Queue this video for download again using the same URL as this row.",
+                        );
+                    if btn.clicked() {
+                        self.retry_download_item_id(id);
+                    }
+                }
+                if can_retry_metadata {
+                    let btn = g
+                        .secondary(&format!("{} Refetch", ui_icons::RETRY), true)
+                        .on_hover_text(
+                            "Run yt-dlp metadata again for this URL (after errors or no preview).",
+                        );
+                    if btn.clicked() {
+                        self.retry_metadata_item_id(id);
+                    }
+                }
+            });
+        });
+    }
+
     fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
         let id = self.items[idx].item_id;
         let status = self.items[idx].status;
         let title = ellipsize(&self.items[idx].title, 80);
         let pct = self.items[idx].percent;
         let selected = self.selected_item_ids.contains(&id);
+        let output_ready = Path::new(&self.output_dir).is_dir();
+        let failure_text = crate::app_state::queue_item_failure_text(&self.items[idx])
+            .map(|t| t.to_owned());
+        let has_error = self.items[idx].error.is_some();
+        let can_retry_download = status == ItemStatus::Failed
+            && output_ready
+            && self.has_yt_dlp
+            && self.item_has_redownload_target(&self.items[idx]);
+        let can_retry_metadata = matches!(status, ItemStatus::Idle)
+            && has_error
+            && self.has_yt_dlp
+            && !self.add_in_progress
+            && !self.items[idx].source_line.trim().is_empty();
         let row_response = ui.horizontal(|ui| {
             if allow_reorder && status == ItemStatus::Idle {
                 let drag_id = egui::Id::new(("ready_drag", id));
@@ -637,6 +667,29 @@ impl PydlApp {
                 }
             }
         });
+        if let Some(ref fail) = failure_text {
+            ui.horizontal(|ui| {
+                ui.add_space(28.0);
+                let err_display = ellipsize(fail, 96);
+                ui.label(
+                    RichText::new(err_display)
+                        .small()
+                        .color(LOG_COLOR_ERROR),
+                );
+            });
+        }
+        if can_retry_download || can_retry_metadata {
+            ui.horizontal(|ui| {
+                ui.add_space(28.0);
+                self.draw_card_retry_buttons(
+                    ui,
+                    id,
+                    "list_retry",
+                    can_retry_download,
+                    can_retry_metadata,
+                );
+            });
+        }
         if allow_reorder && status == ItemStatus::Idle {
             if let Some(dragged) = row_response.response.dnd_release_payload::<u64>() {
                 if *dragged != id {

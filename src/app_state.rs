@@ -130,6 +130,37 @@ pub fn transition_queue_item_status(item: &mut QueueItem, new: ItemStatus) {
     item.status = new;
 }
 
+const QUEUE_ITEM_ERROR_SUMMARY_MAX: usize = 500;
+
+/// Truncates long failure text for the queue row `error` field (full text stays in `detail`).
+pub fn queue_item_error_summary(detail: &str) -> String {
+    let trimmed = detail.trim();
+    if trimmed.len() <= QUEUE_ITEM_ERROR_SUMMARY_MAX {
+        return trimmed.to_owned();
+    }
+    format!(
+        "{}…",
+        &trimmed[..QUEUE_ITEM_ERROR_SUMMARY_MAX.saturating_sub(1)]
+    )
+}
+
+/// Primary failure text for a downloader row (metadata `error`, else failed `detail`).
+pub fn queue_item_failure_text(item: &QueueItem) -> Option<&str> {
+    if let Some(err) = item.error.as_deref() {
+        let t = err.trim();
+        if !t.is_empty() {
+            return Some(t);
+        }
+    }
+    if item.status == ItemStatus::Failed {
+        let d = item.detail.trim();
+        if !d.is_empty() {
+            return Some(d);
+        }
+    }
+    None
+}
+
 /// Sort key for Done rows: newest completion first (left in the card strip).
 pub fn done_item_sort_key(item: &QueueItem) -> (u64, u64) {
     let t = item.completed_at.unwrap_or(item.item_id);

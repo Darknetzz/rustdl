@@ -54,7 +54,13 @@ fn quarantine_bad_config_file(path: &Path) {
         return;
     }
     let bak = PathBuf::from(format!("{}.bak", path.display()));
-    let _ = fs::rename(path, bak);
+    if let Err(e) = fs::rename(path, &bak) {
+        eprintln!(
+            "rustdl: could not quarantine bad config {} to {}: {e}",
+            path.display(),
+            bak.display()
+        );
+    }
 }
 
 fn write_atomic(path: &Path, raw: &str) -> Result<()> {

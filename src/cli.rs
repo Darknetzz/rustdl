@@ -336,7 +336,7 @@ pub async fn run_headless_convert_batch() -> Result<()> {
     let core = service.shared_core();
     {
         let mut c = core.lock();
-        c.start_convert_batch();
+        let _ = c.start_convert_batch();
     }
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;

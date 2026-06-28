@@ -19,7 +19,7 @@ use crate::convert_state::{
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 
-use super::core::DownloadCore;
+use super::core::{ConvertStartError, DownloadCore};
 
 fn convert_encoder_detect_key(
     ffmpeg_path: &str,
@@ -161,7 +161,7 @@ impl DownloadCore {
         {
             return;
         }
-        self.start_convert_batch();
+        let _ = self.start_convert_batch();
     }
 
     /// Adds plan items not already in the converter queue. Returns how many were added.
@@ -265,10 +265,10 @@ impl DownloadCore {
         }
     }
 
-    pub fn start_convert_batch(&mut self) {
+    pub fn start_convert_batch(&mut self) -> Result<(), ConvertStartError> {
         if self.convert_paused {
             self.append_log("Convert: batch is paused. Click Resume first.");
-            return;
+            return Err(ConvertStartError::Paused);
         }
         let jobs: Vec<(u64, ConvertInput, String, ConvertSizeLimit)> = self
             .convert_items
@@ -287,7 +287,7 @@ impl DownloadCore {
             .collect();
         if jobs.is_empty() {
             self.append_log("Convert: no ready items to convert.");
-            return;
+            return Err(ConvertStartError::NoReadyItems);
         }
 
         self.persist_settings();
@@ -326,6 +326,7 @@ impl DownloadCore {
         self.update_convert_status();
         self.schedule_convert_queue_save();
         self.bump_generation();
+        Ok(())
     }
 
     pub fn cancel_convert_batch(&mut self) {
@@ -354,7 +355,7 @@ impl DownloadCore {
         }
         self.convert_paused = false;
         self.append_log("Convert: batch resumed.");
-        self.start_convert_batch();
+        let _ = self.start_convert_batch();
     }
 
     fn request_convert_batch_stop(&mut self, from_pause: bool) {

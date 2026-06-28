@@ -1238,7 +1238,9 @@ impl PydlApp {
     fn start_convert_batch(&mut self) {
         // Persist current AV1 settings first so the worker (in the core) uses the latest config.
         self.persist_settings();
-        self.convert_core_action(|core| core.start_convert_batch());
+        self.convert_core_action(|core| {
+            let _ = core.start_convert_batch();
+        });
     }
 
     fn add_convert_input_folder(&mut self) {

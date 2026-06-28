@@ -1397,6 +1397,9 @@ function showAddFeedback(result) {
   el.textContent = parts.join(" ");
   el.classList.remove("hidden");
   el.classList.toggle("ok", accepted > 0 && dup === 0 && invalid === 0);
+  if (accepted === 0) {
+    showToast(parts.join(" ") || "No new URLs were added.", "warning");
+  }
 }
 
 async function postQueueUrls(urls) {
@@ -2696,6 +2699,17 @@ async function readApiError(res, fallback) {
   return fallback;
 }
 
+/** POST to an action endpoint; shows an error toast and throws when the response is not OK. */
+async function postAction(path, fallback, options = {}) {
+  const res = await api(path, { method: "POST", ...options });
+  if (!res.ok) {
+    const msg = await readApiError(res, fallback);
+    showToast(msg, "error");
+    throw new Error(msg);
+  }
+  return res;
+}
+
 async function redownloadItem(id) {
   const res = await api(`/api/downloads/redownload/${id}`, { method: "POST" });
   if (!res.ok) {
@@ -3579,23 +3593,24 @@ document.getElementById("btn-clear-log").onclick = () =>
 
 document.getElementById("url-input").addEventListener("input", scheduleAutoAddFromInput);
 
-document.getElementById("btn-start").onclick = async () => {
-  await api("/api/downloads/start", { method: "POST" });
-  await refreshAll();
-};
-document.getElementById("btn-pause").onclick = async () => {
-  await api("/api/downloads/pause", { method: "POST" });
-  await refreshAll();
-};
-document.getElementById("btn-resume").onclick = async () => {
-  await api("/api/downloads/resume", { method: "POST" });
-  await refreshAll();
-};
+document.getElementById("btn-start").onclick = () =>
+  postAction("/api/downloads/start", "Downloads could not start.")
+    .then(() => refreshAll())
+    .catch(() => {});
+document.getElementById("btn-pause").onclick = () =>
+  api("/api/downloads/pause", { method: "POST" })
+    .then(() => refreshAll())
+    .catch(console.error);
+document.getElementById("btn-resume").onclick = () =>
+  api("/api/downloads/resume", { method: "POST" })
+    .then(() => refreshAll())
+    .catch(console.error);
 
-document.getElementById("btn-retry-failed")?.addEventListener("click", async () => {
-  await api("/api/downloads/retry-failed", { method: "POST" });
-  await refreshAll();
-});
+document.getElementById("btn-retry-failed")?.addEventListener("click", () =>
+  postAction("/api/downloads/retry-failed", "Could not retry failed downloads.")
+    .then(() => refreshAll())
+    .catch(() => {})
+);
 
 document.getElementById("btn-about-brand")?.addEventListener("click", () => openAboutDialog());
 document.getElementById("btn-about-close")?.addEventListener("click", () => {
@@ -4480,12 +4495,14 @@ async function convertScan() {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!paths.length) return;
-  await api("/api/convert/scan", { method: "POST", body: JSON.stringify({ paths }) });
+  await postAction("/api/convert/scan", "Convert scan failed.", {
+    body: JSON.stringify({ paths }),
+  });
   await refreshConvert();
 }
 
 async function convertStart() {
-  await api("/api/convert/start", { method: "POST" });
+  await postAction("/api/convert/start", "Convert batch could not start.");
   await refreshConvert();
 }
 
@@ -4860,7 +4877,7 @@ document.getElementById("library-history-filter")?.addEventListener("change", ()
 
 const PALETTE_COMMANDS = [
   { label: "Open Settings", keywords: "settings preferences", run: () => openSettingsDialog() },
-  { label: "Start downloads", keywords: "start run download", run: () => api("/api/downloads/start", { method: "POST" }).then(refreshAll) },
+  { label: "Start downloads", keywords: "start run download", run: () => postAction("/api/downloads/start", "Downloads could not start.").then(refreshAll).catch(() => {}) },
   { label: "Pause downloads", keywords: "pause hold", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
   { label: "Resume downloads", keywords: "resume continue", run: () => api("/api/downloads/resume", { method: "POST" }).then(refreshAll) },
   { label: "Start Convert batch", keywords: "convert encode start", run: () => convertStart() },
@@ -5010,7 +5027,9 @@ document.addEventListener("keydown", (e) => {
     flushAutoAddFromInput().catch(console.error);
   } else if (mod && e.key === "d") {
     e.preventDefault();
-    api("/api/downloads/start", { method: "POST" }).then(refreshAll).catch(console.error);
+    postAction("/api/downloads/start", "Downloads could not start.")
+      .then(refreshAll)
+      .catch(() => {});
   } else if (mod && e.key === "f") {
     e.preventDefault();
     focusActiveSearch();
