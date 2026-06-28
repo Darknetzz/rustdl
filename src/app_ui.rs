@@ -1228,8 +1228,11 @@ pub fn allocate_bottom_up_rect<R>(
     add: impl FnOnce(&mut egui::Ui) -> R,
 ) -> R {
     let height = finite_ui_span(height, 1.0).max(1.0);
-    let width = finite_ui_span(width, 1.0).max(1.0);
+    let max_w = clip_bounded_width(ui);
+    let mut width = finite_ui_span(width, 1.0).max(1.0).min(max_w);
     let left = ui.max_rect().min.x;
+    let right = (left + width).min(ui.clip_rect().right());
+    width = (right - left).max(1.0);
     let top = (body_bottom - height).max(ui.clip_rect().min.y);
     let rect = egui::Rect::from_min_max(
         egui::pos2(left, top),
@@ -1239,7 +1242,10 @@ pub fn allocate_bottom_up_rect<R>(
         egui::UiBuilder::new()
             .max_rect(rect)
             .layout(egui::Layout::top_down(egui::Align::Min)),
-        add,
+        |ui| {
+            ui.set_max_width(width);
+            add(ui)
+        },
     )
     .inner
 }

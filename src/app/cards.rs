@@ -6,8 +6,8 @@ use eframe::egui::{Color32, RichText};
 
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
-    compact_button_group, draw_meta_badge, draw_status_chip, left_button_row, popup_menu_above,
-    show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
+    clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, left_button_row,
+    popup_menu_above, show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -811,6 +811,47 @@ impl PydlApp {
         self.rebuild_queue_group_cache();
     }
 
+    fn draw_done_group_history_controls(
+        &mut self,
+        ui: &mut egui::Ui,
+        row_w: f32,
+        done_ids: &[u64],
+    ) {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        ui.label("History:");
+        let combo_w = (row_w * 0.38).clamp(72.0, 120.0);
+        egui::ComboBox::from_id_salt("history_filter_Done")
+            .width(combo_w)
+            .selected_text(match self.history_filter_days {
+                None => "All time".to_owned(),
+                Some(1) => "Last 24h".to_owned(),
+                Some(7) => "Last 7 days".to_owned(),
+                Some(30) => "Last 30 days".to_owned(),
+                Some(d) => format!("Last {d} days"),
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.history_filter_days, None, "All time");
+                ui.selectable_value(&mut self.history_filter_days, Some(1), "Last 24h");
+                ui.selectable_value(&mut self.history_filter_days, Some(7), "Last 7 days");
+                ui.selectable_value(&mut self.history_filter_days, Some(30), "Last 30 days");
+            });
+        let requeue_label = if row_w < 420.0 {
+            "Re-queue"
+        } else {
+            "Re-queue visible"
+        };
+        if ui
+            .small_button(requeue_label)
+            .on_hover_text("Move visible Done items back to Ready")
+            .clicked()
+        {
+            let n = self.requeue_done_items(done_ids);
+            if n > 0 {
+                self.append_log(&format!("Re-queued {n} done item(s)."));
+            }
+        }
+    }
+
     pub(super) fn draw_grouped_cards(&mut self, ui: &mut egui::Ui, outer_scroll_h: f32) {
         if self.item_index_by_id.len() != self.items.len() {
             self.rebuild_item_index();
@@ -851,70 +892,42 @@ impl PydlApp {
                     default_open,
                 )
                 .show_header(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        status_dot_with_label(ui, &header_text, header_color, true);
-                        if label == "Done" && !ids.is_empty() {
-                            let tail_w = ui.available_width().max(0.0);
-                            if tail_w > 0.0 {
-                                ui.allocate_ui_with_layout(
-                                    egui::vec2(tail_w, 0.0),
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        ui.set_max_width(tail_w);
-                                        ui.spacing_mut().item_spacing.x = 6.0;
-                                        if ui
-                                            .small_button("Re-queue visible")
-                                            .on_hover_text(
-                                                "Move visible Done items back to Ready",
-                                            )
-                                            .clicked()
-                                        {
-                                            let n = self.requeue_done_items(&ids);
-                                            if n > 0 {
-                                                self.append_log(&format!(
-                                                    "Re-queued {n} done item(s)."
-                                                ));
-                                            }
-                                        }
-                                        ui.label("History:");
-                                        egui::ComboBox::from_id_salt(format!(
-                                            "history_filter_{label}"
-                                        ))
-                                        .width(tail_w.min(120.0).max(88.0))
-                                        .selected_text(match self.history_filter_days {
-                                            None => "All time".to_owned(),
-                                            Some(1) => "Last 24h".to_owned(),
-                                            Some(7) => "Last 7 days".to_owned(),
-                                            Some(30) => "Last 30 days".to_owned(),
-                                            Some(d) => format!("Last {d} days"),
-                                        })
-                                        .show_ui(ui, |ui| {
-                                            ui.selectable_value(
-                                                &mut self.history_filter_days,
-                                                None,
-                                                "All time",
+                    let row_w = clip_bounded_width(ui);
+                    ui.set_max_width(row_w);
+                    if label == "Done" && !ids.is_empty() {
+                        const DONE_INLINE_MIN: f32 = 420.0;
+                        let mut drew_inline = false;
+                        if row_w >= DONE_INLINE_MIN {
+                            ui.horizontal(|ui| {
+                                ui.set_max_width(row_w);
+                                status_dot_with_label(ui, &header_text, header_color, true);
+                                let tail_w = ui.available_width().max(0.0);
+                                if tail_w >= 160.0 {
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            ui.set_max_width(tail_w);
+                                            self.draw_done_group_history_controls(
+                                                ui, tail_w, &ids,
                                             );
-                                            ui.selectable_value(
-                                                &mut self.history_filter_days,
-                                                Some(1),
-                                                "Last 24h",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.history_filter_days,
-                                                Some(7),
-                                                "Last 7 days",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.history_filter_days,
-                                                Some(30),
-                                                "Last 30 days",
-                                            );
-                                        });
-                                    },
-                                );
-                            }
+                                        },
+                                    );
+                                    drew_inline = true;
+                                }
+                            });
                         }
-                    });
+                        if !drew_inline {
+                            if row_w < DONE_INLINE_MIN {
+                                status_dot_with_label(ui, &header_text, header_color, true);
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                ui.set_max_width(row_w);
+                                self.draw_done_group_history_controls(ui, row_w, &ids);
+                            });
+                        }
+                    } else {
+                        status_dot_with_label(ui, &header_text, header_color, true);
+                    }
                 });
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);

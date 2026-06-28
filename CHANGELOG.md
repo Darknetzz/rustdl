@@ -24,6 +24,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Docked activity log reserves include the heading row; log height slider caps respect remaining panel space in both docked placements.
 - Undocked main footer (queue floating + log docked) uses the same bottom-anchored strip + log layout as the docked queue panel.
 - Queue panel progress bars, Done-group header controls, and list rows stay within the window width (no clipping on the right edge).
+- Done group History/Re-queue controls wrap on narrow queue panels instead of extending past the panel edge; docked queue footer width is clamped to the panel clip rect.
 
 ### Changed
 

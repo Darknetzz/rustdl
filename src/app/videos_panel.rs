@@ -514,7 +514,7 @@ impl PydlApp {
         }
 
         let content_top = ui.cursor().min.y;
-        let cw = content_width(ui).max(1.0);
+        let cw = crate::app_ui::clip_bounded_width(ui).max(1.0);
         let measured_footer = ui
             .ctx()
             .data(|d| d.get_temp::<f32>(queue_footer_height_id(layout.scroll_id)));
@@ -536,6 +536,7 @@ impl PydlApp {
         allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
             ui.add_space(2.0);
             let footer_top = ui.cursor().min.y;
+            self.constrain_content(ui);
             self.draw_videos_footer_toolbar(ui, !layout.is_docked());
             let footer_measured = (ui.min_rect().max.y - footer_top).max(0.0) + 2.0;
             ui.ctx().data_mut(|d| {
