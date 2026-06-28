@@ -15,17 +15,76 @@ pub fn metadata_extra_args(settings: &AppSettings) -> Vec<String> {
     args
 }
 
+/// yt-dlp `-f` filter clauses for minimum video height and frame rate (`0` = no minimum).
+pub fn download_min_format_suffix(min_height: u32, min_fps: u32) -> String {
+    let mut parts = Vec::new();
+    if min_height > 0 {
+        parts.push(format!("height>={min_height}"));
+    }
+    if min_fps > 0 {
+        parts.push(format!("fps>={min_fps}"));
+    }
+    parts
+        .into_iter()
+        .map(|p| format!("[{p}]"))
+        .collect::<String>()
+}
+
+fn apply_min_suffix_to_selector(selector: &str, suffix: &str) -> String {
+    if suffix.is_empty() {
+        return selector.to_owned();
+    }
+    let lower = selector.trim().to_ascii_lowercase();
+    if lower.starts_with("bestaudio") {
+        return selector.to_owned();
+    }
+    format!("{selector}{suffix}")
+}
+
+/// Applies minimum height/fps filters to each selector in a yt-dlp `-f` format string.
+pub fn apply_download_min_requirements(fmt: &str, min_height: u32, min_fps: u32) -> String {
+    let suffix = download_min_format_suffix(min_height, min_fps);
+    if suffix.is_empty() {
+        return fmt.to_owned();
+    }
+    fmt.split('/')
+        .map(|fallback| {
+            fallback
+                .split('+')
+                .map(|sel| apply_min_suffix_to_selector(sel.trim(), &suffix))
+                .collect::<Vec<_>>()
+                .join("+")
+        })
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn build_quality_format(max_height: Option<u32>, min_height: u32, min_fps: u32) -> String {
+    let video = match max_height {
+        Some(h) => format!("bestvideo[height<={h}]"),
+        None => "bestvideo".to_owned(),
+    };
+    let combined = match max_height {
+        Some(h) => format!("best[height<={h}]"),
+        None => "best".to_owned(),
+    };
+    let fmt = format!("{video}+bestaudio/{combined}");
+    apply_download_min_requirements(&fmt, min_height, min_fps)
+}
+
 pub fn quality_format_args(settings: &AppSettings) -> Vec<String> {
     let preset = settings.quality_preset.trim().to_ascii_lowercase();
     let custom = settings.quality_format_custom.trim();
+    let min_h = settings.download_min_height;
+    let min_fps = settings.download_min_fps;
     let fmt = match preset.as_str() {
-        "1080p" => "bestvideo[height<=1080]+bestaudio/best[height<=1080]",
-        "720p" => "bestvideo[height<=720]+bestaudio/best[height<=720]",
-        "audio" => "bestaudio/best",
-        "custom" if !custom.is_empty() => custom,
-        _ => "bestvideo+bestaudio/best",
+        "1080p" => build_quality_format(Some(1080), min_h, min_fps),
+        "720p" => build_quality_format(Some(720), min_h, min_fps),
+        "audio" => "bestaudio/best".to_owned(),
+        "custom" if !custom.is_empty() => apply_download_min_requirements(custom, min_h, min_fps),
+        _ => build_quality_format(None, min_h, min_fps),
     };
-    vec!["-f".to_owned(), fmt.to_owned()]
+    vec!["-f".to_owned(), fmt]
 }
 
 pub fn output_filename_template(settings: &AppSettings) -> String {
@@ -308,6 +367,49 @@ mod tests {
                 "-f".to_owned(),
                 "bestvideo[height<=1080]+bestaudio/best[height<=1080]".to_owned()
             ]
+        );
+    }
+
+    #[test]
+    fn quality_preset_with_min_height_and_fps() {
+        let mut s = base_settings();
+        s.quality_preset = "1080p".to_owned();
+        s.download_min_height = 720;
+        s.download_min_fps = 30;
+        assert_eq!(
+            quality_format_args(&s),
+            vec![
+                "-f".to_owned(),
+                "bestvideo[height<=1080][height>=720][fps>=30]+bestaudio/best[height<=1080][height>=720][fps>=30]"
+                    .to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn quality_preset_custom_with_min_requirements() {
+        let mut s = base_settings();
+        s.quality_preset = "custom".to_owned();
+        s.quality_format_custom = "bestvideo+bestaudio/best".to_owned();
+        s.download_min_height = 1080;
+        assert_eq!(
+            quality_format_args(&s),
+            vec![
+                "-f".to_owned(),
+                "bestvideo[height>=1080]+bestaudio/best[height>=1080]".to_owned()
+            ]
+        );
+    }
+
+    #[test]
+    fn audio_preset_ignores_min_requirements() {
+        let mut s = base_settings();
+        s.quality_preset = "audio".to_owned();
+        s.download_min_height = 1080;
+        s.download_min_fps = 60;
+        assert_eq!(
+            quality_format_args(&s),
+            vec!["-f".to_owned(), "bestaudio/best".to_owned()]
         );
     }
 

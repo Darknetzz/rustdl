@@ -17,6 +17,34 @@ use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
 const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
 
+const DOWNLOAD_MIN_HEIGHT_OPTIONS: &[(u32, &str)] = &[
+    (0, "Any"),
+    (480, "480p"),
+    (720, "720p"),
+    (1080, "1080p"),
+    (1440, "1440p"),
+    (2160, "4K (2160p)"),
+];
+
+const DOWNLOAD_MIN_FPS_OPTIONS: &[(u32, &str)] =
+    &[(0, "Any"), (24, "24"), (25, "25"), (30, "30"), (50, "50"), (60, "60")];
+
+fn download_min_height_label(value: u32) -> &'static str {
+    DOWNLOAD_MIN_HEIGHT_OPTIONS
+        .iter()
+        .find(|(v, _)| *v == value)
+        .map(|(_, label)| *label)
+        .unwrap_or("Any")
+}
+
+fn download_min_fps_label(value: u32) -> &'static str {
+    DOWNLOAD_MIN_FPS_OPTIONS
+        .iter()
+        .find(|(v, _)| *v == value)
+        .map(|(_, label)| *label)
+        .unwrap_or("Any")
+}
+
 fn settings_form_grid<R>(
     ui: &mut egui::Ui,
     id_salt: &str,
@@ -1372,6 +1400,58 @@ impl PydlApp {
                                         .hint_text("bestvideo+bestaudio/best"),
                                     )
                                     .changed();
+                                ui.end_row();
+                            }
+                            ui.label("Minimum height");
+                            egui::ComboBox::from_id_salt("settings_download_min_height")
+                                .selected_text(download_min_height_label(
+                                    self.settings.download_min_height,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in DOWNLOAD_MIN_HEIGHT_OPTIONS {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.download_min_height,
+                                                *v,
+                                                *label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                            ui.label("Minimum FPS");
+                            egui::ComboBox::from_id_salt("settings_download_min_fps")
+                                .selected_text(download_min_fps_label(
+                                    self.settings.download_min_fps,
+                                ))
+                                .show_ui(ui, |ui| {
+                                    for (v, label) in DOWNLOAD_MIN_FPS_OPTIONS {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.download_min_fps,
+                                                *v,
+                                                *label,
+                                            )
+                                            .changed();
+                                    }
+                                });
+                            ui.end_row();
+                            if self.settings.download_min_height > 0
+                                || self.settings.download_min_fps > 0
+                            {
+                                ui.label("Effective -f filter");
+                                let fmt = crate::ytdlp_download_args::quality_format_args(
+                                    &self.settings,
+                                )
+                                .into_iter()
+                                .nth(1)
+                                .unwrap_or_default();
+                                ui.label(
+                                    RichText::new(fmt)
+                                        .small()
+                                        .monospace()
+                                        .color(crate::theme::TEXT_MUTED),
+                                );
                                 ui.end_row();
                             }
                             ui.label("Merge container");

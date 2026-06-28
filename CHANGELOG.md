@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- **Settings → Downloader → Quality & network**: optional **Minimum height** and **Minimum FPS** for downloads (yt-dlp `height>=` / `fps>=` filters on quality presets and custom `-f` strings; audio-only preset unchanged).
+
 ### Fixed
 
 - Web UI start errors and banners use plain-text navigation hints (no missing arrow glyph in the default UI font).

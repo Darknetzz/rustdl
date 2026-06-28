@@ -284,6 +284,12 @@ pub struct AppSettings {
     /// Custom `-f` string when `quality_preset` is `custom`.
     #[serde(default)]
     pub quality_format_custom: String,
+    /// Minimum video height for downloads (`0` = no minimum). Passed to yt-dlp as `height>=N`.
+    #[serde(default)]
+    pub download_min_height: u32,
+    /// Minimum video frame rate for downloads (`0` = no minimum). Passed to yt-dlp as `fps>=N`.
+    #[serde(default)]
+    pub download_min_fps: u32,
     /// Merge container: `default`, `mp4`, `mkv`, or `webm`.
     #[serde(default = "default_merge_container")]
     pub merge_container: String,
@@ -704,6 +710,8 @@ impl Default for AppSettings {
             post_download_organize: false,
             quality_preset: default_quality_preset(),
             quality_format_custom: String::new(),
+            download_min_height: 0,
+            download_min_fps: 0,
             merge_container: default_merge_container(),
             show_first_run_hint: default_show_first_run_hint(),
             yt_download_archive: String::new(),
@@ -998,6 +1006,8 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
         _ => "default".to_owned(),
     };
     cfg.playlist_preview_cap = cfg.playlist_preview_cap.clamp(1, 500);
+    cfg.download_min_height = cfg.download_min_height.clamp(0, 4320);
+    cfg.download_min_fps = cfg.download_min_fps.clamp(0, 240);
     if cfg.active_profile.trim().is_empty() {
         cfg.active_profile = default_active_profile();
     }

@@ -3132,6 +3132,8 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-post-organize", s.post_download_organize);
   setVal("set-quality", s.quality_preset);
   setVal("set-quality-custom", s.quality_format_custom);
+  setVal("set-download-min-height", s.download_min_height ?? 0);
+  setVal("set-download-min-fps", s.download_min_fps ?? 0);
   setVal("set-merge-container", s.merge_container);
   setVal("set-playlist-cap", s.playlist_preview_cap);
   setVal("set-download-archive", s.yt_download_archive);
@@ -3251,6 +3253,10 @@ function collectSettingsForm(base) {
   s.post_download_organize = document.getElementById("set-post-organize").checked;
   s.quality_preset = document.getElementById("set-quality").value;
   s.quality_format_custom = document.getElementById("set-quality-custom").value;
+  s.download_min_height =
+    parseInt(document.getElementById("set-download-min-height").value, 10) || 0;
+  s.download_min_fps =
+    parseInt(document.getElementById("set-download-min-fps").value, 10) || 0;
   s.merge_container = document.getElementById("set-merge-container").value;
   s.playlist_preview_cap =
     parseInt(document.getElementById("set-playlist-cap").value, 10) || 20;

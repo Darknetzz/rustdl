@@ -29,6 +29,10 @@ pub struct DownloadProfileFields {
     pub ffmpeg_extract_audio_mp3: bool,
     pub quality_preset: String,
     pub quality_format_custom: String,
+    #[serde(default)]
+    pub download_min_height: u32,
+    #[serde(default)]
+    pub download_min_fps: u32,
     pub merge_container: String,
     pub output_filename_template: String,
     #[serde(default = "default_profile_organize_folder")]
@@ -91,6 +95,8 @@ impl Default for DownloadProfileFields {
             ffmpeg_extract_audio_mp3: false,
             quality_preset: "best".to_owned(),
             quality_format_custom: String::new(),
+            download_min_height: 0,
+            download_min_fps: 0,
             merge_container: "default".to_owned(),
             output_filename_template: crate::config::DEFAULT_OUTPUT_FILENAME_TEMPLATE.to_owned(),
             download_organize_folder: default_profile_organize_folder(),
@@ -137,6 +143,8 @@ impl DownloadProfile {
         settings.ffmpeg_extract_audio_mp3 = f.ffmpeg_extract_audio_mp3;
         settings.quality_preset = f.quality_preset.clone();
         settings.quality_format_custom = f.quality_format_custom.clone();
+        settings.download_min_height = f.download_min_height;
+        settings.download_min_fps = f.download_min_fps;
         settings.merge_container = f.merge_container.clone();
         settings.output_filename_template = f.output_filename_template.clone();
         settings.download_organize_folder = f.download_organize_folder.clone();
@@ -175,6 +183,8 @@ impl DownloadProfile {
                 ffmpeg_extract_audio_mp3: settings.ffmpeg_extract_audio_mp3,
                 quality_preset: settings.quality_preset.clone(),
                 quality_format_custom: settings.quality_format_custom.clone(),
+                download_min_height: settings.download_min_height,
+                download_min_fps: settings.download_min_fps,
                 merge_container: settings.merge_container.clone(),
                 output_filename_template: settings.output_filename_template.clone(),
                 download_organize_folder: settings.download_organize_folder.clone(),
