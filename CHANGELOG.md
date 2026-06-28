@@ -23,6 +23,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Settings **UI scale** always uses 5% steps (85%–150%); existing configs snap on load; default is 100% instead of 108%.
+- Settings window no longer jumps to full viewport width when opening the **Shared** tab (UI scale stepper layout).
 
 ## [0.8.7]
 

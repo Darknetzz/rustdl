@@ -391,17 +391,17 @@ impl PydlApp {
                                 &mut self.settings.log_relative_time,
                             );
                             ui.label("UI scale");
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            left_button_row(ui, |ui| {
                                 let pct = (self.settings.ui_scale * 100.0).round() as i32;
                                 let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
                                 let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
                                 button_group(ui, "ui_scale", |g| {
                                     if g
-                                        .secondary("+", !at_max)
-                                        .on_hover_text("Increase UI scale")
+                                        .secondary("−", !at_min)
+                                        .on_hover_text("Decrease UI scale")
                                         .clicked()
                                     {
-                                        bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
+                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
                                         changed = true;
                                     }
                                     if g
@@ -421,11 +421,11 @@ impl PydlApp {
                                         changed = true;
                                     }
                                     if g
-                                        .secondary("−", !at_min)
-                                        .on_hover_text("Decrease UI scale")
+                                        .secondary("+", !at_max)
+                                        .on_hover_text("Increase UI scale")
                                         .clicked()
                                     {
-                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
+                                        bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
                                         changed = true;
                                     }
                                 });
