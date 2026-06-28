@@ -64,15 +64,37 @@ fn icon_rgba_64() -> Vec<u8> {
     rgba
 }
 
-/// Icon for the system tray.
+/// Icon for the Windows system tray (`tray-icon` crate).
+#[cfg(windows)]
 pub fn tray_icon() -> tray_icon::Icon {
-    let icon = window_icon();
-    tray_icon::Icon::from_rgba(
-        icon.rgba,
-        icon.width as u32,
-        icon.height as u32,
-    )
-    .expect("tray icon rgba")
+    let (rgba, width, height) = tray_icon_rgba();
+    tray_icon::Icon::from_rgba(rgba, width, height).expect("tray icon rgba")
+}
+
+/// Icon pixmap for the Linux StatusNotifierItem tray (`ksni` crate).
+#[cfg(target_os = "linux")]
+pub fn ksni_tray_icon() -> ksni::Icon {
+    let (rgba, width, height) = tray_icon_rgba();
+    ksni::Icon {
+        width: width as i32,
+        height: height as i32,
+        data: rgba_to_argb32(&rgba),
+    }
+}
+
+fn tray_icon_rgba() -> (Vec<u8>, u32, u32) {
+    let rgba = icon_rgba_64();
+    (rgba, 64, 64)
+}
+
+/// RGBA → ARGB32 bytes for freedesktop tray icons.
+#[cfg(target_os = "linux")]
+fn rgba_to_argb32(rgba: &[u8]) -> Vec<u8> {
+    let mut argb = Vec::with_capacity(rgba.len());
+    for px in rgba.chunks_exact(4) {
+        argb.extend_from_slice(&[px[3], px[0], px[1], px[2]]);
+    }
+    argb
 }
 
 /// Icon for the native window / taskbar (high resolution for Windows scaling).

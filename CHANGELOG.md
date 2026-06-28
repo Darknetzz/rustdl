@@ -18,6 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Linux system tray no longer pulls vulnerable **glib** 0.18.x (Dependabot / RUSTSEC-2024-0429); tray icons use D-Bus StatusNotifierItem instead of libappindicator/GTK.
 - Transient download timeouts and connection errors can recover automatically instead of requiring a manual retry that deletes partial output.
 - Downloads that fail with **Requested format is not available** automatically retry once with `-f best` instead of stopping on strict quality or per-item format overrides.
 - Failed downloads show clearer hints for common yt-dlp errors (generic/flashvars, unsupported URL, private video, format issues) instead of only raw extractor text.

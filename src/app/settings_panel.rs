@@ -356,9 +356,9 @@ impl PydlApp {
                             let tray_hover = if cfg!(target_os = "linux") {
                                 "Hide the window in the notification area when you minimize or \
                                  click the close button; use the tray icon to show rustdl again \
-                                 or choose Quit to exit. On Linux, requires a desktop with a \
-                                 system tray (libappindicator); disabling the option may require \
-                                 a restart to remove the tray icon."
+                                 or choose Quit to exit. On Linux this uses the \
+                                 StatusNotifierItem protocol (D-Bus); disabling the option may \
+                                 require a restart to remove the tray icon."
                             } else {
                                 "Hide the window in the notification area when you minimize or \
                                  click the close button; use the tray icon to show rustdl again \
