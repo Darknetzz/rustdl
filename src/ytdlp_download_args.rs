@@ -56,13 +56,33 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
         args.push("infinite".to_owned());
         args.push("--fragment-retries".to_owned());
         args.push("infinite".to_owned());
+        args.push("--extractor-retries".to_owned());
+        args.push("infinite".to_owned());
+        args.push("--file-access-retries".to_owned());
+        args.push("infinite".to_owned());
     } else {
         let n = settings.yt_dlp_retry_count.to_string();
         args.push("--retries".to_owned());
         args.push(n.clone());
         args.push("--fragment-retries".to_owned());
+        args.push(n.clone());
+        args.push("--extractor-retries".to_owned());
+        args.push(n.clone());
+        args.push("--file-access-retries".to_owned());
         args.push(n);
     }
+    if settings.yt_dlp_socket_timeout_secs > 0 {
+        args.push("--socket-timeout".to_owned());
+        args.push(settings.yt_dlp_socket_timeout_secs.to_string());
+    }
+    if settings.yt_dlp_retry_sleep_secs > 0 {
+        let sleep = settings.yt_dlp_retry_sleep_secs.to_string();
+        args.push("--retry-sleep".to_owned());
+        args.push(sleep.clone());
+        args.push("--retry-sleep".to_owned());
+        args.push(format!("fragment:linear=1:10"));
+    }
+    args.push("--continue".to_owned());
     args.extend(ytdlp::impersonate_args_from_setting(
         &settings.yt_dlp_impersonate,
     ));
@@ -322,6 +342,33 @@ mod tests {
         let mut s2 = s.clone();
         prof.apply_to(&mut s2);
         assert_eq!(tpl_with_profile, compose_output_template(&s2));
+    }
+
+    #[test]
+    fn download_args_network_resilience_flags() {
+        let mut s = base_settings();
+        s.yt_dlp_socket_timeout_secs = 60;
+        s.yt_dlp_retry_sleep_secs = 3;
+        let args = build_download_extra_args(&s);
+        assert!(args.contains(&"--socket-timeout".to_owned()));
+        assert!(args.contains(&"60".to_owned()));
+        assert!(args.contains(&"--retry-sleep".to_owned()));
+        assert!(args.contains(&"3".to_owned()));
+        assert!(args.contains(&"fragment:linear=1:10".to_owned()));
+        assert!(args.contains(&"--continue".to_owned()));
+        assert!(args.contains(&"--extractor-retries".to_owned()));
+        assert!(args.contains(&"--file-access-retries".to_owned()));
+    }
+
+    #[test]
+    fn download_args_skips_zero_timeout_and_sleep() {
+        let mut s = base_settings();
+        s.yt_dlp_socket_timeout_secs = 0;
+        s.yt_dlp_retry_sleep_secs = 0;
+        let args = build_download_extra_args(&s);
+        assert!(!args.contains(&"--socket-timeout".to_owned()));
+        assert!(!args.contains(&"--retry-sleep".to_owned()));
+        assert!(args.contains(&"--continue".to_owned()));
     }
 
     #[test]

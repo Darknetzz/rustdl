@@ -39,6 +39,7 @@ pub mod win_icon;
 pub mod win_window;
 pub mod ytdlp;
 pub mod ytdlp_download_args;
+pub mod ytdlp_errors;
 
 use std::process;
 use std::sync::Arc;

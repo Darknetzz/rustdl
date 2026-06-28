@@ -13,6 +13,10 @@ pub struct DownloadProfileFields {
     pub yt_dlp_extra_args: String,
     pub yt_dlp_unlimited_retries: bool,
     pub yt_dlp_retry_count: u32,
+    #[serde(default = "default_profile_socket_timeout_secs")]
+    pub yt_dlp_socket_timeout_secs: u32,
+    #[serde(default = "default_profile_retry_sleep_secs")]
+    pub yt_dlp_retry_sleep_secs: u32,
     pub yt_ignore_errors: bool,
     pub yt_restrict_filenames: bool,
     pub yt_write_info_json: bool,
@@ -51,6 +55,14 @@ fn default_profile_verify_output() -> bool {
     true
 }
 
+fn default_profile_socket_timeout_secs() -> u32 {
+    60
+}
+
+fn default_profile_retry_sleep_secs() -> u32 {
+    3
+}
+
 fn default_profile_organize_folder() -> String {
     crate::download_organize::FOLDER_FLAT.to_owned()
 }
@@ -65,6 +77,8 @@ impl Default for DownloadProfileFields {
             yt_dlp_extra_args: "--merge-output-format mp4".to_owned(),
             yt_dlp_unlimited_retries: true,
             yt_dlp_retry_count: 10,
+            yt_dlp_socket_timeout_secs: default_profile_socket_timeout_secs(),
+            yt_dlp_retry_sleep_secs: default_profile_retry_sleep_secs(),
             yt_ignore_errors: false,
             yt_restrict_filenames: false,
             yt_write_info_json: false,
@@ -109,6 +123,8 @@ impl DownloadProfile {
         settings.yt_dlp_extra_args = f.yt_dlp_extra_args.clone();
         settings.yt_dlp_unlimited_retries = f.yt_dlp_unlimited_retries;
         settings.yt_dlp_retry_count = f.yt_dlp_retry_count;
+        settings.yt_dlp_socket_timeout_secs = f.yt_dlp_socket_timeout_secs;
+        settings.yt_dlp_retry_sleep_secs = f.yt_dlp_retry_sleep_secs;
         settings.yt_ignore_errors = f.yt_ignore_errors;
         settings.yt_restrict_filenames = f.yt_restrict_filenames;
         settings.yt_write_info_json = f.yt_write_info_json;
@@ -145,6 +161,8 @@ impl DownloadProfile {
                 yt_dlp_extra_args: settings.yt_dlp_extra_args.clone(),
                 yt_dlp_unlimited_retries: settings.yt_dlp_unlimited_retries,
                 yt_dlp_retry_count: settings.yt_dlp_retry_count,
+                yt_dlp_socket_timeout_secs: settings.yt_dlp_socket_timeout_secs,
+                yt_dlp_retry_sleep_secs: settings.yt_dlp_retry_sleep_secs,
                 yt_ignore_errors: settings.yt_ignore_errors,
                 yt_restrict_filenames: settings.yt_restrict_filenames,
                 yt_write_info_json: settings.yt_write_info_json,

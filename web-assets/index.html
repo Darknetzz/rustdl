@@ -374,6 +374,9 @@
           <h3>Retries</h3>
           <label class="check"><input type="checkbox" id="set-unlimited-retries" /> Unlimited HTTP and fragment retries</label>
           <label>Retry count (when not unlimited) <input type="number" id="set-retry-count" min="1" max="999" /></label>
+          <label>Socket timeout (seconds, 0 = yt-dlp default) <input type="number" id="set-socket-timeout" min="0" max="3600" /></label>
+          <label>Sleep between retries (seconds, 0 = off) <input type="number" id="set-retry-sleep" min="0" max="300" /></label>
+          <label>Auto-retry on connection errors (0–5) <input type="number" id="set-download-auto-retries" min="0" max="5" /></label>
 
           <h3>Cookies and impersonate</h3>
           <label>Cookies (file or browser) <input type="text" id="set-cookies" /></label>

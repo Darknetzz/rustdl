@@ -1377,10 +1377,43 @@ impl PydlApp {
                                 )
                                 .changed();
                             ui.end_row();
+                            ui.label("Socket timeout (seconds, 0 = yt-dlp default)");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.yt_dlp_socket_timeout_secs)
+                                        .range(0_u32..=3600)
+                                        .speed(1),
+                                )
+                                .on_hover_text("Maps to yt-dlp --socket-timeout.")
+                                .changed();
+                            ui.end_row();
+                            ui.label("Sleep between retries (seconds, 0 = off)");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.yt_dlp_retry_sleep_secs)
+                                        .range(0_u32..=300)
+                                        .speed(1),
+                                )
+                                .on_hover_text("Maps to yt-dlp --retry-sleep.")
+                                .changed();
+                            ui.end_row();
+                            ui.label("Auto-retry on connection errors (0–5)");
+                            changed |= ui
+                                .add(
+                                    egui::DragValue::new(&mut self.settings.yt_dlp_download_auto_retries)
+                                        .range(0_u32..=5)
+                                        .speed(1),
+                                )
+                                .on_hover_text(
+                                    "rustdl retries the whole download on transient network errors, keeping partial files.",
+                                )
+                                .changed();
+                            ui.end_row();
                         });
                         ui.label(
                             RichText::new(
-                                "Applies to each download request and to DASH/HLS fragments.",
+                                "Applies to each download request and to DASH/HLS fragments. \
+                                 Auto-retry resumes partial downloads without deleting .part files.",
                             )
                             .small()
                             .color(Color32::GRAY),

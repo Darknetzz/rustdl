@@ -9,6 +9,7 @@ use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
+use crate::ytdlp_errors::is_transient_download_error;
 
 type DownloadJob = (u64, String, Arc<AtomicBool>, Vec<String>, String);
 
@@ -31,6 +32,99 @@ fn should_retry_without_embed_thumbnail(extra_args: &[String], err_text: &str) -
         || msg.contains("unable to embed")
         || msg.contains("could not determine image type")
         || msg.contains("conversion failed")
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn run_download_attempt(
+    target_url: &str,
+    output_dir: &str,
+    output_filename_template: &str,
+    extra_args: &[String],
+    yt_bin: &str,
+    ffmpeg_path: &str,
+    subprocess_priority: &str,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    bus: &UiEventBus,
+    item_id: u64,
+) -> Result<(), anyhow::Error> {
+    ytdlp::stream_download_with_bins(
+        target_url,
+        output_dir,
+        output_filename_template,
+        extra_args,
+        yt_bin,
+        ffmpeg_path,
+        subprocess_priority,
+        cancel_flag,
+        |line| {
+            try_send_ui(bus, UiEvent::DownloadLine { item_id, line });
+        },
+    )
+    .await
+}
+
+async fn download_with_transient_retries(
+    item_id: u64,
+    target_url: &str,
+    output_dir: &str,
+    output_filename_template: &str,
+    extra_args: &[String],
+    yt_bin: &str,
+    ffmpeg_path: &str,
+    subprocess_priority: &str,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    bus: &UiEventBus,
+    auto_retries: u32,
+    retry_sleep_secs: u32,
+) -> Result<(), String> {
+    let max_transient = auto_retries;
+    let mut transient_attempt = 0u32;
+    loop {
+        if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err("Cancelled by user.".to_owned());
+        }
+        match run_download_attempt(
+            target_url,
+            output_dir,
+            output_filename_template,
+            extra_args,
+            yt_bin,
+            ffmpeg_path,
+            subprocess_priority,
+            cancel_flag.clone(),
+            bus,
+            item_id,
+        )
+        .await
+        {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                let err_text = e.to_string();
+                if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                    return Err("Cancelled by user.".to_owned());
+                }
+                if transient_attempt < max_transient
+                    && is_transient_download_error(&err_text)
+                {
+                    transient_attempt += 1;
+                    try_send_ui(
+                        bus,
+                        UiEvent::DownloadLine {
+                            item_id,
+                            line: format!(
+                                "Connection issue; retrying ({transient_attempt}/{max_transient})…"
+                            ),
+                        },
+                    );
+                    let sleep_secs =
+                        u64::from(retry_sleep_secs.max(1)) * u64::from(transient_attempt);
+                    tokio::time::sleep(std::time::Duration::from_secs(sleep_secs)).await;
+                    continue;
+                }
+                return Err(err_text);
+            }
+        }
+    }
 }
 
 pub(crate) fn spawn_update_check(
@@ -219,6 +313,8 @@ pub(crate) fn spawn_download_worker(
     yt_bin: String,
     ffmpeg_path: String,
     subprocess_priority: String,
+    download_auto_retries: u32,
+    retry_sleep_secs: u32,
     urls: Vec<DownloadJob>,
 ) {
     let bus = bus.clone();
@@ -243,7 +339,8 @@ pub(crate) fn spawn_download_worker(
                     line: "starting".to_owned(),
                 },
             );
-            let res = ytdlp::stream_download_with_bins(
+            let res = download_with_transient_retries(
+                item_id,
                 &target_url,
                 &output_dir,
                 &output_filename_template,
@@ -252,13 +349,13 @@ pub(crate) fn spawn_download_worker(
                 &ffmpeg_path,
                 &subprocess_priority,
                 cancel_flag.clone(),
-                |line| {
-                    try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });
-                },
+                &bus,
+                download_auto_retries,
+                retry_sleep_secs,
             )
             .await;
             match res {
-                Ok(_) => {
+                Ok(()) => {
                     try_send_ui(
                         &bus,
                         UiEvent::DownloadDone {
@@ -268,8 +365,7 @@ pub(crate) fn spawn_download_worker(
                         },
                     );
                 }
-                Err(e) => {
-                    let err_text = e.to_string();
+                Err(err_text) => {
                     if should_retry_without_embed_thumbnail(&extra_args, &err_text) {
                         let retry_args = remove_embed_thumbnail_arg(&extra_args);
                         try_send_ui(
@@ -280,7 +376,8 @@ pub(crate) fn spawn_download_worker(
                                     .to_owned(),
                             },
                         );
-                        let retry_res = ytdlp::stream_download_with_bins(
+                        let retry_res = download_with_transient_retries(
+                            item_id,
                             &target_url,
                             &output_dir,
                             &output_filename_template,
@@ -289,13 +386,13 @@ pub(crate) fn spawn_download_worker(
                             &ffmpeg_path,
                             &subprocess_priority,
                             cancel_flag.clone(),
-                            |line| {
-                                try_send_ui(&bus, UiEvent::DownloadLine { item_id, line });
-                            },
+                            &bus,
+                            download_auto_retries,
+                            retry_sleep_secs,
                         )
                         .await;
                         match retry_res {
-                            Ok(_) => {
+                            Ok(()) => {
                                 try_send_ui(
                                     &bus,
                                     UiEvent::DownloadDone {

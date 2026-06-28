@@ -3142,6 +3142,9 @@ function populateSettingsForm(s, commandPreview) {
 
   setCheck("set-unlimited-retries", s.yt_dlp_unlimited_retries);
   setVal("set-retry-count", s.yt_dlp_retry_count);
+  setVal("set-socket-timeout", s.yt_dlp_socket_timeout_secs);
+  setVal("set-retry-sleep", s.yt_dlp_retry_sleep_secs);
+  setVal("set-download-auto-retries", s.yt_dlp_download_auto_retries);
   setVal("set-cookies", s.yt_dlp_cookies);
   setVal("set-impersonate", s.yt_dlp_impersonate);
   setVal("set-extra-args", s.yt_dlp_extra_args);
@@ -3251,6 +3254,9 @@ function collectSettingsForm(base) {
 
   s.yt_dlp_unlimited_retries = document.getElementById("set-unlimited-retries").checked;
   s.yt_dlp_retry_count = parseInt(document.getElementById("set-retry-count").value, 10) || 10;
+  s.yt_dlp_socket_timeout_secs = parseInt(document.getElementById("set-socket-timeout").value, 10) || 0;
+  s.yt_dlp_retry_sleep_secs = parseInt(document.getElementById("set-retry-sleep").value, 10) || 0;
+  s.yt_dlp_download_auto_retries = parseInt(document.getElementById("set-download-auto-retries").value, 10) || 0;
   s.yt_dlp_cookies = document.getElementById("set-cookies").value;
   s.yt_dlp_impersonate = document.getElementById("set-impersonate").value;
   s.yt_dlp_extra_args = document.getElementById("set-extra-args").value;

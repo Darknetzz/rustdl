@@ -817,8 +817,23 @@ pub fn parse_progress_line(line: &str) -> (Option<f32>, Option<String>) {
     (pct, size)
 }
 
+/// yt-dlp sleep, retry, or warning lines worth showing on the queue card.
+pub fn is_download_status_line(line: &str) -> bool {
+    let lower = line.trim().to_ascii_lowercase();
+    lower.contains("sleeping")
+        || lower.contains("retry")
+        || lower.contains("fragment")
+        || lower.contains("waiting")
+        || lower.contains("connection issue")
+        || lower.starts_with("warning:")
+        || lower.starts_with("error:")
+}
+
 /// yt-dlp progress lines that should not replace the card detail text (footer already shows stats).
 pub fn is_download_progress_spam_line(line: &str) -> bool {
+    if is_download_status_line(line) {
+        return false;
+    }
     let clean = line.trim();
     if clean.starts_with(PROGRESS_PREFIX) {
         return true;

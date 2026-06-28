@@ -137,6 +137,9 @@ pub enum UiEvent {
 
 /// yt-dlp progress lines that would flood the log if recorded every event.
 pub fn is_throttled_download_log_line(line: &str) -> bool {
+    if crate::ytdlp::is_download_status_line(line) {
+        return false;
+    }
     let trimmed = line.trim();
     if trimmed.starts_with(crate::ytdlp::PROGRESS_PREFIX) {
         return true;

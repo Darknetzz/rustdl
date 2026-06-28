@@ -224,6 +224,11 @@ Presets update current settings immediately, and you can still tweak any individ
 | Download archive | Skip already-archived videos; file path written by `--download-archive` | `--download-archive` |
 | Proxy | HTTP/HTTPS/SOCKS proxy URL | `--proxy` |
 | Speed limit | Max download rate (e.g. `500K`, `1M`) | `--limit-rate` |
+| Unlimited retries | Retry HTTP and fragment requests indefinitely | `--retries infinite --fragment-retries infinite` |
+| Retry count | Fixed retry count when unlimited is off | `--retries N --fragment-retries N` |
+| Socket timeout | Seconds to wait per request (`0` = yt-dlp default) | `--socket-timeout SECONDS` |
+| Sleep between retries | Pause between yt-dlp retries (`0` = off) | `--retry-sleep SECONDS` |
+| Auto-retry on connection errors | rustdl whole-download retries on transient network errors (`0`–`5`; keeps partial files) | *(app-level)* |
 
 ### Post-process
 

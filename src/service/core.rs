@@ -1488,6 +1488,8 @@ impl DownloadCore {
                 yt_dlp_bin.clone(),
                 ffmpeg_bin.clone(),
                 self.settings.subprocess_priority.clone(),
+                self.settings.yt_dlp_download_auto_retries,
+                self.settings.yt_dlp_retry_sleep_secs,
                 urls,
             );
         }

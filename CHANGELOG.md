@@ -13,8 +13,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **Settings → Shared → Minimize to system tray** (Windows and Linux): hide the window in the notification area when you minimize or click the close button; click the tray icon to restore, or use **Quit** in the tray menu to exit.
+- **Settings → Download → Retries**: socket timeout, sleep between yt-dlp retries, and auto-retry on connection errors (0–5 whole-download retries that keep partial files).
 
 ### Fixed
+
+- Transient download timeouts and connection errors can recover automatically instead of requiring a manual retry that deletes partial output.
 
 - Video queue footer height now uses the larger of the width estimate and last frame's measured height, so wrapped convert footers no longer overlap the list after resize.
 - Docked activity log reserves include the heading row; log height slider caps respect remaining panel space in both docked placements.
@@ -23,6 +26,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Downloads pass `--continue`, `--socket-timeout`, `--retry-sleep`, and aligned extractor/file-access retries to yt-dlp; queue cards show sleep/fragment-retry status lines while waiting.
 - Short docked queue panels switch large card groups to list rows sooner to avoid awkward nested scrolling.
 - When the window hits minimum size and the queue auto-undocks, a dismissible banner explains how to show or re-dock the queue.
 

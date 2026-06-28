@@ -126,6 +126,15 @@ pub struct AppSettings {
     /// Used when `yt_dlp_unlimited_retries` is false (yt-dlp default is 10).
     #[serde(default = "default_yt_dlp_retry_count")]
     pub yt_dlp_retry_count: u32,
+    /// Passed as `--socket-timeout` when > 0 (seconds to wait per request).
+    #[serde(default = "default_yt_dlp_socket_timeout_secs")]
+    pub yt_dlp_socket_timeout_secs: u32,
+    /// Passed as `--retry-sleep` when > 0 (seconds between yt-dlp retries).
+    #[serde(default = "default_yt_dlp_retry_sleep_secs")]
+    pub yt_dlp_retry_sleep_secs: u32,
+    /// Whole-download retries in rustdl on transient connection errors (0 = off).
+    #[serde(default = "default_yt_dlp_download_auto_retries")]
+    pub yt_dlp_download_auto_retries: u32,
     pub yt_ignore_errors: bool,
     pub yt_restrict_filenames: bool,
     pub yt_write_info_json: bool,
@@ -583,6 +592,18 @@ fn default_yt_dlp_retry_count() -> u32 {
     10
 }
 
+fn default_yt_dlp_socket_timeout_secs() -> u32 {
+    60
+}
+
+fn default_yt_dlp_retry_sleep_secs() -> u32 {
+    3
+}
+
+fn default_yt_dlp_download_auto_retries() -> u32 {
+    2
+}
+
 fn default_downloader_options_expanded() -> bool {
     true
 }
@@ -609,6 +630,9 @@ impl Default for AppSettings {
             ffprobe_path: String::new(),
             yt_dlp_unlimited_retries: true,
             yt_dlp_retry_count: 10,
+            yt_dlp_socket_timeout_secs: default_yt_dlp_socket_timeout_secs(),
+            yt_dlp_retry_sleep_secs: default_yt_dlp_retry_sleep_secs(),
+            yt_dlp_download_auto_retries: default_yt_dlp_download_auto_retries(),
             yt_ignore_errors: false,
             yt_restrict_filenames: false,
             yt_write_info_json: false,
@@ -814,6 +838,9 @@ pub fn load_settings() -> AppSettings {
     cfg.log_max_chars = cfg.log_max_chars.clamp(2_000, 200_000);
     cfg.ui_scale = cfg.ui_scale.clamp(0.85, 1.5);
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
+    cfg.yt_dlp_socket_timeout_secs = cfg.yt_dlp_socket_timeout_secs.clamp(0, 3600);
+    cfg.yt_dlp_retry_sleep_secs = cfg.yt_dlp_retry_sleep_secs.clamp(0, 300);
+    cfg.yt_dlp_download_auto_retries = cfg.yt_dlp_download_auto_retries.clamp(0, 5);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
     cfg.undocked_footer_height = cfg.undocked_footer_height.clamp(100.0, 600.0);
     cfg.log_float_width = cfg.log_float_width.clamp(400.0, 2400.0);
