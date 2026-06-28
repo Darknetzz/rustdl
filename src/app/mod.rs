@@ -1376,16 +1376,18 @@ impl PydlApp {
             .frame(modal_frame)
             .collapsible(false)
             .resizable(true)
-            .default_width(480.0)
+            .default_width(520.0)
             .min_width(360.0)
-            .min_height(160.0)
+            .min_height(200.0)
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .show(ctx, |ui| {
                 ui.set_width(ui.available_width());
                 ui.label(
-                    RichText::new("Output folder and download profile for new queue items.")
-                        .small()
-                        .color(crate::theme::TEXT_MUTED),
+                    RichText::new(
+                        "Output folder, download profile, and network retry settings for downloads.",
+                    )
+                    .small()
+                    .color(crate::theme::TEXT_MUTED),
                 );
                 ui.add_space(8.0);
                 self.draw_downloader_options_editor(ui);
@@ -1476,6 +1478,12 @@ impl PydlApp {
                         }
                     });
             });
+        }
+        ui.add_space(8.0);
+        ui.separator();
+        ui.label(RichText::new("Retries & network").strong());
+        if self.draw_download_retry_settings(ui, "downloader_options_retries") {
+            self.persist_settings();
         }
     }
 

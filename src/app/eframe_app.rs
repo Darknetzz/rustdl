@@ -646,7 +646,7 @@ impl PydlApp {
                     self.downloader_options_edit_open = true;
                 }
                 if g.secondary(&format!("{} Edit", ui_icons::SETTINGS), true)
-                    .on_hover_text("Change output folder and download profile")
+                    .on_hover_text("Change output folder, profile, and network retry settings")
                     .clicked()
                 {
                     self.downloader_options_edit_open = true;

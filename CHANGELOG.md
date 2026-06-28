@@ -14,6 +14,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - **Settings → Shared → Minimize to system tray** (Windows and Linux): hide the window in the notification area when you minimize or click the close button; click the tray icon to restore, or use **Quit** in the tray menu to exit.
 - **Settings → Download → Retries**: socket timeout, sleep between yt-dlp retries, and auto-retry on connection errors (0–5 whole-download retries that keep partial files).
+- **Download options** dialog (toolbar under the URL box): same retry and network settings alongside output folder and profile.
 
 ### Fixed
 

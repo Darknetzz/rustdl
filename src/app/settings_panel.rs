@@ -190,6 +190,75 @@ fn draw_effective_command_preview(ui: &mut egui::Ui, command_preview: &str) {
 }
 
 impl PydlApp {
+    pub(super) fn draw_download_retry_settings(
+        &mut self,
+        ui: &mut egui::Ui,
+        id_salt: &str,
+    ) -> bool {
+        let mut changed = false;
+        settings_form_grid(ui, id_salt, |ui| {
+            ui.label("Unlimited HTTP and fragment retries");
+            changed |= ui
+                .checkbox(&mut self.settings.yt_dlp_unlimited_retries, "")
+                .on_hover_text(
+                    "Maps to yt-dlp --retries and --fragment-retries (infinite or a fixed count).",
+                )
+                .changed();
+            ui.end_row();
+            ui.label("Retry count (when not unlimited)");
+            changed |= ui
+                .add_enabled(
+                    !self.settings.yt_dlp_unlimited_retries,
+                    egui::DragValue::new(&mut self.settings.yt_dlp_retry_count)
+                        .range(1_u32..=999)
+                        .speed(1),
+                )
+                .changed();
+            ui.end_row();
+            ui.label("Socket timeout (seconds, 0 = yt-dlp default)");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut self.settings.yt_dlp_socket_timeout_secs)
+                        .range(0_u32..=3600)
+                        .speed(1),
+                )
+                .on_hover_text("Maps to yt-dlp --socket-timeout.")
+                .changed();
+            ui.end_row();
+            ui.label("Sleep between retries (seconds, 0 = off)");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut self.settings.yt_dlp_retry_sleep_secs)
+                        .range(0_u32..=300)
+                        .speed(1),
+                )
+                .on_hover_text("Maps to yt-dlp --retry-sleep.")
+                .changed();
+            ui.end_row();
+            ui.label("Auto-retry on connection errors (0–5)");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut self.settings.yt_dlp_download_auto_retries)
+                        .range(0_u32..=5)
+                        .speed(1),
+                )
+                .on_hover_text(
+                    "rustdl retries the whole download on transient network errors, keeping partial files.",
+                )
+                .changed();
+            ui.end_row();
+        });
+        ui.label(
+            RichText::new(
+                "Applies to each download request and to DASH/HLS fragments. \
+                 Auto-retry resumes partial downloads without deleting .part files.",
+            )
+            .small()
+            .color(Color32::GRAY),
+        );
+        changed
+    }
+
     pub(super) fn draw_settings_window(&mut self, ctx: &egui::Context) {
         if !self.settings_open {
             return;
@@ -1358,66 +1427,7 @@ impl PydlApp {
                         );
                         ui.separator();
                         ui.label(RichText::new("Retries").strong());
-                        settings_form_grid(ui, "dl_retries", |ui| {
-                            ui.label("Unlimited HTTP and fragment retries");
-                            changed |= ui
-                                .checkbox(&mut self.settings.yt_dlp_unlimited_retries, "")
-                                .on_hover_text(
-                                    "Maps to yt-dlp --retries and --fragment-retries (infinite or a fixed count).",
-                                )
-                                .changed();
-                            ui.end_row();
-                            ui.label("Retry count (when not unlimited)");
-                            changed |= ui
-                                .add_enabled(
-                                    !self.settings.yt_dlp_unlimited_retries,
-                                    egui::DragValue::new(&mut self.settings.yt_dlp_retry_count)
-                                        .range(1_u32..=999)
-                                        .speed(1),
-                                )
-                                .changed();
-                            ui.end_row();
-                            ui.label("Socket timeout (seconds, 0 = yt-dlp default)");
-                            changed |= ui
-                                .add(
-                                    egui::DragValue::new(&mut self.settings.yt_dlp_socket_timeout_secs)
-                                        .range(0_u32..=3600)
-                                        .speed(1),
-                                )
-                                .on_hover_text("Maps to yt-dlp --socket-timeout.")
-                                .changed();
-                            ui.end_row();
-                            ui.label("Sleep between retries (seconds, 0 = off)");
-                            changed |= ui
-                                .add(
-                                    egui::DragValue::new(&mut self.settings.yt_dlp_retry_sleep_secs)
-                                        .range(0_u32..=300)
-                                        .speed(1),
-                                )
-                                .on_hover_text("Maps to yt-dlp --retry-sleep.")
-                                .changed();
-                            ui.end_row();
-                            ui.label("Auto-retry on connection errors (0–5)");
-                            changed |= ui
-                                .add(
-                                    egui::DragValue::new(&mut self.settings.yt_dlp_download_auto_retries)
-                                        .range(0_u32..=5)
-                                        .speed(1),
-                                )
-                                .on_hover_text(
-                                    "rustdl retries the whole download on transient network errors, keeping partial files.",
-                                )
-                                .changed();
-                            ui.end_row();
-                        });
-                        ui.label(
-                            RichText::new(
-                                "Applies to each download request and to DASH/HLS fragments. \
-                                 Auto-retry resumes partial downloads without deleting .part files.",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
-                        );
+                        changed |= self.draw_download_retry_settings(ui, "dl_retries");
                         ui.separator();
                         ui.label("Cookies (optional)");
                         ui.label(
