@@ -76,12 +76,6 @@ impl PydlApp {
         self.transfer_totals_dirty = true;
     }
 
-    #[allow(dead_code)]
-    pub(super) fn on_item_removed(&mut self, item: &QueueItem) {
-        app_state::dec_status_count(&mut self.status_counts, item.status);
-        self.sync_status_fields_from_counts();
-    }
-
     pub(super) fn recompute_status(&mut self) {
         self.status_counts = app_state::compute_status_counts(&self.items);
         self.sync_status_fields_from_counts();

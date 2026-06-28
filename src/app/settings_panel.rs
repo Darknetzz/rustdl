@@ -459,29 +459,8 @@ impl PydlApp {
                                 });
                             ui.end_row();
                         });
-                        ui.label(RichText::new("Mode panel colors").strong());
-                        ui.label(
-                            RichText::new(
-                                "Tint and accent stripe for Downloader and Video Converter panels.",
-                            )
-                            .small()
-                            .color(crate::theme::text_hint(&self.settings.theme)),
-                        );
-                        settings_form_grid(ui, "shared_mode_colors", |ui| {
-                            ui.label("Downloader");
-                            changed |= crate::theme::draw_mode_color_controls(
-                                ui,
-                                &mut self.settings.mode_downloader_color,
-                                crate::theme::MODE_DOWNLOADER,
-                            );
-                            ui.end_row();
-                            ui.label("Video Converter");
-                            changed |= crate::theme::draw_mode_color_controls(
-                                ui,
-                                &mut self.settings.mode_convert_color,
-                                crate::theme::MODE_CONVERT,
-                            );
-                            ui.end_row();
+                        ui.label(RichText::new("Display limits").strong());
+                        settings_form_grid(ui, "shared_display_limits", |ui| {
                             ui.label("Max log chars");
                             changed |= ui
                                 .add(
@@ -511,11 +490,35 @@ impl PydlApp {
                                 .changed();
                             ui.end_row();
                         });
+                        ui.label(RichText::new("Mode panel colors").strong());
+                        ui.label(
+                            RichText::new(
+                                "Tint and accent stripe for Downloader and Video Converter panels.",
+                            )
+                            .small()
+                            .color(crate::theme::text_hint(&self.settings.theme)),
+                        );
+                        settings_form_grid(ui, "shared_mode_colors", |ui| {
+                            ui.label("Downloader");
+                            changed |= crate::theme::draw_mode_color_controls(
+                                ui,
+                                &mut self.settings.mode_downloader_color,
+                                crate::theme::MODE_DOWNLOADER,
+                            );
+                            ui.end_row();
+                            ui.label("Video Converter");
+                            changed |= crate::theme::draw_mode_color_controls(
+                                ui,
+                                &mut self.settings.mode_convert_color,
+                                crate::theme::MODE_CONVERT,
+                            );
+                            ui.end_row();
+                        });
                         ui.separator();
                         ui.label(RichText::new("Layout presets").strong());
                         ui.label(
                             RichText::new(
-                                "One-click display bundles (does not change download or AV1 options).",
+                                "One-click display bundles (does not change download or Converter options).",
                             )
                             .small()
                             .color(Color32::GRAY),
@@ -762,6 +765,46 @@ impl PydlApp {
                         });
                     }
                     SettingsTab::Downloader => {
+                        egui::CollapsingHeader::new("Output & behavior")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                        ui.label(RichText::new("Output folder").strong());
+                        settings_form_grid(ui, "dl_output_folder", |ui| {
+                            ui.label("Folder");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(&mut self.output_dir)
+                                        .hint_text("Downloads folder path"),
+                                )
+                                .changed();
+                            ui.end_row();
+                        });
+                        left_button_row(ui, |ui| {
+                            button_group(ui, "settings_dl_output", |g| {
+                                if g.secondary(&format!("{} Browse…", ui_icons::OPEN_FOLDER), true)
+                                    .clicked()
+                                {
+                                    let mut dialog =
+                                        rfd::FileDialog::new().set_title("Choose output folder");
+                                    let trimmed = self.output_dir.trim();
+                                    if !trimmed.is_empty() {
+                                        let path = std::path::Path::new(trimmed);
+                                        if path.is_dir() {
+                                            dialog = dialog.set_directory(path);
+                                        } else if let Some(parent) =
+                                            path.parent().filter(|p| p.is_dir())
+                                        {
+                                            dialog = dialog.set_directory(parent);
+                                        }
+                                    }
+                                    if let Some(path) = dialog.pick_folder() {
+                                        self.output_dir = path.to_string_lossy().to_string();
+                                        changed = true;
+                                    }
+                                }
+                            });
+                        });
+                        ui.add_space(6.0);
                         ui.label(RichText::new("Downloader behavior").strong());
                         settings_form_grid(ui, "dl_behavior", |ui| {
                             changed |= settings_checkbox(
@@ -795,7 +838,11 @@ impl PydlApp {
                                 .changed();
                             ui.end_row();
                         });
-                        ui.separator();
+                        });
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new("Watch folder & templates")
+                            .default_open(false)
+                            .show(ui, |ui| {
                         ui.label(RichText::new("Watch folder").strong());
                         ui.label(
                             RichText::new(
@@ -881,7 +928,11 @@ impl PydlApp {
                                 });
                             }
                         }
-                        ui.separator();
+                        });
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new("Profiles & executables")
+                            .default_open(true)
+                            .show(ui, |ui| {
                         ui.label(RichText::new("Downloader executables").strong());
                         ui.label("Leave empty to use PATH lookup.");
                         settings_form_grid(ui, "dl_executables", |ui| {
@@ -1129,8 +1180,11 @@ impl PydlApp {
                                 }
                             }
                         });
-                        ui.separator();
-                        ui.label(RichText::new("Organize downloads").strong());
+                        });
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new("Organize downloads")
+                            .default_open(true)
+                            .show(ui, |ui| {
                         ui.label(
                             "Folder layout and filenames are passed to yt-dlp as the -o template.",
                         );
@@ -1144,7 +1198,7 @@ impl PydlApp {
                                     changed = true;
                                 }
                                 if g
-                                    .secondary("By channel", true)
+                                    .secondary("By uploader / channel", true)
                                     .clicked()
                                 {
                                     apply_organize_preset(&mut self.settings, "uploader");
@@ -1275,7 +1329,11 @@ impl PydlApp {
                                  after restart.",
                             );
                         }
-                        ui.separator();
+                        });
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new("Quality & network")
+                            .default_open(true)
+                            .show(ui, |ui| {
                         ui.label(RichText::new("Output and quality").strong());
                         settings_form_grid(ui, "dl_output_quality", |ui| {
                             ui.label("Effective -o template");
@@ -1476,6 +1534,11 @@ impl PydlApp {
                                 }
                             });
                         });
+                        });
+                        ui.add_space(4.0);
+                        egui::CollapsingHeader::new("Advanced")
+                            .default_open(false)
+                            .show(ui, |ui| {
                         ui.label("Impersonate (optional)");
                         ui.label(
                             RichText::new(
@@ -1496,24 +1559,8 @@ impl PydlApp {
                             ui.end_row();
                         });
                         ui.separator();
-                        ui.label("Extra args (space-separated) added to each download command");
-                        ui.label(
-                            RichText::new(
-                                "Appended after the retry flags above; add --retries etc. here only if you need to override.",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                        settings_form_grid(ui, "dl_extra_args", |ui| {
-                            ui.label("Extra args");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::multiline(&mut self.settings.yt_dlp_extra_args)
-                                        .desired_rows(2)
-                                        .hint_text("--concurrent-fragments 4"),
-                                )
-                                .changed();
-                            ui.end_row();
+                        ui.label(RichText::new("yt-dlp options").strong());
+                        settings_form_grid(ui, "dl_ytdlp_options", |ui| {
                             changed |= settings_checkbox(ui, "Embed thumbnail", &mut self.settings.embed_thumbnail);
                             changed |= settings_checkbox(ui, "Embed metadata", &mut self.settings.yt_embed_metadata);
                             changed |= settings_checkbox(ui, "Ignore errors", &mut self.settings.yt_ignore_errors);
@@ -1532,6 +1579,26 @@ impl PydlApp {
                                 "Write auto subtitles",
                                 &mut self.settings.yt_write_auto_subs,
                             );
+                        });
+                        ui.separator();
+                        ui.label("Extra args (space-separated) added to each download command");
+                        ui.label(
+                            RichText::new(
+                                "Appended after the retry flags above; add --retries etc. here only if you need to override.",
+                            )
+                            .small()
+                            .color(Color32::GRAY),
+                        );
+                        settings_form_grid(ui, "dl_extra_args", |ui| {
+                            ui.label("Extra args");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::multiline(&mut self.settings.yt_dlp_extra_args)
+                                        .desired_rows(2)
+                                        .hint_text("--concurrent-fragments 4"),
+                                )
+                                .changed();
+                            ui.end_row();
                         });
                         ui.separator();
                         ui.label(
@@ -1589,6 +1656,7 @@ impl PydlApp {
                                 .color(Color32::GRAY),
                             );
                         }
+                        });
                     }
                     SettingsTab::Convert => {
                         ui.label(RichText::new("Video Converter settings").strong());
@@ -1763,7 +1831,7 @@ impl PydlApp {
                                 ui.end_row();
                             }
                             ui.label("Size preset");
-                            egui::ComboBox::from_id_salt("settings_av1_preset")
+                            egui::ComboBox::from_id_salt("settings_convert_preset")
                                 .selected_text(self.settings.convert_size_preset.clone())
                                 .show_ui(ui, |ui| {
                                     changed |= ui
@@ -2222,25 +2290,11 @@ impl PydlApp {
             if self.settings.ffmpeg_extract_audio_mp3 {
                 self.settings.ffmpeg_remux_mp4 = false;
             }
-            self.settings.yt_dlp_retry_count = self.settings.yt_dlp_retry_count.clamp(1, 999);
-            self.settings.worker_count = self.worker_count.clamp(1, 6);
+            self.settings.worker_count = self.worker_count;
             self.settings.output_dir = self.output_dir.clone();
-            self.settings.playlist_preview_cap = self.settings.playlist_preview_cap.clamp(1, 500);
-            self.settings.convert_max_width = self.settings.convert_max_width.clamp(320, 7680);
-            crate::convert_size_limit::normalize_settings_limits(&mut self.settings);
-            let max_cpus = crate::external_tools::logical_cpu_count();
-            if self.settings.convert_cpu_threads > 0 {
-                self.settings.convert_cpu_threads =
-                    self.settings.convert_cpu_threads.clamp(1, max_cpus);
-            }
-            self.settings.convert_parallel = self.settings.convert_parallel.clamp(1, 6);
-            self.settings.subprocess_priority =
-                crate::external_tools::subprocess_priority_storage_value(
-                    crate::external_tools::normalize_subprocess_priority(
-                        &self.settings.subprocess_priority,
-                    ),
-                )
-                .to_owned();
+            crate::config::normalize_settings(&mut self.settings);
+            self.worker_count = self.settings.worker_count;
+            self.output_dir = self.settings.output_dir.clone();
             trim_activity_log(&mut self.log_lines, self.settings.log_max_chars);
             {
                 let mut core = self.shared_core.lock();

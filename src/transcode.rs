@@ -602,7 +602,6 @@ struct FfprobeMediaFormat {
 
 #[derive(serde::Deserialize)]
 struct FfprobeMediaStream {
-    codec_type: Option<String>,
     codec_name: Option<String>,
     width: Option<u32>,
     height: Option<u32>,

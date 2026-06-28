@@ -3,7 +3,7 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, draw_labeled_meta_badge, draw_meta_badge, draw_status_dot, left_button_row,
+    button_group, draw_labeled_meta_badge, draw_meta_badge, left_button_row,
     show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
@@ -892,71 +892,73 @@ impl PydlApp {
     }
 
     pub(super) fn draw_convert_queue_status_row(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal_wrapped(|ui| {
-            let heading = if self.convert_items.is_empty() {
-                "Queue:".to_owned()
-            } else {
-                format!("Queue ({}):", self.convert_items.len())
-            };
-            ui.label(RichText::new(heading).color(text_muted(&self.settings.theme)));
-            let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
-            let counts = self.convert_status_counts;
-            let ready = counts.ready;
-            let queued = counts.queued;
-            let running = counts.running;
-            let done = counts.done;
-            let skipped = counts.skipped;
-            let failed = counts.failed;
-            if ready > 0 {
-                parts.push(("ready", ready, status_color(ItemStatus::Idle)));
+        let counts = self.convert_status_counts;
+        let mut parts: Vec<crate::app_ui::QueueStatusPart> = Vec::new();
+        if counts.ready > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "ready",
+                count: counts.ready,
+                color: status_color(ItemStatus::Idle),
+                group: "Ready",
+            });
+        }
+        if counts.queued > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "queued",
+                count: counts.queued,
+                color: status_color(ItemStatus::Queued),
+                group: "Active",
+            });
+        }
+        if counts.running > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "running",
+                count: counts.running,
+                color: status_color(ItemStatus::Downloading),
+                group: "Active",
+            });
+        }
+        if counts.done > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "done",
+                count: counts.done,
+                color: status_color(ItemStatus::Done),
+                group: "Done",
+            });
+        }
+        if counts.skipped > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "skipped",
+                count: counts.skipped,
+                color: CONVERT_SKIPPED_COLOR,
+                group: "Skipped",
+            });
+        }
+        if counts.failed > 0 {
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "failed",
+                count: counts.failed,
+                color: status_color(ItemStatus::Failed),
+                group: "Failed",
+            });
+        }
+        let heading = if self.convert_items.is_empty() {
+            "Queue:".to_owned()
+        } else {
+            format!("Queue ({}):", self.convert_items.len())
+        };
+        match crate::app_ui::draw_queue_status_row(
+            ui,
+            &heading,
+            &parts,
+            self.queue_group_focus.is_some(),
+        ) {
+            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
+            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
+                self.focus_queue_group(group);
             }
-            if queued > 0 {
-                parts.push(("queued", queued, status_color(ItemStatus::Queued)));
-            }
-            if running > 0 {
-                parts.push(("running", running, status_color(ItemStatus::Downloading)));
-            }
-            if done > 0 {
-                parts.push(("done", done, status_color(ItemStatus::Done)));
-            }
-            if skipped > 0 {
-                parts.push(("skipped", skipped, CONVERT_SKIPPED_COLOR));
-            }
-            if failed > 0 {
-                parts.push(("failed", failed, status_color(ItemStatus::Failed)));
-            }
-            if self.queue_group_focus.is_some()
-                && ui
-                    .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
-                    .clicked()
-            {
-                self.queue_group_focus = None;
-            }
-            for (idx, (name, count, color)) in parts.iter().enumerate() {
-                let suffix = if idx + 1 == parts.len() { "" } else { "," };
-                let group = match *name {
-                    "ready" => "Ready",
-                    "queued" | "running" => "Active",
-                    "done" => "Done",
-                    "skipped" => "Skipped",
-                    "failed" => "Failed",
-                    _ => "Active",
-                };
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 5.0;
-                    draw_status_dot(ui, *color);
-                    let label = format!("{count} {name}{suffix}");
-                    let r = ui.add(
-                        egui::Label::new(RichText::new(label).color(*color))
-                            .sense(egui::Sense::click()),
-                    );
-                    if r.clicked() {
-                        self.focus_queue_group(group);
-                    }
-                    r.on_hover_text(format!("Show {group} items"));
-                });
-            }
-        });
+            None => {}
+        }
     }
 
     pub(super) fn draw_convert_batch_summary_row(&self, ui: &mut egui::Ui) {

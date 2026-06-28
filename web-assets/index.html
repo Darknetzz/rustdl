@@ -468,8 +468,29 @@
           <label class="check"><input type="checkbox" id="set-convert-reencode" /> Re-encode files that are already at target codec</label>
           <label class="check"><input type="checkbox" id="set-convert-recommended-container" checked /> Use recommended container for target codec</label>
           <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
-          <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename original (keep as .bak) instead of deleting</label>
+          <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename output to original filename (in-place replacement)</label>
           <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>
+
+          <h3>Post-encode options</h3>
+          <label>Subtitle handling (during encode)
+            <select id="set-convert-subtitle-mode">
+              <option value="none">None</option>
+              <option value="soft">Soft copy (in container)</option>
+              <option value="burn">Burn into video</option>
+            </select>
+          </label>
+          <label>Extract audio sidecar
+            <select id="set-convert-audio-extract">
+              <option value="none">None</option>
+              <option value="flac">FLAC</option>
+              <option value="aac">AAC</option>
+              <option value="opus">Opus</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="set-convert-copy-subtitles" /> Copy subtitle sidecars after encode</label>
+          <label class="check"><input type="checkbox" id="set-convert-write-checksum" /> Write SHA-256 checksum sidecar</label>
+          <label>Move output to subfolder <input type="text" id="set-convert-post-move-subfolder" placeholder="encoded (optional)" /></label>
+          <label>Max hardware encodes <input type="number" id="set-convert-max-hw-encodes" min="0" max="6" step="1" title="Cap concurrent GPU encodes when parallel conversions &gt; 1 (0 = unlimited)." /></label>
 
           <h3>Watch folder</h3>
           <label class="check"><input type="checkbox" id="set-convert-watch-enabled" /> Auto-scan new videos into the convert queue</label>
@@ -478,7 +499,7 @@
 
         <div id="settings-tab-webui" class="settings-panel" role="tabpanel" hidden>
           <h3>LAN access</h3>
-          <p class="hint">HTTP on your local network with token auth by default. Whitelisted IPs can use the web UI without pasting a token.</p>
+          <p class="hint">HTTP by default on your local network with token auth. Optional TLS certificate paths enable HTTPS when both PEM files exist on disk.</p>
           <label class="check"><input type="checkbox" id="set-web-ui-enabled" /> Enable web UI (restart rustdl to apply bind changes)</label>
           <label>Bind address <input type="text" id="set-web-bind-address" placeholder="0.0.0.0:8765" /></label>
           <label>IP whitelist
@@ -487,6 +508,10 @@
           <p class="hint">One IP or CIDR per line. Matching clients skip the API token (full API access). Other clients still need the token from the desktop app.</p>
           <label class="check"><input type="checkbox" id="set-web-browser-notifications" /> Browser notifications on session complete</label>
           <p class="hint">Shows a browser notification when download or convert batches finish (requires permission).</p>
+          <h3>TLS (optional)</h3>
+          <label>TLS certificate <input type="text" id="set-web-tls-cert" placeholder="fullchain.pem" /></label>
+          <label>TLS private key <input type="text" id="set-web-tls-key" placeholder="privkey.pem" /></label>
+          <p class="hint">When both PEM files exist on the host, rustdl serves HTTPS on the bind address.</p>
           <h3>API token</h3>
           <p class="hint">Token for LAN clients without IP whitelist access. Copy from the desktop app or generate a new one here (saved to settings).</p>
           <label>Current token

@@ -6,9 +6,9 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    allocate_top_down_rect, button_group, button_toolbar_wrapped, compact_button_group,
-    consume_remaining_ui_space, content_width, fill_allocated_rect, finite_ui_span,
-    height_to_bottom, left_button_row, persist_resizable_window_size, secondary_button,
+    button_group, button_toolbar_wrapped, compact_button_group, content_width,
+    fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
+    show_persisted_resizable_window, PersistedFloatWindowParams, secondary_button,
     with_full_width, ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN, ACTIVITY_LOG_LINES_FRAME_STROKE,
     ACTIVITY_LOG_LINES_SCROLL_CHROME_H,
 };
@@ -21,6 +21,23 @@ use super::{InputLineInfo, InputLineKind, PydlApp};
 const MAX_LOG_RENDER_LINES: usize = 320;
 pub(crate) const DEFAULT_LOG_RENDER_LINES: usize = MAX_LOG_RENDER_LINES;
 const LOG_RENDER_LINES_STEP: usize = 320;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum LogToolbarPlacement {
+    DockUnderQueue,
+    DockFooter,
+    Floating,
+}
+
+impl LogToolbarPlacement {
+    fn compact_toolbar(self) -> bool {
+        matches!(self, Self::DockUnderQueue | Self::Floating)
+    }
+
+    fn wrap_toolbar(self) -> bool {
+        !matches!(self, Self::DockFooter)
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum LogFilter {
@@ -210,78 +227,48 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_log_float_v8");
-        let init_id = window_id.with("size_init");
-        let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
-        let pointer_down = ctx.input(|i| i.pointer.any_down());
-        let mut window = egui::Window::new("Activity log")
-            .id(window_id)
-            .open(&mut open)
-            .min_width(400.0)
-            .min_height(260.0)
-            .resizable(true);
-        if needs_default {
-            window = window.default_size(egui::vec2(
+        let params = PersistedFloatWindowParams {
+            title: "Activity log".to_owned(),
+            window_id: egui::Id::new("rustdl_log_float_v8"),
+            min_size: egui::vec2(400.0, 260.0),
+            max_size: egui::vec2(2400.0, 1600.0),
+            default_size: egui::vec2(
                 self.settings.log_float_width,
                 self.settings.log_float_height,
-            ));
-            ctx.data_mut(|d| {
-                d.insert_temp(init_id, egui::vec2(1.0, 1.0));
-            });
-        }
-        let response = window.show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 4.0;
-            // Size from the window body (`max_rect`), not viewport `clip_rect`.
-            let body_h =
-                finite_ui_span(ui.max_rect().height(), self.settings.log_float_height).max(260.0);
-            let body_w =
-                finite_ui_span(ui.max_rect().width(), self.settings.log_float_width).max(400.0);
-            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
-                egui::Frame::dark_canvas(ui.style())
-                    .fill(BG_CANVAS)
-                    .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
-                    .inner_margin(egui::Margin::same(10.0))
-                    .rounding(egui::Rounding::same(8.0))
-                    .show(ui, |ui| {
-                        fill_allocated_rect(ui);
-                        let body_bottom = ui.max_rect().bottom();
-                        left_button_row(ui, |ui| {
-                            self.draw_log_dock_controls_compact(ui);
-                        });
-                        ui.add_space(4.0);
-                        with_full_width(ui, |ui| {
-                            self.draw_activity_log_toolbar_inner(ui, true);
-                        });
-                        ui.add_space(4.0);
-                        let log_h = height_to_bottom(ui, body_bottom).max(80.0);
-                        self.draw_activity_log_lines_scroll(ui, log_h);
+            ),
+            stored_size: (
+                self.settings.log_float_width,
+                self.settings.log_float_height,
+            ),
+            item_spacing_y: 4.0,
+        };
+        let outcome = show_persisted_resizable_window(ctx, &mut open, &params, |ui| {
+            egui::Frame::dark_canvas(ui.style())
+                .fill(BG_CANVAS)
+                .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+                .inner_margin(egui::Margin::same(10.0))
+                .rounding(egui::Rounding::same(8.0))
+                .show(ui, |ui| {
+                    fill_allocated_rect(ui);
+                    let body_bottom = ui.max_rect().bottom();
+                    left_button_row(ui, |ui| {
+                        self.draw_log_dock_controls_compact(ui);
                     });
-                consume_remaining_ui_space(ui);
-            });
-            consume_remaining_ui_space(ui);
+                    ui.add_space(4.0);
+                    with_full_width(ui, |ui| {
+                        self.draw_activity_log_toolbar_inner(ui, LogToolbarPlacement::Floating);
+                    });
+                    ui.add_space(4.0);
+                    let log_h = height_to_bottom(ui, body_bottom).max(80.0);
+                    self.draw_activity_log_lines_scroll(ui, log_h);
+                });
         });
-        if let Some(inner) = &response {
-            if let Some((w, h)) = persist_resizable_window_size(
-                pointer_down,
-                inner.response.rect.size(),
-                egui::vec2(400.0, 260.0),
-                egui::vec2(2400.0, 1600.0),
-                (
-                    self.settings.log_float_width,
-                    self.settings.log_float_height,
-                ),
-            ) {
-                self.settings.log_float_width = w;
-                self.settings.log_float_height = h;
-                self.persist_settings();
-            }
-        }
-        if !open {
-            self.settings.logs_open = false;
+        if let Some((w, h)) = outcome.size {
+            self.settings.log_float_width = w;
+            self.settings.log_float_height = h;
             self.persist_settings();
         }
-        if response.is_none() && self.settings.logs_open {
-            // Window was closed via the title-bar X.
+        if !outcome.open {
             self.settings.logs_open = false;
             self.persist_settings();
         }
@@ -331,7 +318,12 @@ impl PydlApp {
         });
     }
 
-    fn draw_activity_log_toolbar_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
+    fn draw_activity_log_toolbar_inner(
+        &mut self,
+        ui: &mut egui::Ui,
+        placement: LogToolbarPlacement,
+    ) {
+        let compact = placement.compact_toolbar();
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
                 compact_button_group(ui, "log_clear", |g| add(g));
@@ -364,10 +356,16 @@ impl PydlApp {
                     self.persist_ui_prefs();
                 }
             });
-            if !compact
-                && ui
-                    .checkbox(&mut self.settings.log_relative_time, "Relative timestamps")
-                    .changed()
+            if ui
+                .checkbox(
+                    &mut self.settings.log_relative_time,
+                    if compact {
+                        "Relative"
+                    } else {
+                        "Relative timestamps"
+                    },
+                )
+                .changed()
             {
                 self.persist_settings();
             }
@@ -406,18 +404,25 @@ impl PydlApp {
                 {
                     self.export_activity_log();
                 }
-                if !compact
-                    && g.secondary(
-                        &format!("{} Open config folder", ui_icons::OPEN_FOLDER),
-                        true,
-                    )
-                    .clicked()
+                if g.secondary(
+                    &format!(
+                        "{} {}",
+                        ui_icons::OPEN_FOLDER,
+                        if compact {
+                            "Config"
+                        } else {
+                            "Open config folder"
+                        }
+                    ),
+                    true,
+                )
+                .clicked()
                 {
                     self.open_config_folder();
                 }
             });
         };
-        if compact {
+        if placement.wrap_toolbar() {
             ui.horizontal_wrapped(|ui| row(ui));
         } else {
             button_toolbar_wrapped(ui, row);
@@ -430,7 +435,7 @@ impl PydlApp {
             ui.label(RichText::new("Activity log").small().strong());
             self.draw_log_dock_controls_inner(ui, true);
         });
-        self.draw_docked_activity_log_body(ui, max_log_h, true);
+        self.draw_docked_activity_log_body(ui, max_log_h, LogToolbarPlacement::DockUnderQueue);
     }
 
     /// Shared docked log chrome: height slider, toolbar, scroll (after heading/dock row).
@@ -438,11 +443,11 @@ impl PydlApp {
         &mut self,
         ui: &mut egui::Ui,
         max_log_h: f32,
-        compact_toolbar: bool,
+        placement: LogToolbarPlacement,
     ) {
         let max_log = max_log_h.clamp(80.0, 480.0);
         self.draw_log_height_slider(ui, max_log);
-        self.draw_activity_log_toolbar_inner(ui, compact_toolbar);
+        self.draw_activity_log_toolbar_inner(ui, placement);
         let log_h = self.settings.log_dock_height.clamp(80.0, max_log);
         self.draw_activity_log_lines_scroll(ui, log_h);
     }
@@ -466,8 +471,13 @@ impl PydlApp {
                     ui.set_min_height(inner_h);
                     ui.set_width(ui.available_width().max(1.0));
                     if self.log_lines.is_empty() {
+                        let hint = if self.convert_mode {
+                            "Convert and download activity will appear here."
+                        } else {
+                            "Download activity will appear here."
+                        };
                         ui.label(
-                            RichText::new("Download activity will appear here.")
+                            RichText::new(hint)
                                 .small()
                                 .color(text_hint(&self.settings.theme)),
                         );

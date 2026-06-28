@@ -14,16 +14,26 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - Command palette: **Remove selected**, **Clear completed downloads**, and **Reset UI scale to 100%** on desktop; LAN web palette adds matching queue, layout, panel, and host-app settings commands.
 - Settings **UI scale**: click the percentage label to reset to 100%.
+- **Download options** collapsible block on the main Downloader panel (output folder and profile inline; state remembered).
+- **Settings → Converter**: subtitle handling during encode (soft copy or burn-in) and optional audio sidecar extraction (FLAC/AAC/Opus) after successful encodes.
+- **Settings → Web UI**: optional TLS certificate and private key paths; when both PEM files exist, the LAN web UI serves **HTTPS**.
+- **Settings → Downloader**: output folder control; collapsible sections (Output & behavior, Watch folder & templates, Profiles & executables, Organize, Quality & network, Advanced).
 
 ### Changed
 
 - Command palette (desktop and LAN web): arrow-key navigation, highlighted selection, multi-word search, section headings, empty-state message, and backdrop click to close (desktop).
 - LAN web command palette scrolls the active row into view while navigating with the keyboard.
+- **Download options** dialog is output-folder-only; profile and retry settings live in **Settings → Downloader** (toolbar **Settings** opens that tab).
+- **Settings → Downloader** and **Shared** tabs reorganized: yt-dlp checkboxes moved out of Extra args, display limits separated from mode panel colors, clearer organize preset labels.
+- Activity log toolbar shows **Relative** timestamps in all docked and floating placements; empty log hint mentions convert activity when in Video Converter mode.
+- Settings import/export and web PATCH apply the same normalization as startup load.
+- LAN web settings mirror new converter post-encode options and TLS paths; convert rename label matches desktop semantics.
 
 ### Fixed
 
 - Settings **UI scale** always uses 5% steps (85%–150%); existing configs snap on load; default is 100% instead of 108%.
 - Settings window no longer jumps to full viewport width when opening the **Shared** tab (UI scale stepper layout).
+- Dismissible banners use the same grouped button styling as dialogs.
 
 ## [0.8.7]
 

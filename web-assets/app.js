@@ -3186,9 +3186,17 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-convert-delete-original", s.convert_delete_original);
   setCheck("set-convert-rename-original", s.convert_rename_original);
   setCheck("set-convert-remember-queue", s.convert_remember_queue);
+  setVal("set-convert-subtitle-mode", s.convert_subtitle_mode || "none");
+  setVal("set-convert-audio-extract", s.convert_audio_extract || "none");
+  setCheck("set-convert-copy-subtitles", s.convert_copy_subtitles);
+  setCheck("set-convert-write-checksum", s.convert_write_checksum);
+  setVal("set-convert-post-move-subfolder", s.convert_post_move_subfolder);
+  setVal("set-convert-max-hw-encodes", s.convert_max_hw_encodes ?? 0);
 
   setCheck("set-web-ui-enabled", s.web_ui_enabled);
   setVal("set-web-bind-address", s.web_bind_address || "0.0.0.0:8765");
+  setVal("set-web-tls-cert", s.web_tls_cert_path);
+  setVal("set-web-tls-key", s.web_tls_key_path);
   setCheck("set-watch-folder-enabled", s.watch_folder_enabled);
   setVal("set-watch-folder-path", s.watch_folder_path);
   setCheck("set-convert-watch-enabled", s.convert_watch_folder_enabled);
@@ -3306,10 +3314,24 @@ function collectSettingsForm(base) {
   s.convert_delete_original = document.getElementById("set-convert-delete-original").checked;
   s.convert_rename_original = document.getElementById("set-convert-rename-original").checked;
   s.convert_remember_queue = document.getElementById("set-convert-remember-queue").checked;
+  s.convert_subtitle_mode =
+    document.getElementById("set-convert-subtitle-mode")?.value || "none";
+  s.convert_audio_extract =
+    document.getElementById("set-convert-audio-extract")?.value || "none";
+  s.convert_copy_subtitles =
+    document.getElementById("set-convert-copy-subtitles")?.checked ?? false;
+  s.convert_write_checksum =
+    document.getElementById("set-convert-write-checksum")?.checked ?? false;
+  s.convert_post_move_subfolder =
+    document.getElementById("set-convert-post-move-subfolder")?.value || "";
+  s.convert_max_hw_encodes =
+    parseInt(document.getElementById("set-convert-max-hw-encodes")?.value, 10) || 0;
 
   s.web_ui_enabled = document.getElementById("set-web-ui-enabled").checked;
   s.web_bind_address =
     document.getElementById("set-web-bind-address").value.trim() || "0.0.0.0:8765";
+  s.web_tls_cert_path = document.getElementById("set-web-tls-cert")?.value.trim() || "";
+  s.web_tls_key_path = document.getElementById("set-web-tls-key")?.value.trim() || "";
   s.web_auth_ip_whitelist = (document.getElementById("set-web-ip-whitelist")?.value || "")
     .split(/\n+/)
     .map((line) => line.trim())
@@ -3334,6 +3356,7 @@ function collectSettingsForm(base) {
   }
   s.convert_cpu_threads = Math.max(0, s.convert_cpu_threads);
   s.convert_parallel = Math.min(6, Math.max(1, s.convert_parallel));
+  s.convert_max_hw_encodes = Math.min(6, Math.max(0, s.convert_max_hw_encodes ?? 0));
   const allowedPriority = new Set(["normal", "below_normal", "idle"]);
   if (!allowedPriority.has(s.subprocess_priority)) s.subprocess_priority = "normal";
   s.worker_count = Math.min(6, Math.max(1, s.worker_count));

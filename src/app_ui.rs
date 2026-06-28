@@ -782,45 +782,6 @@ fn grouped_button_stroke() -> egui::Stroke {
     egui::Stroke::NONE
 }
 
-pub fn danger_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
-    let bg = Color32::from_rgb(183, 28, 28);
-    colored_button(
-        ui,
-        label,
-        enabled,
-        Color32::from_rgb(255, 235, 238),
-        bg,
-        egui::Rounding::same(6.0),
-        standalone_button_stroke(bg),
-    )
-}
-
-pub fn success_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
-    let bg = Color32::from_rgb(46, 125, 50);
-    colored_button(
-        ui,
-        label,
-        enabled,
-        Color32::from_rgb(232, 245, 233),
-        bg,
-        egui::Rounding::same(6.0),
-        standalone_button_stroke(bg),
-    )
-}
-
-pub fn warning_button(ui: &mut egui::Ui, label: &str, enabled: bool) -> Response {
-    let bg = Color32::from_rgb(245, 124, 0);
-    colored_button(
-        ui,
-        label,
-        enabled,
-        Color32::from_rgb(255, 255, 255),
-        bg,
-        egui::Rounding::same(6.0),
-        standalone_button_stroke(bg),
-    )
-}
-
 /// Bootstrap 5 `.alert-warning` palette (`#fff3cd` / `#ffecb5` / `#664d03`).
 const ALERT_WARNING_BG: Color32 = Color32::from_rgb(255, 243, 205);
 const ALERT_WARNING_BORDER: Color32 = Color32::from_rgb(255, 236, 181);
@@ -1105,6 +1066,125 @@ pub fn persist_resizable_window_size(
         return None;
     }
     Some((size.x, size.y))
+}
+
+pub struct PersistedFloatWindowParams {
+    pub title: String,
+    pub window_id: egui::Id,
+    pub min_size: egui::Vec2,
+    pub max_size: egui::Vec2,
+    pub default_size: egui::Vec2,
+    pub stored_size: (f32, f32),
+    pub item_spacing_y: f32,
+}
+
+pub struct PersistedFloatWindowOutcome {
+    pub open: bool,
+    pub size: Option<(f32, f32)>,
+}
+
+/// Shared resizable floating-window shell (size init, body allocation, persist on resize).
+pub fn show_persisted_resizable_window(
+    ctx: &egui::Context,
+    open: &mut bool,
+    params: &PersistedFloatWindowParams,
+    body: impl FnOnce(&mut egui::Ui),
+) -> PersistedFloatWindowOutcome {
+    let init_id = params.window_id.with("size_init");
+    let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
+    let pointer_down = ctx.input(|i| i.pointer.any_down());
+    let mut window = egui::Window::new(params.title.clone())
+        .id(params.window_id)
+        .open(open)
+        .min_width(params.min_size.x)
+        .min_height(params.min_size.y)
+        .resizable(true);
+    if needs_default {
+        window = window.default_size(params.default_size);
+        ctx.data_mut(|d| {
+            d.insert_temp(init_id, egui::vec2(1.0, 1.0));
+        });
+    }
+    let response = window.show(ctx, |ui| {
+        ui.spacing_mut().item_spacing.y = params.item_spacing_y;
+        let body_h =
+            finite_ui_span(ui.max_rect().height(), params.stored_size.1).max(params.min_size.y);
+        let body_w =
+            finite_ui_span(ui.max_rect().width(), params.stored_size.0).max(params.min_size.x);
+        allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+            body(ui);
+            consume_remaining_ui_space(ui);
+        });
+        consume_remaining_ui_space(ui);
+    });
+    let size = response.as_ref().and_then(|inner| {
+        persist_resizable_window_size(
+            pointer_down,
+            inner.response.rect.size(),
+            params.min_size,
+            params.max_size,
+            params.stored_size,
+        )
+    });
+    if response.is_none() && *open {
+        *open = false;
+    }
+    PersistedFloatWindowOutcome {
+        open: *open,
+        size,
+    }
+}
+
+pub struct QueueStatusPart {
+    pub name: &'static str,
+    pub count: usize,
+    pub color: Color32,
+    pub group: &'static str,
+}
+
+pub enum QueueStatusRowAction {
+    ShowAll,
+    Focus(&'static str),
+}
+
+/// Shared downloader/convert queue status count row.
+pub fn draw_queue_status_row(
+    ui: &mut egui::Ui,
+    heading: &str,
+    parts: &[QueueStatusPart],
+    group_focused: bool,
+) -> Option<QueueStatusRowAction> {
+    if parts.is_empty() {
+        return None;
+    }
+    let mut action = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(heading).color(crate::theme::TEXT_MUTED));
+        if group_focused
+            && ui
+                .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
+                .clicked()
+        {
+            action = Some(QueueStatusRowAction::ShowAll);
+        }
+        for (idx, part) in parts.iter().enumerate() {
+            let suffix = if idx + 1 == parts.len() { "" } else { "," };
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 5.0;
+                draw_status_dot(ui, part.color);
+                let label = format!("{} {}{suffix}", part.count, part.name);
+                let r = ui.add(
+                    egui::Label::new(RichText::new(label).color(part.color))
+                        .sense(egui::Sense::click()),
+                );
+                if r.clicked() {
+                    action = Some(QueueStatusRowAction::Focus(part.group));
+                }
+                r.on_hover_text(format!("Show {} items", part.group));
+            });
+        }
+    });
+    action
 }
 
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
@@ -2075,15 +2155,6 @@ fn button_group_sized<R>(
 /// Left-aligned row for one or more [`button_group`]s (does not consume remaining width).
 pub fn left_button_row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     ui.horizontal(|ui| add(ui)).inner
-}
-
-/// Row of one or more [`button_group`]s with spacing between groups.
-pub fn button_toolbar<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        add(ui)
-    })
-    .inner
 }
 
 pub fn button_toolbar_wrapped<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {

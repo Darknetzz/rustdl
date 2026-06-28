@@ -60,7 +60,6 @@ pub enum WebServerStartError {
     EmptyToken,
     BindFailed(String),
     TlsConfig(String),
-    TlsLoadFailed(String),
 }
 
 impl WebServerStartError {
@@ -77,7 +76,6 @@ impl WebServerStartError {
                 )
             }
             Self::TlsConfig(detail) => detail.clone(),
-            Self::TlsLoadFailed(detail) => format!("web TLS configuration failed: {detail}"),
         }
     }
 }

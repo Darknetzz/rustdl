@@ -47,8 +47,8 @@ use crate::app_parsing::parse_urls_from_text_blob;
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, bounded_ui_height, button_group, centered_button_row,
-    content_panel_frame, content_width, left_button_row, modal_backdrop, NavbarStatusInputs,
-    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
+    content_width, left_button_row, modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT,
+    ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_settings, rustdl_config_dir, save_settings,
@@ -597,11 +597,6 @@ impl PydlApp {
             };
             ctx.request_repaint_after(Duration::from_secs_f64(1.0 / f64::from(rate)));
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn apply_ui_smoothness(ctx: &egui::Context) {
-        theme::apply_ui_theme(ctx, "dark");
     }
 
     pub(super) fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) {
@@ -1563,20 +1558,19 @@ impl PydlApp {
                 )
                 .small(),
             );
-            ui.horizontal(|ui| {
-                if ui
-                    .button(format!("{} Open Settings", ui_icons::SETTINGS))
-                    .clicked()
-                {
-                    self.settings_open = true;
-                    self.settings_tab = SettingsTab::WebUi;
-                }
-                if ui
-                    .button(format!("{} Dismiss", ui_icons::DISMISS))
-                    .clicked()
-                {
-                    self.web_server_banner_dismissed = true;
-                }
+            left_button_row(ui, |ui| {
+                button_group(ui, "web_server_banner", |g| {
+                    if g
+                        .secondary(&format!("{} Open Settings", ui_icons::SETTINGS), true)
+                        .clicked()
+                    {
+                        self.settings_open = true;
+                        self.settings_tab = SettingsTab::WebUi;
+                    }
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                        self.web_server_banner_dismissed = true;
+                    }
+                });
             });
         });
         ui.add_space(4.0);
@@ -2322,12 +2316,13 @@ impl PydlApp {
                 RichText::new("Defaults are in use; originals were renamed to .bak when possible.")
                     .small(),
             );
-            if ui
-                .button(format!("{} Dismiss", ui_icons::DISMISS))
-                .clicked()
-            {
-                self.config_load_banner_dismissed = true;
-            }
+            left_button_row(ui, |ui| {
+                button_group(ui, "config_load_banner", |g| {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                        self.config_load_banner_dismissed = true;
+                    }
+                });
+            });
         });
         ui.add_space(4.0);
     }
@@ -2344,12 +2339,13 @@ impl PydlApp {
                 )
                 .color(ALERT_WARNING_TEXT),
             );
-            if ui
-                .button(format!("{} Dismiss", ui_icons::DISMISS))
-                .clicked()
-            {
-                self.videos_auto_undock_banner_dismissed = true;
-            }
+            left_button_row(ui, |ui| {
+                button_group(ui, "videos_auto_undock_banner", |g| {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                        self.videos_auto_undock_banner_dismissed = true;
+                    }
+                });
+            });
         });
         ui.add_space(4.0);
     }
@@ -2366,12 +2362,13 @@ impl PydlApp {
                 )
                 .color(ALERT_DANGER_TEXT),
             );
-            if ui
-                .button(format!("{} Dismiss", ui_icons::DISMISS))
-                .clicked()
-            {
-                self.ui_event_channel_banner_dismissed = true;
-            }
+            left_button_row(ui, |ui| {
+                button_group(ui, "event_channel_banner", |g| {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                        self.ui_event_channel_banner_dismissed = true;
+                    }
+                });
+            });
         });
         ui.add_space(4.0);
     }

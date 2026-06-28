@@ -1,23 +1,24 @@
 //! Video queue: docked under main controls or in a floating window (Downloader and AV1).
 
-use eframe::egui::{self, Color32, RichText};
+use eframe::egui::{self, RichText};
 
 use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_bottom_up_rect, allocate_top_down_rect, bounded_ui_height, button_group,
     button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space, content_width,
-    docked_log_lines_max_h, draw_batch_progress_bar, draw_status_dot, fill_allocated_rect,
-    finite_ui_span, height_to_bottom, left_button_row, note_resizable_panel_height,
-    persist_resizable_window_size, queue_footer_reserve, queue_log_block_height,
-    queue_panel_layout_heights, queue_undocked_strip_reserve,
-    show_mode_panel, status_color, with_full_width, DOCKED_LOG_HEADING_H,
-    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    docked_log_lines_max_h, draw_batch_progress_bar, fill_allocated_rect, finite_ui_span,
+    height_to_bottom, left_button_row, note_resizable_panel_height, queue_footer_reserve,
+    queue_log_block_height, queue_panel_layout_heights, queue_undocked_strip_reserve,
+    show_mode_panel, show_persisted_resizable_window, status_color, with_full_width,
+    PersistedFloatWindowParams, DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
 use crate::ui_icons;
 
+use super::log_panel::LogToolbarPlacement;
 use super::PydlApp;
 
 /// Minimum scroll height for queue cards in the docked bottom panel.
@@ -32,6 +33,7 @@ const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
 /// Shared layout parameters for docked and floating video queue panels.
 struct VideosQueueLayout<'a> {
     scroll_id: &'a str,
+    docked: bool,
     dock_log: bool,
     /// Bottom edge of the allocated queue body (set by docked/float shell before the mode panel).
     body_bottom: Option<f32>,
@@ -39,12 +41,12 @@ struct VideosQueueLayout<'a> {
 
 impl VideosQueueLayout<'_> {
     fn is_docked(&self) -> bool {
-        self.scroll_id.contains("dock")
+        self.docked
     }
 }
 
-fn queue_list_min_scroll_h(scroll_id: &str) -> f32 {
-    if scroll_id.contains("dock") {
+fn queue_list_min_scroll_h(docked: bool) -> f32 {
+    if docked {
         DOCKED_QUEUE_LIST_MIN_H
     } else {
         80.0
@@ -86,8 +88,14 @@ impl PydlApp {
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).
-    fn draw_queue_list_body(&mut self, ui: &mut egui::Ui, scroll_h: f32, scroll_id: &str) {
-        let min_h = queue_list_min_scroll_h(scroll_id);
+    fn draw_queue_list_body(
+        &mut self,
+        ui: &mut egui::Ui,
+        scroll_h: f32,
+        scroll_id: &str,
+        docked: bool,
+    ) {
+        let min_h = queue_list_min_scroll_h(docked);
         let cap = bounded_ui_height(ui, min_h).max(min_h);
         let scroll_h = finite_ui_span(scroll_h, min_h).clamp(0.0, cap);
         if scroll_h < 1.0 {
@@ -101,7 +109,7 @@ impl PydlApp {
             if self.convert_mode {
                 self.draw_convert_queue_list_scroll(ui, inner_h, min_h, scroll_h);
             } else {
-                self.draw_downloader_queue_list_scroll(ui, inner_h, scroll_id, scroll_h);
+                self.draw_downloader_queue_list_scroll(ui, inner_h, scroll_id, docked, scroll_h);
             }
         });
     }
@@ -319,9 +327,10 @@ impl PydlApp {
         ui: &mut egui::Ui,
         scroll_h: f32,
         scroll_id: &str,
+        docked: bool,
         outer_scroll_h: f32,
     ) {
-        let min_h = queue_list_min_scroll_h(scroll_id);
+        let min_h = queue_list_min_scroll_h(docked);
         let scroll_h = finite_ui_span(scroll_h, min_h).max(1.0);
         egui::ScrollArea::vertical()
             .id_salt(scroll_id)
@@ -531,7 +540,7 @@ impl PydlApp {
         );
         let (list_h, stack_h) =
             queue_panel_layout_heights(content_top, body_bottom, footer_h, log_block_est);
-        self.draw_queue_list_body(ui, list_h, layout.scroll_id);
+        self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked);
 
         allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
             ui.add_space(2.0);
@@ -596,83 +605,72 @@ impl PydlApp {
 
     /// Colored per-status counts for the downloader queue (videos panel / floating window).
     pub(super) fn draw_downloader_queue_status_row(&mut self, ui: &mut egui::Ui) {
-        let mut parts: Vec<(&str, usize, Color32)> = Vec::new();
+        let mut parts: Vec<crate::app_ui::QueueStatusPart> = Vec::new();
         if self.status_resolving > 0 {
-            parts.push((
-                "resolving",
-                self.status_resolving,
-                status_color(ItemStatus::Resolving),
-            ));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "resolving",
+                count: self.status_resolving,
+                color: status_color(ItemStatus::Resolving),
+                group: "Resolving",
+            });
         }
         if self.status_ready > 0 {
-            parts.push(("ready", self.status_ready, status_color(ItemStatus::Idle)));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "ready",
+                count: self.status_ready,
+                color: status_color(ItemStatus::Idle),
+                group: "Ready",
+            });
         }
         if self.status_queued > 0 {
-            parts.push((
-                "queued",
-                self.status_queued,
-                status_color(ItemStatus::Queued),
-            ));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "queued",
+                count: self.status_queued,
+                color: status_color(ItemStatus::Queued),
+                group: "Active",
+            });
         }
         if self.status_active > 0 {
-            parts.push((
-                "active",
-                self.status_active,
-                status_color(ItemStatus::Downloading),
-            ));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "active",
+                count: self.status_active,
+                color: status_color(ItemStatus::Downloading),
+                group: "Active",
+            });
         }
         if self.status_done > 0 {
-            parts.push(("done", self.status_done, status_color(ItemStatus::Done)));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "done",
+                count: self.status_done,
+                color: status_color(ItemStatus::Done),
+                group: "Done",
+            });
         }
         if self.status_failed > 0 {
-            parts.push((
-                "failed",
-                self.status_failed,
-                status_color(ItemStatus::Failed),
-            ));
+            parts.push(crate::app_ui::QueueStatusPart {
+                name: "failed",
+                count: self.status_failed,
+                color: status_color(ItemStatus::Failed),
+                group: "Issues",
+            });
         }
-        if parts.is_empty() {
-            return;
+        let heading = if self.items.is_empty() {
+            "Downloads:".to_owned()
+        } else {
+            format!("Downloads ({}):", self.items.len())
+        };
+        match crate::app_ui::draw_queue_status_row(
+            ui,
+            &heading,
+            &parts,
+            self.queue_group_focus.is_some(),
+        ) {
+            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
+            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
+                self.focus_queue_group(group);
+            }
+            None => {}
         }
-        ui.horizontal_wrapped(|ui| {
-            let heading = if self.items.is_empty() {
-                "Downloads:".to_owned()
-            } else {
-                format!("Downloads ({}):", self.items.len())
-            };
-            ui.label(RichText::new(heading).color(TEXT_MUTED));
-            if self.queue_group_focus.is_some()
-                && ui
-                    .small_button(format!("{} Show all", ui_icons::SHOW_ALL))
-                    .clicked()
-            {
-                self.queue_group_focus = None;
-            }
-            for (idx, (name, count, color)) in parts.iter().enumerate() {
-                let suffix = if idx + 1 == parts.len() { "" } else { "," };
-                let group = match *name {
-                    "ready" => "Ready",
-                    "queued" | "active" => "Active",
-                    "done" => "Done",
-                    "failed" => "Issues",
-                    "resolving" => "Resolving",
-                    _ => "Active",
-                };
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing.x = 5.0;
-                    draw_status_dot(ui, *color);
-                    let label = format!("{count} {name}{suffix}");
-                    let r = ui.add(
-                        egui::Label::new(RichText::new(label).color(*color))
-                            .sense(egui::Sense::click()),
-                    );
-                    if r.clicked() {
-                        self.focus_queue_group(group);
-                    }
-                    r.on_hover_text(format!("Show {group} items"));
-                });
-            }
-        });
     }
 
     pub(super) fn draw_download_batch_progress_row(&mut self, ui: &mut egui::Ui) {
@@ -795,7 +793,7 @@ impl PydlApp {
                 });
                 let budget = height_to_bottom(ui, body_bottom).max(80.0);
                 let max_log = docked_log_lines_max_h((budget - DOCKED_LOG_HEADING_H).max(0.0));
-                self.draw_docked_activity_log_body(ui, max_log, false);
+                self.draw_docked_activity_log_body(ui, max_log, LogToolbarPlacement::DockFooter);
             });
     }
 
@@ -864,6 +862,7 @@ impl PydlApp {
             let body_bottom = ui.max_rect().bottom();
             let layout = VideosQueueLayout {
                 scroll_id: "rustdl_videos_dock_scroll",
+                docked: true,
                 dock_log,
                 body_bottom: Some(body_bottom),
             };
@@ -894,77 +893,53 @@ impl PydlApp {
             return;
         }
         let mut open = true;
-        let window_id = egui::Id::new("rustdl_videos_float_v8");
-        let init_id = window_id.with("size_init");
-        let needs_default = ctx.data(|d| d.get_temp::<egui::Vec2>(init_id).is_none());
         let title = self.videos_window_title().to_owned();
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
         let dl_color = self.settings.mode_downloader_color.clone();
         let convert_color = self.settings.mode_convert_color.clone();
         let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
-        let mut window = egui::Window::new(title)
-            .id(window_id)
-            .open(&mut open)
-            .min_width(480.0)
-            .min_height(320.0)
-            .resizable(true);
-        if needs_default {
-            window = window.default_size(egui::vec2(
+        let params = PersistedFloatWindowParams {
+            title,
+            window_id: egui::Id::new("rustdl_videos_float_v8"),
+            min_size: egui::vec2(480.0, 320.0),
+            max_size: egui::vec2(2400.0, 1600.0),
+            default_size: egui::vec2(
                 self.settings.video_float_width,
                 self.settings.video_float_height,
-            ));
-            ctx.data_mut(|d| {
-                d.insert_temp(init_id, egui::vec2(1.0, 1.0));
-            });
-        }
-        let pointer_down = ctx.input(|i| i.pointer.any_down());
-        let response = window.show(ctx, |ui| {
-            ui.spacing_mut().item_spacing.y = 6.0;
-            // Size from the window body (`max_rect`), not viewport `clip_rect`.
-            let body_h =
-                finite_ui_span(ui.max_rect().height(), self.settings.video_float_height).max(320.0);
-            let body_w =
-                finite_ui_span(ui.max_rect().width(), self.settings.video_float_width).max(480.0);
-            allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
-                fill_allocated_rect(ui);
-                let body_bottom = ui.max_rect().bottom();
-                let layout = VideosQueueLayout {
-                    scroll_id: "rustdl_videos_float_v8",
-                    dock_log: false,
-                    body_bottom: Some(body_bottom),
-                };
-                Self::draw_mode_queue_panel(
-                    ui,
-                    &theme,
-                    av1,
-                    mode_colors,
-                    QUEUE_MODE_PANEL_MARGIN,
-                    |ui| {
-                        self.draw_videos_queue_body(ui, layout);
-                    },
-                );
-                consume_remaining_ui_space(ui);
-            });
-            consume_remaining_ui_space(ui);
+            ),
+            stored_size: (
+                self.settings.video_float_width,
+                self.settings.video_float_height,
+            ),
+            item_spacing_y: 6.0,
+        };
+        let outcome = show_persisted_resizable_window(ctx, &mut open, &params, |ui| {
+            fill_allocated_rect(ui);
+            let body_bottom = ui.max_rect().bottom();
+            let layout = VideosQueueLayout {
+                scroll_id: "rustdl_videos_float_v8",
+                docked: false,
+                dock_log: false,
+                body_bottom: Some(body_bottom),
+            };
+            Self::draw_mode_queue_panel(
+                ui,
+                &theme,
+                av1,
+                mode_colors,
+                QUEUE_MODE_PANEL_MARGIN,
+                |ui| {
+                    self.draw_videos_queue_body(ui, layout);
+                },
+            );
         });
-        if let Some(inner) = &response {
-            if let Some((w, h)) = persist_resizable_window_size(
-                pointer_down,
-                inner.response.rect.size(),
-                egui::vec2(480.0, 320.0),
-                egui::vec2(2400.0, 1600.0),
-                (
-                    self.settings.video_float_width,
-                    self.settings.video_float_height,
-                ),
-            ) {
-                self.settings.video_float_width = w;
-                self.settings.video_float_height = h;
-                self.persist_settings();
-            }
+        if let Some((w, h)) = outcome.size {
+            self.settings.video_float_width = w;
+            self.settings.video_float_height = h;
+            self.persist_settings();
         }
-        if !open {
+        if !outcome.open {
             self.settings.videos_open = false;
             self.persist_settings();
         }
