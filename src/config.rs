@@ -246,7 +246,10 @@ pub struct AppSettings {
     #[serde(default, alias = "av1_size_limit_value")]
     pub convert_size_limit_value: String,
     /// When a limit is violated: `skip`, `fail`, `encode_delete`, or `keep`.
-    #[serde(default = "default_convert_size_limit_violation", alias = "av1_size_limit_violation")]
+    #[serde(
+        default = "default_convert_size_limit_violation",
+        alias = "av1_size_limit_violation"
+    )]
     pub convert_size_limit_violation: String,
     /// Keep converter queue items across app restarts until manually cleared.
     #[serde(
@@ -838,10 +841,8 @@ pub fn snap_ui_scale(scale: f32) -> f32 {
     const MIN_PCT: i32 = 85;
     const MAX_PCT: i32 = 150;
     let pct = (scale * 100.0).round() as i32;
-    let snapped = ((pct as f64 / STEP_PCT as f64)
-        .round() as i32
-        * STEP_PCT)
-        .clamp(MIN_PCT, MAX_PCT);
+    let snapped =
+        ((pct as f64 / STEP_PCT as f64).round() as i32 * STEP_PCT).clamp(MIN_PCT, MAX_PCT);
     snapped as f32 / 100.0
 }
 

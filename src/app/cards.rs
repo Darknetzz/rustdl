@@ -134,8 +134,7 @@ impl PydlApp {
                     let nat = tex.size_vec2();
                     let draw_sz = fit_thumbnail_draw_size(nat, thumb_rect.size());
                     if draw_sz.x >= 1.0 && draw_sz.y >= 1.0 {
-                        let img_rect =
-                            egui::Rect::from_center_size(thumb_rect.center(), draw_sz);
+                        let img_rect = egui::Rect::from_center_size(thumb_rect.center(), draw_sz);
                         ui.painter().image(
                             tex.id(),
                             img_rect,
@@ -144,14 +143,11 @@ impl PydlApp {
                         );
                     }
                 } else if done_but_file_missing {
-                    ui.allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(thumb_rect),
-                        |ui| {
-                            ui.centered_and_justified(|ui| {
-                                draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
-                            });
-                        },
-                    );
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(thumb_rect), |ui| {
+                        ui.centered_and_justified(|ui| {
+                            draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                        });
+                    });
                 } else {
                     let center_msg = if !self.settings.show_thumbnails {
                         "Thumbnails off"
@@ -176,17 +172,11 @@ impl PydlApp {
                     );
                 }
                 if done_but_file_missing && self.textures.contains_key(&id) {
-                    ui.allocate_new_ui(
-                        egui::UiBuilder::new().max_rect(thumb_rect),
-                        |ui| {
-                            ui.with_layout(
-                                egui::Layout::bottom_up(egui::Align::Center),
-                                |ui| {
-                                    draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
-                                },
-                            );
-                        },
-                    );
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(thumb_rect), |ui| {
+                        ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                            draw_meta_badge(ui, "File missing", MetaBadgeKind::FileMissing);
+                        });
+                    });
                 }
 
                 let title_max = if compact { 56 } else { 68 };
@@ -216,24 +206,26 @@ impl PydlApp {
                 };
                 ui.add_sized(
                     [inner_w, subtitle_h],
-                    egui::Label::new(RichText::new(subtitle_text).small().color(Color32::LIGHT_GRAY))
-                        .wrap(),
+                    egui::Label::new(
+                        RichText::new(subtitle_text)
+                            .small()
+                            .color(Color32::LIGHT_GRAY),
+                    )
+                    .wrap(),
                 );
                 if let Some((ref path, mtime)) = done_file {
-                    let fname = path
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("file");
+                    let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
                     let rel = format_relative_ago(mtime);
                     let abs = format_absolute_local(mtime);
                     let file_line = format!("{fname} · {rel}");
-                    let hover = format!(
-                        "{}\nModified: {abs}",
-                        path.to_string_lossy()
-                    );
+                    let hover = format!("{}\nModified: {abs}", path.to_string_lossy());
                     let file_label = ui.add(
-                        egui::Label::new(RichText::new(file_line).small().color(Color32::from_gray(150)))
-                            .wrap(),
+                        egui::Label::new(
+                            RichText::new(file_line)
+                                .small()
+                                .color(Color32::from_gray(150)),
+                        )
+                        .wrap(),
                     );
                     file_label.on_hover_text(hover);
                 }
@@ -274,12 +266,8 @@ impl PydlApp {
                     let detail_color = log_line_color(&detail);
                     ui.add_sized(
                         [inner_w, detail_h],
-                        egui::Label::new(
-                            RichText::new(detail_short)
-                                .small()
-                                .color(detail_color),
-                        )
-                        .wrap(),
+                        egui::Label::new(RichText::new(detail_short).small().color(detail_color))
+                            .wrap(),
                     );
                 }
 
@@ -287,12 +275,8 @@ impl PydlApp {
                     let err_display = ellipsize(err, 72);
                     ui.add_sized(
                         [inner_w, 16.0],
-                        egui::Label::new(
-                            RichText::new(err_display)
-                                .small()
-                                .color(LOG_COLOR_ERROR),
-                        )
-                        .wrap(),
+                        egui::Label::new(RichText::new(err_display).small().color(LOG_COLOR_ERROR))
+                            .wrap(),
                     );
                 }
 
@@ -433,25 +417,13 @@ impl PydlApp {
                         if let Some(bytes) =
                             queue_item_file_size_bytes(&self.items[idx], local_path)
                         {
-                            draw_meta_badge(
-                                ui,
-                                &human_bytes_ui(bytes),
-                                MetaBadgeKind::FileSize,
-                            );
+                            draw_meta_badge(ui, &human_bytes_ui(bytes), MetaBadgeKind::FileSize);
                         }
                         if !video_codec.is_empty() {
-                            draw_meta_badge(
-                                ui,
-                                &video_codec.to_uppercase(),
-                                MetaBadgeKind::Codec,
-                            );
+                            draw_meta_badge(ui, &video_codec.to_uppercase(), MetaBadgeKind::Codec);
                         }
                         if let Some(fps) = item_fps {
-                            draw_meta_badge(
-                                ui,
-                                &format!("{fps:.2} fps"),
-                                MetaBadgeKind::FrameRate,
-                            );
+                            draw_meta_badge(ui, &format!("{fps:.2} fps"), MetaBadgeKind::FrameRate);
                         }
                     }
                     draw_status_chip(ui, status);
@@ -467,10 +439,8 @@ impl PydlApp {
                 };
                 if !footer_status.is_empty() {
                     ui.add(
-                        egui::Label::new(
-                            RichText::new(&footer_status).small().color(footer_color),
-                        )
-                        .wrap(),
+                        egui::Label::new(RichText::new(&footer_status).small().color(footer_color))
+                            .wrap(),
                     );
                 }
                 ui.set_width(inner_w);
@@ -480,31 +450,22 @@ impl PydlApp {
                     left_button_row(ui, |ui| {
                         compact_button_group(ui, ("card_actions", id), |g| {
                             if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                                && g.warning(
-                                    &format!("{} Ready", ui_icons::CANCEL_TO_READY),
-                                    true,
-                                )
-                                .on_hover_text("Cancel download and mark as ready")
-                                .clicked()
+                                && g.warning(&format!("{} Ready", ui_icons::CANCEL_TO_READY), true)
+                                    .on_hover_text("Cancel download and mark as ready")
+                                    .clicked()
                             {
                                 self.request_cancel_item(id, CancelPostAction::Ready);
                             }
                             if matches!(status, ItemStatus::Queued | ItemStatus::Downloading)
-                                && g.danger(
-                                    &format!("{} Drop", ui_icons::CANCEL_TO_REMOVE),
-                                    true,
-                                )
-                                .on_hover_text("Cancel download and remove from queue")
-                                .clicked()
+                                && g.danger(&format!("{} Drop", ui_icons::CANCEL_TO_REMOVE), true)
+                                    .on_hover_text("Cancel download and remove from queue")
+                                    .clicked()
                             {
                                 self.request_cancel_item(id, CancelPostAction::Remove);
                             }
                             if !show_saved_file_actions
-                                && g.danger(
-                                    &format!("{} Remove", ui_icons::REMOVE),
-                                    removable,
-                                )
-                                .clicked()
+                                && g.danger(&format!("{} Remove", ui_icons::REMOVE), removable)
+                                    .clicked()
                             {
                                 if !self.remove_item_by_id(id) {
                                     self.append_log(&format!(
@@ -576,8 +537,8 @@ impl PydlApp {
         let pct = self.items[idx].percent;
         let selected = self.selected_item_ids.contains(&id);
         let output_ready = Path::new(&self.output_dir).is_dir();
-        let failure_text = crate::app_state::queue_item_failure_text(&self.items[idx])
-            .map(|t| t.to_owned());
+        let failure_text =
+            crate::app_state::queue_item_failure_text(&self.items[idx]).map(|t| t.to_owned());
         let has_error = self.items[idx].error.is_some();
         let can_retry_download = status == ItemStatus::Failed
             && output_ready
@@ -628,8 +589,7 @@ impl PydlApp {
                 let fmt_w = ui.available_width().clamp(72.0, 140.0);
                 let response = ui.add_sized(
                     [fmt_w, ui.spacing().interact_size.y],
-                    egui::TextEdit::singleline(&mut fmt_buf)
-                        .hint_text("Format (-f)"),
+                    egui::TextEdit::singleline(&mut fmt_buf).hint_text("Format (-f)"),
                 );
                 if response.lost_focus() && fmt_buf.trim() != current.trim() {
                     let trimmed = fmt_buf.trim();
@@ -685,11 +645,7 @@ impl PydlApp {
             ui.horizontal(|ui| {
                 ui.add_space(28.0);
                 let err_display = ellipsize(fail, 96);
-                ui.label(
-                    RichText::new(err_display)
-                        .small()
-                        .color(LOG_COLOR_ERROR),
-                );
+                ui.label(RichText::new(err_display).small().color(LOG_COLOR_ERROR));
             });
         }
         if can_retry_download || can_retry_metadata {
@@ -907,9 +863,7 @@ impl PydlApp {
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
                                             ui.set_max_width(tail_w);
-                                            self.draw_done_group_history_controls(
-                                                ui, tail_w, &ids,
-                                            );
+                                            self.draw_done_group_history_controls(ui, tail_w, &ids);
                                         },
                                     );
                                     drew_inline = true;

@@ -64,8 +64,8 @@ impl PydlApp {
         };
         let rt = self.runtime.clone();
         rt.spawn(async move {
-            if let Ok(Err(err)) = tokio::task::spawn_blocking(move || save_activity_log(&snapshot))
-                .await
+            if let Ok(Err(err)) =
+                tokio::task::spawn_blocking(move || save_activity_log(&snapshot)).await
             {
                 eprintln!("rustdl: failed to save activity log: {err}");
             }

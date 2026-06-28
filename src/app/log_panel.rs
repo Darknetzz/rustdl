@@ -6,10 +6,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::app_ui::{
-    button_group, button_toolbar_wrapped, compact_button_group, content_width,
-    fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
-    show_persisted_resizable_window, PersistedFloatWindowParams, secondary_button,
-    with_full_width, ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN, ACTIVITY_LOG_LINES_FRAME_STROKE,
+    button_group, button_toolbar_wrapped, compact_button_group, content_width, fill_allocated_rect,
+    finite_ui_span, height_to_bottom, left_button_row, secondary_button,
+    show_persisted_resizable_window, with_full_width, PersistedFloatWindowParams,
+    ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN, ACTIVITY_LOG_LINES_FRAME_STROKE,
     ACTIVITY_LOG_LINES_SCROLL_CHROME_H,
 };
 use crate::theme::{log_bg, text_hint, BG_CANVAS, BORDER_PANEL, BORDER_SUBTLE, TEXT_MUTED};
@@ -548,18 +548,13 @@ impl PydlApp {
                             for line in window {
                                 let color = log_line_color(line);
                                 if compact_lines {
-                                    let display =
-                                        format_log_timestamp_display(line, relative);
+                                    let display = format_log_timestamp_display(line, relative);
                                     ui.label(
-                                        RichText::new(display)
-                                            .small()
-                                            .monospace()
-                                            .color(color),
+                                        RichText::new(display).small().monospace().color(color),
                                     );
                                 } else {
                                     let widget = log_line_widget(line, color, ui, relative);
-                                    let label =
-                                        egui::Label::new(widget).wrap().selectable(true);
+                                    let label = egui::Label::new(widget).wrap().selectable(true);
                                     let r = ui.add(label);
                                     r.context_menu(|ui| {
                                         button_group(ui, "log_copy_line", |g| {

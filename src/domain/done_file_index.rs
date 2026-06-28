@@ -59,7 +59,9 @@ impl DoneFileIndex {
         } else {
             None
         };
-        if self.force_refresh || self.cached_output_dir != output_dir || self.cached_dir_mtime != mtime
+        if self.force_refresh
+            || self.cached_output_dir != output_dir
+            || self.cached_dir_mtime != mtime
         {
             return true;
         }

@@ -158,10 +158,7 @@ pub fn format_queue_download_failure(raw: &str) -> (String, String) {
         };
         return (hint.to_owned(), detail);
     }
-    (
-        queue_item_error_summary(raw),
-        raw.to_owned(),
-    )
+    (queue_item_error_summary(raw), raw.to_owned())
 }
 
 /// Primary failure text for a downloader row (metadata `error`, else failed `detail`).

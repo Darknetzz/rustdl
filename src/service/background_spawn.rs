@@ -104,9 +104,7 @@ async fn download_with_transient_retries(
                 if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
                     return Err("Cancelled by user.".to_owned());
                 }
-                if transient_attempt < max_transient
-                    && is_transient_download_error(&err_text)
-                {
+                if transient_attempt < max_transient && is_transient_download_error(&err_text) {
                     transient_attempt += 1;
                     try_send_ui(
                         bus,
@@ -712,7 +710,12 @@ pub(crate) fn spawn_convert_worker(
     rt: &Arc<Runtime>,
     bus: &UiEventBus,
     cfg: ConvertConfig,
-    jobs: Vec<(u64, ConvertInput, String, crate::convert_size_limit::ConvertSizeLimit)>,
+    jobs: Vec<(
+        u64,
+        ConvertInput,
+        String,
+        crate::convert_size_limit::ConvertSizeLimit,
+    )>,
     cancel_flag: Arc<AtomicBool>,
     parallel: usize,
 ) {

@@ -1129,10 +1129,7 @@ pub fn show_persisted_resizable_window(
     if response.is_none() && *open {
         *open = false;
     }
-    PersistedFloatWindowOutcome {
-        open: *open,
-        size,
-    }
+    PersistedFloatWindowOutcome { open: *open, size }
 }
 
 pub struct QueueStatusPart {
@@ -1381,10 +1378,8 @@ pub fn allocate_bottom_up_rect<R>(
     let right = (left + width).min(ui.clip_rect().right());
     width = (right - left).max(1.0);
     let top = (body_bottom - height).max(ui.clip_rect().min.y);
-    let rect = egui::Rect::from_min_max(
-        egui::pos2(left, top),
-        egui::pos2(left + width, body_bottom),
-    );
+    let rect =
+        egui::Rect::from_min_max(egui::pos2(left, top), egui::pos2(left + width, body_bottom));
     ui.allocate_new_ui(
         egui::UiBuilder::new()
             .max_rect(rect)
@@ -2211,13 +2206,19 @@ mod tests {
 
     #[test]
     fn docked_log_lines_max_h_respects_chrome() {
-        assert_eq!(docked_log_lines_max_h(200.0), (200.0 - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0));
+        assert_eq!(
+            docked_log_lines_max_h(200.0),
+            (200.0 - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0)
+        );
         assert_eq!(docked_log_lines_max_h(50.0), 80.0);
     }
 
     #[test]
     fn default_videos_dock_height_scales_with_viewport() {
-        assert_eq!(default_videos_dock_height_for_viewport(880.0), 880.0 * VIDEOS_DOCKED_HEIGHT_RATIO);
+        assert_eq!(
+            default_videos_dock_height_for_viewport(880.0),
+            880.0 * VIDEOS_DOCKED_HEIGHT_RATIO
+        );
         assert!(default_videos_dock_height_for_viewport(300.0) >= 180.0);
     }
 
@@ -2232,15 +2233,30 @@ mod tests {
     fn queue_footer_reserve_scales_with_width() {
         assert_eq!(queue_footer_toolbar_reserve(1000.0, false, true), 72.0);
         assert_eq!(queue_footer_toolbar_reserve(900.0, false, true), 72.0);
-        assert_eq!(queue_footer_toolbar_reserve(750.0, false, true), 96.0 + 24.0);
-        assert_eq!(queue_footer_toolbar_reserve(600.0, false, true), 96.0 + 24.0);
-        assert_eq!(queue_footer_toolbar_reserve(480.0, false, true), 130.0 + 24.0);
+        assert_eq!(
+            queue_footer_toolbar_reserve(750.0, false, true),
+            96.0 + 24.0
+        );
+        assert_eq!(
+            queue_footer_toolbar_reserve(600.0, false, true),
+            96.0 + 24.0
+        );
+        assert_eq!(
+            queue_footer_toolbar_reserve(480.0, false, true),
+            130.0 + 24.0
+        );
     }
 
     #[test]
     fn queue_footer_reserve_convert_mode_taller() {
-        assert_eq!(queue_footer_toolbar_reserve(1000.0, true, true), 72.0 + 40.0);
-        assert_eq!(queue_footer_toolbar_reserve(480.0, true, false), 130.0 + 40.0);
+        assert_eq!(
+            queue_footer_toolbar_reserve(1000.0, true, true),
+            72.0 + 40.0
+        );
+        assert_eq!(
+            queue_footer_toolbar_reserve(480.0, true, false),
+            130.0 + 40.0
+        );
     }
 
     #[test]
@@ -2272,14 +2288,20 @@ mod tests {
         let mut dock = 800.0;
         let mut undock = 600.0;
         assert!(super::clamp_dock_heights_for_viewport(
-            760.0, &mut dock, &mut undock, false
+            760.0,
+            &mut dock,
+            &mut undock,
+            false
         ));
         assert!(dock <= 760.0 * VIDEOS_DOCKED_HEIGHT_RATIO + 0.01);
         assert!(undock <= 760.0 * 0.45 + 0.01);
         let mut dock2 = 200.0;
         let mut undock2 = 200.0;
         assert!(!super::clamp_dock_heights_for_viewport(
-            760.0, &mut dock2, &mut undock2, true
+            760.0,
+            &mut dock2,
+            &mut undock2,
+            true
         ));
         assert_eq!(dock2, 200.0);
     }

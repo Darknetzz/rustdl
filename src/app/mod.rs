@@ -315,12 +315,9 @@ impl PydlApp {
         let ui_bus = shared_core.lock().ui_event_bus();
         let mut settings = load_settings();
         if (settings.videos_dock_height - 360.0).abs() < 0.5 {
-            let vp_h = cc.egui_ctx.input(|i| {
-                i.viewport()
-                    .inner_rect
-                    .map(|r| r.height())
-                    .unwrap_or(880.0)
-            });
+            let vp_h = cc
+                .egui_ctx
+                .input(|i| i.viewport().inner_rect.map(|r| r.height()).unwrap_or(880.0));
             settings.videos_dock_height =
                 crate::app_ui::default_videos_dock_height_for_viewport(vp_h);
         }
@@ -1397,8 +1394,8 @@ impl PydlApp {
                 ui.set_width(ui.available_width());
                 ui.label(
                     RichText::new("Choose the output folder for downloads.")
-                    .small()
-                    .color(crate::theme::TEXT_MUTED),
+                        .small()
+                        .color(crate::theme::TEXT_MUTED),
                 );
                 ui.add_space(8.0);
                 self.draw_downloader_output_folder_row(ui, "modal");
@@ -1560,14 +1557,15 @@ impl PydlApp {
             );
             left_button_row(ui, |ui| {
                 button_group(ui, "web_server_banner", |g| {
-                    if g
-                        .secondary(&format!("{} Open Settings", ui_icons::SETTINGS), true)
+                    if g.secondary(&format!("{} Open Settings", ui_icons::SETTINGS), true)
                         .clicked()
                     {
                         self.settings_open = true;
                         self.settings_tab = SettingsTab::WebUi;
                     }
-                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true)
+                        .clicked()
+                    {
                         self.web_server_banner_dismissed = true;
                     }
                 });
@@ -2318,7 +2316,9 @@ impl PydlApp {
             );
             left_button_row(ui, |ui| {
                 button_group(ui, "config_load_banner", |g| {
-                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true)
+                        .clicked()
+                    {
                         self.config_load_banner_dismissed = true;
                     }
                 });
@@ -2341,7 +2341,9 @@ impl PydlApp {
             );
             left_button_row(ui, |ui| {
                 button_group(ui, "videos_auto_undock_banner", |g| {
-                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true)
+                        .clicked()
+                    {
                         self.videos_auto_undock_banner_dismissed = true;
                     }
                 });
@@ -2364,7 +2366,9 @@ impl PydlApp {
             );
             left_button_row(ui, |ui| {
                 button_group(ui, "event_channel_banner", |g| {
-                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true).clicked() {
+                    if g.secondary(&format!("{} Dismiss", ui_icons::DISMISS), true)
+                        .clicked()
+                    {
                         self.ui_event_channel_banner_dismissed = true;
                     }
                 });
@@ -2729,52 +2733,55 @@ impl PydlApp {
                 egui::ScrollArea::vertical()
                     .max_height(bounded_ui_height(ui, 200.0).max(200.0))
                     .show(ui, |ui| {
-                    let done: Vec<&QueueItem> = self
-                        .items
-                        .iter()
-                        .filter(|it| it.status == ItemStatus::Done)
-                        .filter(|it| self.item_matches_search(it))
-                        .filter(|it| self.item_matches_history_filter(it))
-                        .collect();
-                    if done.is_empty() {
-                        ui.label("No completed downloads match the current filter.");
-                        return;
-                    }
-                    let mut requeue_url: Option<String> = None;
-                    let mut open_path: Option<String> = None;
-                    for it in done {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(it.title.clone()).strong());
-                            if let Some(u) = &it.uploader {
-                                ui.label(RichText::new(u).small().color(crate::theme::TEXT_MUTED));
-                            }
-                            if ui.small_button("Re-queue").clicked() {
-                                requeue_url = Some(it.webpage_url.clone());
-                            }
-                            if it.local_path.is_some() && ui.small_button("Open").clicked() {
-                                open_path = it.local_path.clone();
-                            }
-                        });
-                        if let Some(p) = &it.local_path {
-                            ui.label(RichText::new(p).small().color(crate::theme::TEXT_MUTED));
+                        let done: Vec<&QueueItem> = self
+                            .items
+                            .iter()
+                            .filter(|it| it.status == ItemStatus::Done)
+                            .filter(|it| self.item_matches_search(it))
+                            .filter(|it| self.item_matches_history_filter(it))
+                            .collect();
+                        if done.is_empty() {
+                            ui.label("No completed downloads match the current filter.");
+                            return;
                         }
-                    }
-                    if let Some(url) = requeue_url {
-                        self.download_core_action(|core| {
-                            let stats = core.queue_urls_for_resolve(vec![url]);
-                            if stats.accepted == 0 {
-                                core.append_log(
+                        let mut requeue_url: Option<String> = None;
+                        let mut open_path: Option<String> = None;
+                        for it in done {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(it.title.clone()).strong());
+                                if let Some(u) = &it.uploader {
+                                    ui.label(
+                                        RichText::new(u).small().color(crate::theme::TEXT_MUTED),
+                                    );
+                                }
+                                if ui.small_button("Re-queue").clicked() {
+                                    requeue_url = Some(it.webpage_url.clone());
+                                }
+                                if it.local_path.is_some() && ui.small_button("Open").clicked() {
+                                    open_path = it.local_path.clone();
+                                }
+                            });
+                            if let Some(p) = &it.local_path {
+                                ui.label(RichText::new(p).small().color(crate::theme::TEXT_MUTED));
+                            }
+                        }
+                        if let Some(url) = requeue_url {
+                            self.download_core_action(|core| {
+                                let stats = core.queue_urls_for_resolve(vec![url]);
+                                if stats.accepted == 0 {
+                                    core.append_log(
                                     "Library re-queue: URL was not added (duplicate or invalid).",
                                 );
-                            }
-                        });
-                    }
-                    if let Some(p) = open_path {
-                        if let Err(e) = crate::app_actions::open_path(std::path::Path::new(&p)) {
-                            self.append_log(&format!("Failed to open path: {e}"));
+                                }
+                            });
                         }
-                    }
-                });
+                        if let Some(p) = open_path {
+                            if let Err(e) = crate::app_actions::open_path(std::path::Path::new(&p))
+                            {
+                                self.append_log(&format!("Failed to open path: {e}"));
+                            }
+                        }
+                    });
             });
         self.library_open = open;
     }

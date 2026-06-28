@@ -587,9 +587,10 @@ impl DownloadCore {
         };
         let item = &mut self.convert_items[idx];
         item.size_limit_kind_override = kind.map(|k| crate::convert_size_limit::normalize_kind(&k));
-        item.size_limit_value_override = value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
-        item.size_limit_violation_override = violation
-            .map(|v| crate::convert_size_limit::normalize_violation(&v));
+        item.size_limit_value_override =
+            value.map(|v| v.trim().to_owned()).filter(|v| !v.is_empty());
+        item.size_limit_violation_override =
+            violation.map(|v| crate::convert_size_limit::normalize_violation(&v));
         self.schedule_convert_queue_save();
         self.bump_generation();
         true

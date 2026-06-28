@@ -241,10 +241,9 @@ impl PydlApp {
                     close_palette = true;
                 }
                 if resp.has_focus() {
-                    if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !filtered.is_empty()
-                    {
-                        self.command_palette_selection = (self.command_palette_selection + 1)
-                            .min(filtered.len() - 1);
+                    if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) && !filtered.is_empty() {
+                        self.command_palette_selection =
+                            (self.command_palette_selection + 1).min(filtered.len() - 1);
                     }
                     if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
                         self.command_palette_selection =

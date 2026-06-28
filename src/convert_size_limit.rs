@@ -39,18 +39,18 @@ impl ConvertSizeLimit {
     pub fn from_settings(settings: &AppSettings) -> Self {
         Self {
             kind: normalize_kind(&settings.convert_size_limit_kind),
-            value: parse_limit_value(&settings.convert_size_limit_kind, &settings.convert_size_limit_value)
-                .unwrap_or(0.0),
+            value: parse_limit_value(
+                &settings.convert_size_limit_kind,
+                &settings.convert_size_limit_value,
+            )
+            .unwrap_or(0.0),
             violation: normalize_violation(&settings.convert_size_limit_violation),
         }
     }
 
     pub fn for_item(settings: &AppSettings, item: &ConvertQueueItem) -> Self {
         let global = Self::from_settings(settings);
-        let kind = item
-            .size_limit_kind_override
-            .as_deref()
-            .map(normalize_kind);
+        let kind = item.size_limit_kind_override.as_deref().map(normalize_kind);
         let Some(kind) = kind else {
             return global;
         };
@@ -117,7 +117,11 @@ impl ConvertSizeLimit {
     pub fn limit_label(&self, input_bytes: u64) -> String {
         match self.kind.as_str() {
             KIND_MIN_SHRINK_PERCENT => format!("≥{:.0}% shrink from source", self.value),
-            KIND_MAX_PERCENT_OF_SOURCE => format!("≤{:.0}% of source ({})", self.value, human_bytes_ui(input_bytes)),
+            KIND_MAX_PERCENT_OF_SOURCE => format!(
+                "≤{:.0}% of source ({})",
+                self.value,
+                human_bytes_ui(input_bytes)
+            ),
             KIND_MAX_OUTPUT_BYTES => format!("≤{}", human_bytes_ui(self.value as u64)),
             _ => "none".to_owned(),
         }
@@ -145,10 +149,7 @@ impl ConvertSizeLimit {
     }
 
     pub fn uses_pre_encode_gate(&self) -> bool {
-        matches!(
-            self.violation.as_str(),
-            VIOLATION_SKIP | VIOLATION_FAIL
-        )
+        matches!(self.violation.as_str(), VIOLATION_SKIP | VIOLATION_FAIL)
     }
 }
 

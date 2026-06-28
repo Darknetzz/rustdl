@@ -330,7 +330,9 @@ impl super::core::DownloadCore {
                                 it.output_bytes = None;
                                 it.status = ItemStatus::Failed;
                                 it.detail = format!("Failed: {limit_msg}");
-                                self.append_log(&format!("[convert {item_id}] Failed: {limit_msg}"));
+                                self.append_log(&format!(
+                                    "[convert {item_id}] Failed: {limit_msg}"
+                                ));
                             }
                             PostEncodeDecision::Keep => {
                                 it.output_bytes = Some(output_bytes);
@@ -343,8 +345,7 @@ impl super::core::DownloadCore {
                                     && limit.violation == VIOLATION_KEEP
                                     && limit.violates(input_bytes, output_bytes)
                                 {
-                                    saved_detail =
-                                        format!("{saved_detail} · WARNING: {limit_msg}");
+                                    saved_detail = format!("{saved_detail} · WARNING: {limit_msg}");
                                 }
                                 it.detail = saved_detail;
                                 let source = it.source_path.clone();

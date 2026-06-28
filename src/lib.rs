@@ -24,11 +24,11 @@ pub mod queue_templates;
 pub(crate) mod service;
 pub mod system_usage;
 pub mod theme;
-#[cfg(any(windows, target_os = "linux"))]
-pub mod tray;
 pub mod thumbnail_store;
 pub mod time_format;
 pub mod transcode;
+#[cfg(any(windows, target_os = "linux"))]
+pub mod tray;
 pub mod ui_icons;
 pub mod watch_folder;
 #[cfg(windows)]

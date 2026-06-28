@@ -364,7 +364,10 @@ mod tests {
         let fallback = with_fallback_format_args(&args);
         assert!(!fallback.contains(&"bestvideo+bestaudio/best".to_owned()));
         assert_eq!(
-            fallback.windows(2).find(|w| w[0] == "-f").map(|w| w[1].as_str()),
+            fallback
+                .windows(2)
+                .find(|w| w[0] == "-f")
+                .map(|w| w[1].as_str()),
             Some("best")
         );
     }

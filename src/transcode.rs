@@ -6,11 +6,11 @@ use std::sync::{Arc, Mutex};
 use anyhow::{anyhow, Result};
 use eframe::egui;
 
+use crate::convert_size_limit::{pre_encode_decision, ConvertSizeLimit, PreEncodeDecision};
 use crate::external_tools::{
     apply_subprocess_launch, logical_cpu_count, no_console_window, normalize_subprocess_priority,
     resolve_executable,
 };
-use crate::convert_size_limit::{pre_encode_decision, ConvertSizeLimit, PreEncodeDecision};
 
 const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
 const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
@@ -740,7 +740,9 @@ pub fn input_has_subtitle_streams(file_path: &Path, ffprobe_path: &str) -> bool 
 }
 
 fn escape_ffmpeg_subtitle_path(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/").replace(':', "\\:")
+    path.to_string_lossy()
+        .replace('\\', "/")
+        .replace(':', "\\:")
 }
 
 /// Appends a burn-in subtitle filter when subtitle mode is `burn`.
@@ -762,7 +764,9 @@ pub fn build_video_filter_with_subtitles(
 
 /// Maps subtitle streams during encode when mode is `soft`.
 pub fn append_soft_subtitle_maps(cmd: &mut Command) {
-    cmd.args(["-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:s", "copy"]);
+    cmd.args([
+        "-map", "0:v:0", "-map", "0:a?", "-map", "0:s?", "-c:s", "copy",
+    ]);
 }
 
 fn audio_extract_output_path(video_output: &Path, mode: &str) -> Option<PathBuf> {
@@ -1042,9 +1046,7 @@ where
                 match pre_encode_decision(&cfg.size_limit, input_bytes, estimated_out) {
                     PreEncodeDecision::Proceed => {}
                     PreEncodeDecision::Skip => {
-                        let msg = cfg
-                            .size_limit
-                            .violation_message(input_bytes, estimated_out);
+                        let msg = cfg.size_limit.violation_message(input_bytes, estimated_out);
                         on_line(format!(
                             "skip_reason=estimated output exceeds size limit ({})",
                             cfg.size_limit.limit_label(input_bytes)
@@ -1052,9 +1054,7 @@ where
                         return Err(anyhow!("Skipped: estimated {msg}"));
                     }
                     PreEncodeDecision::Fail => {
-                        let msg = cfg
-                            .size_limit
-                            .violation_message(input_bytes, estimated_out);
+                        let msg = cfg.size_limit.violation_message(input_bytes, estimated_out);
                         on_line(format!("size_limit=estimated output exceeds limit ({msg})"));
                         return Err(anyhow!("Failed: estimated {msg}"));
                     }
@@ -1067,10 +1067,9 @@ where
     }
     let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
     let pix_fmt = select_pixel_format(enc.hw_type);
-    let subtitle_mode =
-        crate::config::normalize_convert_subtitle_mode(&cfg.subtitle_mode);
-    let has_subtitles = subtitle_mode != "none"
-        && input_has_subtitle_streams(&plan.input, &cfg.ffprobe_path);
+    let subtitle_mode = crate::config::normalize_convert_subtitle_mode(&cfg.subtitle_mode);
+    let has_subtitles =
+        subtitle_mode != "none" && input_has_subtitle_streams(&plan.input, &cfg.ffprobe_path);
     let vf = build_video_filter_with_subtitles(
         enc.hw_type,
         cfg.max_width,

@@ -1,11 +1,11 @@
 use super::*;
-use crate::service::DownloadCore;
 use crate::app_ui::{
-    bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame,
-    content_width, dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
+    bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame, content_width,
+    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
     patch_resizable_panel_state_height, show_mode_panel, with_full_width, LAYOUT_WIDE_BREAKPOINT,
     UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
+use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         {
@@ -652,7 +652,9 @@ impl PydlApp {
                     self.downloader_options_edit_open = true;
                 }
                 if g.secondary(&format!("{} Settings", ui_icons::SETTINGS), true)
-                    .on_hover_text("Open Settings → Downloader for retries, profiles, and organize options")
+                    .on_hover_text(
+                        "Open Settings → Downloader for retries, profiles, and organize options",
+                    )
                     .clicked()
                 {
                     self.settings_open = true;

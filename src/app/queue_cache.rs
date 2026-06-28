@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use crate::app_state::{self, TransferTotals};
-use crate::models::{ItemStatus, QueueItem};
+use crate::models::ItemStatus;
 
 use super::PydlApp;
 

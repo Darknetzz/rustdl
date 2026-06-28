@@ -527,17 +527,10 @@ impl PydlApp {
         let measured_footer = ui
             .ctx()
             .data(|d| d.get_temp::<f32>(queue_footer_height_id(layout.scroll_id)));
-        let footer_h = queue_footer_reserve(
-            cw,
-            self.convert_mode,
-            layout.is_docked(),
-            measured_footer,
-        );
-        let log_block_est = queue_log_block_height(
-            layout.dock_log,
-            self.settings.log_dock_height,
-            true,
-        );
+        let footer_h =
+            queue_footer_reserve(cw, self.convert_mode, layout.is_docked(), measured_footer);
+        let log_block_est =
+            queue_log_block_height(layout.dock_log, self.settings.log_dock_height, true);
         let (list_h, stack_h) =
             queue_panel_layout_heights(content_top, body_bottom, footer_h, log_block_est);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked);
@@ -549,10 +542,7 @@ impl PydlApp {
             self.draw_videos_footer_toolbar(ui, !layout.is_docked());
             let footer_measured = (ui.min_rect().max.y - footer_top).max(0.0) + 2.0;
             ui.ctx().data_mut(|d| {
-                d.insert_temp(
-                    queue_footer_height_id(layout.scroll_id),
-                    footer_measured,
-                );
+                d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_measured);
             });
             if layout.dock_log {
                 ui.add_space(6.0);
@@ -820,8 +810,8 @@ impl PydlApp {
                 allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
                     let strip_top = ui.cursor().min.y;
                     self.draw_videos_undocked_strip(ui);
-                    let strip_measured = (ui.min_rect().max.y - strip_top)
-                        .max(UNDOCKED_VIDEOS_STRIP_H);
+                    let strip_measured =
+                        (ui.min_rect().max.y - strip_top).max(UNDOCKED_VIDEOS_STRIP_H);
                     ui.ctx().data_mut(|d| {
                         d.insert_temp(queue_undocked_strip_height_id(), strip_measured);
                     });

@@ -20,7 +20,9 @@ use crate::domain::UiEvent;
 use crate::models::QueueItem;
 use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
 use crate::service::core::DownloadCore;
-use crate::service::core::{CancelPostAction, DownloadStartError, QueueClearFilter, RetryFailedError, SharedCore};
+use crate::service::core::{
+    CancelPostAction, DownloadStartError, QueueClearFilter, RetryFailedError, SharedCore,
+};
 use crate::service::web::media;
 use crate::ytdlp::{self, thumbnail_url_candidates};
 use crate::ytdlp_download_args::{build_download_extra_args, output_filename_template};
@@ -161,12 +163,7 @@ pub(super) fn api_err(
     status: StatusCode,
     msg: impl Into<String>,
 ) -> (StatusCode, Json<ApiErrorBody>) {
-    (
-        status,
-        Json(ApiErrorBody {
-            error: msg.into(),
-        }),
-    )
+    (status, Json(ApiErrorBody { error: msg.into() }))
 }
 
 #[derive(Deserialize)]
@@ -657,10 +654,7 @@ async fn profiles_import(
         ));
         return Err(api_err(
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!(
-                "failed to save {} imported profile(s)",
-                save_errors.len()
-            ),
+            format!("failed to save {} imported profile(s)", save_errors.len()),
         ));
     }
     c.bump_generation();

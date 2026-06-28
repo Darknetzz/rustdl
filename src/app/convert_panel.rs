@@ -1183,31 +1183,31 @@ impl PydlApp {
                                 }
                                 if targets.file.is_some() || targets.folder.is_some() {
                                     button_group(ui, ("convert_open", it.item_id), |g| {
-                                    let mut open_file = false;
-                                    let mut open_folder = false;
-                                    g.open_menu(
-                                        targets.file.is_some(),
-                                        targets.folder.is_some(),
-                                        &mut open_file,
-                                        &mut open_folder,
-                                    );
-                                    if open_file {
-                                        if let Some(p) = &targets.file {
-                                            self.open_file_path(p);
-                                        }
-                                    }
-                                    if open_folder {
-                                        if let Some(p) = &targets.file {
-                                            self.reveal_file_path(p);
-                                        } else if let Some(p) = &targets.folder {
-                                            if let Err(e) = app_actions::open_path(p) {
-                                                self.append_log(&format!(
-                                                    "Failed to open folder: {e}"
-                                                ));
+                                        let mut open_file = false;
+                                        let mut open_folder = false;
+                                        g.open_menu(
+                                            targets.file.is_some(),
+                                            targets.folder.is_some(),
+                                            &mut open_file,
+                                            &mut open_folder,
+                                        );
+                                        if open_file {
+                                            if let Some(p) = &targets.file {
+                                                self.open_file_path(p);
                                             }
                                         }
-                                    }
-                                });
+                                        if open_folder {
+                                            if let Some(p) = &targets.file {
+                                                self.reveal_file_path(p);
+                                            } else if let Some(p) = &targets.folder {
+                                                if let Err(e) = app_actions::open_path(p) {
+                                                    self.append_log(&format!(
+                                                        "Failed to open folder: {e}"
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    });
                                 }
                             });
                         }

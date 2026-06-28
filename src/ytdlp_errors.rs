@@ -106,8 +106,11 @@ mod tests {
 
     #[test]
     fn generic_flashvars_hint() {
-        let err = "ERROR: [generic] Unable to extract flashvars; please report this issue on GitHub";
+        let err =
+            "ERROR: [generic] Unable to extract flashvars; please report this issue on GitHub";
         assert!(download_failure_user_hint(err).is_some());
-        assert!(download_failure_user_hint(err).unwrap().contains("generic extractor"));
+        assert!(download_failure_user_hint(err)
+            .unwrap()
+            .contains("generic extractor"));
     }
 }
