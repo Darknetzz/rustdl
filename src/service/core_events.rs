@@ -561,11 +561,13 @@ impl super::core::DownloadCore {
                 self.items[idx].percent = 100.0;
                 self.items[idx].eta_text = "0s".to_owned();
                 self.items[idx].error = None;
+                self.items[idx].detail = final_detail.clone();
             } else {
-                self.items[idx].error =
-                    Some(crate::app_state::queue_item_error_summary(&final_detail));
+                let (error, detail) =
+                    crate::app_state::format_queue_download_failure(&final_detail);
+                self.items[idx].error = Some(error);
+                self.items[idx].detail = detail;
             }
-            self.items[idx].detail = final_detail.clone();
         }
         if completed {
             self.enqueue_completed_download_to_convert(item_id);

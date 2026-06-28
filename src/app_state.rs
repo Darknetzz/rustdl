@@ -144,6 +144,26 @@ pub fn queue_item_error_summary(detail: &str) -> String {
     )
 }
 
+/// Maps raw yt-dlp failure text to a short row `error` plus expanded `detail`.
+pub fn format_queue_download_failure(raw: &str) -> (String, String) {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return (String::new(), String::new());
+    }
+    if let Some(hint) = crate::ytdlp_errors::download_failure_user_hint(raw) {
+        let detail = if raw.contains(hint) {
+            raw.to_owned()
+        } else {
+            format!("{raw}\n\n{hint}")
+        };
+        return (hint.to_owned(), detail);
+    }
+    (
+        queue_item_error_summary(raw),
+        raw.to_owned(),
+    )
+}
+
 /// Primary failure text for a downloader row (metadata `error`, else failed `detail`).
 pub fn queue_item_failure_text(item: &QueueItem) -> Option<&str> {
     if let Some(err) = item.error.as_deref() {
@@ -336,6 +356,15 @@ pub fn synthetic_queue_items(count: usize) -> Vec<QueueItem> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn format_queue_download_failure_uses_hint_for_generic() {
+        let raw = "ERROR: [generic] Unable to extract flashvars; please report this issue";
+        let (error, detail) = format_queue_download_failure(raw);
+        assert!(error.contains("generic extractor"));
+        assert!(detail.contains(raw));
+        assert!(detail.contains("generic extractor"));
+    }
 
     #[test]
     fn status_delta_round_trips() {

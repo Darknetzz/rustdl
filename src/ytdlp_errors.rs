@@ -42,6 +42,35 @@ pub fn is_format_unavailable_error(err: &str) -> bool {
         || msg.contains("no formats found")
 }
 
+/// Short, actionable hint for common yt-dlp failures (shown on the queue row).
+pub fn download_failure_user_hint(err: &str) -> Option<&'static str> {
+    let msg = err.to_ascii_lowercase();
+    if msg.contains("unable to extract flashvars")
+        || (msg.contains("[generic]") && msg.contains("unable to extract"))
+    {
+        return Some(
+            "yt-dlp used the generic extractor and could not read this page. \
+             Use the site’s watch-page URL (not a redirect/embed), update yt-dlp, \
+             and add cookies in Settings if login is required.",
+        );
+    }
+    if msg.contains("no suitable extractors") || msg.contains("unsupported url") {
+        return Some("This URL is not supported by yt-dlp. Verify the link and update yt-dlp.");
+    }
+    if msg.contains("video unavailable") {
+        return Some("Video unavailable. It may be deleted, region-locked, or require cookies.");
+    }
+    if msg.contains("private video") || msg.contains("members only") {
+        return Some("Video is private or members-only. Add cookies in Settings and retry.");
+    }
+    if is_format_unavailable_error(err) {
+        return Some(
+            "Selected quality/format is not available. Retry the download or switch to Best quality in Settings.",
+        );
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -73,5 +102,12 @@ mod tests {
             "ERROR: [youtube] xh5ASlG: Requested format is not available. Use --list-formats for a list of available formats"
         ));
         assert!(!is_format_unavailable_error("Video unavailable"));
+    }
+
+    #[test]
+    fn generic_flashvars_hint() {
+        let err = "ERROR: [generic] Unable to extract flashvars; please report this issue on GitHub";
+        assert!(download_failure_user_hint(err).is_some());
+        assert!(download_failure_user_hint(err).unwrap().contains("generic extractor"));
     }
 }
