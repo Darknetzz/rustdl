@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{button_group, left_button_row};
+use crate::app_ui::{button_group, draw_keyboard_shortcut_row, left_button_row};
 
 use crate::pkg_version;
 use crate::ui_icons;
@@ -77,16 +77,34 @@ impl PydlApp {
                 });
                 ui.separator();
                 ui.label(RichText::new("Keyboard shortcuts").strong());
-                for line in [
-                    "Ctrl+Enter (Cmd+Enter): Add URLs from input",
-                    "Ctrl+D (Cmd+D): Start downloads for ready items",
-                    "Ctrl+, (Cmd+,): Open Settings",
-                    "Ctrl+F (Cmd+F): Focus queue search",
-                    "Ctrl+L (Cmd+L): Show or hide activity log",
-                    "Ctrl+K (Cmd+K): Command palette (pause/resume, retry all, mode switch)",
-                    "Escape: Close dialogs and floating panels",
-                ] {
-                    ui.label(RichText::new(line).small().color(Color32::GRAY));
+                ui.add_space(2.0);
+                let theme = self.settings.theme.clone();
+                const SHORTCUTS: [(&[&str], Option<&[&str]>, &str); 7] = [
+                    (&["Ctrl", "Enter"], Some(&["Cmd", "Enter"]), "Add URLs from input"),
+                    (
+                        &["Ctrl", "D"],
+                        Some(&["Cmd", "D"]),
+                        "Start downloads for ready items",
+                    ),
+                    (&["Ctrl", ","], Some(&["Cmd", ","]), "Open Settings"),
+                    (&["Ctrl", "F"], Some(&["Cmd", "F"]), "Focus queue search"),
+                    (
+                        &["Ctrl", "L"],
+                        Some(&["Cmd", "L"]),
+                        "Show or hide activity log",
+                    ),
+                    (
+                        &["Ctrl", "K"],
+                        Some(&["Cmd", "K"]),
+                        "Command palette (pause/resume, retry all, mode switch)",
+                    ),
+                    (&["Escape"], None, "Close dialogs and floating panels"),
+                ];
+                for (i, (win, mac, desc)) in SHORTCUTS.iter().enumerate() {
+                    if i > 0 {
+                        ui.add_space(2.0);
+                    }
+                    draw_keyboard_shortcut_row(ui, &theme, win, *mac, desc);
                 }
                 ui.separator();
                 left_button_row(ui, |ui| {

@@ -187,6 +187,73 @@ pub fn status_color(s: ItemStatus) -> Color32 {
     }
 }
 
+/// Small keyboard-key chip (HTML `<kbd>`-like).
+pub fn draw_kbd_key(ui: &mut egui::Ui, label: &str) -> Response {
+    let (fill, border, text) = kbd_chip_colors(ui);
+    egui::Frame::none()
+        .fill(fill)
+        .stroke(Stroke::new(1.0, border))
+        .inner_margin(egui::Margin::symmetric(5.0, 2.0))
+        .rounding(egui::Rounding::same(4.0))
+        .show(ui, |ui| {
+            ui.label(RichText::new(label).monospace().size(11.0).color(text));
+        })
+        .response
+}
+
+fn kbd_chip_colors(ui: &egui::Ui) -> (Color32, Color32, Color32) {
+    if ui.visuals().dark_mode {
+        (
+            Color32::from_rgb(40, 42, 50),
+            Color32::from_rgb(78, 82, 94),
+            Color32::from_rgb(232, 234, 240),
+        )
+    } else {
+        (
+            Color32::from_rgb(248, 249, 252),
+            Color32::from_rgb(186, 192, 204),
+            Color32::from_rgb(32, 34, 40),
+        )
+    }
+}
+
+fn draw_kbd_sequence(ui: &mut egui::Ui, keys: &[&str], theme: &str) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 3.0;
+        let muted = text_muted(theme);
+        for (i, key) in keys.iter().enumerate() {
+            if i > 0 {
+                ui.label(RichText::new("+").small().color(muted));
+            }
+            draw_kbd_key(ui, key);
+        }
+    });
+}
+
+/// One shortcut row: key chips, optional macOS alternate, then description.
+pub fn draw_keyboard_shortcut_row(
+    ui: &mut egui::Ui,
+    theme: &str,
+    windows_keys: &[&str],
+    mac_keys: Option<&[&str]>,
+    description: &str,
+) {
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
+        draw_kbd_sequence(ui, windows_keys, theme);
+        if let Some(mac) = mac_keys {
+            ui.label(RichText::new("(").small().color(text_muted(theme)));
+            draw_kbd_sequence(ui, mac, theme);
+            ui.label(RichText::new(")").small().color(text_muted(theme)));
+        }
+        ui.label(
+            RichText::new(format!(": {description}"))
+                .small()
+                .color(text_muted(theme)),
+        );
+    });
+}
+
 /// Full-width batch progress bar with a caller-supplied caption.
 pub fn draw_batch_progress_bar(
     ui: &mut egui::Ui,
