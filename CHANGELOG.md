@@ -16,6 +16,17 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Video queue footer height now uses the larger of the width estimate and last frame's measured height, so wrapped convert footers no longer overlap the list after resize.
+- Docked activity log reserves include the heading row; log height slider caps respect remaining panel space in both docked placements.
+- Undocked main footer (queue floating + log docked) uses the same bottom-anchored strip + log layout as the docked queue panel.
+
+### Changed
+
+- Short docked queue panels switch large card groups to list rows sooner to avoid awkward nested scrolling.
+- When the window hits minimum size and the queue auto-undocks, a dismissible banner explains how to show or re-dock the queue.
+
+### Fixed
+
 - Video queue layout anchors the footer and docked activity log from the panel bottom (list height follows status rows and remaining space; log slider cap respects available height).
 - Main column scroll fills the space above the docked queue panel when you resize the bottom panel.
 - Docked and floating video queue panels no longer overlap the footer toolbar or docked activity log when the window or panel is resized (layout uses measured footer height and mode-aware reserves; log height slider applies consistently when the log is docked under the queue or in the main footer).

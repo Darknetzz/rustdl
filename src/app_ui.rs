@@ -1076,6 +1076,10 @@ pub const UNDOCKED_VIDEOS_STRIP_H: f32 = 100.0;
 pub const DOCKED_LOG_CHROME_H: f32 = 100.0;
 /// Spacing + separator above the activity log when docked under the video queue.
 pub const DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H: f32 = 11.0;
+/// "Activity log" placement row above docked log chrome (under queue or in footer frame).
+pub const DOCKED_LOG_HEADING_H: f32 = 24.0;
+/// Outer spacing + frame margins for log docked in the undocked main footer (no under-queue separator).
+pub const UNDOCKED_LOG_SECTION_FRAME_H: f32 = 25.0;
 /// Main header switches from one row to stacked layout at this content width.
 pub const LAYOUT_WIDE_BREAKPOINT: f32 = 1040.0;
 /// Footer toolbar reserve uses a taller wrapped layout below this width.
@@ -1108,40 +1112,53 @@ pub fn queue_footer_toolbar_reserve(content_width: f32, convert_mode: bool, dock
     base + convert_extra + docked_extra
 }
 
-/// Heights for the pinned queue body regions (list scroll, footer, optional docked log).
-pub struct QueueBodyLayout {
-    pub list_h: f32,
-    pub footer_h: f32,
-    pub log_block_h: f32,
-}
-
-/// Compute queue list height from remaining body space and pinned footer/log blocks.
-pub fn queue_body_layout_heights(
-    available_h: f32,
+/// Footer toolbar reserve: width/mode estimate, optionally raised by last frame's measured height.
+pub fn queue_footer_reserve(
     content_width: f32,
-    dock_log: bool,
-    log_dock_height: f32,
     convert_mode: bool,
     docked: bool,
-    measured_footer_h: Option<f32>,
-) -> QueueBodyLayout {
-    let footer_h = measured_footer_h.unwrap_or_else(|| {
-        queue_footer_toolbar_reserve(content_width, convert_mode, docked) + 2.0
-    });
-    let log_block_h = if dock_log {
-        log_dock_height.clamp(80.0, 480.0)
-            + DOCKED_LOG_CHROME_H
-            + DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
-    } else {
-        0.0
-    };
-    let bottom_stack = footer_h + log_block_h;
-    let list_h = (available_h - bottom_stack).max(0.0);
-    QueueBodyLayout {
-        list_h,
-        footer_h,
-        log_block_h,
+    measured_h: Option<f32>,
+) -> f32 {
+    let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked) + 2.0;
+    match measured_h {
+        Some(m) if m.is_finite() && m > 0.0 => m.max(est),
+        _ => est,
     }
+}
+
+/// Undocked videos strip reserve (compact strip in main footer when queue is floating).
+pub fn queue_undocked_strip_reserve(measured_h: Option<f32>) -> f32 {
+    match measured_h {
+        Some(m) if m.is_finite() && m > 0.0 => m.max(UNDOCKED_VIDEOS_STRIP_H),
+        _ => UNDOCKED_VIDEOS_STRIP_H,
+    }
+}
+
+/// Vertical space for a docked log block (scroll lines + chrome + heading; optional placement extras).
+pub fn queue_log_block_height(dock_log: bool, log_dock_height: f32, under_videos: bool) -> f32 {
+    if !dock_log {
+        return 0.0;
+    }
+    let lines = log_dock_height.clamp(80.0, 480.0);
+    let mut h = lines + DOCKED_LOG_CHROME_H + DOCKED_LOG_HEADING_H;
+    if under_videos {
+        h += DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H;
+    } else {
+        h += UNDOCKED_LOG_SECTION_FRAME_H;
+    }
+    h
+}
+
+/// List and bottom-stack heights from a fixed content top and pinned footer/log blocks.
+pub fn queue_panel_layout_heights(
+    content_top: f32,
+    body_bottom: f32,
+    footer_h: f32,
+    log_block_h: f32,
+) -> (f32, f32) {
+    let list_h = queue_list_height_from_layout(content_top, body_bottom, footer_h, log_block_h);
+    let stack_h = footer_h + log_block_h;
+    (list_h, stack_h)
 }
 
 /// Clamp persisted dock panel heights when the main viewport shrinks (skip while dragging).
@@ -1174,16 +1191,6 @@ pub fn default_videos_dock_height_for_viewport(viewport_height: f32) -> f32 {
         return 360.0;
     }
     (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).clamp(180.0, 800.0)
-}
-
-/// Vertical space for the docked log block (lines + chrome + separator), excluding the heading row.
-pub fn queue_log_block_height(dock_log: bool, log_dock_height: f32) -> f32 {
-    if !dock_log {
-        return 0.0;
-    }
-    log_dock_height.clamp(80.0, 480.0)
-        + DOCKED_LOG_CHROME_H
-        + DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
 }
 
 /// List scroll height between fixed `content_top` and a bottom stack (footer + optional log).
@@ -2073,19 +2080,27 @@ mod tests {
     }
 
     #[test]
-    fn queue_body_layout_never_negative_list() {
-        let layout = queue_body_layout_heights(400.0, 800.0, true, 180.0, false, true, None);
-        assert!(layout.list_h >= 0.0);
-        assert!(layout.footer_h > 0.0);
-        assert!(layout.log_block_h > 0.0);
+    fn queue_footer_reserve_uses_measured_max() {
+        let est = queue_footer_reserve(800.0, false, true, None);
+        let raised = queue_footer_reserve(800.0, false, true, Some(140.0));
+        assert!(raised >= est);
+        assert_eq!(raised, 140.0);
+        assert_eq!(queue_footer_reserve(800.0, false, true, Some(50.0)), est);
     }
 
     #[test]
-    fn queue_body_layout_uses_measured_footer() {
-        let est = queue_body_layout_heights(500.0, 800.0, false, 120.0, false, true, None);
-        let measured = queue_body_layout_heights(500.0, 800.0, false, 120.0, false, true, Some(140.0));
-        assert!(measured.list_h < est.list_h);
-        assert_eq!(measured.footer_h, 140.0);
+    fn queue_log_block_height_includes_heading() {
+        let h = queue_log_block_height(true, 180.0, true);
+        assert!(h >= 180.0 + DOCKED_LOG_CHROME_H + DOCKED_LOG_HEADING_H);
+        let footer = queue_log_block_height(true, 180.0, false);
+        assert!(footer > h - DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H);
+    }
+
+    #[test]
+    fn queue_panel_layout_heights_never_negative_list() {
+        let (list_h, stack_h) = queue_panel_layout_heights(100.0, 500.0, 72.0, 200.0);
+        assert!(list_h >= 0.0);
+        assert_eq!(stack_h, 272.0);
     }
 
     #[test]

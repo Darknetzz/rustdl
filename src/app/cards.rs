@@ -835,7 +835,8 @@ impl PydlApp {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
                     let allow_reorder = label == "Ready";
                     let use_list = self.effective_card_list_layout()
-                        || ids.len() >= self.queue_card_list_fallback_threshold();
+                        || ids.len() >= self.queue_card_list_fallback_threshold()
+                        || outer_scroll_h < 200.0;
                     if use_list {
                         const LIST_ROW_H: f32 = 42.0;
                         let row_count = ids.len().max(1);

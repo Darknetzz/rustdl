@@ -285,6 +285,8 @@ pub struct PydlApp {
     profile_rename_buffer: Option<(String, String)>,
     /// Queue was undocked automatically because the main window is too small.
     videos_auto_undocked_for_size: bool,
+    /// User dismissed the auto-undock info banner in the main column.
+    videos_auto_undock_banner_dismissed: bool,
     /// User chose docked layout (toolbar or Settings); skip auto-undock until they undock manually.
     videos_dock_user_prefers_docked: bool,
     /// Frames elapsed since startup; used to recover invisible Wayland windows.
@@ -511,6 +513,7 @@ impl PydlApp {
             focus_queue_search: false,
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,
+            videos_auto_undock_banner_dismissed: false,
             videos_dock_user_prefers_docked: false,
             #[cfg(target_os = "linux")]
             gui_startup_frames: 0,
@@ -1025,6 +1028,7 @@ impl PydlApp {
     /// User toggled dock/undock (toolbar or Settings); overrides size-driven auto layout.
     pub(super) fn note_videos_dock_user_choice(&mut self, docked: bool) {
         self.videos_auto_undocked_for_size = false;
+        self.videos_auto_undock_banner_dismissed = true;
         self.videos_dock_user_prefers_docked = docked;
         if !docked {
             self.settings.videos_open = true;
@@ -1152,6 +1156,7 @@ impl PydlApp {
                 self.settings.videos_docked = false;
                 self.settings.videos_open = false;
                 self.videos_auto_undocked_for_size = true;
+                self.videos_auto_undock_banner_dismissed = false;
                 self.persist_settings();
             }
         } else if self.videos_auto_undocked_for_size
@@ -1159,6 +1164,7 @@ impl PydlApp {
         {
             self.settings.videos_docked = true;
             self.videos_auto_undocked_for_size = false;
+            self.videos_auto_undock_banner_dismissed = true;
             self.persist_settings();
         }
     }
@@ -2261,6 +2267,28 @@ impl PydlApp {
                 .clicked()
             {
                 self.config_load_banner_dismissed = true;
+            }
+        });
+        ui.add_space(4.0);
+    }
+
+    pub(super) fn draw_videos_auto_undock_banner(&mut self, ui: &mut egui::Ui) {
+        if !self.videos_auto_undocked_for_size || self.videos_auto_undock_banner_dismissed {
+            return;
+        }
+        alert_warning(ui, |ui| {
+            ui.label(
+                RichText::new(
+                    "The video queue was undocked because the window is at minimum size. \
+                     Use Show Videos in the footer strip, or widen the window to dock the queue again.",
+                )
+                .color(ALERT_WARNING_TEXT),
+            );
+            if ui
+                .button(format!("{} Dismiss", ui_icons::DISMISS))
+                .clicked()
+            {
+                self.videos_auto_undock_banner_dismissed = true;
             }
         });
         ui.add_space(4.0);

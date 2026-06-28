@@ -167,7 +167,7 @@ impl PydlApp {
                 }
 
                 let mut run: Option<&'static str> = None;
-                let scroll_h = bounded_ui_height(ui, 120.0).max(120.0).min(280.0);
+                let scroll_h = bounded_ui_height(ui, 120.0).clamp(120.0, 280.0);
                 egui::ScrollArea::vertical()
                     .max_height(scroll_h)
                     .show(ui, |ui| {

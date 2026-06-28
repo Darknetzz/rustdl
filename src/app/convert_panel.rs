@@ -164,9 +164,7 @@ fn convert_item_size_limit_override_label(
     item: &ConvertQueueItem,
     settings: &AppSettings,
 ) -> Option<String> {
-    if item.size_limit_kind_override.is_none() {
-        return None;
-    }
+    item.size_limit_kind_override.as_ref()?;
     let limit = ConvertSizeLimit::for_item(settings, item);
     Some(if limit.is_active() {
         format!("Size limit override: {}", limit.summary_label())
