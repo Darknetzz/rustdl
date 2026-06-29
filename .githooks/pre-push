@@ -38,16 +38,23 @@ schedule_publish() {
 			;;
 		esac
 	elif command -v powershell >/dev/null 2>&1; then
-		powershell -NoProfile -ExecutionPolicy Bypass -Command "
-			Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @(
-				'-NoProfile',
-				'-ExecutionPolicy', 'Bypass',
-				'-File', '$wait_script',
-				'-Remote', '$remote',
-				'-Commit', '$commit',
-				'-Quiet'
-			) | Out-Null
-		"
+		case "$(uname -s 2>/dev/null)" in
+		MINGW* | MSYS* | CYGWIN* | Windows*)
+			powershell -NoProfile -ExecutionPolicy Bypass -Command "
+				Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @(
+					'-NoProfile',
+					'-ExecutionPolicy', 'Bypass',
+					'-File', '$wait_script',
+					'-Remote', '$remote',
+					'-Commit', '$commit',
+					'-Quiet'
+				) | Out-Null
+			"
+			;;
+		*)
+			powershell -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
+			;;
+		esac
 	elif [ -x "$repo_root/scripts/wait_and_publish_dev.sh" ]; then
 		"$repo_root/scripts/wait_and_publish_dev.sh" "$remote" "$commit" &
 	else
