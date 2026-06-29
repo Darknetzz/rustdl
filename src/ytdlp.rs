@@ -558,6 +558,130 @@ fn estimate_preview_resolution(entry: &Value) -> (Option<u32>, Option<u32>) {
     (None, None)
 }
 
+/// Best video width/height from a yt-dlp `-J` entry (`formats` + top-level fields).
+pub fn max_video_resolution_from_entry(entry: &serde_json::Value) -> (Option<u32>, Option<u32>) {
+    let mut best_w = entry
+        .get("width")
+        .and_then(serde_json::Value::as_u64)
+        .map(|v| v as u32);
+    let mut best_h = entry
+        .get("height")
+        .and_then(serde_json::Value::as_u64)
+        .map(|v| v as u32);
+
+    let mut scan = |f: &serde_json::Value| {
+        let vcodec = f.get("vcodec").and_then(serde_json::Value::as_str).unwrap_or("");
+        if vcodec == "none" || vcodec.is_empty() {
+            return;
+        }
+        if let Some(h) = f.get("height").and_then(serde_json::Value::as_u64) {
+            let h = h as u32;
+            best_h = Some(best_h.map_or(h, |cur| cur.max(h)));
+        }
+        if let Some(w) = f.get("width").and_then(serde_json::Value::as_u64) {
+            let w = w as u32;
+            best_w = Some(best_w.map_or(w, |cur| cur.max(w)));
+        }
+    };
+
+    if let Some(formats) = entry.get("formats").and_then(serde_json::Value::as_array) {
+        for f in formats {
+            scan(f);
+        }
+    }
+    if let Some(req) = entry.get("requested_formats").and_then(serde_json::Value::as_array) {
+        for f in req {
+            scan(f);
+        }
+    }
+    (best_w, best_h)
+}
+
+pub struct MaxResolutionProbe {
+    pub title: String,
+    pub video_id: String,
+    pub webpage_url: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub error: Option<String>,
+}
+
+/// Probe max available video resolution for a URL (`yt-dlp -J`, no download).
+pub fn probe_max_video_resolution_with_bin(
+    url: &str,
+    yt_dlp_path: &str,
+    extra_args: &[String],
+) -> MaxResolutionProbe {
+    let trimmed = url.trim();
+    let fail = |error: String| MaxResolutionProbe {
+        title: String::new(),
+        video_id: String::new(),
+        webpage_url: trimmed.to_owned(),
+        width: None,
+        height: None,
+        error: Some(error),
+    };
+    if trimmed.is_empty() {
+        return fail("URL is empty".to_owned());
+    }
+    let bin = resolve_executable(yt_dlp_path, "yt-dlp");
+    let mut cmd = Command::new(&bin);
+    no_console_window(&mut cmd);
+    cmd.args(["-J", "--no-warnings", "--skip-download"]);
+    for arg in extra_args {
+        cmd.arg(arg);
+    }
+    cmd.arg(trimmed);
+    let output = match cmd.output() {
+        Ok(o) => o,
+        Err(e) => return fail(yt_dlp_spawn_error_message(yt_dlp_path, &e)),
+    };
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+        return fail(if err.is_empty() {
+            "yt-dlp failed".to_owned()
+        } else {
+            err
+        });
+    }
+    let Ok(root) = serde_json::from_slice::<serde_json::Value>(&output.stdout) else {
+        return fail("Invalid yt-dlp JSON".to_owned());
+    };
+    let entry = if let Some(entries) = root.get("entries").and_then(serde_json::Value::as_array) {
+        entries.first()
+    } else {
+        Some(&root)
+    };
+    let Some(entry) = entry else {
+        return fail("No entries in playlist".to_owned());
+    };
+    let title = entry
+        .get("title")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("(no title)")
+        .to_owned();
+    let webpage_url = entry
+        .get("webpage_url")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| entry.get("url").and_then(serde_json::Value::as_str))
+        .unwrap_or(trimmed)
+        .to_owned();
+    let video_id = entry
+        .get("id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_owned();
+    let (width, height) = max_video_resolution_from_entry(entry);
+    MaxResolutionProbe {
+        title,
+        video_id,
+        webpage_url,
+        width,
+        height,
+        error: None,
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct FfprobeStreamsRoot {
     #[serde(default)]

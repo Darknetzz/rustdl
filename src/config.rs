@@ -402,6 +402,30 @@ pub struct AppSettings {
     /// Scheduled download start time (`HH:MM` local); empty = disabled.
     #[serde(default)]
     pub scheduled_download_start: String,
+    /// Periodically re-probe watchlist URLs for higher max resolution.
+    #[serde(default = "default_watchlist_enabled")]
+    pub watchlist_enabled: bool,
+    /// Hours between automatic watchlist probes (`1`–`168`).
+    #[serde(default = "default_watchlist_poll_hours")]
+    pub watchlist_poll_hours: u32,
+    /// When a watchlist URL improves, auto-add it to the download queue.
+    #[serde(default)]
+    pub watchlist_auto_enqueue: bool,
+    /// Minimum height increase (pixels) before treating a probe as improved.
+    #[serde(default = "default_watchlist_min_height_delta")]
+    pub watchlist_min_height_delta: u32,
+}
+
+fn default_watchlist_enabled() -> bool {
+    true
+}
+
+fn default_watchlist_poll_hours() -> u32 {
+    6
+}
+
+fn default_watchlist_min_height_delta() -> u32 {
+    1
 }
 
 fn default_web_bind_address() -> String {
@@ -755,6 +779,10 @@ impl Default for AppSettings {
             web_tls_cert_path: String::new(),
             web_tls_key_path: String::new(),
             scheduled_download_start: String::new(),
+            watchlist_enabled: default_watchlist_enabled(),
+            watchlist_poll_hours: default_watchlist_poll_hours(),
+            watchlist_auto_enqueue: false,
+            watchlist_min_height_delta: default_watchlist_min_height_delta(),
         }
     }
 }
@@ -1028,6 +1056,8 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
     if cfg.active_profile.trim().is_empty() {
         cfg.active_profile = default_active_profile();
     }
+    cfg.watchlist_poll_hours = cfg.watchlist_poll_hours.clamp(1, 168);
+    cfg.watchlist_min_height_delta = cfg.watchlist_min_height_delta.clamp(1, 2160);
 }
 
 pub fn load_settings() -> AppSettings {

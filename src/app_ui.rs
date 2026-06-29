@@ -2203,15 +2203,18 @@ impl<'a> ButtonGroup<'a> {
         })
     }
 
-    /// Verify saved file streams and optionally re-download (done rows).
+    /// Verify saved file streams, re-download, or watch for better quality (done rows).
     pub fn verify_menu(
         &mut self,
         show_verify_file: bool,
         can_verify_file: bool,
         show_redownload: bool,
         can_redownload: bool,
+        show_watch: bool,
+        can_watch: bool,
         verify_clicked: &mut bool,
         redownload_clicked: &mut bool,
+        watch_clicked: &mut bool,
     ) -> Response {
         let compact = self.compact;
         let label = format!("{} Verify...", crate::ui_icons::CHECK_STREAMS);
@@ -2261,9 +2264,26 @@ impl<'a> ButtonGroup<'a> {
                     {
                         *redownload_clicked = true;
                     }
+                    if show_watch
+                        && ui
+                            .add_enabled(
+                                can_watch,
+                                egui::Button::new(format!(
+                                    "{} Watch for better quality",
+                                    crate::ui_icons::WATCHLIST
+                                )),
+                            )
+                            .on_hover_text(
+                                "Add this URL to the quality watchlist; rustdl will re-probe on a schedule and notify you when max resolution increases.",
+                            )
+                            .on_disabled_hover_text("Needs a video URL and yt-dlp.")
+                            .clicked()
+                    {
+                        *watch_clicked = true;
+                    }
                 });
             }
-            button.on_hover_text("Verify the saved file or re-download this URL")
+            button.on_hover_text("Verify, re-download, or watch for better quality")
         })
     }
 

@@ -101,6 +101,7 @@ pub fn spawn_watch_folder_loop(runtime: Arc<Runtime>, core: SharedCore) {
             let mut c = core.lock();
             c.poll_watch_folders();
             c.poll_scheduled_download_start();
+            c.maybe_schedule_watchlist_poll(&core);
             DownloadCore::spawn_done_file_lookup_refresh_if_due(&core);
         }
     });

@@ -804,6 +804,64 @@ pub(crate) fn spawn_playlist_preview(
     });
 }
 
+pub(crate) fn spawn_watchlist_poll_cycle(shared: crate::service::core::SharedCore) {
+    let inflight = {
+        let c = shared.lock();
+        if c.watchlist_poll_inflight.load(Ordering::Relaxed) {
+            return;
+        }
+        c.watchlist_poll_inflight.clone()
+    };
+    inflight.store(true, Ordering::Relaxed);
+    let rt = {
+        let c = shared.lock();
+        c.runtime.clone()
+    };
+    rt.spawn(async move {
+        let work: Vec<(u64, String, String, Vec<String>)> = {
+            let c = shared.lock();
+            c.watchlist
+                .entries
+                .iter()
+                .filter(|e| !e.paused)
+                .map(|e| {
+                    (
+                        e.entry_id,
+                        e.url.clone(),
+                        c.settings.yt_dlp_path.clone(),
+                        crate::ytdlp_download_args::metadata_extra_args(&c.settings),
+                    )
+                })
+                .collect()
+        };
+        for (entry_id, url, bin, metadata_args) in work {
+            let url_for_probe = url.clone();
+            let probe = match tokio::task::spawn_blocking(move || {
+                ytdlp::probe_max_video_resolution_with_bin(
+                    &url_for_probe,
+                    &bin,
+                    &metadata_args,
+                )
+            })
+            .await
+            {
+                Ok(p) => p,
+                Err(_) => ytdlp::MaxResolutionProbe {
+                    title: String::new(),
+                    video_id: String::new(),
+                    webpage_url: url.clone(),
+                    width: None,
+                    height: None,
+                    error: Some("Watchlist probe task failed.".to_owned()),
+                },
+            };
+            let mut c = shared.lock();
+            c.apply_watchlist_probe_result(entry_id, probe);
+        }
+        inflight.store(false, Ordering::Relaxed);
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::should_retry_without_embed_thumbnail;

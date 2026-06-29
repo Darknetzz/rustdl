@@ -438,6 +438,7 @@ impl eframe::App for PydlApp {
                 self.constrain_content(ui);
 
                 self.draw_downloader_options_collapsible(ui);
+                self.draw_watchlist_collapsible(ui);
 
                 let has_idle_items = self
                     .items

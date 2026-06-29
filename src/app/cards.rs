@@ -348,19 +348,29 @@ impl PydlApp {
                             if done_file.is_some() || status == ItemStatus::Done {
                                 let mut verify_file = false;
                                 let mut redownload = false;
+                                let mut watch_quality = false;
+                                let can_watch = status == ItemStatus::Done
+                                    && self.has_yt_dlp
+                                    && self.watchlist_url_available_for_item(id);
                                 g.verify_menu(
                                     done_file.is_some(),
                                     can_verify_file,
                                     status == ItemStatus::Done,
                                     can_redownload_action,
+                                    status == ItemStatus::Done,
+                                    can_watch,
                                     &mut verify_file,
                                     &mut redownload,
+                                    &mut watch_quality,
                                 );
                                 if verify_file {
                                     self.check_streams_for_item_id(id);
                                 }
                                 if redownload {
                                     self.redownload_item_id(id);
+                                }
+                                if watch_quality {
+                                    self.add_queue_item_to_watchlist(id);
                                 }
                             }
                             let mut remove_from_queue = false;

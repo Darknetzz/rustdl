@@ -98,6 +98,11 @@ fn sync_shared_fields_from_core(core: &DownloadCore, app: &mut PydlApp) {
         app.synced_settings_generation = core.settings_generation;
     }
 
+    if core.watchlist_generation != app.synced_watchlist_generation {
+        app.watchlist = core.watchlist.clone();
+        app.synced_watchlist_generation = core.watchlist_generation;
+    }
+
     app.downloads_paused = core.downloads_paused;
     app.convert_paused = core.convert_paused;
     app.session_complete_notified = core.session_complete_notified;

@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- **Quality watchlist** — save URLs to re-probe on a schedule; rustdl logs when max available resolution increases (e.g. a low-quality premiere later replaced by HD on the same link). Add from a Done download (**Verify… → Watch for better quality**), paste a URL in **Settings → Downloader → Quality watchlist**, or use the **Quality watchlist** panel in the main column. Optional auto-enqueue when quality improves.
+
 ### Changed
 
 - LAN web UI **IP whitelist** defaults to **127.0.0.1** and **::1** so browsers on this PC can connect without the API token; other clients still need the token unless you add their IP or subnet.

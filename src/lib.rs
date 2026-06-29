@@ -31,6 +31,7 @@ pub mod transcode;
 pub mod tray;
 pub mod ui_icons;
 pub mod watch_folder;
+pub mod watchlist;
 #[cfg(windows)]
 pub mod win_drop_target;
 #[cfg(windows)]

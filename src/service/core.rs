@@ -298,6 +298,11 @@ pub struct DownloadCore {
 
     pub watch_folder_state: crate::watch_folder::WatchFolderState,
 
+    pub watchlist: crate::watchlist::WatchlistStore,
+    pub watchlist_generation: u64,
+    pub(crate) watchlist_last_cycle: Option<Instant>,
+    pub(crate) watchlist_poll_inflight: Arc<AtomicBool>,
+
     /// Local calendar day (`YYYY-MM-DD`) when scheduled download start last fired.
     pub scheduled_download_last_fire_day: Option<String>,
 }
@@ -436,6 +441,10 @@ impl DownloadCore {
             shutdown_notify: None,
             pending_session_restore,
             watch_folder_state: crate::watch_folder::WatchFolderState::new(),
+            watchlist: crate::watchlist::load_watchlist(),
+            watchlist_generation: 1,
+            watchlist_last_cycle: None,
+            watchlist_poll_inflight: Arc::new(AtomicBool::new(false)),
             scheduled_download_last_fire_day: None,
         };
         core.rebuild_item_index();

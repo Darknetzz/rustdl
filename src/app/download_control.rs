@@ -98,4 +98,65 @@ impl PydlApp {
             }
         });
     }
+
+    pub(super) fn add_queue_item_to_watchlist(&mut self, item_id: u64) {
+        self.download_core_action(|core| {
+            if let Err(err) = core.add_watchlist_from_queue_item(item_id) {
+                core.append_log(&format!("Watchlist: {}", err.message()));
+            }
+        });
+        self.spawn_watchlist_probe_if_enabled();
+    }
+
+    pub(super) fn add_url_to_watchlist(&mut self, url: &str) {
+        let url = url.to_owned();
+        self.download_core_action(|core| {
+            if let Err(err) = core.add_watchlist_url(url) {
+                core.append_log(&format!("Watchlist: {}", err.message()));
+            }
+        });
+        self.spawn_watchlist_probe_if_enabled();
+    }
+
+    pub(super) fn remove_watchlist_entry(&mut self, entry_id: u64) {
+        self.download_core_action(|core| {
+            if core.remove_watchlist_entry(entry_id) {
+                core.append_log("Watchlist: entry removed.");
+            }
+        });
+    }
+
+    pub(super) fn set_watchlist_entry_paused(&mut self, entry_id: u64, paused: bool) {
+        self.download_core_action(|core| {
+            core.set_watchlist_entry_paused(entry_id, paused);
+        });
+    }
+
+    pub(super) fn enqueue_watchlist_entry(&mut self, entry_id: u64) {
+        self.download_core_action(|core| {
+            if core.enqueue_watchlist_entry(entry_id) {
+                core.append_log("Watchlist: URL added to the download queue.");
+            }
+        });
+    }
+
+    pub(super) fn probe_watchlist_now(&mut self) {
+        self.download_core_action(|core| {
+            core.request_watchlist_probe_now();
+            core.append_log("Watchlist: checking URLs…");
+        });
+        if self.settings.watchlist_enabled && self.has_yt_dlp {
+            crate::service::background_spawn::spawn_watchlist_poll_cycle(
+                self.shared_core.clone(),
+            );
+        }
+    }
+
+    fn spawn_watchlist_probe_if_enabled(&self) {
+        if self.settings.watchlist_enabled && self.has_yt_dlp {
+            crate::service::background_spawn::spawn_watchlist_poll_cycle(
+                self.shared_core.clone(),
+            );
+        }
+    }
 }

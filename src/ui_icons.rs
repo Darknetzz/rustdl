@@ -25,6 +25,7 @@ pub const RETRY: &str = m::ICON_REFRESH;
 pub const CANCEL_TO_READY: &str = m::ICON_STOP;
 pub const CANCEL_TO_REMOVE: &str = m::ICON_DELETE_FOREVER;
 pub const RECHECK: &str = m::ICON_SEARCH;
+pub const WATCHLIST: &str = m::ICON_VISIBILITY;
 pub const SCAN: &str = m::ICON_SCAN;
 pub const SETTINGS: &str = m::ICON_SETTINGS;
 /// LAN web UI (browser).

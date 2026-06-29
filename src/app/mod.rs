@@ -32,6 +32,7 @@ mod settings_panel;
 pub(crate) mod thumbnails;
 pub(crate) mod update_check;
 mod videos_panel;
+mod watchlist_panel;
 mod web_qr;
 
 pub(crate) use crate::domain::events::UiEvent;
@@ -115,6 +116,11 @@ pub struct PydlApp {
     pub(crate) synced_log_len: usize,
     /// Last mirrored settings generation from core.
     pub(crate) synced_settings_generation: u64,
+    /// Mirrored quality watchlist from core.
+    pub(crate) watchlist: crate::watchlist::WatchlistStore,
+    pub(crate) synced_watchlist_generation: u64,
+    /// Buffer for adding a watchlist URL from Settings.
+    watchlist_add_url_buf: String,
     pub(crate) web_server: Option<crate::service::web::WebServerHandle>,
     runtime: Arc<Runtime>,
     ui_bus: crate::domain::UiEventBus,
@@ -374,6 +380,8 @@ impl PydlApp {
         let core_generation = shared_core.lock().generation;
         let synced_done_file_index_generation = shared_core.lock().done_file_index.generation;
         let synced_settings_generation = shared_core.lock().settings_generation;
+        let watchlist = shared_core.lock().watchlist.clone();
+        let synced_watchlist_generation = shared_core.lock().watchlist_generation;
 
         let mut app = Self {
             shared_core: shared_core.clone(),
@@ -383,6 +391,9 @@ impl PydlApp {
             settings_dirty: false,
             synced_log_len: log_lines.len(),
             synced_settings_generation,
+            watchlist,
+            synced_watchlist_generation,
+            watchlist_add_url_buf: String::new(),
             web_server: None,
             runtime,
             ui_bus,
@@ -617,6 +628,18 @@ impl PydlApp {
             count = core.requeue_done_items(item_ids);
         });
         count
+    }
+
+    pub(super) fn watchlist_url_available_for_item(&self, item_id: u64) -> bool {
+        let Some(url) = self
+            .items
+            .iter()
+            .find(|it| it.item_id == item_id)
+            .and_then(crate::app_state::resolve_item_download_url)
+        else {
+            return false;
+        };
+        !url.trim().is_empty() && !self.watchlist.has_url(&url)
     }
 
     pub(super) fn effective_card_list_layout_for_panel(&self, outer_scroll_h: f32) -> bool {

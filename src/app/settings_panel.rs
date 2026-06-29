@@ -927,6 +927,9 @@ impl PydlApp {
                             ui.end_row();
                         });
                         ui.separator();
+                        ui.label(RichText::new("Quality watchlist").strong());
+                        changed |= self.draw_watchlist_settings_section(ui);
+                        ui.separator();
                         ui.label(RichText::new("Queue templates").strong());
                         settings_form_grid(ui, "queue_templates", |ui| {
                             ui.label("Template name");
