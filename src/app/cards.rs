@@ -8,9 +8,10 @@ use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
     left_button_row, popup_menu_above, queue_card_grid_width, queue_short_panel_list_fallback,
-    should_flatten_nested_group_scroll, show_queue_group_section, status_color,
+    should_flatten_nested_group_scroll, show_menu_popup, show_queue_group_section, status_color,
     status_dot_with_label, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
 };
+use crate::media_metadata::queue_item_more_info_rows;
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
 use crate::time_format::{format_absolute_local, format_relative_ago};
@@ -295,6 +296,9 @@ impl PydlApp {
                         });
                     });
                 }
+                left_button_row(ui, |ui| {
+                    self.draw_more_info_button(ui, id);
+                });
 
                 let can_retry_download = status == ItemStatus::Failed
                     && output_ready
@@ -647,6 +651,7 @@ impl PydlApp {
                     }
                 }
             }
+            self.draw_more_info_button(ui, id);
         });
         if let Some(ref fail) = failure_text {
             ui.horizontal(|ui| {
@@ -675,6 +680,52 @@ impl PydlApp {
             }
         }
         ui.separator();
+    }
+
+    fn draw_more_info_button(&mut self, ui: &mut egui::Ui, item_id: u64) {
+        let popup_id = ui.id().with(("more_info_popup", item_id));
+        let label = format!("{} More info", ui_icons::MORE_INFO);
+        let button = ui
+            .button(label)
+            .on_hover_text("Source metadata from yt-dlp; file details from ffprobe when downloaded");
+        if button.clicked() {
+            self.ensure_queue_item_metadata(item_id);
+            ui.memory_mut(|mem| mem.toggle_popup(popup_id));
+        }
+        if ui.memory(|mem| mem.is_popup_open(popup_id)) {
+            let rows = self
+                .item_idx(item_id)
+                .map(|idx| queue_item_more_info_rows(&self.items[idx]))
+                .unwrap_or_default();
+            show_menu_popup(ui, popup_id, &button, |ui| {
+                ui.set_min_width(360.0);
+                if rows.is_empty() {
+                    ui.label("No metadata yet — wait for resolve or finish the download.");
+                    return;
+                }
+                egui::ScrollArea::vertical()
+                    .max_height(420.0)
+                    .show(ui, |ui| {
+                        let mut last_section = "";
+                        for row in &rows {
+                            if row.section != last_section {
+                                if !last_section.is_empty() {
+                                    ui.add_space(6.0);
+                                    ui.separator();
+                                    ui.add_space(4.0);
+                                }
+                                ui.label(RichText::new(row.section).strong());
+                                last_section = row.section;
+                            }
+                            ui.horizontal_wrapped(|ui| {
+                                ui.spacing_mut().item_spacing.x = 8.0;
+                                ui.label(RichText::new(format!("{}:", row.label)).weak());
+                                ui.label(&row.value);
+                            });
+                        }
+                    });
+            });
+        }
     }
 
     fn item_in_queue_group(&self, it: &QueueItem, label: &str) -> bool {

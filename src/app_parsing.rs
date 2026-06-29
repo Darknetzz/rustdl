@@ -239,6 +239,21 @@ pub fn apply_local_media_probe(
     if let Some(fps) = media.fps {
         item.fps = Some(fps);
     }
+    if let Some(fmt) = media.format_name {
+        item.file_format = Some(fmt);
+    }
+    if let Some(ct) = media.creation_time {
+        item.file_creation_time = Some(ct);
+    }
+    if let Some(enc) = media.encoder_tag {
+        item.file_encoder = Some(enc);
+    }
+    if let Some(ac) = media.audio_codec {
+        item.audio_codec = Some(ac);
+    }
+    if let Some(bps) = media.bitrate_bps {
+        item.file_bitrate_bps = Some(bps);
+    }
 }
 
 /// Bytes to show on a done card badge (download total, then on-disk size).

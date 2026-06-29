@@ -458,6 +458,19 @@ fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
         .get("upload_date")
         .and_then(Value::as_str)
         .map(str::to_owned);
+    let upload_timestamp = entry
+        .get("timestamp")
+        .and_then(Value::as_i64)
+        .or_else(|| entry.get("release_timestamp").and_then(Value::as_i64));
+    let view_count = entry.get("view_count").and_then(Value::as_u64);
+    let release_date = entry
+        .get("release_date")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let live_status = entry
+        .get("live_status")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
     VideoPreview {
         video_id: entry
             .get("id")
@@ -481,6 +494,10 @@ fn parse_preview_entry(entry: &Value, source: &str) -> VideoPreview {
         playlist_title,
         playlist_index,
         upload_date,
+        upload_timestamp,
+        view_count,
+        release_date,
+        live_status,
         width,
         height,
         expected_size_bytes,

@@ -65,6 +65,8 @@ pub const PRESET_ARCHIVE: &str = m::ICON_ARCHIVE;
 pub const COPY_CLIPBOARD: &str = m::ICON_CONTENT_PASTE;
 /// Page link actions on downloader queue cards.
 pub const PAGE_URL: &str = m::ICON_LINK;
+/// Per-queue-row metadata popup (yt-dlp + ffprobe).
+pub const MORE_INFO: &str = m::ICON_INFO;
 pub const UPDATE_CHECK: &str = m::ICON_SYNC;
 /// Open release / get update (browser).
 pub const UPDATE_OPEN: &str = m::ICON_OPEN_IN_NEW;

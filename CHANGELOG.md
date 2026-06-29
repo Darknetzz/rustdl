@@ -13,6 +13,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **Quality watchlist** — save URLs to re-probe on a schedule; rustdl logs when max available resolution increases (e.g. a low-quality premiere later replaced by HD on the same link). Add from a Done download (**Verify… → Watch for better quality**), paste a URL in **Settings → Downloader → Quality watchlist**, or use the **Quality watchlist** panel in the main column. Optional auto-enqueue when quality improves.
+- **More info** on each download queue row — **More info** opens a popup with yt-dlp source fields (title, uploader, publish date, views, URL, playlist, …) and, after download, ffprobe file details (container, codecs, bitrate, path, saved time).
 
 ### Changed
 

@@ -34,6 +34,10 @@ pub struct ConvertInputMedia {
     pub fps: Option<f32>,
     pub bitrate_bps: Option<u64>,
     pub duration_ms: Option<u64>,
+    pub format_name: Option<String>,
+    pub creation_time: Option<String>,
+    pub encoder_tag: Option<String>,
+    pub audio_codec: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -594,14 +598,28 @@ fn parse_bitrate_field(raw: &str) -> Option<u64> {
     trimmed.parse().ok()
 }
 
+#[derive(serde::Deserialize, Default)]
+struct FfprobeFormatTags {
+    #[serde(default)]
+    creation_time: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+    #[serde(default)]
+    encoder: Option<String>,
+}
+
 #[derive(serde::Deserialize)]
 struct FfprobeMediaFormat {
+    format_name: Option<String>,
     bit_rate: Option<String>,
     duration: Option<String>,
+    #[serde(default)]
+    tags: Option<FfprobeFormatTags>,
 }
 
 #[derive(serde::Deserialize)]
 struct FfprobeMediaStream {
+    codec_type: Option<String>,
     codec_name: Option<String>,
     width: Option<u32>,
     height: Option<u32>,
@@ -624,12 +642,10 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         .args([
             "-v",
             "error",
-            "-select_streams",
-            "v:0",
             "-show_entries",
-            "stream=codec_name,width,height,avg_frame_rate,r_frame_rate,bit_rate",
+            "stream=codec_type,codec_name,width,height,avg_frame_rate,r_frame_rate,bit_rate",
             "-show_entries",
-            "format=bit_rate,duration",
+            "format=format_name,bit_rate,duration,tags",
             "-of",
             "json",
             &file_path.to_string_lossy(),
@@ -642,14 +658,27 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         return None;
     }
     let root: FfprobeMediaRoot = serde_json::from_slice(&out.stdout).ok()?;
-    let stream = root.streams.into_iter().next()?;
+    let stream = root
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("video"))?;
+    let audio_codec = root
+        .streams
+        .iter()
+        .find(|s| s.codec_type.as_deref() == Some("audio"))
+        .and_then(|s| s.codec_name.as_deref())
+        .map(|c| c.trim().to_ascii_lowercase())
+        .filter(|c| !c.is_empty());
     let format = root.format.unwrap_or(FfprobeMediaFormat {
+        format_name: None,
         bit_rate: None,
         duration: None,
+        tags: None,
     });
 
     let codec = stream
         .codec_name
+        .as_deref()
         .unwrap_or_default()
         .trim()
         .to_ascii_lowercase();
@@ -696,6 +725,27 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         fps,
         bitrate_bps,
         duration_ms,
+        format_name: format
+            .format_name
+            .map(|n| n.split(',').next().unwrap_or(&n).trim().to_owned())
+            .filter(|n| !n.is_empty()),
+        creation_time: format
+            .tags
+            .as_ref()
+            .and_then(|t| {
+                t.creation_time
+                    .as_deref()
+                    .or(t.date.as_deref())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+            }),
+        encoder_tag: format
+            .tags
+            .and_then(|t| t.encoder)
+            .map(|e| e.trim().to_owned())
+            .filter(|e| !e.is_empty()),
+        audio_codec,
     })
 }
 

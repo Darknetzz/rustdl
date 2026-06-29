@@ -2008,7 +2008,7 @@ fn grouped_warning_button(
     )
 }
 
-fn show_menu_popup<R>(
+pub(crate) fn show_menu_popup<R>(
     ui: &mut egui::Ui,
     popup_id: Id,
     button: &Response,

@@ -11,6 +11,10 @@ pub struct VideoPreview {
     pub playlist_title: Option<String>,
     pub playlist_index: Option<u32>,
     pub upload_date: Option<String>,
+    pub upload_timestamp: Option<i64>,
+    pub view_count: Option<u64>,
+    pub release_date: Option<String>,
+    pub live_status: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub expected_size_bytes: Option<u64>,
@@ -37,6 +41,14 @@ pub struct QueueItem {
     pub playlist_index: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub upload_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upload_timestamp: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub view_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub release_date: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_status: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub error: Option<String>,
@@ -70,6 +82,21 @@ pub struct QueueItem {
     /// Frame rate from ffprobe on the saved file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fps: Option<f32>,
+    /// Container format from ffprobe (`matroska`, `mp4`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_format: Option<String>,
+    /// `creation_time` / `date` tag from the downloaded file container.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_creation_time: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_encoder: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_codec: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_bitrate_bps: Option<u64>,
+    /// Filesystem mtime when the output file was last seen on disk.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_saved_mtime: Option<u64>,
     /// True when a playlist/channel was truncated to the preview cap.
     #[serde(default)]
     pub playlist_capped: bool,
@@ -89,6 +116,10 @@ impl Default for QueueItem {
             playlist_title: None,
             playlist_index: None,
             upload_date: None,
+            upload_timestamp: None,
+            view_count: None,
+            release_date: None,
+            live_status: None,
             width: None,
             height: None,
             error: None,
@@ -106,6 +137,12 @@ impl Default for QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            file_format: None,
+            file_creation_time: None,
+            file_encoder: None,
+            audio_codec: None,
+            file_bitrate_bps: None,
+            file_saved_mtime: None,
             playlist_capped: false,
         }
     }
@@ -125,6 +162,10 @@ impl QueueItem {
             playlist_title: None,
             playlist_index: None,
             upload_date: None,
+            upload_timestamp: None,
+            view_count: None,
+            release_date: None,
+            live_status: None,
             width: None,
             height: None,
             error: None,
@@ -142,6 +183,12 @@ impl QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            file_format: None,
+            file_creation_time: None,
+            file_encoder: None,
+            audio_codec: None,
+            file_bitrate_bps: None,
+            file_saved_mtime: None,
             playlist_capped: false,
         }
     }
@@ -172,6 +219,10 @@ impl QueueItem {
             playlist_title: p.playlist_title,
             playlist_index: p.playlist_index,
             upload_date: p.upload_date,
+            upload_timestamp: p.upload_timestamp,
+            view_count: p.view_count,
+            release_date: p.release_date,
+            live_status: p.live_status,
             width: p.width,
             height: p.height,
             error: p.error,
@@ -189,6 +240,12 @@ impl QueueItem {
             profile_override: None,
             video_codec: String::new(),
             fps: None,
+            file_format: None,
+            file_creation_time: None,
+            file_encoder: None,
+            audio_codec: None,
+            file_bitrate_bps: None,
+            file_saved_mtime: None,
             playlist_capped: p.playlist_capped,
         }
     }

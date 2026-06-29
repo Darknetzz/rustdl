@@ -1971,29 +1971,49 @@ impl PydlApp {
     }
 
     fn probe_done_item_resolution_if_missing(&mut self, item_id: u64) {
+        self.ensure_queue_item_metadata(item_id);
+    }
+
+    /// Lazy ffprobe + filesystem metadata for the **More info** popup and done-card badges.
+    pub(super) fn ensure_queue_item_metadata(&mut self, item_id: u64) {
         let Some(idx) = self.item_idx(item_id) else {
             return;
         };
-        if self.items[idx].status != ItemStatus::Done {
+        if !matches!(
+            self.items[idx].status,
+            ItemStatus::Done | ItemStatus::Failed
+        ) {
             return;
         }
-        if self.items[idx].width.is_some()
-            && self.items[idx].height.is_some()
-            && !self.items[idx].video_codec.is_empty()
-            && self.items[idx].fps.is_some()
-        {
+        let needs_probe = {
+            let it = &self.items[idx];
+            it.file_format.is_none()
+                || it.audio_codec.is_none()
+                || it.file_bitrate_bps.is_none()
+                || it.file_creation_time.is_none()
+                || it.video_codec.is_empty()
+                || it.width.is_none()
+                || it.height.is_none()
+                || it.fps.is_none()
+                || it.file_saved_mtime.is_none()
+        };
+        if !needs_probe {
             return;
         }
-        let Some((path, _)) = self.find_downloaded_file_for_item(&self.items[idx]) else {
+        let Some((path, mtime)) = self.find_downloaded_file_for_item(&self.items[idx]) else {
             return;
         };
-        crate::app_parsing::apply_local_media_probe(
-            &mut self.items[idx],
-            &path,
-            &self.settings.ffprobe_path,
-        );
-        self.queue_dirty = true;
-        self.schedule_queue_save();
+        if self.has_ffprobe {
+            crate::app_parsing::apply_local_media_probe(
+                &mut self.items[idx],
+                &path,
+                &self.settings.ffprobe_path,
+            );
+        }
+        if let Ok(dur) = mtime.duration_since(std::time::UNIX_EPOCH) {
+            self.items[idx].file_saved_mtime = Some(dur.as_secs());
+        }
+        self.mark_queue_dirty();
     }
 
     pub(super) fn refresh_input_line_info(&mut self) {

@@ -123,6 +123,18 @@ fn queue_item_mirror_changed(
         || app_it.speed_text != core_it.speed_text
         || app_it.eta_text != core_it.eta_text
         || app_it.size_text != core_it.size_text
+        || app_it.upload_timestamp != core_it.upload_timestamp
+        || app_it.view_count != core_it.view_count
+        || app_it.release_date != core_it.release_date
+        || app_it.live_status != core_it.live_status
+        || app_it.file_format != core_it.file_format
+        || app_it.file_creation_time != core_it.file_creation_time
+        || app_it.file_encoder != core_it.file_encoder
+        || app_it.audio_codec != core_it.audio_codec
+        || app_it.file_bitrate_bps != core_it.file_bitrate_bps
+        || app_it.file_saved_mtime != core_it.file_saved_mtime
+        || app_it.video_codec != core_it.video_codec
+        || app_it.fps != core_it.fps
 }
 
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
