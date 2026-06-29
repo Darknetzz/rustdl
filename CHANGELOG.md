@@ -10,18 +10,17 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-29
+
 ### Added
 
 - **Quality watchlist** — save URLs to re-probe on a schedule; rustdl logs when max available resolution increases (e.g. a low-quality premiere later replaced by HD on the same link). Add from a Done download (**Verify… → Watch for better quality**), paste a URL in **Settings → Downloader → Quality watchlist**, or use the **Quality watchlist** panel in the main column. Optional auto-enqueue when quality improves.
 - **More info** on each download queue row — **More info** opens a popup with yt-dlp source fields (title, uploader, publish date, views, URL, playlist, …) and, after download, ffprobe file details (container, codecs, bitrate, path, saved time).
+- **Settings → Downloader → Quality & network**: optional **Minimum height** and **Minimum FPS** for downloads (yt-dlp `height>=` / `fps>=` filters on quality presets and custom `-f` strings; audio-only preset unchanged).
 
 ### Changed
 
 - LAN web UI **IP whitelist** defaults to **127.0.0.1** and **::1** so browsers on this PC can connect without the API token; other clients still need the token unless you add their IP or subnet.
-
-### Added
-
-- **Settings → Downloader → Quality & network**: optional **Minimum height** and **Minimum FPS** for downloads (yt-dlp `height>=` / `fps>=` filters on quality presets and custom `-f` strings; audio-only preset unchanged).
 
 ### Fixed
 
@@ -717,7 +716,9 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...dev
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.11.0...dev
+[0.11.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.10.0...rustdl-v0.11.0
+[0.10.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...rustdl-v0.10.0
 [0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
 [0.9.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.8...rustdl-v0.9.0
 [0.8.8]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.7...rustdl-v0.8.8
