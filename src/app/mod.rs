@@ -1142,6 +1142,30 @@ impl PydlApp {
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
     }
 
+    /// True when the main window should not paint (minimized or hidden to tray).
+    pub(super) fn main_window_ui_suspended(&self, ctx: &egui::Context) -> bool {
+        if self.hidden_to_tray {
+            return true;
+        }
+        ctx.input(|i| i.viewport().minimized == Some(true))
+    }
+
+    /// Taskbar / activation while hidden to tray should restore the main window.
+    pub(super) fn maybe_show_main_window_on_activation(&mut self, ctx: &egui::Context) {
+        if !self.hidden_to_tray {
+            return;
+        }
+        let activate = ctx.input(|i| {
+            i.events
+                .iter()
+                .any(|e| matches!(e, egui::Event::WindowFocused(true)))
+                || i.viewport().focused == Some(true)
+        });
+        if activate {
+            self.show_main_window_from_tray(ctx);
+        }
+    }
+
     pub(super) fn show_main_window_from_tray(&mut self, ctx: &egui::Context) {
         self.hidden_to_tray = false;
         ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));

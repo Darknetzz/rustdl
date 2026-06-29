@@ -20,9 +20,6 @@ impl eframe::App for PydlApp {
         #[cfg(windows)]
         {
             crate::win_icon::apply_native_window_icons(frame, &app_icon::window_icon());
-            if !self.hidden_to_tray {
-                crate::win_window::maybe_restore_main_window(frame, ctx);
-            }
         }
         #[cfg(not(windows))]
         let _ = frame;
@@ -56,14 +53,22 @@ impl eframe::App for PydlApp {
         }
         self.handle_viewport_close_request(ctx);
         self.maybe_hide_to_tray_on_minimize(ctx);
+        self.maybe_show_main_window_on_activation(ctx);
+        #[cfg(windows)]
+        if !self.hidden_to_tray {
+            crate::win_window::maybe_restore_main_window(frame, ctx);
+        }
+        let ui_suspended = self.main_window_ui_suspended(ctx);
         self.maybe_adjust_videos_dock_for_viewport(ctx);
         if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
             self.exit_pending_after_cancel = false;
             self.finish_exit(ctx);
         }
         self.poll_done_file_lookup();
-        self.poll_output_disk_space();
-        self.poll_system_usage();
+        if !ui_suspended {
+            self.poll_output_disk_space();
+            self.poll_system_usage();
+        }
         let background_busy = self.add_in_progress
             || self.convert_running
             || self.status_resolving > 0
@@ -79,6 +84,11 @@ impl eframe::App for PydlApp {
             || self.convert_save_deadline.is_some();
         if !background_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(1500));
+        } else if ui_suspended {
+            let hz = (self.background_busy_repaint_hz() * 0.2).max(2.0);
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
+                1.0 / f64::from(hz),
+            ));
         }
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
@@ -135,6 +145,7 @@ impl eframe::App for PydlApp {
             }
         }
 
+        if !ui_suspended {
         if self.settings.videos_docked {
             egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                 .resizable(true)
@@ -456,13 +467,17 @@ impl eframe::App for PydlApp {
         }
         self.maybe_notify_session_complete();
         self.maybe_notify_convert_batch_complete();
-
-        self.input_urls_snapshot = self.input_urls.clone();
-        self.draw_session_restore_dialog(ctx);
-        self.draw_exit_confirm_dialog(ctx);
         self.draw_playlist_preview_dialog(ctx);
         self.draw_downloader_options_dialog(ctx);
-        self.request_repaint_if_background_busy(ctx);
+
+        self.input_urls_snapshot = self.input_urls.clone();
+        } // !ui_suspended
+
+        self.draw_session_restore_dialog(ctx);
+        self.draw_exit_confirm_dialog(ctx);
+        if !ui_suspended {
+            self.request_repaint_if_background_busy(ctx);
+        }
         DownloadCore::spawn_done_file_lookup_refresh_if_due(&self.shared_core);
         core_sync::try_push_app_to_core(self, &self.shared_core.clone());
     }
