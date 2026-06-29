@@ -20,8 +20,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
-- Floating **Videos** / **Convert queue** window no longer grows toward full-screen size after undocking (body size from window clip rect + pinned allocation; list scroll capped to layout height).
-- Undocking the video queue no longer freezes the app (queue list rows stay virtualized in short panels; runaway float-window resize is not persisted).
+- Floating **Videos** / **Convert queue** window no longer grows toward full-screen size after undocking (body size from window clip rect + pinned allocation; list scroll capped to layout height; egui window `max_size` enforced).
+- Undocking the video queue no longer freezes the app (queue list rows stay virtualized in short panels; runaway float-window resize is not persisted; layout dimension saves are debounced off the UI thread).
 - Settings → Shared: **Power save during active work** and **Minimize to system tray** each use their own row (aligned with other checkboxes in the form grid).
 - Web UI start errors and banners use plain-text navigation hints (no missing arrow glyph in the default UI font).
 - Enabling the LAN web UI with an empty API token auto-generates a token when the server starts (same as first launch).

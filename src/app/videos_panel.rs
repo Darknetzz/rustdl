@@ -865,7 +865,7 @@ impl PydlApp {
             {
                 self.settings.undocked_footer_height =
                     panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
-                self.persist_settings();
+                self.schedule_settings_save();
             }
         } else {
             with_full_width(ui, |ui| {
@@ -915,7 +915,7 @@ impl PydlApp {
         {
             self.settings.videos_dock_height =
                 panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
-            self.persist_settings();
+            self.schedule_settings_save();
         }
     }
 
@@ -971,7 +971,7 @@ impl PydlApp {
             if (prev_w - w).abs() > 0.5 || (prev_h - h).abs() > 0.5 {
                 self.settings.video_float_width = w;
                 self.settings.video_float_height = h;
-                self.persist_settings();
+                self.schedule_settings_save();
             }
         }
         if !outcome.open {

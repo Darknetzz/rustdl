@@ -266,7 +266,7 @@ impl PydlApp {
         if let Some((w, h)) = outcome.size {
             self.settings.log_float_width = w;
             self.settings.log_float_height = h;
-            self.persist_settings();
+            self.schedule_settings_save();
         }
         if !outcome.open {
             self.settings.logs_open = false;

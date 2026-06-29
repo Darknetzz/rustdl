@@ -27,6 +27,7 @@ mod input_lines;
 pub(crate) mod log_panel;
 mod queue_cache;
 mod queue_persist;
+mod settings_persist;
 mod settings_panel;
 pub(crate) mod thumbnails;
 pub(crate) mod update_check;
@@ -245,6 +246,8 @@ pub struct PydlApp {
     thumb_semaphore: Arc<Semaphore>,
     /// When set, queue JSON is written after this instant (debounced).
     queue_save_deadline: Option<Instant>,
+    /// When set, settings JSON is written after this instant (debounced layout geometry).
+    settings_save_deadline: Option<Instant>,
     /// Mirror of core debounced convert queue persistence.
     convert_save_deadline: Option<Instant>,
 
@@ -488,6 +491,7 @@ impl PydlApp {
             http_client,
             thumb_semaphore,
             queue_save_deadline: None,
+            settings_save_deadline: None,
             convert_save_deadline: None,
             download_log_throttle: HashMap::new(),
             pending_thumbnail_uploads: VecDeque::new(),
@@ -1016,11 +1020,8 @@ impl PydlApp {
     }
 
     pub(super) fn persist_settings(&mut self) {
-        self.settings.output_dir = self.output_dir.clone();
-        self.settings.worker_count = self.worker_count.clamp(1, 6);
-        self.settings.settings_tab = settings_tab_to_str(self.settings_tab).to_owned();
-        self.settings.queue_search = self.queue_search.clone();
-        self.settings.log_filter = self.log_filter.slug().to_owned();
+        self.settings_save_deadline = None;
+        self.sync_settings_mirror_fields();
         if let Err(err) = save_settings(&self.settings) {
             self.append_log(&format!("Failed to save settings: {err}"));
         }
@@ -1178,7 +1179,7 @@ impl PydlApp {
             &mut self.settings.log_dock_height,
             pointer_down,
         ) {
-            self.persist_settings();
+            self.schedule_settings_save();
         }
         if self.settings.videos_docked {
             if crate::app_ui::viewport_too_small_for_docked_videos(size)

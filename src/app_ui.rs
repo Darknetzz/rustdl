@@ -1170,6 +1170,9 @@ pub fn show_persisted_resizable_window(
         .open(open)
         .min_width(params.min_size.x)
         .min_height(params.min_size.y)
+        .max_width(params.max_size.x)
+        .max_height(params.max_size.y)
+        .max_size(params.max_size)
         .resizable(true);
     if needs_default {
         window = window.default_size(params.default_size);

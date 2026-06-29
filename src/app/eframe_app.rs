@@ -41,6 +41,7 @@ impl eframe::App for PydlApp {
         self.maybe_flush_queue_save();
         self.maybe_flush_convert_queue_save();
         self.maybe_flush_log_save();
+        self.maybe_flush_settings_save();
         self.process_events(ctx);
         self.poll_watch_folders();
         #[cfg(windows)]
@@ -74,6 +75,7 @@ impl eframe::App for PydlApp {
             || !self.pending_thumbnail_uploads.is_empty()
             || self.auto_add_after.is_some()
             || self.queue_save_deadline.is_some()
+            || self.settings_save_deadline.is_some()
             || self.convert_save_deadline.is_some();
         if !background_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(1500));
