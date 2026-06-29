@@ -391,17 +391,32 @@ impl PydlApp {
                 self.persist_settings();
             }
             "Layout: Compact queue" => {
-                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "compact");
+                let vh = crate::app_ui::main_viewport_size(ctx).y;
+                crate::app::settings_panel::apply_layout_preset(
+                    &mut self.settings,
+                    "compact",
+                    Some(vh),
+                );
                 self.settings_dirty = true;
                 self.persist_settings();
             }
             "Layout: Review mode" => {
-                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "review");
+                let vh = crate::app_ui::main_viewport_size(ctx).y;
+                crate::app::settings_panel::apply_layout_preset(
+                    &mut self.settings,
+                    "review",
+                    Some(vh),
+                );
                 self.settings_dirty = true;
                 self.persist_settings();
             }
             "Layout: Minimal" => {
-                crate::app::settings_panel::apply_layout_preset(&mut self.settings, "minimal");
+                let vh = crate::app_ui::main_viewport_size(ctx).y;
+                crate::app::settings_panel::apply_layout_preset(
+                    &mut self.settings,
+                    "minimal",
+                    Some(vh),
+                );
                 self.settings_dirty = true;
                 self.persist_settings();
             }

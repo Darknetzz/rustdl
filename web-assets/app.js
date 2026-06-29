@@ -1,7 +1,14 @@
 const TOKEN_KEY = "rustdl_web_token";
 const WEB_THEME_KEY = "rustdl_web_theme";
 const QUEUE_GROUP_COLLAPSED_KEY = "rustdl_web_queue_groups";
+const WEB_LAYOUT_HEIGHTS_KEY = "rustdl_web_layout_heights";
 const DONE_HISTORY_FILTER_KEY = "rustdl_web_done_history_days";
+// Layout tiers mirror desktop app_ui.rs (1040 / 900 / 600).
+const LAYOUT_FOOTER_WIDE_BREAKPOINT_PX = 900;
+const LAYOUT_DL_SHORT_PANEL_LIST_THRESHOLD = 220;
+const LAYOUT_CONVERT_SHORT_PANEL_LIST_THRESHOLD = 280;
+const WEB_LOG_MIN_HEIGHT_PX = 80;
+const WEB_QUEUE_MIN_HEIGHT_PX = 48;
 const DOWNLOAD_QUEUE_GROUPS = ["Active", "Ready", "Issues", "Done", "Resolving"];
 const CONVERT_QUEUE_GROUPS = ["Active", "Ready", "Failed", "Skipped", "Done"];
 
@@ -498,6 +505,53 @@ function updateOrganizeUi(settings) {
   }
 }
 
+function loadWebLayoutHeights() {
+  try {
+    const raw = localStorage.getItem(WEB_LAYOUT_HEIGHTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWebLayoutHeights(patch) {
+  const cur = loadWebLayoutHeights();
+  localStorage.setItem(WEB_LAYOUT_HEIGHTS_KEY, JSON.stringify({ ...cur, ...patch }));
+}
+
+function applyWebLayoutHeights() {
+  const h = loadWebLayoutHeights();
+  const logView = document.getElementById("log-view");
+  const queue = document.getElementById("queue");
+  const convertQueue = document.getElementById("convert-queue");
+  if (logView && h.logHeightPx >= WEB_LOG_MIN_HEIGHT_PX) {
+    logView.style.height = `${h.logHeightPx}px`;
+    logView.style.maxHeight = `${Math.max(h.logHeightPx, 240)}px`;
+  }
+  const queueMin = h.queueMinHeightPx;
+  if (queueMin >= WEB_QUEUE_MIN_HEIGHT_PX) {
+    if (queue) queue.style.minHeight = `${queueMin}px`;
+    if (convertQueue) convertQueue.style.minHeight = `${queueMin}px`;
+  }
+}
+
+function initWebLayoutHeightPersistence() {
+  applyWebLayoutHeights();
+  const logView = document.getElementById("log-view");
+  if (!logView || typeof ResizeObserver === "undefined") return;
+  let saveTimer = null;
+  const ro = new ResizeObserver(() => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      const h = logView.offsetHeight;
+      if (h >= WEB_LOG_MIN_HEIGHT_PX) {
+        saveWebLayoutHeights({ logHeightPx: h });
+      }
+    }, 250);
+  });
+  ro.observe(logView);
+}
+
 function applyLayoutPreset(settings, preset) {
   if (preset === "compact") {
     settings.card_list_layout = true;
@@ -845,6 +899,7 @@ function convertThumbFailurePlaceholder(reason, key) {
 function showApp() {
   document.getElementById("auth-panel").classList.add("hidden");
   document.getElementById("app-main").classList.remove("hidden");
+  initWebLayoutHeightPersistence();
 }
 
 function renderTools(tools) {
@@ -2520,7 +2575,13 @@ function renderGroupedQueue(root, items, options) {
     groupExtras,
   } = options;
   const collapsedState = loadQueueGroupCollapsed();
-  const listLayout = !!settings.card_list_layout;
+  const outerH = options.outerScrollPx ?? 0;
+  const listLayout = effectiveListLayout(
+    settings,
+    items.length,
+    outerH,
+    mode === "cv",
+  );
   const buckets = new Map();
   for (const item of items) {
     const label = groupFn(item);
@@ -2634,7 +2695,9 @@ async function refreshQueue(force = false) {
     return;
   }
   lastQueueStructureKey = structureKey;
-  root.className = "queue" + (effectiveListLayout(settings, allItems.length) ? " list-layout" : "");
+  const outerH = queueOuterScrollPx("queue");
+  const listLayout = effectiveListLayout(settings, allItems.length, outerH, false);
+  root.className = "queue" + (listLayout ? " list-layout" : "");
   root.innerHTML = "";
   const readyItems = (data.items || [])
     .filter((item) => downloadQueueGroup(item) === "Ready" && itemMatchesSearch(item, searchQuery))
@@ -2652,10 +2715,11 @@ async function refreshQueue(force = false) {
   renderGroupedQueue(root, items, {
     settings: {
       ...settings,
-      card_list_layout: effectiveListLayout(settings, (data.items || []).length),
+      card_list_layout: listLayout,
     },
     groupFn: downloadQueueGroup,
     groupOrder: DOWNLOAD_QUEUE_GROUPS,
+    outerScrollPx: outerH,
     renderItem: (item, s) =>
       s.card_list_layout
         ? renderQueueCardListRow(item, s, cardCtx)
@@ -4438,9 +4502,19 @@ async function fetchconvertThumbnailBlob(item) {
 
 const AUTO_LIST_LAYOUT_THRESHOLD = 50;
 
-function effectiveListLayout(settings, itemCount) {
+function effectiveListLayout(settings, itemCount, outerScrollPx = null, convertMode = false) {
   const s = settings || {};
-  return !!s.card_list_layout || itemCount > AUTO_LIST_LAYOUT_THRESHOLD;
+  if (s.card_list_layout || itemCount > AUTO_LIST_LAYOUT_THRESHOLD) return true;
+  if (outerScrollPx == null || outerScrollPx < 1) return false;
+  const threshold = convertMode
+    ? LAYOUT_CONVERT_SHORT_PANEL_LIST_THRESHOLD
+    : LAYOUT_DL_SHORT_PANEL_LIST_THRESHOLD;
+  return outerScrollPx < threshold;
+}
+
+function queueOuterScrollPx(elementId) {
+  const el = document.getElementById(elementId);
+  return el?.clientHeight || 0;
 }
 
 function updateConvertBulkSelectionUi() {
@@ -4526,7 +4600,8 @@ async function refreshConvert() {
   const filteredItems = (data.items || []).filter((it) =>
     convertItemMatchesSearch(it, searchQuery),
   );
-  const listLayout = effectiveListLayout(settings, data.items.length);
+  const outerH = queueOuterScrollPx("convert-queue");
+  const listLayout = effectiveListLayout(settings, data.items.length, outerH, true);
   pruneconvertThumbKeys(data.items);
   root.className = "queue" + (listLayout ? " list-layout" : "");
   root.innerHTML = "";
@@ -4554,6 +4629,7 @@ async function refreshConvert() {
     settings: { ...settings, card_list_layout: listLayout, show_thumbnails: showThumbnails },
     groupFn: convertGroup,
     groupOrder: CONVERT_QUEUE_GROUPS,
+    outerScrollPx: outerH,
     renderItem: (item, s) => renderConvertCard(item, s, cardCtx),
     defaultOpenCtx: {},
     mode: "cv",

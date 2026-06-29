@@ -3,8 +3,10 @@ use eframe::egui::{self, Color32, RichText};
 use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
-    button_group, draw_labeled_meta_badge, draw_meta_badge, left_button_row,
-    show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
+    button_group, compact_convert_list_row, convert_list_row_height, draw_labeled_meta_badge,
+    draw_meta_badge, left_button_row, queue_short_panel_list_fallback,
+    should_flatten_nested_group_scroll, show_queue_group_section, status_color,
+    status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
 use crate::convert_size_limit::{
@@ -841,33 +843,53 @@ impl PydlApp {
                 });
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
-                    if self.effective_convert_list_layout() {
-                        const LIST_ROW_H: f32 = 118.0;
+                    let list_compact =
+                        compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
+                    let use_list = self.effective_convert_list_layout_for_panel(outer_scroll_h)
+                        || queue_short_panel_list_fallback(outer_scroll_h, true);
+                    let flatten = should_flatten_nested_group_scroll(outer_scroll_h);
+                    if use_list {
+                        let list_row_h = convert_list_row_height(list_compact);
                         let row_count = ids.len().max(1);
-                        let outer_cap = outer_scroll_h.max(LIST_ROW_H);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0)
-                            .clamp(LIST_ROW_H, 600.0)
-                            .min(outer_cap);
-                        egui::ScrollArea::vertical()
-                            .id_salt(format!("rustdl_convert_list_{label}"))
-                            .max_height(max_h)
-                            .auto_shrink([false, true])
-                            .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
-                                for row in row_range {
-                                    if let Some(item_id) = ids.get(row) {
-                                        if let Some(idx) = self.convert_item_idx(*item_id) {
-                                            let it = self.convert_items[idx].clone();
-                                            ui.group(|ui| {
-                                                self.draw_convert_queue_card(
-                                                    ui,
-                                                    &it,
-                                                    label == "Ready",
-                                                );
-                                            });
+                        let outer_cap = outer_scroll_h.max(list_row_h);
+                        let max_h = if flatten {
+                            outer_cap
+                        } else {
+                            (row_count as f32 * list_row_h + 8.0)
+                                .clamp(list_row_h, 600.0)
+                                .min(outer_cap)
+                        };
+                        let allow_reorder = label == "Ready";
+                        let mut draw_row = |ui: &mut egui::Ui, item_id: u64| {
+                            if let Some(idx) = self.convert_item_idx(item_id) {
+                                let it = self.convert_items[idx].clone();
+                                ui.group(|ui| {
+                                    self.draw_convert_queue_card(
+                                        ui,
+                                        &it,
+                                        allow_reorder,
+                                        list_compact,
+                                    );
+                                });
+                            }
+                        };
+                        if flatten {
+                            for item_id in &ids {
+                                draw_row(ui, *item_id);
+                            }
+                        } else {
+                            egui::ScrollArea::vertical()
+                                .id_salt(format!("rustdl_convert_list_{label}"))
+                                .max_height(max_h)
+                                .auto_shrink([false, true])
+                                .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
+                                    for row in row_range {
+                                        if let Some(item_id) = ids.get(row) {
+                                            draw_row(ui, *item_id);
                                         }
                                     }
-                                }
-                            });
+                                });
+                        }
                     } else {
                         for item_id in &ids {
                             let Some(idx) = self.convert_item_idx(*item_id) else {
@@ -875,7 +897,7 @@ impl PydlApp {
                             };
                             let it = self.convert_items[idx].clone();
                             ui.group(|ui| {
-                                self.draw_convert_queue_card(ui, &it, label == "Ready");
+                                self.draw_convert_queue_card(ui, &it, label == "Ready", false);
                             });
                         }
                     }
@@ -892,6 +914,27 @@ impl PydlApp {
     }
 
     pub(super) fn draw_convert_queue_status_row(&mut self, ui: &mut egui::Ui) {
+        let (heading, parts) = self.convert_queue_status_parts();
+        match crate::app_ui::draw_queue_status_row(
+            ui,
+            &heading,
+            &parts,
+            self.queue_group_focus.is_some(),
+        ) {
+            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
+            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
+                self.focus_queue_group(group);
+            }
+            None => {}
+        }
+    }
+
+    pub(super) fn draw_convert_queue_status_row_compact(&self, ui: &mut egui::Ui) {
+        let (heading, parts) = self.convert_queue_status_parts();
+        crate::app_ui::draw_queue_status_compact_row(ui, &heading, &parts);
+    }
+
+    fn convert_queue_status_parts(&self) -> (String, Vec<crate::app_ui::QueueStatusPart>) {
         let counts = self.convert_status_counts;
         let mut parts: Vec<crate::app_ui::QueueStatusPart> = Vec::new();
         if counts.ready > 0 {
@@ -947,18 +990,7 @@ impl PydlApp {
         } else {
             format!("Queue ({}):", self.convert_items.len())
         };
-        match crate::app_ui::draw_queue_status_row(
-            ui,
-            &heading,
-            &parts,
-            self.queue_group_focus.is_some(),
-        ) {
-            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
-            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
-                self.focus_queue_group(group);
-            }
-            None => {}
-        }
+        (heading, parts)
     }
 
     pub(super) fn draw_convert_batch_summary_row(&self, ui: &mut egui::Ui) {
@@ -1023,6 +1055,7 @@ impl PydlApp {
         ui: &mut egui::Ui,
         it: &ConvertQueueItem,
         allow_reorder: bool,
+        compact: bool,
     ) {
         let theme = self.settings.theme.clone();
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
@@ -1067,7 +1100,11 @@ impl PydlApp {
                         }
                     }
                     ui.spacing_mut().item_spacing.x = 10.0;
-                    let thumb_size = egui::vec2(90.0, 52.0);
+                    let thumb_size = if compact {
+                        egui::vec2(56.0, 32.0)
+                    } else {
+                        egui::vec2(90.0, 52.0)
+                    };
                     let (thumb_rect, _) = ui.allocate_exact_size(thumb_size, egui::Sense::hover());
                     ui.painter().rect_filled(
                         thumb_rect,
@@ -1107,7 +1144,7 @@ impl PydlApp {
                     }
 
                     ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 3.0;
+                        ui.spacing_mut().item_spacing.y = if compact { 2.0 } else { 3.0 };
                         ui.set_min_width(ui.available_width());
 
                         ui.horizontal(|ui| {
@@ -1119,8 +1156,19 @@ impl PydlApp {
                                 item_color,
                                 false,
                             );
+                            if compact {
+                                let name = std::path::Path::new(&it.source_path)
+                                    .file_name()
+                                    .and_then(|s| s.to_str())
+                                    .unwrap_or(&it.source_path);
+                                ui.add(
+                                    egui::Label::new(RichText::new(name).small().color(text_muted(&theme)))
+                                        .truncate(),
+                                );
+                            }
                         });
 
+                        if !compact {
                         if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
                             let mut pb =
                                 egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
@@ -1170,6 +1218,17 @@ impl PydlApp {
                             }
                         } else if !it.detail.is_empty() {
                             ui.label(RichText::new(&it.detail).small());
+                        }
+                        } else if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
+                            let mut pb =
+                                egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
+                                    .desired_width(ui.available_width().min(200.0))
+                                    .show_percentage()
+                                    .animate(it.status == ItemStatus::Downloading);
+                            if it.status == ItemStatus::Downloading {
+                                pb = pb.fill(item_color);
+                            }
+                            ui.add(pb);
                         }
 
                         let targets = convert_item_open_targets(it);

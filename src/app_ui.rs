@@ -949,7 +949,40 @@ pub fn show_mode_panel<R>(
         })
 }
 
-const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
+pub const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
+/// Review layout preset: taller docked queue panel.
+pub const REVIEW_DOCK_HEIGHT_RATIO: f32 = 0.60;
+/// Minimal layout preset: shorter docked queue panel.
+pub const MINIMAL_DOCK_HEIGHT_RATIO: f32 = 0.40;
+/// Shared absolute min/max for docked queue and undocked footer (log docked).
+pub const BOTTOM_PANEL_MIN_H: f32 = 180.0;
+pub const BOTTOM_PANEL_MAX_H: f32 = 800.0;
+
+/// Downloader queue list row height (virtualized list layout).
+pub const QUEUE_DL_LIST_ROW_H: f32 = 42.0;
+/// Convert queue list row height (full detail).
+pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 118.0;
+/// Convert queue list row height (compact panels / minimal preset).
+pub const QUEUE_CONVERT_LIST_ROW_COMPACT_H: f32 = 72.0;
+pub const QUEUE_FLOATING_LIST_MIN_H: f32 = 80.0;
+pub const QUEUE_DOCKED_LIST_MIN_PAD: f32 = 8.0;
+
+/// Force list layout when outer scroll is shorter than this (downloader).
+pub const QUEUE_DL_SHORT_PANEL_LIST_THRESHOLD: f32 = 220.0;
+/// Force list layout when outer scroll is shorter than this (convert).
+pub const QUEUE_CONVERT_SHORT_PANEL_LIST_THRESHOLD: f32 = 280.0;
+pub const QUEUE_DL_LIST_FALLBACK_THRESHOLD: f32 = 200.0;
+pub const QUEUE_CONVERT_LIST_FALLBACK_THRESHOLD: f32 = 280.0;
+/// Skip per-group nested scroll when the outer queue scroll is shorter than this.
+pub const QUEUE_FLATTEN_NESTED_SCROLL_THRESHOLD: f32 = 320.0;
+/// Use compact convert list rows below this outer scroll height (or compact_cards).
+pub const QUEUE_COMPACT_CONVERT_ROW_THRESHOLD: f32 = 260.0;
+
+pub const QUEUE_STATUS_COMPACT_DL_THRESHOLD: f32 = 120.0;
+pub const QUEUE_STATUS_COMPACT_CONVERT_THRESHOLD: f32 = 200.0;
+pub const FOOTER_RESERVE_RESIZE_MARGIN: f32 = 12.0;
+pub const MODE_NAV_COMPACT_BREAKPOINT: f32 = 720.0;
+const LAYOUT_UI_SCALE_FLOOR: f32 = 0.85;
 
 /// Minimum main-window inner width (see [`VIEWPORT_MIN_INNER`]).
 pub const VIEWPORT_MIN_INNER_WIDTH: f32 = 920.0;
@@ -1184,6 +1217,26 @@ pub fn draw_queue_status_row(
     action
 }
 
+/// Single-line queue status summary when vertical space is tight.
+pub fn draw_queue_status_compact_row(
+    ui: &mut egui::Ui,
+    heading: &str,
+    parts: &[QueueStatusPart],
+) {
+    if parts.is_empty() {
+        return;
+    }
+    let summary: String = parts
+        .iter()
+        .map(|p| format!("{} {}", p.count, p.name))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(heading).small().color(crate::theme::TEXT_MUTED));
+        ui.label(RichText::new(summary).small().weak());
+    });
+}
+
 /// Vertical space from the layout cursor to the bottom of the clip rect (always finite).
 pub fn remaining_ui_height(ui: &egui::Ui) -> f32 {
     let y = ui.cursor().min.y;
@@ -1244,17 +1297,144 @@ pub const ACTIVITY_LOG_LINES_FRAME_STROKE: f32 = 1.0;
 pub const ACTIVITY_LOG_LINES_SCROLL_CHROME_H: f32 =
     ACTIVITY_LOG_LINES_FRAME_INNER_MARGIN * 2.0 + ACTIVITY_LOG_LINES_FRAME_STROKE;
 
+/// Layout breakpoint adjusted for UI zoom (widgets grow with `ctx.set_zoom_factor`).
+pub fn layout_breakpoint(base: f32, ui_scale: f32) -> f32 {
+    base / ui_scale.max(LAYOUT_UI_SCALE_FLOOR)
+}
+
+/// Minimum queue list scroll height for at least one full row.
+pub fn queue_list_min_scroll_h(docked: bool, convert_mode: bool, compact_convert_row: bool) -> f32 {
+    let row = if convert_mode {
+        if compact_convert_row {
+            QUEUE_CONVERT_LIST_ROW_COMPACT_H
+        } else {
+            QUEUE_CONVERT_LIST_ROW_H
+        }
+    } else {
+        QUEUE_DL_LIST_ROW_H
+    };
+    let min = row + QUEUE_DOCKED_LIST_MIN_PAD;
+    if docked {
+        min
+    } else {
+        min.max(QUEUE_FLOATING_LIST_MIN_H)
+    }
+}
+
+pub fn convert_list_row_height(compact: bool) -> f32 {
+    if compact {
+        QUEUE_CONVERT_LIST_ROW_COMPACT_H
+    } else {
+        QUEUE_CONVERT_LIST_ROW_H
+    }
+}
+
+pub fn compact_convert_list_row(compact_cards: bool, outer_scroll_h: f32) -> bool {
+    compact_cards || outer_scroll_h < QUEUE_COMPACT_CONVERT_ROW_THRESHOLD
+}
+
+pub fn should_flatten_nested_group_scroll(outer_scroll_h: f32) -> bool {
+    outer_scroll_h < QUEUE_FLATTEN_NESTED_SCROLL_THRESHOLD
+}
+
+pub fn effective_panel_list_layout(
+    settings_card_list: bool,
+    item_count: usize,
+    outer_scroll_h: f32,
+    convert_mode: bool,
+    auto_threshold: usize,
+) -> bool {
+    if settings_card_list || item_count > auto_threshold {
+        return true;
+    }
+    if convert_mode {
+        outer_scroll_h < QUEUE_CONVERT_SHORT_PANEL_LIST_THRESHOLD
+    } else {
+        outer_scroll_h < QUEUE_DL_SHORT_PANEL_LIST_THRESHOLD
+    }
+}
+
+pub fn queue_short_panel_list_fallback(outer_scroll_h: f32, convert_mode: bool) -> bool {
+    if convert_mode {
+        outer_scroll_h < QUEUE_CONVERT_LIST_FALLBACK_THRESHOLD
+    } else {
+        outer_scroll_h < QUEUE_DL_LIST_FALLBACK_THRESHOLD
+    }
+}
+
+pub fn queue_status_compact(list_h: f32, convert_mode: bool) -> bool {
+    if convert_mode {
+        list_h < QUEUE_STATUS_COMPACT_CONVERT_THRESHOLD
+    } else {
+        list_h < QUEUE_STATUS_COMPACT_DL_THRESHOLD
+    }
+}
+
+pub fn max_bottom_panel_height(viewport_h: f32) -> f32 {
+    if !viewport_h.is_finite() || viewport_h < 1.0 {
+        return BOTTOM_PANEL_MAX_H;
+    }
+    (viewport_h * VIDEOS_DOCKED_HEIGHT_RATIO)
+        .max(BOTTOM_PANEL_MIN_H)
+        .min(BOTTOM_PANEL_MAX_H)
+}
+
+pub fn main_body_scroll_min(viewport_h: f32) -> f32 {
+    if !viewport_h.is_finite() || viewport_h < 1.0 {
+        return 120.0;
+    }
+    (viewport_h * 0.25).clamp(120.0, 280.0)
+}
+
+pub fn url_input_height(viewport_h: f32) -> f32 {
+    if !viewport_h.is_finite() || viewport_h < 1.0 {
+        return 88.0;
+    }
+    (viewport_h * 0.12).clamp(72.0, 140.0)
+}
+
+/// Cap log line area so it does not dominate a small bottom panel.
+pub fn scaled_log_dock_height(user_pref: f32, available_for_log: f32) -> f32 {
+    let max_lines = docked_log_lines_max_h(available_for_log.max(0.0));
+    user_pref.min(max_lines * 0.55).clamp(80.0, 480.0)
+}
+
+/// Card width for wrapped grid layout (`columns` in 1..=4).
+pub fn queue_card_grid_width(avail: f32, compact: bool) -> f32 {
+    let (card_min, card_max) = if compact {
+        (260.0, 320.0)
+    } else {
+        (280.0, 360.0)
+    };
+    let gutter = 8.0;
+    let columns = ((avail - gutter) / (card_min + gutter))
+        .floor()
+        .clamp(1.0, 4.0) as u32;
+    if columns <= 1 {
+        return (avail * 0.45).clamp(card_min, card_max);
+    }
+    let gutters = gutter * (columns as f32 - 1.0);
+    ((avail - gutters) / columns as f32).clamp(card_min, card_max)
+}
+
 /// Estimated vertical space for the video queue footer toolbar (dock/hide + batch actions).
-pub fn queue_footer_toolbar_reserve(content_width: f32, convert_mode: bool, docked: bool) -> f32 {
-    let base = if content_width >= LAYOUT_FOOTER_WIDE_BREAKPOINT {
+pub fn queue_footer_toolbar_reserve(
+    content_width: f32,
+    convert_mode: bool,
+    docked: bool,
+    ui_scale: f32,
+) -> f32 {
+    let wide = layout_breakpoint(LAYOUT_FOOTER_WIDE_BREAKPOINT, ui_scale);
+    let medium = layout_breakpoint(LAYOUT_FOOTER_MEDIUM_BREAKPOINT, ui_scale);
+    let base = if content_width >= wide {
         72.0
-    } else if content_width >= LAYOUT_FOOTER_MEDIUM_BREAKPOINT {
+    } else if content_width >= medium {
         96.0
     } else {
         130.0
     };
     let convert_extra = if convert_mode { 40.0 } else { 0.0 };
-    let docked_extra = if docked && !convert_mode && content_width < LAYOUT_FOOTER_WIDE_BREAKPOINT {
+    let docked_extra = if docked && !convert_mode && content_width < wide {
         24.0
     } else {
         0.0
@@ -1268,12 +1448,18 @@ pub fn queue_footer_reserve(
     convert_mode: bool,
     docked: bool,
     measured_h: Option<f32>,
+    ui_scale: f32,
+    resizing: bool,
 ) -> f32 {
-    let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked) + 2.0;
-    match measured_h {
+    let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked, ui_scale) + 2.0;
+    let mut h = match measured_h {
         Some(m) if m.is_finite() && m > 0.0 => m.max(est),
         _ => est,
+    };
+    if resizing {
+        h += FOOTER_RESERVE_RESIZE_MARGIN;
     }
+    h
 }
 
 /// Undocked videos strip reserve (compact strip in main footer when queue is floating).
@@ -1316,20 +1502,26 @@ pub fn clamp_dock_heights_for_viewport(
     viewport_height: f32,
     videos_dock_height: &mut f32,
     undocked_footer_height: &mut f32,
+    log_dock_height: &mut f32,
     pointer_down: bool,
 ) -> bool {
     if pointer_down || !viewport_height.is_finite() || viewport_height < 1.0 {
         return false;
     }
-    let max_docked = (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).max(180.0);
-    let max_undocked = (viewport_height * 0.45).max(180.0);
+    let max_panel = max_bottom_panel_height(viewport_height);
     let mut changed = false;
-    if *videos_dock_height > max_docked {
-        *videos_dock_height = max_docked;
+    if *videos_dock_height > max_panel {
+        *videos_dock_height = max_panel;
         changed = true;
     }
-    if *undocked_footer_height > max_undocked {
-        *undocked_footer_height = max_undocked;
+    if *undocked_footer_height > max_panel {
+        *undocked_footer_height = max_panel;
+        changed = true;
+    }
+    let log_budget = (max_panel * 0.55).max(80.0);
+    let scaled = scaled_log_dock_height(*log_dock_height, log_budget);
+    if (scaled - *log_dock_height).abs() > 0.5 {
+        *log_dock_height = scaled;
         changed = true;
     }
     changed
@@ -1340,7 +1532,15 @@ pub fn default_videos_dock_height_for_viewport(viewport_height: f32) -> f32 {
     if !viewport_height.is_finite() || viewport_height < 1.0 {
         return 360.0;
     }
-    (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).clamp(180.0, 800.0)
+    (viewport_height * VIDEOS_DOCKED_HEIGHT_RATIO).clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H)
+}
+
+/// Suggested dock height for a layout preset ratio.
+pub fn dock_height_for_viewport_ratio(viewport_height: f32, ratio: f32) -> f32 {
+    if !viewport_height.is_finite() || viewport_height < 1.0 {
+        return 360.0;
+    }
+    (viewport_height * ratio).clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H)
 }
 
 /// List scroll height between fixed `content_top` and a bottom stack (footer + optional log).
@@ -1399,18 +1599,35 @@ pub fn draw_mode_nav_bar(
     dl_active: bool,
     av1_active: bool,
     colors: ModePanelColors<'_>,
+    ui_scale: f32,
 ) -> (bool, bool) {
     let dl_accent = mode_accent_for(false, &colors);
     let convert_accent = mode_accent_for(true, &colors);
     let mut dl_clicked = false;
     let mut av1_clicked = false;
     let row_w = clip_bounded_width(ui);
+    let compact = row_w < layout_breakpoint(MODE_NAV_COMPACT_BREAKPOINT, ui_scale);
     let muted = text_muted(theme);
     let group_border = panel_border(theme);
     let group_fill = if theme == "light" {
         Color32::from_rgba_unmultiplied(0, 0, 0, 10)
     } else {
         Color32::from_rgba_unmultiplied(255, 255, 255, 8)
+    };
+    let (dl_name, convert_name, dl_tip, convert_tip) = if compact {
+        (
+            "Downloader",
+            "Converter",
+            "Downloader mode",
+            "Video Converter mode",
+        )
+    } else {
+        (
+            "Downloader",
+            "Video Converter",
+            "Downloader mode",
+            "Video Converter mode",
+        )
     };
     ui.allocate_ui_with_layout(
         egui::vec2(row_w, 38.0),
@@ -1427,7 +1644,7 @@ pub fn draw_mode_nav_bar(
                         ui.spacing_mut().item_spacing.x = 0.0;
                         let dl_text = if dl_active { Color32::WHITE } else { muted };
                         let dl_label = RichText::new(format!(
-                            "{} Downloader",
+                            "{} {dl_name}",
                             crate::ui_icons::NAV_DOWNLOADER
                         ))
                         .color(dl_text)
@@ -1444,15 +1661,17 @@ pub fn draw_mode_nav_bar(
                                 .stroke(Stroke::NONE)
                                 .rounding(egui::Rounding::same(6.0)),
                         );
-                        if dl.clicked() {
+                        if dl.on_hover_text(dl_tip).clicked() {
                             dl_clicked = true;
                         }
                         let av1_text = if av1_active { Color32::WHITE } else { muted };
-                        let av1_label =
-                            RichText::new(format!("{} Video Converter", crate::ui_icons::NAV_AV1))
-                                .color(av1_text)
-                                .size(14.0)
-                                .strong();
+                        let av1_label = RichText::new(format!(
+                            "{} {convert_name}",
+                            crate::ui_icons::NAV_AV1
+                        ))
+                        .color(av1_text)
+                        .size(14.0)
+                        .strong();
                         let av1 = ui.add_sized(
                             [btn_w, 34.0],
                             egui::Button::new(av1_label)
@@ -1464,7 +1683,7 @@ pub fn draw_mode_nav_bar(
                                 .stroke(Stroke::NONE)
                                 .rounding(egui::Rounding::same(6.0)),
                         );
-                        if av1.clicked() {
+                        if av1.on_hover_text(convert_tip).clicked() {
                             av1_clicked = true;
                         }
                     });
@@ -2231,41 +2450,69 @@ mod tests {
 
     #[test]
     fn queue_footer_reserve_scales_with_width() {
-        assert_eq!(queue_footer_toolbar_reserve(1000.0, false, true), 72.0);
-        assert_eq!(queue_footer_toolbar_reserve(900.0, false, true), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(1000.0, false, true, 1.0), 72.0);
+        assert_eq!(queue_footer_toolbar_reserve(900.0, false, true, 1.0), 72.0);
         assert_eq!(
-            queue_footer_toolbar_reserve(750.0, false, true),
+            queue_footer_toolbar_reserve(750.0, false, true, 1.0),
             96.0 + 24.0
         );
         assert_eq!(
-            queue_footer_toolbar_reserve(600.0, false, true),
+            queue_footer_toolbar_reserve(600.0, false, true, 1.0),
             96.0 + 24.0
         );
         assert_eq!(
-            queue_footer_toolbar_reserve(480.0, false, true),
+            queue_footer_toolbar_reserve(480.0, false, true, 1.0),
             130.0 + 24.0
         );
+        assert_eq!(
+            queue_footer_toolbar_reserve(599.0, false, true, 1.0),
+            130.0 + 24.0
+        );
+        assert_eq!(queue_footer_toolbar_reserve(601.0, false, true, 1.0), 96.0 + 24.0);
+        assert_eq!(queue_footer_toolbar_reserve(901.0, false, true, 1.0), 72.0);
     }
 
     #[test]
     fn queue_footer_reserve_convert_mode_taller() {
         assert_eq!(
-            queue_footer_toolbar_reserve(1000.0, true, true),
+            queue_footer_toolbar_reserve(1000.0, true, true, 1.0),
             72.0 + 40.0
         );
         assert_eq!(
-            queue_footer_toolbar_reserve(480.0, true, false),
+            queue_footer_toolbar_reserve(480.0, true, false, 1.0),
             130.0 + 40.0
         );
     }
 
     #[test]
     fn queue_footer_reserve_uses_measured_max() {
-        let est = queue_footer_reserve(800.0, false, true, None);
-        let raised = queue_footer_reserve(800.0, false, true, Some(140.0));
+        let est = queue_footer_reserve(800.0, false, true, None, 1.0, false);
+        let raised = queue_footer_reserve(800.0, false, true, Some(140.0), 1.0, false);
         assert!(raised >= est);
         assert_eq!(raised, 140.0);
-        assert_eq!(queue_footer_reserve(800.0, false, true, Some(50.0)), est);
+        assert_eq!(
+            queue_footer_reserve(800.0, false, true, Some(50.0), 1.0, false),
+            est
+        );
+        let resizing = queue_footer_reserve(800.0, false, true, None, 1.0, true);
+        assert!(resizing > est);
+    }
+
+    #[test]
+    fn queue_list_min_scroll_h_mode_aware() {
+        assert!(queue_list_min_scroll_h(true, true, false) >= QUEUE_CONVERT_LIST_ROW_H);
+        assert!(queue_list_min_scroll_h(true, false, false) >= QUEUE_DL_LIST_ROW_H);
+        assert_eq!(
+            queue_list_min_scroll_h(true, true, true),
+            QUEUE_CONVERT_LIST_ROW_COMPACT_H + QUEUE_DOCKED_LIST_MIN_PAD
+        );
+    }
+
+    #[test]
+    fn queue_panel_layout_heights_convert_footer_and_log() {
+        let (list_h, stack_h) = queue_panel_layout_heights(80.0, 520.0, 112.0, 304.0);
+        assert_eq!(stack_h, 416.0);
+        assert_eq!(list_h, 520.0 - 80.0 - 416.0);
     }
 
     #[test]
@@ -2287,20 +2534,24 @@ mod tests {
     fn clamp_dock_heights_for_viewport_helper() {
         let mut dock = 800.0;
         let mut undock = 600.0;
+        let mut log = 400.0;
         assert!(super::clamp_dock_heights_for_viewport(
             760.0,
             &mut dock,
             &mut undock,
+            &mut log,
             false
         ));
-        assert!(dock <= 760.0 * VIDEOS_DOCKED_HEIGHT_RATIO + 0.01);
-        assert!(undock <= 760.0 * 0.45 + 0.01);
+        assert!(dock <= max_bottom_panel_height(760.0) + 0.01);
+        assert!(undock <= max_bottom_panel_height(760.0) + 0.01);
         let mut dock2 = 200.0;
         let mut undock2 = 200.0;
+        let mut log2 = 180.0;
         assert!(!super::clamp_dock_heights_for_viewport(
             760.0,
             &mut dock2,
             &mut undock2,
+            &mut log2,
             true
         ));
         assert_eq!(dock2, 200.0);

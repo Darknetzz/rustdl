@@ -1,7 +1,10 @@
 use eframe::egui;
 use eframe::egui::{Color32, RichText};
 
-use crate::app_ui::{bounded_ui_height, button_group, left_button_row};
+use crate::app_ui::{
+    bounded_ui_height, button_group, dock_height_for_viewport_ratio, left_button_row,
+    main_viewport_size, scaled_log_dock_height, MINIMAL_DOCK_HEIGHT_RATIO, REVIEW_DOCK_HEIGHT_RATIO,
+};
 use crate::config::{
     bump_ui_scale, export_settings_json, import_settings_json, snap_ui_scale, trim_activity_log,
     AppSettings, UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP,
@@ -175,25 +178,45 @@ fn apply_organize_preset(settings: &mut AppSettings, preset: &str) {
     }
 }
 
-pub(crate) fn apply_layout_preset(settings: &mut AppSettings, preset: &str) {
+pub(crate) fn apply_layout_preset(
+    settings: &mut AppSettings,
+    preset: &str,
+    viewport_height: Option<f32>,
+) {
     match preset {
         "compact" => {
             settings.card_list_layout = true;
             settings.compact_cards = true;
             settings.hide_card_subtitle = true;
             settings.show_thumbnails = true;
+            settings.log_dock_height = settings.log_dock_height.min(120.0).max(80.0);
         }
         "review" => {
             settings.card_list_layout = false;
             settings.compact_cards = false;
             settings.hide_card_subtitle = false;
             settings.show_thumbnails = true;
+            settings.logs_open = true;
+            settings.logs_docked = true;
+            if let Some(vh) = viewport_height {
+                settings.videos_dock_height =
+                    dock_height_for_viewport_ratio(vh, REVIEW_DOCK_HEIGHT_RATIO);
+                let log_budget = (settings.videos_dock_height * 0.45).max(80.0);
+                settings.log_dock_height =
+                    scaled_log_dock_height(200.0, log_budget).max(120.0);
+            } else {
+                settings.log_dock_height = 200.0;
+            }
         }
         "minimal" => {
             settings.card_list_layout = true;
             settings.compact_cards = true;
             settings.hide_card_subtitle = true;
             settings.show_thumbnails = false;
+            if let Some(vh) = viewport_height {
+                settings.videos_dock_height =
+                    dock_height_for_viewport_ratio(vh, MINIMAL_DOCK_HEIGHT_RATIO);
+            }
         }
         _ => {}
     }
@@ -560,13 +583,14 @@ impl PydlApp {
                             .color(Color32::GRAY),
                         );
                         left_button_row(ui, |ui| {
+                            let vh = main_viewport_size(ui.ctx()).y;
                             button_group(ui, "layout_presets", |g| {
                                 if g
                                     .secondary("Compact queue", true)
                                     .on_hover_text("List layout, compact cards, hide subtitle")
                                     .clicked()
                                 {
-                                    apply_layout_preset(&mut self.settings, "compact");
+                                    apply_layout_preset(&mut self.settings, "compact", Some(vh));
                                     changed = true;
                                 }
                                 if g
@@ -574,7 +598,7 @@ impl PydlApp {
                                     .on_hover_text("Horizontal cards with thumbnails")
                                     .clicked()
                                 {
-                                    apply_layout_preset(&mut self.settings, "review");
+                                    apply_layout_preset(&mut self.settings, "review", Some(vh));
                                     changed = true;
                                 }
                                 if g
@@ -582,7 +606,7 @@ impl PydlApp {
                                     .on_hover_text("Compact list without thumbnails")
                                     .clicked()
                                 {
-                                    apply_layout_preset(&mut self.settings, "minimal");
+                                    apply_layout_preset(&mut self.settings, "minimal", Some(vh));
                                     changed = true;
                                 }
                             });

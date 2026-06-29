@@ -615,15 +615,29 @@ impl PydlApp {
         count
     }
 
-    /// True when list layout should be used (user preference or large queue auto-switch).
-    pub(super) fn effective_card_list_layout(&self) -> bool {
-        let threshold = self.auto_list_layout_threshold();
-        self.settings.card_list_layout || self.items.len() > threshold
+    pub(super) fn effective_card_list_layout_for_panel(&self, outer_scroll_h: f32) -> bool {
+        crate::app_ui::effective_panel_list_layout(
+            self.settings.card_list_layout,
+            self.items.len(),
+            outer_scroll_h,
+            false,
+            self.auto_list_layout_threshold(),
+        )
     }
 
-    pub(super) fn effective_convert_list_layout(&self) -> bool {
-        let threshold = self.auto_list_layout_threshold();
-        self.settings.card_list_layout || self.convert_items.len() > threshold
+    /// True when list layout should be used (user preference or large queue auto-switch).
+    pub(super) fn effective_card_list_layout(&self) -> bool {
+        self.effective_card_list_layout_for_panel(f32::MAX)
+    }
+
+    pub(super) fn effective_convert_list_layout_for_panel(&self, outer_scroll_h: f32) -> bool {
+        crate::app_ui::effective_panel_list_layout(
+            self.settings.card_list_layout,
+            self.convert_items.len(),
+            outer_scroll_h,
+            true,
+            self.auto_list_layout_threshold(),
+        )
     }
 
     pub(super) fn item_matches_history_filter(&self, item: &QueueItem) -> bool {
@@ -1161,6 +1175,7 @@ impl PydlApp {
             size.y,
             &mut self.settings.videos_dock_height,
             &mut self.settings.undocked_footer_height,
+            &mut self.settings.log_dock_height,
             pointer_down,
         ) {
             self.persist_settings();

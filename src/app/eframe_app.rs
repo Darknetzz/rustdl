@@ -1,9 +1,10 @@
 use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame, content_width,
-    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge,
-    patch_resizable_panel_state_height, show_mode_panel, with_full_width, LAYOUT_WIDE_BREAKPOINT,
-    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, layout_breakpoint,
+    main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height, show_mode_panel,
+    url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
+    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -136,7 +137,7 @@ impl eframe::App for PydlApp {
             egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                 .resizable(true)
                 .default_height(self.settings.videos_dock_height)
-                .height_range(180.0..=800.0)
+                .height_range(BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H)
                 .frame(dock_panel_horizontal_frame())
                 .show(ctx, |ui| {
                     self.draw_docked_videos_panel(ui);
@@ -145,7 +146,7 @@ impl eframe::App for PydlApp {
         } else {
             let log_docked = self.settings.logs_open && self.settings.logs_docked;
             let (default_h, height_range, resizable) = if log_docked {
-                (self.settings.undocked_footer_height, 180.0..=600.0, true)
+                (self.settings.undocked_footer_height, BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H, true)
             } else {
                 (UNDOCKED_VIDEOS_STRIP_H, 72.0..=140.0, false)
             };
@@ -170,6 +171,7 @@ impl eframe::App for PydlApp {
                 self.draw_videos_auto_undock_banner(ui);
                 self.draw_ui_event_channel_banner(ui);
                 self.draw_web_server_banner(ui);
+                let ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
                 let (dl_nav, av1_nav) = draw_mode_nav_bar(
                     ui,
                     &self.settings.theme,
@@ -179,6 +181,7 @@ impl eframe::App for PydlApp {
                         &self.settings.mode_downloader_color,
                         &self.settings.mode_convert_color,
                     ),
+                    ui_scale,
                 );
                 if dl_nav {
                     self.set_app_mode(false);
@@ -186,7 +189,9 @@ impl eframe::App for PydlApp {
                 if av1_nav {
                     self.set_app_mode(true);
                 }
-                let scroll_h = bounded_ui_height(ui, 100.0).max(100.0);
+                let viewport_h = main_viewport_size(ctx).y;
+                let scroll_min = main_body_scroll_min(viewport_h);
+                let scroll_h = bounded_ui_height(ui, scroll_min).max(scroll_min);
                 egui::ScrollArea::vertical()
                     .id_salt("rustdl_main_body_v1")
                     .auto_shrink([false, false])
@@ -313,8 +318,9 @@ impl eframe::App for PydlApp {
                     });
                 }
                 let prev_url_snapshot = self.input_urls_snapshot.clone();
+                let url_h = url_input_height(viewport_h);
                 let url_edit = ui.add_sized(
-                    [content_width(ui), 88.0],
+                    [content_width(ui), url_h],
                     egui::TextEdit::multiline(&mut self.input_urls)
                         .hint_text(
                             "https://... — paste, drag from browser, or drop .url / .webloc / list (.txt, .m3u)",
@@ -473,7 +479,8 @@ impl PydlApp {
         self.constrain_content(ui);
         with_full_width(ui, |ui| {
             let row_w = ui.available_width();
-            if row_w >= LAYOUT_WIDE_BREAKPOINT {
+            let ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
+            if row_w >= layout_breakpoint(LAYOUT_WIDE_BREAKPOINT, ui_scale) {
                 self.draw_main_header_wide(ui, row_w);
             } else {
                 self.draw_main_header_narrow(ui);

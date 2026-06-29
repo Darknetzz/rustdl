@@ -25,6 +25,29 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Enabling the LAN web UI with an empty API token auto-generates a token when the server starts (same as first launch).
 - GitHub stable release descriptions no longer show **`[Unreleased]`** when a version was published before its `CHANGELOG.md` section existed (`extract_release_notes` + `refresh_release_notes` scripts).
 
+## [0.10.0] - 2026-06-29
+
+### Changed
+
+- **Layout presets** (Compact / Review / Minimal) now also adjust docked queue height and activity log size where appropriate; Review opens the docked log at a moderate height.
+- Queue **search field** width scales with panel width on desktop and in floating queue windows.
+- **Mode tabs** shorten to “Downloader” / “Converter” on narrow widths (full names in tooltips); layout breakpoints scale with **UI zoom**.
+- **Undocked footer** (queue floating + log docked) shares the same max height cap as the docked queue panel (52% of viewport, up to 800px).
+- Main column **URL input** and body scroll region scale with window height so short viewports keep usable paste room.
+- Download queue **card grid** fills wide floating windows with up to four cards per row instead of leaving horizontal gaps.
+- LAN web UI: queue toolbars wrap at **900px** (matching desktop footer tiers); queue/list mode also considers panel height; activity log height is remembered in the browser.
+
+### Added
+
+- Shared layout helpers for mode-aware list row minimums, panel-height auto list layout, compact queue status rows when space is tight, compact convert list rows, and flattened group scrolling in short panels.
+- Layout unit tests for footer reserves, mode-aware list minimums, and convert dock+log height math.
+
+### Fixed
+
+- Convert queue list scroll height no longer falls below one full row in short docked panels.
+- Footer toolbar reserve adds a safety margin while resizing docked panels to avoid one-frame overlap after sudden width changes.
+- Viewport shrink clamps activity log height so it does not dominate a small bottom panel.
+
 ## [0.9.1] - 2026-06-28
 
 ### Fixed

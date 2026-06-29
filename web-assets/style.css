@@ -92,6 +92,15 @@ body.theme-light {
   max-height: min(60vh, 520px);
 }
 
+/* Desktop layout tiers: 1040 header / 900 footer wrap / 600 narrow (see app_ui.rs). */
+@media (max-width: 900px) {
+  .queue-toolbar,
+  .convert-actions .btn-toolbar {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+}
+
 @media (max-width: 640px) {
   .topbar-actions .btn-toolbar {
     width: 100%;
@@ -1620,6 +1629,11 @@ body.view-convert .card-progress-fill:not([class*="status-"]) {
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.35rem;
+}
+
+#queue,
+#convert-queue {
+  min-height: 48px;
 }
 
 @media (max-width: 720px) {

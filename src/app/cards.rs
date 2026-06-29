@@ -6,8 +6,10 @@ use eframe::egui::{Color32, RichText};
 
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
-    clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, left_button_row,
-    popup_menu_above, show_queue_group_section, status_color, status_dot_with_label, MetaBadgeKind,
+    clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
+    left_button_row, popup_menu_above, queue_card_grid_width, queue_short_panel_list_fallback,
+    should_flatten_nested_group_scroll, show_queue_group_section, status_color,
+    status_dot_with_label, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
 };
 use crate::models::{ItemStatus, QueueItem};
 use crate::theme;
@@ -72,12 +74,7 @@ impl PydlApp {
         let card_inner = |ui: &mut egui::Ui| {
             let compact = self.settings.compact_cards;
             let avail = ui.available_width().max(1.0);
-            let (card_min, card_max) = if compact {
-                (260.0, 320.0)
-            } else {
-                (280.0, 360.0)
-            };
-            let card_w = (avail * 0.45).clamp(card_min, card_max);
+            let card_w = queue_card_grid_width(avail, compact);
             let inner_w = (card_w - 20.0).max(1.0);
             let thumb_w = (card_w - 24.0).max(1.0);
             let thumb = if compact {
@@ -850,10 +847,11 @@ impl PydlApp {
                 .show_header(ui, |ui| {
                     let row_w = clip_bounded_width(ui);
                     ui.set_max_width(row_w);
+                    let ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
+                    let done_inline_min = layout_breakpoint(420.0, ui_scale);
                     if label == "Done" && !ids.is_empty() {
-                        const DONE_INLINE_MIN: f32 = 420.0;
                         let mut drew_inline = false;
-                        if row_w >= DONE_INLINE_MIN {
+                        if row_w >= done_inline_min {
                             ui.horizontal(|ui| {
                                 ui.set_max_width(row_w);
                                 status_dot_with_label(ui, &header_text, header_color, true);
@@ -871,7 +869,7 @@ impl PydlApp {
                             });
                         }
                         if !drew_inline {
-                            if row_w < DONE_INLINE_MIN {
+                            if row_w < done_inline_min {
                                 status_dot_with_label(ui, &header_text, header_color, true);
                             }
                             ui.horizontal_wrapped(|ui| {
@@ -886,30 +884,44 @@ impl PydlApp {
                 let (_toggle, inner, _) = header.body(|ui| {
                     ui.spacing_mut().item_spacing = egui::vec2(6.0, 2.0);
                     let allow_reorder = label == "Ready";
-                    let use_list = self.effective_card_list_layout()
+                    let use_list = self.effective_card_list_layout_for_panel(outer_scroll_h)
                         || ids.len() >= self.queue_card_list_fallback_threshold()
-                        || outer_scroll_h < 200.0;
+                        || queue_short_panel_list_fallback(outer_scroll_h, false);
+                    let flatten = should_flatten_nested_group_scroll(outer_scroll_h);
                     if use_list {
-                        const LIST_ROW_H: f32 = 42.0;
+                        let list_row_h = QUEUE_DL_LIST_ROW_H;
                         let row_count = ids.len().max(1);
-                        let outer_cap = outer_scroll_h.max(LIST_ROW_H);
-                        let max_h = (row_count as f32 * LIST_ROW_H + 8.0)
-                            .clamp(LIST_ROW_H, 600.0)
-                            .min(outer_cap);
-                        egui::ScrollArea::vertical()
-                            .id_salt(format!("rustdl_list_{label}"))
-                            .max_height(max_h)
-                            .auto_shrink([false, true])
-                            // show_rows virtualizes list rows for large Ready/Issues groups.
-                            .show_rows(ui, LIST_ROW_H, ids.len(), |ui, row_range| {
-                                for row in row_range {
-                                    if let Some(item_id) = ids.get(row) {
-                                        if let Some(idx) = self.item_idx(*item_id) {
-                                            self.draw_card_list(ui, idx, allow_reorder);
-                                        }
+                        let outer_cap = outer_scroll_h.max(list_row_h);
+                        let max_h = if flatten {
+                            outer_cap
+                        } else {
+                            (row_count as f32 * list_row_h + 8.0)
+                                .clamp(list_row_h, 600.0)
+                                .min(outer_cap)
+                        };
+                        if flatten {
+                            for row in 0..ids.len() {
+                                if let Some(item_id) = ids.get(row) {
+                                    if let Some(idx) = self.item_idx(*item_id) {
+                                        self.draw_card_list(ui, idx, allow_reorder);
                                     }
                                 }
-                            });
+                            }
+                        } else {
+                            egui::ScrollArea::vertical()
+                                .id_salt(format!("rustdl_list_{label}"))
+                                .max_height(max_h)
+                                .auto_shrink([false, true])
+                                .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
+                                    for row in row_range {
+                                        if let Some(item_id) = ids.get(row) {
+                                            if let Some(idx) = self.item_idx(*item_id) {
+                                                self.draw_card_list(ui, idx, allow_reorder);
+                                            }
+                                        }
+                                    }
+                                });
+                        }
                     } else {
                         let row_width = ui.available_width().max(1.0);
                         ui.set_width(row_width);

@@ -7,12 +7,15 @@ use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_bottom_up_rect, allocate_top_down_rect, bounded_ui_height, button_group,
     button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space, content_width,
-    docked_log_lines_max_h, draw_batch_progress_bar, fill_allocated_rect, finite_ui_span,
-    height_to_bottom, left_button_row, note_resizable_panel_height, queue_footer_reserve,
-    queue_log_block_height, queue_panel_layout_heights, queue_undocked_strip_reserve,
-    show_mode_panel, show_persisted_resizable_window, status_color, with_full_width,
-    PersistedFloatWindowParams, DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    docked_log_lines_max_h, draw_batch_progress_bar, draw_queue_status_compact_row,
+    fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
+    note_resizable_panel_height, queue_footer_reserve, queue_list_height_from_layout,
+    queue_list_min_scroll_h, queue_log_block_height, queue_panel_layout_heights,
+    queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
+    show_persisted_resizable_window, status_color, with_full_width,
+    compact_convert_list_row, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
+    DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    VIDEOS_DOCK_PANEL_ID,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -20,15 +23,6 @@ use crate::ui_icons;
 
 use super::log_panel::LogToolbarPlacement;
 use super::PydlApp;
-
-/// Minimum scroll height for queue cards in the docked bottom panel.
-const DOCKED_QUEUE_LIST_MIN_H: f32 = 48.0;
-const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
-    left: 10.0,
-    right: 10.0,
-    top: 6.0,
-    bottom: 6.0,
-};
 
 /// Shared layout parameters for docked and floating video queue panels.
 struct VideosQueueLayout<'a> {
@@ -45,13 +39,12 @@ impl VideosQueueLayout<'_> {
     }
 }
 
-fn queue_list_min_scroll_h(docked: bool) -> f32 {
-    if docked {
-        DOCKED_QUEUE_LIST_MIN_H
-    } else {
-        80.0
-    }
-}
+const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
+    left: 10.0,
+    right: 10.0,
+    top: 6.0,
+    bottom: 6.0,
+};
 
 fn queue_footer_height_id(scroll_id: &str) -> egui::Id {
     egui::Id::new("queue_footer_h").with(scroll_id)
@@ -94,8 +87,11 @@ impl PydlApp {
         scroll_h: f32,
         scroll_id: &str,
         docked: bool,
+        outer_scroll_h: f32,
     ) {
-        let min_h = queue_list_min_scroll_h(docked);
+        let compact_convert =
+            self.convert_mode && compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
+        let min_h = queue_list_min_scroll_h(docked, self.convert_mode, compact_convert);
         let cap = bounded_ui_height(ui, min_h).max(min_h);
         let scroll_h = finite_ui_span(scroll_h, min_h).clamp(0.0, cap);
         if scroll_h < 1.0 {
@@ -330,7 +326,7 @@ impl PydlApp {
         docked: bool,
         outer_scroll_h: f32,
     ) {
-        let min_h = queue_list_min_scroll_h(docked);
+        let min_h = queue_list_min_scroll_h(docked, false, false);
         let scroll_h = finite_ui_span(scroll_h, min_h).max(1.0);
         egui::ScrollArea::vertical()
             .id_salt(scroll_id)
@@ -468,12 +464,14 @@ impl PydlApp {
         } else {
             "Title, URL, uploader…"
         };
+        let cw = crate::app_ui::clip_bounded_width(ui).max(1.0);
+        let search_w = (cw * 0.35).clamp(160.0, 420.0);
         ui.horizontal(|ui| {
             ui.label("Search");
             let search = ui.add(
                 egui::TextEdit::singleline(&mut self.queue_search)
                     .hint_text(hint)
-                    .desired_width(220.0),
+                    .desired_width(search_w),
             );
             if self.focus_queue_search {
                 search.request_focus();
@@ -511,29 +509,56 @@ impl PydlApp {
 
         self.draw_queue_search_row(ui);
 
-        if self.convert_mode {
-            if !self.convert_items.is_empty() {
-                self.draw_convert_queue_status_row(ui);
-                self.draw_convert_batch_progress_row(ui);
-                self.draw_convert_batch_summary_row(ui);
-            }
-        } else if !self.items.is_empty() {
-            self.draw_downloader_queue_status_row(ui);
-            self.draw_download_batch_progress_row(ui);
-        }
-
-        let content_top = ui.cursor().min.y;
+        let content_top_after_search = ui.cursor().min.y;
         let cw = crate::app_ui::clip_bounded_width(ui).max(1.0);
+        let ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
+        let resizing = ui.ctx().input(|i| i.pointer.any_down());
         let measured_footer = ui
             .ctx()
             .data(|d| d.get_temp::<f32>(queue_footer_height_id(layout.scroll_id)));
-        let footer_h =
-            queue_footer_reserve(cw, self.convert_mode, layout.is_docked(), measured_footer);
+        let footer_h = queue_footer_reserve(
+            cw,
+            self.convert_mode,
+            layout.is_docked(),
+            measured_footer,
+            ui_scale,
+            resizing,
+        );
         let log_block_est =
             queue_log_block_height(layout.dock_log, self.settings.log_dock_height, true);
+        let predicted_list_h =
+            queue_list_height_from_layout(content_top_after_search, body_bottom, footer_h, log_block_est);
+        let status_compact = queue_status_compact(predicted_list_h, self.convert_mode);
+
+        if self.convert_mode {
+            if !self.convert_items.is_empty() {
+                if status_compact {
+                    self.draw_convert_queue_status_row_compact(ui);
+                } else {
+                    self.draw_convert_queue_status_row(ui);
+                    self.draw_convert_batch_progress_row(ui);
+                    self.draw_convert_batch_summary_row(ui);
+                }
+            }
+        } else if !self.items.is_empty() {
+            if status_compact {
+                self.draw_downloader_queue_status_row_compact(ui);
+            } else {
+                self.draw_downloader_queue_status_row(ui);
+                self.draw_download_batch_progress_row(ui);
+            }
+        }
+
+        let content_top = ui.cursor().min.y;
         let (list_h, stack_h) =
             queue_panel_layout_heights(content_top, body_bottom, footer_h, log_block_est);
-        self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked);
+        self.draw_queue_list_body(
+            ui,
+            list_h,
+            layout.scroll_id,
+            layout.docked,
+            list_h,
+        );
 
         allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
             ui.add_space(2.0);
@@ -595,6 +620,22 @@ impl PydlApp {
 
     /// Colored per-status counts for the downloader queue (videos panel / floating window).
     pub(super) fn draw_downloader_queue_status_row(&mut self, ui: &mut egui::Ui) {
+        let (heading, parts) = self.downloader_queue_status_parts();
+        match crate::app_ui::draw_queue_status_row(
+            ui,
+            &heading,
+            &parts,
+            self.queue_group_focus.is_some(),
+        ) {
+            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
+            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
+                self.focus_queue_group(group);
+            }
+            None => {}
+        }
+    }
+
+    fn downloader_queue_status_parts(&self) -> (String, Vec<crate::app_ui::QueueStatusPart>) {
         let mut parts: Vec<crate::app_ui::QueueStatusPart> = Vec::new();
         if self.status_resolving > 0 {
             parts.push(crate::app_ui::QueueStatusPart {
@@ -649,18 +690,12 @@ impl PydlApp {
         } else {
             format!("Downloads ({}):", self.items.len())
         };
-        match crate::app_ui::draw_queue_status_row(
-            ui,
-            &heading,
-            &parts,
-            self.queue_group_focus.is_some(),
-        ) {
-            Some(crate::app_ui::QueueStatusRowAction::ShowAll) => self.queue_group_focus = None,
-            Some(crate::app_ui::QueueStatusRowAction::Focus(group)) => {
-                self.focus_queue_group(group);
-            }
-            None => {}
-        }
+        (heading, parts)
+    }
+
+    pub(super) fn draw_downloader_queue_status_row_compact(&mut self, ui: &mut egui::Ui) {
+        let (heading, parts) = self.downloader_queue_status_parts();
+        draw_queue_status_compact_row(ui, &heading, &parts);
     }
 
     pub(super) fn draw_download_batch_progress_row(&mut self, ui: &mut egui::Ui) {
@@ -824,7 +859,8 @@ impl PydlApp {
             if !ui.ctx().input(|i| i.pointer.any_down())
                 && (panel_h - self.settings.undocked_footer_height).abs() > 1.0
             {
-                self.settings.undocked_footer_height = panel_h.clamp(180.0, 600.0);
+                self.settings.undocked_footer_height =
+                    panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
                 self.persist_settings();
             }
         } else {
@@ -873,7 +909,8 @@ impl PydlApp {
         if !ui.ctx().input(|i| i.pointer.any_down())
             && (panel_h - self.settings.videos_dock_height).abs() > 1.0
         {
-            self.settings.videos_dock_height = panel_h.clamp(180.0, 800.0);
+            self.settings.videos_dock_height =
+                panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
             self.persist_settings();
         }
     }

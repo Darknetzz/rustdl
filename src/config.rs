@@ -948,7 +948,7 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
     cfg.yt_dlp_retry_sleep_secs = cfg.yt_dlp_retry_sleep_secs.clamp(0, 300);
     cfg.yt_dlp_download_auto_retries = cfg.yt_dlp_download_auto_retries.clamp(0, 5);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
-    cfg.undocked_footer_height = cfg.undocked_footer_height.clamp(100.0, 600.0);
+    cfg.undocked_footer_height = cfg.undocked_footer_height.clamp(100.0, 800.0);
     cfg.log_float_width = cfg.log_float_width.clamp(400.0, 2400.0);
     cfg.log_float_height = cfg.log_float_height.clamp(260.0, 1600.0);
     cfg.videos_dock_height = cfg.videos_dock_height.clamp(180.0, 800.0);
