@@ -65,6 +65,18 @@ fn settings_checkbox(ui: &mut egui::Ui, label: &str, value: &mut bool) -> bool {
     changed
 }
 
+fn settings_checkbox_tooltip(
+    ui: &mut egui::Ui,
+    label: &str,
+    value: &mut bool,
+    tooltip: &str,
+) -> bool {
+    ui.label(label);
+    let changed = ui.checkbox(value, "").on_hover_text(tooltip).changed();
+    ui.end_row();
+    changed
+}
+
 fn size_limit_kind_options() -> [(&'static str, &'static str); 4] {
     use crate::convert_size_limit::{
         KIND_MAX_OUTPUT_BYTES, KIND_MAX_PERCENT_OF_SOURCE, KIND_MIN_SHRINK_PERCENT, KIND_NONE,
@@ -366,16 +378,13 @@ impl PydlApp {
                                 "List layout for queue cards (denser)",
                                 &mut self.settings.card_list_layout,
                             );
-                            changed |= ui
-                                .checkbox(
-                                    &mut self.settings.ui_power_save,
-                                    "Power save during active work",
-                                )
-                                .on_hover_text(
-                                    "Lower UI refresh rate while downloading or converting, \
-                                     use denser queue rows sooner, and lighter activity-log rendering",
-                                )
-                                .changed();
+                            changed |= settings_checkbox_tooltip(
+                                ui,
+                                "Power save during active work",
+                                &mut self.settings.ui_power_save,
+                                "Lower UI refresh rate while downloading or converting, \
+                                 use denser queue rows sooner, and lighter activity-log rendering",
+                            );
                             let tray_hover = if cfg!(target_os = "linux") {
                                 "Hide the window in the notification area when you minimize or \
                                  click the close button; use the tray icon to show rustdl again \
@@ -387,13 +396,12 @@ impl PydlApp {
                                  click the close button; use the tray icon to show rustdl again \
                                  or choose Quit to exit"
                             };
-                            changed |= ui
-                                .checkbox(
-                                    &mut self.settings.minimize_to_tray,
-                                    "Minimize to system tray",
-                                )
-                                .on_hover_text(tray_hover)
-                                .changed();
+                            changed |= settings_checkbox_tooltip(
+                                ui,
+                                "Minimize to system tray",
+                                &mut self.settings.minimize_to_tray,
+                                tray_hover,
+                            );
                             changed |= settings_checkbox(
                                 ui,
                                 "Autoscroll log to latest line",

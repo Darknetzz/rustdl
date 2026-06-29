@@ -20,6 +20,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Settings → Shared: **Power save during active work** and **Minimize to system tray** each use their own row (aligned with other checkboxes in the form grid).
 - Web UI start errors and banners use plain-text navigation hints (no missing arrow glyph in the default UI font).
 - Enabling the LAN web UI with an empty API token auto-generates a token when the server starts (same as first launch).
 - GitHub stable release descriptions no longer show **`[Unreleased]`** when a version was published before its `CHANGELOG.md` section existed (`extract_release_notes` + `refresh_release_notes` scripts).
@@ -157,6 +158,25 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Activity log panel: **Hide log** sits next to **Dock log** / **Undock log** (main header control unchanged).
 - Desktop UI stays more responsive under load: skips cloning the done-file index every frame, debounces output-folder rescans during active downloads/converts, throttles thumbnail queue rescans and convert batch aggregate updates, speeds up activity log rendering when the filter is **All**, and avoids redundant idle repaints while batches are running.
 - Downloader panel uses less vertical space: merged destination/profile with Start/Pause into one toolbar row, shorter URL field, and scroll area shrinks to content instead of filling empty space above the queue.
+
+## [0.8.3] - 2026-06-28
+
+### Added
+
+- **Settings → Shared → Minimize to system tray** (Windows and Linux): hide the window in the notification area when you minimize or click the close button; click the tray icon to restore, or use **Quit** in the tray menu to exit.
+- **Settings → Shared → Power save during active work**: lowers UI refresh rate while downloading or converting, switches to list rows sooner on large queues, and uses lighter log rendering (optional; off by default).
+
+### Changed
+
+- Activity log panel: **Hide log** sits next to **Dock log** / **Undock log** (main header control unchanged).
+- Desktop UI stays more responsive under load: skips cloning the done-file index every frame, debounces output-folder rescans during active downloads/converts, throttles thumbnail queue rescans and convert batch aggregate updates, speeds up activity log rendering when the filter is **All**, and avoids redundant idle repaints while batches are running.
+- Desktop responsiveness: output-folder scans for Open/Reveal no longer run on the UI thread on every finished download; they are debounced and run in the background. Core state sync and queue/log saves use non-blocking locks and background I/O where possible, so the window should stay interactive during heavy download or convert sessions.
+
+### Fixed
+
+- Fixed a startup hang on Windows where the window never appeared (output-folder indexing could block the UI thread; tray hooks now initialize only when **Minimize to system tray** is enabled).
+- Docked and floating video queue panels no longer overlap the footer toolbar or docked activity log when the window or panel is resized (layout uses measured footer height and mode-aware reserves; log height slider applies consistently when the log is docked under the queue or in the main footer).
+- Queue group list scroll areas stay within the outer queue scroll height on short panels (avoids awkward nested double-scroll).
 
 ## [0.8.2] - 2026-06-23
 
@@ -669,6 +689,7 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
 [0.9.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.8...rustdl-v0.9.0
 [0.8.8]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.7...rustdl-v0.8.8
+[0.8.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.2...rustdl-v0.8.3
 [0.8.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.1...rustdl-v0.8.2
 [0.8.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.8.0...rustdl-v0.8.1
 [0.8.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.3...rustdl-v0.8.0
