@@ -1985,19 +1985,7 @@ impl PydlApp {
         ) {
             return;
         }
-        let needs_probe = {
-            let it = &self.items[idx];
-            it.file_format.is_none()
-                || it.audio_codec.is_none()
-                || it.file_bitrate_bps.is_none()
-                || it.file_creation_time.is_none()
-                || it.video_codec.is_empty()
-                || it.width.is_none()
-                || it.height.is_none()
-                || it.fps.is_none()
-                || it.file_saved_mtime.is_none()
-        };
-        if !needs_probe {
+        if self.items[idx].file_saved_mtime.is_some() {
             return;
         }
         let Some((path, mtime)) = self.find_downloaded_file_for_item(&self.items[idx]) else {
@@ -2014,6 +2002,7 @@ impl PydlApp {
             self.items[idx].file_saved_mtime = Some(dur.as_secs());
         }
         self.mark_queue_dirty();
+        self.schedule_queue_save();
     }
 
     pub(super) fn refresh_input_line_info(&mut self) {

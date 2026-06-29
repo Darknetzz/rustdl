@@ -658,14 +658,18 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         return None;
     }
     let root: FfprobeMediaRoot = serde_json::from_slice(&out.stdout).ok()?;
-    let stream = root
+    let video = root
         .streams
         .iter()
-        .find(|s| s.codec_type.as_deref() == Some("video"))?;
-    let audio_codec = root
+        .find(|s| s.codec_type.as_deref() == Some("video"));
+    let audio = root
         .streams
         .iter()
-        .find(|s| s.codec_type.as_deref() == Some("audio"))
+        .find(|s| s.codec_type.as_deref() == Some("audio"));
+    if video.is_none() && audio.is_none() {
+        return None;
+    }
+    let audio_codec = audio
         .and_then(|s| s.codec_name.as_deref())
         .map(|c| c.trim().to_ascii_lowercase())
         .filter(|c| !c.is_empty());
@@ -676,22 +680,19 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         tags: None,
     });
 
-    let codec = stream
-        .codec_name
-        .as_deref()
+    let codec = video
+        .and_then(|s| s.codec_name.as_deref())
         .unwrap_or_default()
         .trim()
         .to_ascii_lowercase();
-    let width = stream.width.filter(|w| *w > 0);
-    let height = stream.height.filter(|h| *h > 0);
-    let fps = stream
-        .avg_frame_rate
-        .as_deref()
+    let width = video.and_then(|s| s.width).filter(|w| *w > 0);
+    let height = video.and_then(|s| s.height).filter(|h| *h > 0);
+    let fps = video
+        .and_then(|s| s.avg_frame_rate.as_deref())
         .and_then(parse_ffprobe_fraction)
         .or_else(|| {
-            stream
-                .r_frame_rate
-                .as_deref()
+            video
+                .and_then(|s| s.r_frame_rate.as_deref())
                 .and_then(parse_ffprobe_fraction)
         })
         .filter(|f| *f > 0.0)
@@ -703,10 +704,14 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         .filter(|d| *d > 0.0)
         .map(|d| (d * 1000.0) as u64);
 
-    let mut bitrate_bps = stream
-        .bit_rate
-        .as_deref()
+    let mut bitrate_bps = video
+        .and_then(|s| s.bit_rate.as_deref())
         .and_then(parse_bitrate_field)
+        .or_else(|| {
+            audio
+                .and_then(|s| s.bit_rate.as_deref())
+                .and_then(parse_bitrate_field)
+        })
         .or_else(|| format.bit_rate.as_deref().and_then(parse_bitrate_field));
 
     if bitrate_bps.is_none() {
