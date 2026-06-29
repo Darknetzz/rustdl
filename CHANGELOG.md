@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Documentation
+
+- **README** and **AGENTS.md** now document the full product scope (Quality watchlist, More info, minimum height/FPS, config files, module map, and architecture notes for agents).
+
 ## [0.11.0] - 2026-06-29
 
 ### Added

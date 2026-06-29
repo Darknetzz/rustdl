@@ -4,14 +4,62 @@ Guidance for AI agents and automation working in this repository.
 
 ## What this project is
 
-**rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues. It also includes:
-
-- **Downloader mode** — paste URLs, preview cards, queue downloads, activity log, profiles, settings.
-- **Video Converter mode** — local file/folder transcoding via ffmpeg (AV1 default; H.265/H.264 optional; desktop GUI and LAN web UI).
-- **Optional LAN web UI** — Axum HTTP server + embedded `web-assets/` for remote downloader and converter queue control.
-- **Headless CLI** — `--download`, `--web-only`, `--list-profiles` (see `README.md`).
+**rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues. It is a **multi-surface product**: one shared download/convert engine backs the egui desktop app, an optional LAN web UI, and headless CLI modes. There are **no Cargo `[features]`** — everything ships in a single binary (~35k lines of Rust + ~5k lines of LAN web JS).
 
 The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` from `src/main.rs`.
+
+### Product surfaces
+
+| Surface | Entry | Implementation |
+|---------|-------|----------------|
+| **Desktop GUI** | `cargo run` / `rustdl` | `PydlApp` in `src/app/mod.rs`, `eframe_app.rs` |
+| **LAN web UI** | Settings → Web UI or `--web-only` | `src/service/web/` + `web-assets/` (Axum REST + SSE) |
+| **Headless CLI** | Flags below | `src/cli.rs` — `--download` bypasses shared queue; other flags use persisted state |
+
+### Feature areas (all active in the shipped product)
+
+- **Downloader mode** — paste URLs, preview cards, queue downloads, activity log, profiles, scheduled start, watch folders, queue templates, download library.
+- **Video Converter mode** — local file/folder transcoding via ffmpeg (AV1 default; H.265/H.264 optional); parallel workers, GPU encode fairness, convert presets; desktop + LAN web UI.
+- **Quality watchlist** — periodically re-probe saved URLs; log when max available resolution improves; optional auto-enqueue (`watchlist.rs`, `watchlist_panel.rs`, `core_watchlist.rs`; Settings → Downloader). **Desktop only** — not exposed on LAN web UI yet.
+- **Command palette** — `Ctrl+K` / `Cmd+K`; layout presets (Compact / Review / Minimal), dock/float panels, quick queue actions (`command_palette.rs`; mirrored in `web-assets/app.js`).
+- **Download library** — index of completed files under the output folder; desktop window + LAN **Library** tab (`domain/done_file_index.rs`, `core.rs` refresh loop).
+- **More info** — per-row popup with yt-dlp source fields and ffprobe file details after download (`cards.rs`).
+- **System tray** — Windows + Linux minimize-to-tray while downloads/encodes continue (`tray.rs`).
+- **Windows URL drag-and-drop** — browser URI drops from Chrome/Firefox (`win_drop_target.rs`); other platforms: paste or file drops only.
+
+User-facing feature docs live in `README.md`; recent additions are also in `CHANGELOG.md` under `[Unreleased]` / latest version.
+
+### CLI flags
+
+| Flag | Purpose |
+|------|---------|
+| *(no args)* | Start GUI |
+| `--download URL` | Headless yt-dlp run (URL, `@file.txt`, or `-` for stdin); no shared queue or activity log |
+| `--profile NAME` | With `--download`: apply named profile first |
+| `--output-dir PATH` | With `--download`: override output folder |
+| `--dry-run` | With `--download`: print planned args only |
+| `--enqueue URL\|@file\|-` | Append URLs to saved download queue |
+| `--start-queue` | Start persisted download queue and wait |
+| `--convert-batch` | Start persisted convert batch and wait |
+| `--web-only` | Headless LAN web UI (no GUI window) |
+| `--host ADDR`, `--port PORT` | With `--web-only`: bind override (defaults from settings) |
+| `--list-profiles` | Print download profile names |
+| `-h`, `--help` / `-V`, `--version` | Help and version |
+
+See `README.md` → **Run** for examples.
+
+### Codebase at a glance
+
+| Layer | ~Lines | Notes |
+|-------|--------|-------|
+| `src/` Rust | ~35k | Single crate, 75 `.rs` files |
+| `web-assets/app.js` | ~5.3k | Second UI stack for LAN web (duplicates much queue/settings UX) |
+| `tests/` | ~5.7k | Integration + perf (`queue_perf.rs` is large) |
+| `scripts/` | ~3k | Build, release, CI — not shipped |
+
+**Hotspot files** (start here when debugging layout or queue behavior): `src/app/mod.rs`, `src/app_ui.rs`, `src/app/settings_panel.rs`, `src/service/core.rs`, `src/service/web/api.rs`, `web-assets/app.js`.
+
+**Dual UI rule:** desktop changes often need matching updates in `web-assets/app.js` and/or `src/service/web/api.rs` when the LAN web UI exposes the same control.
 
 **Canonical repository:** https://github.com/Darknetzz/rustdl (GitLab mirror: https://gitlab.roste.org/kriss/rustdl). User-facing links, `Cargo.toml` `repository` / `homepage`, and `pkg_version::GITHUB_*` constants should all use that GitHub URL—not the old monorepo [Darknetzz/code](https://github.com/Darknetzz/code) path `Rust/rustdl/` (historical context only; see `MIGRATION.md`). Default branch on GitHub/GitLab is **`dev`**.
 
@@ -54,17 +102,63 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 
 ## Repository layout
 
+### Core application (`src/`)
+
 | Path | Role |
 |------|------|
-| `src/app/` | egui UI: `eframe_app.rs` (main window), `videos_panel.rs`, `cards.rs`, `settings_panel.rs`, `log_panel.rs`, `convert_panel.rs` |
-| `src/app_ui.rs` | Shared UI helpers (buttons, badges, layout, `queue_body_layout_heights`, viewport dock clamp) |
-| `src/service/` | Background core + Tokio; `web/` for LAN API and static assets |
-| `src/ytdlp.rs`, `src/ytdlp_download_args.rs` | yt-dlp invocation and argument building |
-| `src/config.rs`, `src/models.rs`, `src/profiles.rs` | Settings, queue models, download profiles |
-| `src/cli.rs` | CLI / `--web-only` entry |
-| `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`) |
-| `tests/` | Integration tests (ytdlp fixtures, queue perf, subprocess smoke) |
+| **`src/app/mod.rs`** | `PydlApp` — main egui state hub (~2.7k lines); mode toggle, settings, web server handle |
+| **`src/app/eframe_app.rs`** | `eframe::App` impl; frame loop, panel routing |
+| **`src/app/videos_panel.rs`** | Download queue panel (docked + floating); `VideosQueueLayout` scroll/footer math |
+| **`src/app/cards.rs`** | Preview cards / list rows, **More info** popup, per-item actions |
+| **`src/app/convert_panel.rs`** | Video Converter queue UI |
+| **`src/app/settings_panel.rs`** | Settings window (Shared / Downloader / Converter / Web UI tabs) |
+| **`src/app/log_panel.rs`** | Activity log (docked under queue + floating window) |
+| **`src/app/watchlist_panel.rs`** | Quality watchlist collapsible panel |
+| **`src/app/command_palette.rs`** | `Ctrl+K` command palette |
+| **`src/app/core_sync.rs`** | Mirrors `DownloadCore` ↔ `PydlApp` each frame |
+| **`src/app/events.rs`** | UI event types from background |
+| **`src/app/queue_persist.rs`** | Save/restore download queue |
+| **`src/app/settings_persist.rs`** | Settings save on change |
+| **`src/app/download_control.rs`** | Start/pause/cancel download session |
+| **`src/app/thumbnails.rs`** | Card thumbnail loading |
+| **`src/app/input_lines.rs`** | URL paste / validation / dedupe |
+| **`src/app/about.rs`**, **`update_check.rs`**, **`web_qr.rs`** | About dialog, GitHub release check, LAN QR code |
+| **`src/app/queue_cache.rs`**, **`background_spawn.rs`**, **`done_file_index.rs`** | Thin re-exports to canonical modules |
+| **`src/app_ui.rs`** | Shared UI helpers (buttons, badges, layout presets, `queue_body_layout_heights`, viewport clamp) |
+| **`src/service/core.rs`** | `DownloadCore` — queue engine, yt-dlp workers, persistence hooks, library index |
+| **`src/service/core_convert.rs`** | Converter batch logic on shared core |
+| **`src/service/core_watchlist.rs`** | Watchlist probe scheduling |
+| **`src/service/core_events.rs`** | Tokio event loop + watch-folder polling |
+| **`src/service/background_spawn.rs`** | Shared background task helpers |
+| **`src/service/mod.rs`** | `RustdlService` — shared handle for GUI + web |
+| **`src/service/web/`** | LAN server: `server.rs`, `api.rs`, `convert_api.rs`, `auth.rs`, `media.rs`, `assets.rs` |
+| **`src/domain/`** | Shared types: `events.rs` (`UiEvent`), `done_file_index.rs` |
+| **`src/ytdlp.rs`**, **`ytdlp_download_args.rs`**, **`ytdlp_errors.rs`** | yt-dlp subprocess, args, errors |
+| **`src/transcode.rs`** | ffmpeg encode pipeline, encoder auto-detect |
+| **`src/config.rs`** | `AppSettings`, paths, load/save |
+| **`src/models.rs`** | Queue item types and status |
+| **`src/profiles.rs`** | Download profiles (built-in + user) |
+| **`src/convert_state.rs`**, **`convert_presets.rs`**, **`convert_size_limit.rs`** | Converter queue persistence and presets |
+| **`src/watchlist.rs`** | Watchlist store + `rustdl_watchlist.json` |
+| **`src/watch_folder.rs`** | Auto-enqueue from `.url` / `.txt` drops |
+| **`src/queue_templates.rs`** | Saved downloader queue templates |
+| **`src/cli.rs`** | CLI entry and headless modes |
+| **`src/external_tools.rs`** | Resolve yt-dlp / ffmpeg / ffprobe on `PATH` |
+| **`src/thumbnail_store.rs`**, **`media_metadata.rs`**, **`download_organize.rs`** | Thumbnails, ffprobe, output templates |
+| **`src/tray.rs`** | System tray (Windows + Linux) |
+| **`src/win_drop_target.rs`**, **`win_icon.rs`**, **`win_window.rs`** | Windows-only shell integration |
+| **`src/theme.rs`**, **`ui_icons.rs`**, **`app_icon.rs`** | Theming and icons |
+
+### Web, tests, tooling
+
+| Path | Role |
+|------|------|
+| `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`, fonts) |
+| `tests/ytdlp_fixtures.rs` | yt-dlp argument / fixture tests |
+| `tests/queue_perf.rs` | Queue layout and perf regression tests |
+| `tests/subprocess_smoke.rs` | Subprocess smoke tests |
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
+| `scripts/ci_local.ps1`, `scripts/ci_local.sh` | Local fmt / clippy / test / deny / audit |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Optional: finalize `[Unreleased]` changelog + compare links (`release: vX.Y.Z` commit) |
 | `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
@@ -76,16 +170,61 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
 
-User data (not in repo): `<config_dir>/rustdl/` — `rustdl_config.json`, `rustdl_queue.json`, `rustdl_activity_log.json`. See `README.md` for paths.
+### User data (not in repo)
+
+Under `<config_dir>/rustdl/` (see `README.md` for OS paths):
+
+| File / folder | Purpose |
+|---------------|---------|
+| `rustdl_config.json` | All settings |
+| `rustdl_queue.json` | Saved download queue |
+| `rustdl_convert_queue.json` | Saved Video Converter queue (when remember enabled) |
+| `rustdl_activity_log.json` | Persisted activity log |
+| `rustdl_profiles.json` | User-defined download profiles |
+| `rustdl_watchlist.json` | Quality watchlist entries |
+| `rustdl_convert_presets.json` | User convert encoding presets |
+| `queue_templates/` | Saved downloader queue templates |
+
+Never commit these files or paste their contents into the repo.
 
 ## Architecture notes for code changes
 
-- **UI thread vs background work**: `PydlApp` in `src/app/mod.rs` owns egui state; download/encode work runs on a shared Tokio `Runtime` via `src/service/core.rs`. UI updates arrive through channels (`src/app/events.rs`, `core_sync.rs`).
-- **Queue persistence**: `src/app/queue_persist.rs` saves/restores the downloader queue; converter queue in `src/convert_state.rs` / `rustdl_convert_queue.json`.
-- **External tools**: Resolved via `PATH` or custom paths in settings (`src/external_tools.rs`). Requires `yt-dlp`; `ffmpeg` / `ffprobe` optional but needed for many features.
-- **Windows-only**: Browser URL drag-and-drop (`src/win_drop_target.rs`), console detach for GUI (`src/cli.rs`).
+```text
+surfaces          GUI (egui)          LAN web (app.js)
+                      |                      |
+                 core_sync.rs            api.rs / convert_api.rs
+                      \                    /
+                    DownloadCore (service/core.rs)
+                      /         |         \
+              ytdlp.rs    transcode.rs   watchlist.rs
+                      \         |         /
+                   Tokio Runtime + subprocess workers
+```
+
+- **UI thread vs background work**: `PydlApp` in `src/app/mod.rs` owns egui state; download/encode work runs on a shared Tokio `Runtime` via `src/service/core.rs`. UI updates arrive through channels (`src/domain/events.rs`, `src/app/events.rs`, `core_sync.rs`). `RustdlService` in `service/mod.rs` constructs one `SharedCore` for GUI and optional web server.
+- **Queue persistence**: `src/app/queue_persist.rs` saves/restores the downloader queue; converter queue in `src/convert_state.rs` / `rustdl_convert_queue.json`. Core owns authoritative queue state; GUI mirrors it via `core_sync.rs`.
+- **LAN web API**: `service/web/server.rs` spawns Axum; `api.rs` (downloader + library + settings) and `convert_api.rs` (converter) call the same `SharedCore` as the desktop app. Static UI from `web-assets/` via `assets.rs` (`rust-embed`). Auth: API token + optional IP whitelist (`auth.rs`); optional TLS from settings.
+- **External tools**: Resolved via `PATH` or custom paths in settings (`src/external_tools.rs`). Requires `yt-dlp`; `ffmpeg` / `ffprobe` optional but needed for converter, thumbnails, **More info**, and watchlist probes.
+- **Platform `cfg`**: `tray.rs` (Windows + Linux); `win_*` modules (Windows only). No macOS tray yet. Linux GUI: `persist_window: false` in `lib.rs` to avoid off-screen restore.
 
 When editing UI spacing or panels, check both **docked** (main window) and **floating** (`draw_videos_window`, `draw_logs_window`) code paths in `src/app/videos_panel.rs` and related modules. Both paths should go through `VideosQueueLayout` in `videos_panel.rs` (shared scroll/footer/log reserve math).
+
+### Where to change common things
+
+| Task | Primary files |
+|------|-----------------|
+| Download queue UI / cards | `videos_panel.rs`, `cards.rs`, `app_ui.rs` |
+| Converter UI | `convert_panel.rs`, `core_convert.rs`, `transcode.rs` |
+| Settings field or tab | `settings_panel.rs`, `config.rs` |
+| yt-dlp flags / args | `ytdlp_download_args.rs`, `ytdlp.rs`, `profiles.rs` |
+| Queue worker behavior | `service/core.rs`, `core_events.rs` |
+| Quality watchlist | `watchlist.rs`, `watchlist_panel.rs`, `core_watchlist.rs` |
+| LAN web endpoint or web UX | `service/web/api.rs`, `convert_api.rs`, `web-assets/app.js` |
+| Command palette action | `command_palette.rs`, then web palette in `app.js` if exposed |
+| Download library / completed files | `domain/done_file_index.rs`, `core.rs` refresh helpers |
+| CLI headless mode | `cli.rs` |
+| New persisted user file | `config.rs` (path helper), relevant store module, `README.md` + this file |
+| Layout math / presets | `app_ui.rs`, `videos_panel.rs`, tests in `tests/queue_perf.rs` |
 
 ### Layout QA checklist (manual)
 
@@ -254,16 +393,18 @@ Configure the webhook for **push** events on `Darknetzz/rustdl`. Payload URL pat
 
 ## Agent conventions
 
+- **Read this file first** for architecture, file map, and release rules; use `README.md` for end-user feature wording and settings tables.
 - **CHANGELOG (required)**: Any user-visible change must include a `CHANGELOG.md` update under `## [Unreleased]` in the **same commit** as the code. Write for end users (what changed in the app, not file names). Do not mark a user-facing task complete without a changelog bullet. Skip only for changes with no user-facing effect (CI, internal refactors, agent/docs-only edits to this file). See **CHANGELOG on every commit** below.
-- **Scope**: Smallest correct diff; match existing naming and patterns in the file you touch.
+- **Dual UI**: If a feature is exposed on the LAN web UI, update `web-assets/app.js` and web API handlers — not just egui panels.
+- **Scope**: Smallest correct diff; match existing naming and patterns in the file you touch. Prefer extending existing helpers in `app_ui.rs` / `core.rs` over new abstractions.
 - **Comments**: Only for non-obvious behavior; prefer clear code.
-- **Tests**: Add or extend tests when fixing real behavior bugs; avoid trivial tests unless requested.
-- **Docs**: Do not add new markdown files unless asked (this file is the exception the user requested).
+- **Tests**: Add or extend tests when fixing real behavior bugs; layout regressions often go in `tests/queue_perf.rs`. Avoid trivial tests unless requested.
+- **Docs**: Do not add new markdown files unless asked. Keep `README.md` (user-facing) and `AGENTS.md` (agent-facing) in sync when adding features or persisted files.
 - **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include the `CHANGELOG.md` update (see **CHANGELOG (required)** above); bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**) and tag the bump commit with `rustdl-vX.Y.Z` (bump scripts or `-TagOnly`; do not push the tag until release unless asked).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.
 
 ## Further reading
 
-- `README.md` — features, settings tables, LAN security notes, platform behavior.
-- `MIGRATION.md` — remotes (`github`, `gitlab`), branch policy, monorepo history.
-- `CHANGELOG.md` — recent product changes.
+- [`README.md`](README.md) — features, settings tables, LAN security notes, platform behavior, config file paths.
+- [`MIGRATION.md`](MIGRATION.md) — remotes (`github`, `gitlab`), branch policy, monorepo history.
+- [`CHANGELOG.md`](CHANGELOG.md) — recent product changes (check latest section before editing user-facing copy).

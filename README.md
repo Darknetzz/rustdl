@@ -4,7 +4,7 @@
   <img src="assets/rustdl-icon.png" alt="rustdl icon" width="128" />
 </p>
 
-<p align="center">Desktop GUI for <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> built in Rust with <code>eframe/egui</code>.</p>
+<p align="center">Desktop GUI for <a href="https://github.com/yt-dlp/yt-dlp">yt-dlp</a> built in Rust with <code>eframe/egui</code>. Also includes a Video Converter, optional LAN web UI, quality watchlist, and headless CLI modes.</p>
 
 <p align="center">Source: <a href="https://github.com/Darknetzz/rustdl">github.com/Darknetzz/rustdl</a> · mirror: <a href="https://gitlab.roste.org/kriss/rustdl">gitlab.roste.org/kriss/rustdl</a></p>
 
@@ -108,6 +108,9 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - **Watch folders**: auto-enqueue URLs from `.url` / `.txt` files (Downloader) and auto-scan new videos into the convert queue (Settings).
 - **Queue templates** and **convert encoding presets** saved under your config directory.
 - **Download library** (desktop window and LAN **Library** tab): browse completed downloads and re-queue URLs.
+- **Quality watchlist** — save URLs to re-probe on a schedule; rustdl logs when max available resolution increases (e.g. a premiere later replaced by HD). Add from a Done download (**Verify… → Watch for better quality**), paste in **Settings → Downloader → Quality watchlist**, or use the **Quality watchlist** panel in the main column. Optional auto-enqueue when quality improves.
+- **More info** on each download queue row — yt-dlp source fields (title, uploader, views, …) and, after download, ffprobe file details (container, codecs, path).
+- **Minimum height / FPS** filters (Settings → Downloader → Quality & network) — optional `height>=` / `fps>=` on quality presets (audio-only preset unchanged).
 - Headless queue modes: `--enqueue`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the GUI.
 - **Scheduled download start** (Settings → Downloader): optional daily `HH:MM` local time to start ready downloads.
 - **GPU encode fairness** and **parallel conversions** (`1..=6`) when running Video Converter batches.
@@ -116,7 +119,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 
 When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings (unless your IP is on the whitelist), then use the page to control the **Downloader** queue, **Video Converter** queue, and **Library** of completed downloads. **127.0.0.1** and **::1** are whitelisted by default so the web UI on this PC does not require a token.
 
-**Still desktop-only:** native queue/settings file pickers (web uses API import/export), desktop notifications on session complete, in-app update download (Windows only), browser URL drag-and-drop (Windows only).
+**Still desktop-only:** native queue/settings file pickers (web uses API import/export), desktop notifications on session complete, in-app update download (Windows only), browser URL drag-and-drop (Windows only), **Quality watchlist** panel and settings.
 
 **Security notes:**
 
@@ -134,6 +137,14 @@ When enabled in **Settings → Web UI**, rustdl serves a built-in web interface 
 - **Video Converter**: local file/folder conversion to AV1, H.265, or H.264 (session-wide target) from a dedicated in-app panel.
 
 Switch modes from the **Mode** toggle near the top of the main window.
+
+### Quality watchlist
+
+Track URLs whose source quality may improve over time (e.g. a live premiere that later gets a full HD upload on the same link):
+
+- **Add** from a Done item (**Verify… → Watch for better quality**), paste a URL under **Settings → Downloader → Quality watchlist**, or use the collapsible **Quality watchlist** panel in the main column.
+- **Settings → Downloader → Quality watchlist**: enable/disable polling, interval (hours), minimum height delta to count as an improvement, and optional **auto-enqueue** when quality improves.
+- Entries persist in `rustdl_watchlist.json` under your config folder.
 
 ### Video Converter notes
 
@@ -227,6 +238,8 @@ Presets update current settings immediately, and you can still tweak any individ
 | Speed limit | Max download rate (e.g. `500K`, `1M`) | `--limit-rate` |
 | Unlimited retries | Retry HTTP and fragment requests indefinitely | `--retries infinite --fragment-retries infinite` |
 | Retry count | Fixed retry count when unlimited is off | `--retries N --fragment-retries N` |
+| Minimum height | Skip formats below this height (quality presets / custom `-f`; audio-only unchanged) | `height>=N` in format filter |
+| Minimum FPS | Skip formats below this frame rate | `fps>=N` in format filter |
 | Socket timeout | Seconds to wait per request (`0` = yt-dlp default) | `--socket-timeout SECONDS` |
 | Sleep between retries | Pause between yt-dlp retries (`0` = off) | `--retry-sleep SECONDS` |
 | Auto-retry on connection errors | rustdl whole-download retries on transient network errors (`0`–`5`; keeps partial files) | *(app-level)* |
@@ -257,6 +270,8 @@ Also in the same folder:
 - `rustdl_queue.json` — saved download queue
 - `rustdl_convert_queue.json` — saved Video Converter queue (when *Remember Convert queue* is enabled)
 - `rustdl_activity_log.json` — persisted activity log (survives restarts)
+- `rustdl_profiles.json` — user-defined download profiles
+- `rustdl_watchlist.json` — quality watchlist entries
 - `queue_templates/` — saved downloader queue templates
 - `rustdl_convert_presets.json` — user-defined convert presets (built-in Fast AV1 / Quality H.265 ship in-app)
 
