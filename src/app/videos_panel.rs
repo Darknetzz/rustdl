@@ -9,7 +9,7 @@ use crate::app_ui::{
     button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space, content_width,
     docked_log_lines_max_h, draw_batch_progress_bar, draw_queue_status_compact_row,
     fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
-    note_resizable_panel_height, queue_footer_reserve, queue_list_height_from_layout,
+    note_resizable_panel_height, pin_allocated_rect, queue_footer_reserve, queue_list_height_from_layout,
     queue_list_min_scroll_h, queue_log_block_height, queue_panel_layout_heights,
     queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
     show_persisted_resizable_window, status_color, with_full_width,
@@ -92,7 +92,11 @@ impl PydlApp {
         let compact_convert =
             self.convert_mode && compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
         let min_h = queue_list_min_scroll_h(docked, self.convert_mode, compact_convert);
-        let cap = bounded_ui_height(ui, min_h).max(min_h);
+        let cap = if docked {
+            bounded_ui_height(ui, min_h).max(min_h)
+        } else {
+            finite_ui_span(scroll_h, min_h).max(min_h)
+        };
         let scroll_h = finite_ui_span(scroll_h, min_h).clamp(0.0, cap);
         if scroll_h < 1.0 {
             return;
@@ -942,7 +946,7 @@ impl PydlApp {
             item_spacing_y: 6.0,
         };
         let outcome = show_persisted_resizable_window(ctx, &mut open, &params, |ui| {
-            fill_allocated_rect(ui);
+            pin_allocated_rect(ui);
             let body_bottom = ui.max_rect().bottom();
             let layout = VideosQueueLayout {
                 scroll_id: "rustdl_videos_float_v8",
@@ -960,6 +964,7 @@ impl PydlApp {
                     self.draw_videos_queue_body(ui, layout);
                 },
             );
+            consume_remaining_ui_space(ui);
         });
         if let Some((w, h)) = outcome.size {
             self.settings.video_float_width = w;

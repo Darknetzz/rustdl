@@ -1027,6 +1027,36 @@ pub fn fill_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
     egui::vec2(w, h)
 }
 
+/// Lock child layout to the parent's allocated [`egui::Ui::max_rect`] (floating windows / fixed panels).
+pub fn pin_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
+    let r = ui.max_rect();
+    let w = finite_ui_span(r.width(), 1.0).max(1.0);
+    let h = finite_ui_span(r.height(), 1.0).max(1.0);
+    ui.set_max_width(w);
+    if h < MAX_REASONABLE_UI_SPAN {
+        ui.set_max_height(h);
+    }
+    egui::vec2(w, h)
+}
+
+/// Inner body size for a resizable floating window (prefer clip rect; fall back to stored size).
+pub fn float_window_inner_size(
+    ui: &egui::Ui,
+    stored: egui::Vec2,
+    min: egui::Vec2,
+    max: egui::Vec2,
+) -> egui::Vec2 {
+    let clip = ui.clip_rect().size();
+    let pick = |raw: f32, fallback: f32, lo: f32, hi: f32| {
+        let use_raw = raw.is_finite() && raw >= lo && raw <= hi + 2.0;
+        (if use_raw { raw } else { fallback }).clamp(lo, hi)
+    };
+    egui::vec2(
+        pick(clip.x, stored.x, min.x, max.x),
+        pick(clip.y, stored.y, min.y, max.y),
+    )
+}
+
 /// Fill leftover space so resizable panels/windows keep their dragged size.
 ///
 /// See egui docs: put `ui.allocate_space(ui.available_size())` **last** in resizable panel/window code.
@@ -1140,11 +1170,14 @@ pub fn show_persisted_resizable_window(
     }
     let response = window.show(ctx, |ui| {
         ui.spacing_mut().item_spacing.y = params.item_spacing_y;
-        let body_h =
-            finite_ui_span(ui.max_rect().height(), params.stored_size.1).max(params.min_size.y);
-        let body_w =
-            finite_ui_span(ui.max_rect().width(), params.stored_size.0).max(params.min_size.x);
-        allocate_top_down_rect(ui, egui::vec2(body_w, body_h), |ui| {
+        let inner = float_window_inner_size(
+            ui,
+            egui::vec2(params.stored_size.0, params.stored_size.1),
+            params.min_size,
+            params.max_size,
+        );
+        allocate_top_down_rect(ui, inner, |ui| {
+            pin_allocated_rect(ui);
             body(ui);
             consume_remaining_ui_space(ui);
         });
