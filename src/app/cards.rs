@@ -899,29 +899,19 @@ impl PydlApp {
                                 .clamp(list_row_h, 600.0)
                                 .min(outer_cap)
                         };
-                        if flatten {
-                            for row in 0..ids.len() {
-                                if let Some(item_id) = ids.get(row) {
-                                    if let Some(idx) = self.item_idx(*item_id) {
-                                        self.draw_card_list(ui, idx, allow_reorder);
-                                    }
-                                }
-                            }
-                        } else {
-                            egui::ScrollArea::vertical()
-                                .id_salt(format!("rustdl_list_{label}"))
-                                .max_height(max_h)
-                                .auto_shrink([false, true])
-                                .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
-                                    for row in row_range {
-                                        if let Some(item_id) = ids.get(row) {
-                                            if let Some(idx) = self.item_idx(*item_id) {
-                                                self.draw_card_list(ui, idx, allow_reorder);
-                                            }
+                        egui::ScrollArea::vertical()
+                            .id_salt(format!("rustdl_list_{label}"))
+                            .max_height(max_h)
+                            .auto_shrink([false, true])
+                            .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
+                                for row in row_range {
+                                    if let Some(item_id) = ids.get(row) {
+                                        if let Some(idx) = self.item_idx(*item_id) {
+                                            self.draw_card_list(ui, idx, allow_reorder);
                                         }
                                     }
-                                });
-                        }
+                                }
+                            });
                     } else {
                         let row_width = ui.available_width().max(1.0);
                         ui.set_width(row_width);

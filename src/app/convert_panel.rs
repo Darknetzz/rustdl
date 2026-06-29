@@ -873,23 +873,17 @@ impl PydlApp {
                                 });
                             }
                         };
-                        if flatten {
-                            for item_id in &ids {
-                                draw_row(ui, *item_id);
-                            }
-                        } else {
-                            egui::ScrollArea::vertical()
-                                .id_salt(format!("rustdl_convert_list_{label}"))
-                                .max_height(max_h)
-                                .auto_shrink([false, true])
-                                .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
-                                    for row in row_range {
-                                        if let Some(item_id) = ids.get(row) {
-                                            draw_row(ui, *item_id);
-                                        }
+                        egui::ScrollArea::vertical()
+                            .id_salt(format!("rustdl_convert_list_{label}"))
+                            .max_height(max_h)
+                            .auto_shrink([false, true])
+                            .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
+                                for row in row_range {
+                                    if let Some(item_id) = ids.get(row) {
+                                        draw_row(ui, *item_id);
                                     }
-                                });
-                        }
+                                }
+                            });
                     } else {
                         for item_id in &ids {
                             let Some(idx) = self.convert_item_idx(*item_id) else {

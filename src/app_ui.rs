@@ -973,7 +973,9 @@ pub const QUEUE_DL_SHORT_PANEL_LIST_THRESHOLD: f32 = 220.0;
 pub const QUEUE_CONVERT_SHORT_PANEL_LIST_THRESHOLD: f32 = 280.0;
 pub const QUEUE_DL_LIST_FALLBACK_THRESHOLD: f32 = 200.0;
 pub const QUEUE_CONVERT_LIST_FALLBACK_THRESHOLD: f32 = 280.0;
-/// Skip per-group nested scroll when the outer queue scroll is shorter than this.
+/// Max list scroll height used in layout math (guards bad body_bottom in float windows).
+pub const QUEUE_LIST_LAYOUT_MAX_H: f32 = 1200.0;
+/// Skip per-group nested scroll cap when the outer queue scroll is shorter than this.
 pub const QUEUE_FLATTEN_NESTED_SCROLL_THRESHOLD: f32 = 320.0;
 /// Use compact convert list rows below this outer scroll height (or compact_cards).
 pub const QUEUE_COMPACT_CONVERT_ROW_THRESHOLD: f32 = 260.0;
@@ -1123,6 +1125,13 @@ pub fn persist_resizable_window_size(
         return None;
     }
     if size.x < min.x || size.y < min.y || size.x > max.x || size.y > max.y {
+        return None;
+    }
+    // Reject runaway growth from shrink-wrapped content (layout feedback loop).
+    if current.1 > min.y + 1.0 && size.y > current.1 * 1.35 + 24.0 {
+        return None;
+    }
+    if current.0 > min.x + 1.0 && size.x > current.0 * 1.35 + 24.0 {
         return None;
     }
     if (current.0 - size.x).abs() <= 0.5 && (current.1 - size.y).abs() <= 0.5 {
@@ -1553,7 +1562,11 @@ pub fn clamp_dock_heights_for_viewport(
     }
     let log_budget = (max_panel * 0.55).max(80.0);
     let scaled = scaled_log_dock_height(*log_dock_height, log_budget);
-    if (scaled - *log_dock_height).abs() > 0.5 {
+    if changed {
+        if (scaled - *log_dock_height).abs() > 0.5 {
+            *log_dock_height = scaled;
+        }
+    } else if *log_dock_height > scaled + 0.5 {
         *log_dock_height = scaled;
         changed = true;
     }
@@ -1589,6 +1602,8 @@ pub fn queue_list_height_from_layout(
     let stack_h = footer_h + log_block_h;
     let stack_top = body_bottom - stack_h;
     finite_ui_span(stack_top - content_top, 0.0)
+        .min(QUEUE_LIST_LAYOUT_MAX_H)
+        .max(0.0)
 }
 
 /// Max activity-log scroll height (slider cap) from remaining panel budget below chrome.

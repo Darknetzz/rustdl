@@ -964,12 +964,15 @@ impl PydlApp {
                     self.draw_videos_queue_body(ui, layout);
                 },
             );
-            consume_remaining_ui_space(ui);
         });
         if let Some((w, h)) = outcome.size {
-            self.settings.video_float_width = w;
-            self.settings.video_float_height = h;
-            self.persist_settings();
+            let prev_w = self.settings.video_float_width;
+            let prev_h = self.settings.video_float_height;
+            if (prev_w - w).abs() > 0.5 || (prev_h - h).abs() > 0.5 {
+                self.settings.video_float_width = w;
+                self.settings.video_float_height = h;
+                self.persist_settings();
+            }
         }
         if !outcome.open {
             self.settings.videos_open = false;
