@@ -8,6 +8,7 @@
 remote="$1"
 repo_root=$(git rev-parse --show-toplevel) || exit 0
 wait_script="$repo_root/scripts/wait_and_publish_dev.ps1"
+wait_script_sh="$repo_root/scripts/wait_and_publish_dev.sh"
 log_hint="${TMPDIR:-/tmp}/rustdl-dev-release.log"
 case "$(uname -s 2>/dev/null)" in
 MINGW* | MSYS* | CYGWIN* | Windows*)
@@ -15,14 +16,19 @@ MINGW* | MSYS* | CYGWIN* | Windows*)
 	;;
 esac
 
+# Returns 0 when a background publish task was scheduled, 1 otherwise.
 schedule_publish() {
 	commit="$1"
 	echo "rustdl: scheduling dev release publish in background (log: $log_hint)" >&2
 	if command -v pwsh >/dev/null 2>&1; then
+		if [ ! -f "$wait_script" ]; then
+			echo "rustdl: could not schedule dev release publish (missing $wait_script)" >&2
+			return 1
+		fi
 		case "$(uname -s 2>/dev/null)" in
 		MINGW* | MSYS* | CYGWIN* | Windows*)
 			# Detach from the terminal: plain '&' still shares stdout with git push / pushall.
-			pwsh -NoProfile -ExecutionPolicy Bypass -Command "
+			if ! pwsh -NoProfile -ExecutionPolicy Bypass -Command "
 				Start-Process -FilePath pwsh -WindowStyle Hidden -ArgumentList @(
 					'-NoProfile',
 					'-ExecutionPolicy', 'Bypass',
@@ -31,16 +37,23 @@ schedule_publish() {
 					'-Commit', '$commit',
 					'-Quiet'
 				) | Out-Null
-			"
+			"; then
+				echo "rustdl: could not schedule dev release publish (pwsh Start-Process failed)" >&2
+				return 1
+			fi
 			;;
 		*)
 			pwsh -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
 			;;
 		esac
 	elif command -v powershell >/dev/null 2>&1; then
+		if [ ! -f "$wait_script" ]; then
+			echo "rustdl: could not schedule dev release publish (missing $wait_script)" >&2
+			return 1
+		fi
 		case "$(uname -s 2>/dev/null)" in
 		MINGW* | MSYS* | CYGWIN* | Windows*)
-			powershell -NoProfile -ExecutionPolicy Bypass -Command "
+			if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "
 				Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @(
 					'-NoProfile',
 					'-ExecutionPolicy', 'Bypass',
@@ -49,18 +62,25 @@ schedule_publish() {
 					'-Commit', '$commit',
 					'-Quiet'
 				) | Out-Null
-			"
+			"; then
+				echo "rustdl: could not schedule dev release publish (powershell Start-Process failed)" >&2
+				return 1
+			fi
 			;;
 		*)
 			powershell -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
 			;;
 		esac
-	elif [ -x "$repo_root/scripts/wait_and_publish_dev.sh" ]; then
-		"$repo_root/scripts/wait_and_publish_dev.sh" "$remote" "$commit" &
+	elif [ -x "$wait_script_sh" ]; then
+		"$wait_script_sh" "$remote" "$commit" &
 	else
 		echo "rustdl: could not schedule dev release publish (no pwsh/powershell/wait script)" >&2
+		return 1
 	fi
+	return 0
 }
+
+publish_failed=0
 
 # pre-push stdin: <local ref> SP <local sha> SP <remote ref> SP <remote sha> LF
 while read -r local_ref local_sha remote_ref remote_sha; do
@@ -68,7 +88,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	[ "$remote_ref" = "refs/heads/dev" ] || continue
 	# branch delete
 	[ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
-	schedule_publish "$local_sha"
+	if ! schedule_publish "$local_sha"; then
+		publish_failed=1
+	fi
 done
+
+if [ "$publish_failed" -ne 0 ]; then
+	echo "rustdl: push aborted — dev/stable release publish was not scheduled." >&2
+	echo "rustdl: install pwsh or powershell, or ensure scripts/wait_and_publish_dev.* exists." >&2
+	echo "rustdl: or push with --no-verify after fixing, or run scripts/push_dev.ps1 manually." >&2
+	exit 1
+fi
 
 exit 0
