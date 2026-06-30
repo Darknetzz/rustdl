@@ -189,17 +189,17 @@ impl PydlApp {
 
     pub(super) fn auto_list_layout_threshold(&self) -> usize {
         if self.settings.ui_power_save {
-            25
+            18
         } else {
-            50
+            24
         }
     }
 
     pub(super) fn queue_card_list_fallback_threshold(&self) -> usize {
         if self.settings.ui_power_save {
-            24
+            8
         } else {
-            48
+            12
         }
     }
 }

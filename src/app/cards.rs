@@ -101,15 +101,6 @@ impl PydlApp {
                         }
                     }
                 });
-                if self.settings.show_thumbnails
-                    && !resolving
-                    && !self.textures.contains_key(&id)
-                    && !self.thumbnail_inflight.contains(&id)
-                    && !self.thumbnail_attempted.contains(&id)
-                    && (has_thumb_source || done_file.is_some())
-                {
-                    self.queue_thumbnail_load(id);
-                }
                 // Fixed max cell; image keeps aspect ratio and never exceeds thumb (no upscale).
                 let (thumb_rect, _) = ui.allocate_exact_size(thumb, egui::Sense::hover());
                 ui.painter().rect_filled(
@@ -719,8 +710,8 @@ impl PydlApp {
                     && self.status_resolving == 0
             }
             "Ready" => self.items.len() <= 12,
-            "Issues" => true,
-            _ => self.queue_search.is_empty(),
+            "Issues" => self.items.len() <= 20,
+            _ => self.queue_search.is_empty() && self.items.len() <= 15,
         }
     }
 

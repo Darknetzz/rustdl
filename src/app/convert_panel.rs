@@ -726,7 +726,7 @@ impl PydlApp {
             .id_salt("convert_queue_scroll")
             .auto_shrink([false, false])
             .max_height(scroll_h)
-            .animated(true)
+            .animated(false)
             .drag_to_scroll(true)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());

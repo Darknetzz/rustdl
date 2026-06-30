@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame, content_width,
@@ -14,7 +16,7 @@ impl eframe::App for PydlApp {
             if let Some(mut core) = shared.try_lock() {
                 core_sync::sync_core_to_app(&mut core, self);
             } else {
-                ctx.request_repaint();
+                ctx.request_repaint_after(Duration::from_millis(50));
             };
         }
         #[cfg(windows)]
@@ -68,6 +70,17 @@ impl eframe::App for PydlApp {
         if !ui_suspended {
             self.poll_output_disk_space();
             self.poll_system_usage();
+            if self.settings.show_thumbnails {
+                const THUMB_ENSURE_IDLE: Duration = Duration::from_secs(5);
+                let due = self
+                    .last_downloader_thumbnail_ensure_at
+                    .map(|t| Instant::now().saturating_duration_since(t) >= THUMB_ENSURE_IDLE)
+                    .unwrap_or(true);
+                if due {
+                    self.ensure_downloader_thumbnails();
+                    self.last_downloader_thumbnail_ensure_at = Some(Instant::now());
+                }
+            }
         }
         let background_busy = self.add_in_progress
             || self.convert_running

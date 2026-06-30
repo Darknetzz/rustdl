@@ -336,7 +336,7 @@ impl PydlApp {
             .id_salt(scroll_id)
             .auto_shrink([false, false])
             .max_height(scroll_h)
-            .animated(true)
+            .animated(false)
             .drag_to_scroll(true)
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::VisibleWhenNeeded)
             .show(ui, |ui| {

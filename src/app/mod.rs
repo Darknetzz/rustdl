@@ -979,7 +979,7 @@ impl PydlApp {
         let interval = if busy {
             Duration::from_secs(2)
         } else {
-            Duration::from_secs(1)
+            Duration::from_secs(12)
         };
         let now = Instant::now();
         let should_poll = match self.last_done_lookup_poll {

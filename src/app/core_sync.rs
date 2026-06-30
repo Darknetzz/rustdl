@@ -233,13 +233,7 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
         for item_id in &new_item_ids {
             app.queue_thumbnail_load(*item_id);
         }
-        const ENSURE_INTERVAL: Duration = Duration::from_secs(2);
-        let should_ensure = !new_item_ids.is_empty()
-            || app
-                .last_downloader_thumbnail_ensure_at
-                .map(|t| Instant::now().saturating_duration_since(t) >= ENSURE_INTERVAL)
-                .unwrap_or(true);
-        if should_ensure {
+        if !new_item_ids.is_empty() {
             app.ensure_downloader_thumbnails();
             app.last_downloader_thumbnail_ensure_at = Some(Instant::now());
         }
