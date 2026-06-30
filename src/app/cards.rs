@@ -7,7 +7,7 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
-    left_button_row, popup_menu_above, queue_card_grid_width, queue_short_panel_list_fallback,
+    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback, url_menu_above,
     should_flatten_nested_group_scroll, show_menu_popup, show_queue_group_section, status_color,
     status_dot_with_label, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
 };
@@ -40,8 +40,7 @@ impl PydlApp {
         let eta_text = self.items[idx].eta_text.clone();
         let detail = self.items[idx].detail.clone();
         let has_error = self.items[idx].error.clone();
-        let thumbnail_url = self.items[idx].thumbnail_url.clone();
-        let has_thumbnail_url = thumbnail_url.is_some();
+        let has_thumb_source = crate::app_state::queue_item_has_thumbnail_source(&self.items[idx]);
         let resolving = status == ItemStatus::Resolving;
         let done_file: Option<(PathBuf, SystemTime)> = match status {
             ItemStatus::Done | ItemStatus::Failed => {
@@ -103,23 +102,13 @@ impl PydlApp {
                     }
                 });
                 if self.settings.show_thumbnails
+                    && !resolving
                     && !self.textures.contains_key(&id)
                     && !self.thumbnail_inflight.contains(&id)
+                    && !self.thumbnail_attempted.contains(&id)
+                    && (has_thumb_source || done_file.is_some())
                 {
-                    if self.thumbnail_attempted.contains(&id)
-                        && (self.items[idx].thumbnail_path.is_some()
-                            || (done_file.is_some() && self.has_ffmpeg))
-                    {
-                        self.thumbnail_attempted.remove(&id);
-                    }
-                    if !self.thumbnail_attempted.contains(&id) {
-                        let can_try = has_thumbnail_url
-                            || !self.items[idx].video_id.trim().is_empty()
-                            || done_file.is_some();
-                        if can_try {
-                            self.queue_thumbnail_load(id);
-                        }
-                    }
+                    self.queue_thumbnail_load(id);
                 }
                 // Fixed max cell; image keeps aspect ratio and never exceeds thumb (no upscale).
                 let (thumb_rect, _) = ui.allocate_exact_size(thumb, egui::Sense::hover());
@@ -149,14 +138,13 @@ impl PydlApp {
                 } else {
                     let center_msg = if !self.settings.show_thumbnails {
                         "Thumbnails off"
+                    } else if resolving {
+                        "Fetching metadata..."
                     } else if self.thumbnail_inflight.contains(&id) {
                         "Fetching thumbnail..."
                     } else if self.thumbnail_attempted.contains(&id) {
                         "Thumbnail unavailable"
-                    } else if has_thumbnail_url
-                        || !self.items[idx].video_id.trim().is_empty()
-                        || done_file.is_some()
-                    {
+                    } else if has_thumb_source || done_file.is_some() {
                         "Fetching thumbnail..."
                     } else {
                         "No preview available"
@@ -279,15 +267,10 @@ impl PydlApp {
                 }
 
                 if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
-                    let ctx = ui.ctx().clone();
                     left_button_row(ui, |ui| {
                         compact_button_group(ui, ("card_url", id), |g| {
-                            let mut copy_url = false;
                             let mut open_url = false;
-                            g.url_menu(&url, &mut copy_url, &mut open_url);
-                            if copy_url {
-                                ctx.copy_text(url.clone());
-                            }
+                            g.url_menu(&url, &mut open_url);
                             if open_url {
                                 if let Err(e) = crate::app_actions::open_browser(&url) {
                                     self.append_log(&format!("Failed to open URL: {e}"));
@@ -614,37 +597,11 @@ impl PydlApp {
                 }
             }
             if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
-                let ctx = ui.ctx().clone();
-                let mut copy_url = false;
                 let mut open_url = false;
                 ui.push_id(("list_url_menu", id), |ui| {
                     let popup_id = ui.make_persistent_id("popup");
-                    popup_menu_above(
-                        ui,
-                        popup_id,
-                        format!("{} URL...", ui_icons::PAGE_URL),
-                        |ui| {
-                            if ui
-                                .button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
-                                .on_hover_text(&url)
-                                .clicked()
-                            {
-                                copy_url = true;
-                            }
-                            if ui
-                                .button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
-                                .on_hover_text("Open in your default browser")
-                                .clicked()
-                            {
-                                open_url = true;
-                            }
-                        },
-                    )
-                    .on_hover_text(&url);
+                    url_menu_above(ui, popup_id, &url, &mut open_url);
                 });
-                if copy_url {
-                    ctx.copy_text(url.clone());
-                }
                 if open_url {
                     if let Err(e) = crate::app_actions::open_browser(&url) {
                         self.append_log(&format!("Failed to open URL: {e}"));

@@ -10,6 +10,14 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- Downloader queue **Copy URL** briefly shows **Copied!** on desktop (card and list rows) and a toast on the LAN web UI.
+
+### Fixed
+
+- Queue cards no longer stay on **Fetching thumbnail** while yt-dlp metadata is still loading (**Fetching metadata…** until resolve completes, then thumbnail fetch retries with the resolved preview URL).
+
 ### Documentation
 
 - **README** and **AGENTS.md** now document the full product scope (Quality watchlist, More info, minimum height/FPS, config files, module map, and architecture notes for agents).

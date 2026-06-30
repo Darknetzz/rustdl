@@ -27,6 +27,23 @@ pub(crate) fn decode_thumbnail_image(bytes: Vec<u8>) -> Option<egui::ColorImage>
 }
 
 impl PydlApp {
+    pub(super) fn should_refresh_thumbnail_after_item_change(
+        prev: &crate::models::QueueItem,
+        next: &crate::models::QueueItem,
+    ) -> bool {
+        prev.status == ItemStatus::Resolving && next.status != ItemStatus::Resolving
+            || prev.thumbnail_url != next.thumbnail_url
+            || prev.video_id != next.video_id
+    }
+
+    pub(super) fn invalidate_thumbnail_state(&mut self, item_id: u64, drop_texture: bool) {
+        self.thumbnail_attempted.remove(&item_id);
+        self.thumbnail_inflight.remove(&item_id);
+        if drop_texture {
+            self.textures.remove(&item_id);
+        }
+    }
+
     fn thumbnails_allowed_for_queue(&self, item_id: u64) -> bool {
         if !self.settings.show_thumbnails {
             return false;
@@ -35,6 +52,10 @@ impl PydlApp {
             return false;
         };
         let status = self.items[idx].status;
+        // Wait for yt-dlp metadata before hitting CDN URLs (avoids failed early fetches).
+        if matches!(status, ItemStatus::Resolving) {
+            return false;
+        }
         // Finished rows still need previews (ffmpeg frame grab / saved disk cache).
         if matches!(status, ItemStatus::Done | ItemStatus::Failed) {
             return true;
@@ -44,7 +65,7 @@ impl PydlApp {
         }
         matches!(
             status,
-            ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading | ItemStatus::Resolving
+            ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Downloading
         )
     }
 

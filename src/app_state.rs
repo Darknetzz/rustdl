@@ -251,6 +251,11 @@ pub fn item_has_redownload_target(item: &QueueItem) -> bool {
     resolve_item_download_url(item).is_some()
 }
 
+/// True when the row has at least one remote thumbnail URL to try (yt-dlp field or YouTube id fallbacks).
+pub fn queue_item_has_thumbnail_source(item: &QueueItem) -> bool {
+    !crate::ytdlp::thumbnail_url_candidates(item).is_empty()
+}
+
 /// True when `line` is an absolute http(s) URL with a host (rejects `error:`, `help:`, etc.).
 pub fn is_queueable_http_url(line: &str) -> bool {
     let line = line.trim();

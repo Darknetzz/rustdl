@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
@@ -120,6 +120,9 @@ fn queue_item_mirror_changed(
         || app_it.thumbnail_path != core_it.thumbnail_path
         || app_it.error != core_it.error
         || app_it.title != core_it.title
+        || app_it.thumbnail_url != core_it.thumbnail_url
+        || app_it.video_id != core_it.video_id
+        || app_it.webpage_url != core_it.webpage_url
         || app_it.speed_text != core_it.speed_text
         || app_it.eta_text != core_it.eta_text
         || app_it.size_text != core_it.size_text
@@ -138,6 +141,11 @@ fn queue_item_mirror_changed(
 }
 
 fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_ids: &HashSet<u64>) {
+    let prev_by_id: HashMap<u64, crate::models::QueueItem> = app
+        .items
+        .iter()
+        .map(|it| (it.item_id, it.clone()))
+        .collect();
     let app_ids: HashSet<u64> = app.items.iter().map(|it| it.item_id).collect();
     let core_ids: HashSet<u64> = core.items.iter().map(|it| it.item_id).collect();
     let dirty_only = !core.dirty_queue_item_ids.is_empty()
@@ -194,6 +202,28 @@ fn sync_queue_from_core(core: &DownloadCore, app: &mut PydlApp, previous_item_id
     app.queue_dirty = false;
 
     if app.settings.show_thumbnails {
+        let mut thumb_retries: Vec<(u64, bool, bool)> = Vec::new();
+        for it in &app.items {
+            let Some(prev) = prev_by_id.get(&it.item_id) else {
+                continue;
+            };
+            if !PydlApp::should_refresh_thumbnail_after_item_change(prev, it) {
+                continue;
+            }
+            let drop_texture = prev.thumbnail_url != it.thumbnail_url
+                || prev.video_id != it.video_id
+                || prev.status == crate::models::ItemStatus::Resolving;
+            let should_queue = it.status != crate::models::ItemStatus::Resolving
+                && crate::app_state::queue_item_has_thumbnail_source(it);
+            thumb_retries.push((it.item_id, drop_texture, should_queue));
+        }
+        for (item_id, drop_texture, should_queue) in thumb_retries {
+            app.invalidate_thumbnail_state(item_id, drop_texture);
+            if should_queue {
+                app.queue_thumbnail_load(item_id);
+            }
+        }
+
         let new_item_ids: Vec<u64> = app
             .items
             .iter()

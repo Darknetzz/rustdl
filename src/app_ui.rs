@@ -2008,6 +2008,47 @@ fn grouped_warning_button(
     )
 }
 
+pub(crate) const COPY_FEEDBACK_SECS: f64 = 2.0;
+
+pub(crate) fn copy_feedback_active(ui: &egui::Ui, feedback_id: Id) -> bool {
+    let now = ui.input(|i| i.time);
+    ui.ctx().data(|d| {
+        d.get_temp::<f64>(feedback_id)
+            .is_some_and(|until| now < until)
+    })
+}
+
+pub(crate) fn set_copy_feedback(ui: &mut egui::Ui, feedback_id: Id) {
+    let now = ui.input(|i| i.time);
+    ui.ctx().data_mut(|d| {
+        d.insert_temp(feedback_id, now + COPY_FEEDBACK_SECS);
+    });
+    ui.ctx().request_repaint();
+}
+
+fn draw_url_menu_popup_items(
+    ui: &mut egui::Ui,
+    url: &str,
+    feedback_id: Id,
+    open_clicked: &mut bool,
+) {
+    if ui
+        .button(format!("{} Copy URL", ui_icons::COPY_CLIPBOARD))
+        .on_hover_text(url)
+        .clicked()
+    {
+        ui.ctx().copy_text(url.to_owned());
+        set_copy_feedback(ui, feedback_id);
+    }
+    if ui
+        .button(format!("{} Open URL", ui_icons::UPDATE_OPEN))
+        .on_hover_text("Open in your default browser")
+        .clicked()
+    {
+        *open_clicked = true;
+    }
+}
+
 pub(crate) fn show_menu_popup<R>(
     ui: &mut egui::Ui,
     popup_id: Id,
@@ -2075,6 +2116,35 @@ pub(crate) fn popup_menu_above<R>(
     button
 }
 
+/// URL copy/open menu for compact list rows (matches [`ButtonGroup::url_menu`] feedback).
+pub(crate) fn url_menu_above(
+    ui: &mut egui::Ui,
+    popup_id: Id,
+    url: &str,
+    open_clicked: &mut bool,
+) -> Response {
+    let feedback_id = ui.id().with("url_copy_feedback");
+    let copied = copy_feedback_active(ui, feedback_id);
+    if copied {
+        ui.ctx().request_repaint();
+    }
+    let label = if copied {
+        format!("{} Copied!", ui_icons::STATUS_DONE)
+    } else {
+        format!("{} URL...", ui_icons::PAGE_URL)
+    };
+    let url_owned = url.to_owned();
+    if copied {
+        ui.colored_label(Color32::from_rgb(46, 125, 50), label)
+            .on_hover_text(url)
+    } else {
+        popup_menu_above(ui, popup_id, label, |ui| {
+            draw_url_menu_popup_items(ui, &url_owned, feedback_id, open_clicked);
+        })
+        .on_hover_text(url)
+    }
+}
+
 /// Bootstrap-style fused buttons (shared edges, no dividers).
 pub struct ButtonGroup<'a> {
     ui: &'a mut egui::Ui,
@@ -2114,33 +2184,29 @@ impl<'a> ButtonGroup<'a> {
     }
 
     /// Copy or open the downloader page URL for this row.
-    pub fn url_menu(
-        &mut self,
-        url: &str,
-        copy_clicked: &mut bool,
-        open_clicked: &mut bool,
-    ) -> Response {
+    pub fn url_menu(&mut self, url: &str, open_clicked: &mut bool) -> Response {
         let compact = self.compact;
-        let label = format!("{} URL...", crate::ui_icons::PAGE_URL);
         self.add(|ui| {
+            let feedback_id = ui.id().with("url_copy_feedback");
+            let copied = copy_feedback_active(ui, feedback_id);
+            if copied {
+                ui.ctx().request_repaint();
+            }
+            let label = if copied {
+                format!("{} Copied!", ui_icons::STATUS_DONE)
+            } else {
+                format!("{} URL...", ui_icons::PAGE_URL)
+            };
             let popup_id = ui.make_persistent_id("url_menu");
-            grouped_popup_menu(ui, popup_id, &label, true, compact, false, |ui| {
-                if ui
-                    .button(format!("{} Copy URL", crate::ui_icons::COPY_CLIPBOARD))
-                    .on_hover_text(url)
-                    .clicked()
-                {
-                    *copy_clicked = true;
-                }
-                if ui
-                    .button(format!("{} Open URL", crate::ui_icons::UPDATE_OPEN))
-                    .on_hover_text("Open in your default browser")
-                    .clicked()
-                {
-                    *open_clicked = true;
-                }
-            })
-            .on_hover_text(url)
+            let url_owned = url.to_owned();
+            if copied {
+                grouped_success_button(ui, &label, true, compact).on_hover_text(url)
+            } else {
+                grouped_popup_menu(ui, popup_id, &label, true, compact, false, |ui| {
+                    draw_url_menu_popup_items(ui, &url_owned, feedback_id, open_clicked);
+                })
+                .on_hover_text(url)
+            }
         })
     }
 

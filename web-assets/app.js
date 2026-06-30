@@ -1506,6 +1506,7 @@ function formatResolution(w, h) {
 
 function thumbPlaceholderText(item, showThumbnails) {
   if (!showThumbnails) return "Thumbnails off";
+  if (statusSlug(item.status) === "resolving") return "Fetching metadata…";
   if (itemHasThumbnailSource(item)) return "Fetching thumbnail…";
   return "No preview available";
 }
@@ -1566,9 +1567,12 @@ function appendUrlMenuButton(group, item) {
   copyBtn.onclick = (e) => {
     e.preventDefault();
     menu.open = false;
-    navigator.clipboard.writeText(url).catch(() => {
-      showPromptDialog("Copy this URL:", url, "Copy URL");
-    });
+    navigator.clipboard
+      .writeText(url)
+      .then(() => showToast("URL copied to clipboard."))
+      .catch(() => {
+        showPromptDialog("Copy this URL:", url, "Copy URL");
+      });
   };
   panel.appendChild(copyBtn);
 
@@ -2033,7 +2037,7 @@ function attachCardThumbnail(img, placeholder, item, showThumbnails) {
   placeholder.classList.remove("hidden");
   placeholder.textContent = thumbPlaceholderText(item, showThumbnails);
 
-  if (!showThumbnails || !itemHasThumbnailSource(item)) {
+  if (!showThumbnails || statusSlug(item.status) === "resolving" || !itemHasThumbnailSource(item)) {
     return;
   }
   const cacheKey = thumbCacheKey(item);
