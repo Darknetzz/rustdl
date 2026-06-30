@@ -26,6 +26,43 @@ pub fn normalize_target_codec(raw: &str) -> &'static str {
     }
 }
 
+/// True when ffmpeg could not read the input (corrupt/partial/missing)—CPU encoder retry won't help.
+pub fn convert_failure_is_unreadable_source(err: &str) -> bool {
+    let s = err.to_ascii_lowercase();
+    s.contains("moov atom not found")
+        || s.contains("invalid data found when processing input")
+        || s.contains("error opening input")
+        || s.contains("no such file or directory")
+}
+
+fn convert_source_error_summary(err: &str) -> Option<&'static str> {
+    let s = err.to_ascii_lowercase();
+    if s.contains("moov atom not found") {
+        Some(
+            "Source file appears incomplete or corrupt (MP4 moov atom missing). \
+             This usually means the download was interrupted or the file is still being written. \
+             Re-download the video fully, then convert again.",
+        )
+    } else if s.contains("invalid data found when processing input")
+        || s.contains("error opening input")
+    {
+        Some(
+            "ffmpeg could not read the source file—it may be corrupt, incomplete, or not a valid video container.",
+        )
+    } else {
+        None
+    }
+}
+
+/// User-facing convert failure text with a plain-language lead when the source file is the problem.
+pub fn format_convert_failure(err: &str) -> String {
+    if let Some(summary) = convert_source_error_summary(err) {
+        format!("{summary}\n\n{err}")
+    } else {
+        err.to_owned()
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ConvertInputMedia {
     pub codec: String,
@@ -1266,6 +1303,15 @@ mod tests {
     #[test]
     fn effective_cpu_threads_zero_means_auto() {
         assert_eq!(effective_cpu_threads(0), None);
+    }
+
+    #[test]
+    fn convert_failure_detects_incomplete_mp4() {
+        let err = "ffmpeg failed with status exit code: 1\nmoov atom not found";
+        assert!(convert_failure_is_unreadable_source(err));
+        let msg = format_convert_failure(err);
+        assert!(msg.contains("incomplete or corrupt"));
+        assert!(msg.contains("moov atom not found"));
     }
 
     #[test]

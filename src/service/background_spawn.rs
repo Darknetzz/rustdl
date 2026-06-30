@@ -614,6 +614,18 @@ async fn run_convert_job(
                 );
                 return;
             }
+            if transcode::convert_failure_is_unreadable_source(&err_text) {
+                let _ = try_send_ui(
+                    bus,
+                    UiEvent::ConvertDone {
+                        item_id,
+                        ok: false,
+                        detail: transcode::format_convert_failure(&err_text),
+                        final_output_path: None,
+                    },
+                );
+                return;
+            }
             // Hardware encoders can fail at runtime (driver/session/caps); retry once on CPU.
             let cpu_name = transcode::cpu_encoder_for_target(&cfg.target_codec);
             if enc.encoder != cpu_name && enc.hw_type != "cpu" {

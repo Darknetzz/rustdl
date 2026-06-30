@@ -17,6 +17,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Queue cards no longer stay on **Fetching thumbnail** while yt-dlp metadata is still loading (**Fetching metadata…** until resolve completes, then thumbnail fetch retries with the resolved preview URL).
+- Video Converter: corrupt or partial source files (e.g. **moov atom not found**) show a plain-language error and skip the pointless CPU encoder retry.
 
 ### Documentation
 
