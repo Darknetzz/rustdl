@@ -534,13 +534,16 @@ impl PydlApp {
             && self.has_yt_dlp
             && !self.add_in_progress
             && !self.items[idx].source_line.trim().is_empty();
-        let row_w = crate::app_ui::clip_bounded_width(ui);
+        let row_w = clip_bounded_width(ui);
         ui.set_max_width(row_w);
         let title = ellipsize(
             &self.items[idx].title,
             ((row_w / 7.0).floor() as usize).clamp(24, 80),
         );
+        let row_h = ui.spacing().interact_size.y;
+        let mut open_url = false;
         let row_response = ui.horizontal(|ui| {
+            ui.set_max_width(row_w);
             if allow_reorder && status == ItemStatus::Idle {
                 let drag_id = egui::Id::new(("ready_drag", id));
                 let _drag = ui.dnd_drag_source(drag_id, std::sync::Arc::new(id), |ui| {
@@ -556,51 +559,60 @@ impl PydlApp {
                 }
             }
             draw_status_chip(ui, status);
-            let title_w = ui.available_width().max(40.0);
-            ui.add_sized(
-                [title_w, ui.spacing().interact_size.y],
-                egui::Label::new(RichText::new(title).strong()).truncate(),
-            );
-            if status == ItemStatus::Downloading || status == ItemStatus::Queued {
-                let bar_w = ui.available_width().clamp(48.0, 120.0);
-                ui.add_sized(
-                    [bar_w, ui.spacing().interact_size.y],
-                    egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage(),
-                );
-            }
-            if status == ItemStatus::Idle {
-                let current = self.items[idx].format_override.clone().unwrap_or_default();
-                let mut fmt_buf = current.clone();
-                let fmt_w = ui.available_width().clamp(72.0, 140.0);
-                let response = ui.add_sized(
-                    [fmt_w, ui.spacing().interact_size.y],
-                    egui::TextEdit::singleline(&mut fmt_buf).hint_text("Format (-f)"),
-                );
-                if response.lost_focus() && fmt_buf.trim() != current.trim() {
-                    let trimmed = fmt_buf.trim();
-                    let format_override = if trimmed.is_empty() {
-                        None
-                    } else {
-                        Some(trimmed.to_owned())
-                    };
-                    let profile_override = self.items[idx].profile_override.clone();
-                    self.set_item_download_overrides(id, format_override, profile_override);
-                }
-            }
-            if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
-                let mut open_url = false;
-                ui.push_id(("list_url_menu", id), |ui| {
-                    let popup_id = ui.make_persistent_id("popup");
-                    url_menu_above(ui, popup_id, &url, &mut open_url);
-                });
-                if open_url {
-                    if let Err(e) = crate::app_actions::open_browser(&url) {
-                        self.append_log(&format!("Failed to open URL: {e}"));
+            let tail_w = ui.available_width().max(40.0);
+            ui.allocate_ui_with_layout(
+                egui::vec2(tail_w, row_h),
+                egui::Layout::right_to_left(egui::Align::Center),
+                |ui| {
+                    ui.set_max_width(tail_w);
+                    self.draw_more_info_button(ui, id);
+                    if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx])
+                    {
+                        ui.push_id(("list_url_menu", id), |ui| {
+                            let popup_id = ui.make_persistent_id("popup");
+                            url_menu_above(ui, popup_id, &url, &mut open_url);
+                        });
                     }
+                    if status == ItemStatus::Downloading || status == ItemStatus::Queued {
+                        ui.add_sized(
+                            [120.0, row_h],
+                            egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0))
+                                .show_percentage(),
+                        );
+                    }
+                    if status == ItemStatus::Idle {
+                        let current = self.items[idx].format_override.clone().unwrap_or_default();
+                        let mut fmt_buf = current.clone();
+                        let response = ui.add_sized(
+                            [140.0, row_h],
+                            egui::TextEdit::singleline(&mut fmt_buf).hint_text("Format (-f)"),
+                        );
+                        if response.lost_focus() && fmt_buf.trim() != current.trim() {
+                            let trimmed = fmt_buf.trim();
+                            let format_override = if trimmed.is_empty() {
+                                None
+                            } else {
+                                Some(trimmed.to_owned())
+                            };
+                            let profile_override = self.items[idx].profile_override.clone();
+                            self.set_item_download_overrides(id, format_override, profile_override);
+                        }
+                    }
+                    let title_w = ui.available_width().max(40.0);
+                    ui.add_sized(
+                        [title_w, row_h],
+                        egui::Label::new(RichText::new(title).strong()).truncate(),
+                    );
+                },
+            );
+        });
+        if open_url {
+            if let Some(url) = crate::app_state::resolve_item_download_url(&self.items[idx]) {
+                if let Err(e) = crate::app_actions::open_browser(&url) {
+                    self.append_log(&format!("Failed to open URL: {e}"));
                 }
             }
-            self.draw_more_info_button(ui, id);
-        });
+        }
         if let Some(ref fail) = failure_text {
             ui.horizontal(|ui| {
                 ui.add_space(28.0);
