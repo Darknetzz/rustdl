@@ -16,6 +16,18 @@ MINGW* | MSYS* | CYGWIN* | Windows*)
 	;;
 esac
 
+# Start CMD in background; return 0 if it is still running shortly after spawn.
+start_background() {
+	"$@" &
+	bg_pid=$!
+	sleep 0.5
+	if kill -0 "$bg_pid" 2>/dev/null; then
+		return 0
+	fi
+	wait "$bg_pid" 2>/dev/null || true
+	return 1
+}
+
 # Returns 0 when a background publish task was scheduled, 1 otherwise.
 schedule_publish() {
 	commit="$1"
@@ -43,7 +55,10 @@ schedule_publish() {
 			fi
 			;;
 		*)
-			pwsh -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
+			if ! start_background pwsh -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet; then
+				echo "rustdl: could not schedule dev release publish (pwsh failed to start)" >&2
+				return 1
+			fi
 			;;
 		esac
 	elif command -v powershell >/dev/null 2>&1; then
@@ -68,11 +83,17 @@ schedule_publish() {
 			fi
 			;;
 		*)
-			powershell -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet &
+			if ! start_background powershell -NoProfile -ExecutionPolicy Bypass -File "$wait_script" -Remote "$remote" -Commit "$commit" -Quiet; then
+				echo "rustdl: could not schedule dev release publish (powershell failed to start)" >&2
+				return 1
+			fi
 			;;
 		esac
 	elif [ -x "$wait_script_sh" ]; then
-		"$wait_script_sh" "$remote" "$commit" &
+		if ! start_background "$wait_script_sh" "$remote" "$commit"; then
+			echo "rustdl: could not schedule dev release publish ($wait_script_sh failed to start)" >&2
+			return 1
+		fi
 	else
 		echo "rustdl: could not schedule dev release publish (no pwsh/powershell/wait script)" >&2
 		return 1
