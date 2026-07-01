@@ -375,6 +375,9 @@ pub struct AppSettings {
     pub convert_watch_folder_path: String,
     #[serde(default)]
     pub convert_watch_folder_enabled: bool,
+    /// Optional folder for all converter outputs. Empty = write next to each input file.
+    #[serde(default)]
+    pub convert_output_dir: String,
     /// After encode: move output into this subfolder under the output directory (empty = skip).
     #[serde(default)]
     pub convert_post_move_subfolder: String,
@@ -770,6 +773,7 @@ impl Default for AppSettings {
             watch_folder_enabled: false,
             convert_watch_folder_path: String::new(),
             convert_watch_folder_enabled: false,
+            convert_output_dir: String::new(),
             convert_post_move_subfolder: String::new(),
             convert_copy_subtitles: false,
             convert_write_checksum: false,

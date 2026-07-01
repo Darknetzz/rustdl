@@ -514,13 +514,19 @@ fn walk_dir(out: &mut Vec<ConvertPlanItem>, root: &Path, cfg: &ConvertConfig) {
 
 fn planned_output_directory(input: &Path, cfg: &ConvertConfig) -> PathBuf {
     if cfg.delete_original && cfg.rename_original {
-        input
+        return input
             .parent()
             .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from(&cfg.output_dir))
-    } else {
-        PathBuf::from(&cfg.output_dir)
+            .unwrap_or_else(|| PathBuf::from("."));
     }
+    let configured = cfg.output_dir.trim();
+    if !configured.is_empty() {
+        return PathBuf::from(configured);
+    }
+    input
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn maybe_push_file(out: &mut Vec<ConvertPlanItem>, input: &Path, cfg: &ConvertConfig) {
@@ -1390,6 +1396,24 @@ mod tests {
         );
         assert_eq!(plan.len(), 1);
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mp4"));
+    }
+
+    #[test]
+    fn collect_plan_defaults_to_input_directory() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let source_dir = tmp.path().join("media");
+        std::fs::create_dir_all(&source_dir).expect("create source dir");
+        let movie = source_dir.join("movie.mp4");
+        std::fs::write(&movie, b"x").expect("write movie");
+        let cfg = test_config(Path::new(""), "av1", true);
+        let plan = collect_plan(
+            &[ConvertInput {
+                source_path: movie.to_string_lossy().to_string(),
+            }],
+            &cfg,
+        );
+        assert_eq!(plan.len(), 1);
+        assert_eq!(plan[0].output, source_dir.join("movie-AV1.mkv"));
     }
 
     #[test]

@@ -28,6 +28,7 @@ pub struct ConvertPresetFields {
     pub convert_use_recommended_container: bool,
     pub convert_delete_original: bool,
     pub convert_rename_original: bool,
+    pub convert_output_dir: String,
     pub convert_post_move_subfolder: String,
     pub convert_copy_subtitles: bool,
     pub convert_write_checksum: bool,
@@ -57,6 +58,7 @@ impl Default for ConvertPresetFields {
             convert_use_recommended_container: true,
             convert_delete_original: false,
             convert_rename_original: false,
+            convert_output_dir: String::new(),
             convert_post_move_subfolder: String::new(),
             convert_copy_subtitles: false,
             convert_write_checksum: false,
@@ -118,6 +120,7 @@ impl ConvertPresetFields {
             convert_use_recommended_container: settings.convert_use_recommended_container,
             convert_delete_original: settings.convert_delete_original,
             convert_rename_original: settings.convert_rename_original,
+            convert_output_dir: settings.convert_output_dir.clone(),
             convert_post_move_subfolder: settings.convert_post_move_subfolder.clone(),
             convert_copy_subtitles: settings.convert_copy_subtitles,
             convert_write_checksum: settings.convert_write_checksum,
@@ -146,6 +149,7 @@ impl ConvertPresetFields {
         settings.convert_use_recommended_container = self.convert_use_recommended_container;
         settings.convert_delete_original = self.convert_delete_original;
         settings.convert_rename_original = self.convert_rename_original;
+        settings.convert_output_dir = self.convert_output_dir.clone();
         settings.convert_post_move_subfolder = self.convert_post_move_subfolder.clone();
         settings.convert_copy_subtitles = self.convert_copy_subtitles;
         settings.convert_write_checksum = self.convert_write_checksum;

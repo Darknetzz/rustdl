@@ -1741,6 +1741,20 @@ impl PydlApp {
                                 )
                                 .changed();
                             ui.end_row();
+                            ui.label("Output folder");
+                            changed |= ui
+                                .add(
+                                    egui::TextEdit::singleline(
+                                        &mut self.settings.convert_output_dir,
+                                    )
+                                    .hint_text("same folder as each input (default)"),
+                                )
+                                .on_hover_text(
+                                    "When empty, encoded files are written next to each source file. \
+                                     Set a folder to send all batch outputs there instead.",
+                                )
+                                .changed();
+                            ui.end_row();
                             changed |= settings_checkbox(
                                 ui,
                                 "Recursive folder scan",

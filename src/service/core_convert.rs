@@ -34,7 +34,7 @@ impl DownloadCore {
         ConvertConfig {
             ffmpeg_path: self.settings.ffmpeg_path.clone(),
             ffprobe_path: self.settings.ffprobe_path.clone(),
-            output_dir: self.output_dir.clone(),
+            output_dir: self.settings.convert_output_dir.clone(),
             recursive: self.settings.convert_recursive,
             dry_run: self.settings.convert_dry_run,
             delete_original: self.settings.convert_delete_original,

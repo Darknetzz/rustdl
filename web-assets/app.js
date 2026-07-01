@@ -3245,6 +3245,7 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-convert-delete-original", s.convert_delete_original);
   setCheck("set-convert-rename-original", s.convert_rename_original);
   setCheck("set-convert-remember-queue", s.convert_remember_queue);
+  setVal("set-convert-output-dir", s.convert_output_dir);
   setVal("set-convert-subtitle-mode", s.convert_subtitle_mode || "none");
   setVal("set-convert-audio-extract", s.convert_audio_extract || "none");
   setCheck("set-convert-copy-subtitles", s.convert_copy_subtitles);
@@ -3384,6 +3385,7 @@ function collectSettingsForm(base) {
   s.convert_delete_original = document.getElementById("set-convert-delete-original").checked;
   s.convert_rename_original = document.getElementById("set-convert-rename-original").checked;
   s.convert_remember_queue = document.getElementById("set-convert-remember-queue").checked;
+  s.convert_output_dir = document.getElementById("set-convert-output-dir")?.value || "";
   s.convert_subtitle_mode =
     document.getElementById("set-convert-subtitle-mode")?.value || "none";
   s.convert_audio_extract =
