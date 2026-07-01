@@ -4,6 +4,13 @@ name: release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: >-
+          GitHub release tag (e.g. rustdl-v0.11.0).
+          Leave empty to use rustdl-v + version from Cargo.toml on the checked-out ref.
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -68,11 +75,29 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: Resolve release tag
+        id: resolve
+        shell: bash
+        run: |
+          input_tag='${{ inputs.tag }}'
+          if [[ -n "$input_tag" ]]; then
+            tag="$input_tag"
+          else
+            ver="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+            if [[ -z "$ver" ]]; then
+              echo "Could not read version from Cargo.toml" >&2
+              exit 1
+            fi
+            tag="rustdl-v${ver}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $tag"
+
       - name: Build release notes from CHANGELOG
         id: notes
         shell: bash
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ steps.resolve.outputs.tag }}"
           chmod +x scripts/extract_release_notes.sh
           ./scripts/extract_release_notes.sh CHANGELOG.md "$tag" > release-notes.md
           echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
@@ -82,7 +107,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES_FILE: ${{ steps.notes.outputs.path }}
         run: |
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ steps.resolve.outputs.tag }}"
           ver="${tag#rustdl-v}"
           ver="${ver#v}"
           repo="${GITHUB_REPOSITORY}"
