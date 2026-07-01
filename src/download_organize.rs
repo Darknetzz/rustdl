@@ -70,6 +70,29 @@ pub fn uses_custom_template(settings: &AppSettings) -> bool {
         || settings.download_organize_filename == FILENAME_CUSTOM
 }
 
+/// Apply a named download-organize preset (`flat`, `uploader`, `playlist`, `date`).
+pub fn apply_organize_preset(settings: &mut AppSettings, preset: &str) {
+    match preset {
+        "flat" => {
+            settings.download_organize_folder = FOLDER_FLAT.to_owned();
+            settings.download_organize_filename = FILENAME_TITLE_ID.to_owned();
+        }
+        "uploader" => {
+            settings.download_organize_folder = FOLDER_UPLOADER.to_owned();
+            settings.download_organize_filename = FILENAME_TITLE_ID.to_owned();
+        }
+        "playlist" => {
+            settings.download_organize_folder = FOLDER_PLAYLIST.to_owned();
+            settings.download_organize_filename = FILENAME_PLAYLIST_INDEX_TITLE_ID.to_owned();
+        }
+        "date" => {
+            settings.download_organize_folder = FOLDER_DATE_YM.to_owned();
+            settings.download_organize_filename = FILENAME_DATE_TITLE_ID.to_owned();
+        }
+        _ => {}
+    }
+}
+
 pub fn folder_template_prefix(folder: &str) -> &'static str {
     match folder {
         FOLDER_UPLOADER => "%(uploader)s/",
@@ -423,6 +446,22 @@ mod tests {
         assert!(template_implies_custom_mode(
             "%(uploader)s/%(title)s.%(ext)s"
         ));
+    }
+
+    #[test]
+    fn apply_organize_preset_uploader() {
+        let mut s = base_settings();
+        apply_organize_preset(&mut s, "uploader");
+        assert_eq!(s.download_organize_folder, FOLDER_UPLOADER);
+        assert_eq!(s.download_organize_filename, FILENAME_TITLE_ID);
+    }
+
+    #[test]
+    fn apply_organize_preset_date() {
+        let mut s = base_settings();
+        apply_organize_preset(&mut s, "date");
+        assert_eq!(s.download_organize_folder, FOLDER_DATE_YM);
+        assert_eq!(s.download_organize_filename, FILENAME_DATE_TITLE_ID);
     }
 
     #[test]

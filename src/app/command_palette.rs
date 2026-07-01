@@ -392,7 +392,7 @@ impl PydlApp {
             }
             "Layout: Compact queue" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app::settings_panel::apply_layout_preset(
+                crate::app_ui::apply_layout_preset(
                     &mut self.settings,
                     "compact",
                     Some(vh),
@@ -402,7 +402,7 @@ impl PydlApp {
             }
             "Layout: Review mode" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app::settings_panel::apply_layout_preset(
+                crate::app_ui::apply_layout_preset(
                     &mut self.settings,
                     "review",
                     Some(vh),
@@ -412,7 +412,7 @@ impl PydlApp {
             }
             "Layout: Minimal" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app::settings_panel::apply_layout_preset(
+                crate::app_ui::apply_layout_preset(
                     &mut self.settings,
                     "minimal",
                     Some(vh),

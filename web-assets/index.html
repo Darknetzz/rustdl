@@ -99,6 +99,21 @@
       <div id="queue" class="queue"></div>
     </section>
 
+    <section class="panel" id="watchlist-panel">
+      <div class="row watchlist-header">
+        <h2>Quality watchlist</h2>
+        <button type="button" id="btn-watchlist-probe" class="secondary" data-icon="refresh">Check now</button>
+      </div>
+      <p class="hint">Re-check saved URLs on a schedule; rustdl logs when max available resolution increases.</p>
+      <div id="watchlist-list" class="watchlist-list"></div>
+      <form id="watchlist-add-form" class="row watchlist-add-form">
+        <label class="grow">URL
+          <input type="url" id="watchlist-add-url" placeholder="https://…" />
+        </label>
+        <button type="submit" class="secondary" data-icon="add">Add URL</button>
+      </form>
+    </section>
+
     <section class="panel">
       <div class="row log-header">
         <h2>Activity log</h2>
@@ -151,6 +166,9 @@
         <label class="convert-input-label">Input paths (file or folder, one per line)
           <textarea id="convert-input" rows="3" placeholder="D:\Videos\movie.mkv&#10;D:\Videos\Folder"></textarea>
         </label>
+        <div class="row">
+          <button type="button" id="btn-browse-convert-input" class="secondary" data-icon="folder_open">Browse on host…</button>
+        </div>
         <div class="row convert-actions btn-toolbar">
           <div class="btn-group" role="group" aria-label="Convert batch controls">
             <button type="button" id="btn-convert-scan" class="secondary" data-icon="search" title="Find supported videos in the listed paths and add them as ready">Scan inputs</button>
@@ -268,6 +286,13 @@
           <p class="hint">Used by the downloader and Video Converter. Leave empty to use PATH.</p>
           <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
           <label>ffprobe path <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" /></label>
+
+          <h3>Backup</h3>
+          <p class="hint">Export or import the full rustdl settings JSON (same format as the desktop app).</p>
+          <div class="btn-group" role="group" aria-label="Settings backup">
+            <button type="button" id="btn-settings-export" class="secondary" data-icon="download">Export settings</button>
+            <button type="button" id="btn-settings-import" class="secondary" data-icon="upload">Import settings</button>
+          </div>
         </div>
 
         <div id="settings-tab-downloader" class="settings-panel" role="tabpanel" hidden>
@@ -277,7 +302,12 @@
           <label>Scheduled download start (local HH:MM, empty = off) <input type="text" id="set-scheduled-start" placeholder="08:30" maxlength="5" /></label>
           <label class="check"><input type="checkbox" id="set-enqueue-convert" /> Enqueue completed downloads in Video Converter queue</label>
           <label>Parallel downloads <input type="number" id="set-workers" min="1" max="6" /></label>
-          <label>Output folder <input type="text" id="set-output-dir" /></label>
+          <label>Output folder
+            <span class="input-with-button">
+              <input type="text" id="set-output-dir" />
+              <button type="button" id="btn-browse-output-dir" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
           <p id="settings-output-disk" class="hint hidden" aria-live="polite"></p>
 
           <h3>Downloader executables</h3>
@@ -398,8 +428,20 @@
           <label>Sleep between retries (seconds, 0 = off) <input type="number" id="set-retry-sleep" min="0" max="300" /></label>
           <label>Auto-retry on connection errors (0–5) <input type="number" id="set-download-auto-retries" min="0" max="5" /></label>
 
+          <h3>Quality watchlist</h3>
+          <p class="hint">Re-probe saved URLs on a schedule; rustdl logs when max available resolution increases.</p>
+          <label class="check"><input type="checkbox" id="set-watchlist-enabled" /> Enable quality watchlist</label>
+          <label>Check every (hours) <input type="number" id="set-watchlist-poll-hours" min="1" max="168" /></label>
+          <label>Min height increase (px) <input type="number" id="set-watchlist-min-delta" min="1" max="2160" /></label>
+          <label class="check"><input type="checkbox" id="set-watchlist-auto-enqueue" /> Auto-add improved URLs to the download queue</label>
+
           <h3>Cookies and impersonate</h3>
-          <label>Cookies (file or browser) <input type="text" id="set-cookies" /></label>
+          <label>Cookies (file or browser)
+            <span class="input-with-button">
+              <input type="text" id="set-cookies" />
+              <button type="button" id="btn-browse-cookies" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
           <div class="row">
             <button type="button" id="btn-test-cookies" class="secondary" data-icon="science">Test cookies</button>
           </div>
@@ -407,7 +449,12 @@
 
           <h3>Watch folder</h3>
           <label class="check"><input type="checkbox" id="set-watch-folder-enabled" /> Auto-enqueue URLs from a watched folder (.url / .txt)</label>
-          <label>Watch folder path <input type="text" id="set-watch-folder-path" placeholder="D:\Downloads\watch" /></label>
+          <label>Watch folder path
+            <span class="input-with-button">
+              <input type="text" id="set-watch-folder-path" placeholder="D:\Downloads\watch" />
+              <button type="button" id="btn-browse-watch-folder" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
 
           <h3>Queue templates</h3>
           <p class="hint">Save the current queue as a named template or load URLs from a saved template.</p>
@@ -607,6 +654,18 @@
     </form>
   </dialog>
 
+  <dialog id="more-info-dialog" class="settings-dialog more-info-dialog">
+    <form method="dialog" id="more-info-form">
+      <h2 id="more-info-title">More info</h2>
+      <div id="more-info-body" class="more-info-body"></div>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="submit" class="secondary" data-icon="close">Close</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <div id="command-palette" class="command-palette hidden" role="dialog" aria-modal="true" aria-label="Command palette">
     <div class="command-palette-backdrop" id="command-palette-backdrop"></div>
     <div class="command-palette-panel">
@@ -620,6 +679,10 @@
   </section>
 
   <script src="/icons.js"></script>
+  <script src="/api-client.js"></script>
+  <script src="/palette-ui.js"></script>
+  <script src="/watchlist-ui.js"></script>
+  <script src="/browse-ui.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

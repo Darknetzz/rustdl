@@ -20,6 +20,10 @@ pub fn static_router() -> Router {
         .route("/style.css", get(style_css))
         .route("/material-icons.css", get(material_icons_css))
         .route("/icons.js", get(icons_js))
+        .route("/api-client.js", get(api_client_js))
+        .route("/palette-ui.js", get(palette_ui_js))
+        .route("/watchlist-ui.js", get(watchlist_ui_js))
+        .route("/browse-ui.js", get(browse_ui_js))
         .route("/fonts/material-icons.woff2", get(material_icons_font))
         .route("/favicon.ico", get(favicon))
         .route("/favicon.png", get(favicon))
@@ -43,6 +47,22 @@ async fn material_icons_css() -> impl IntoResponse {
 
 async fn icons_js() -> impl IntoResponse {
     serve("icons.js", "text/javascript; charset=utf-8")
+}
+
+async fn api_client_js() -> impl IntoResponse {
+    serve("api-client.js", "text/javascript; charset=utf-8")
+}
+
+async fn palette_ui_js() -> impl IntoResponse {
+    serve("palette-ui.js", "text/javascript; charset=utf-8")
+}
+
+async fn watchlist_ui_js() -> impl IntoResponse {
+    serve("watchlist-ui.js", "text/javascript; charset=utf-8")
+}
+
+async fn browse_ui_js() -> impl IntoResponse {
+    serve("browse-ui.js", "text/javascript; charset=utf-8")
 }
 
 async fn material_icons_font() -> impl IntoResponse {

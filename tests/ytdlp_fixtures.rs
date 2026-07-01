@@ -1,4 +1,5 @@
 use rustdl::ytdlp::{self, PROGRESS_PREFIX};
+use serde_json::json;
 
 #[test]
 fn progress_fixture_template_prefix() {
@@ -35,4 +36,30 @@ fn download_args_fixture_best_quality() {
 
     let args = build_download_extra_args(&settings);
     assert!(args.windows(2).any(|w| w[0] == "-f"));
+}
+
+#[test]
+fn max_video_resolution_from_entry_picks_highest_format() {
+    let entry = json!({
+        "formats": [
+            { "height": 720, "width": 1280, "vcodec": "avc1" },
+            { "height": 1080, "width": 1920, "vcodec": "avc1" }
+        ]
+    });
+    let (w, h) = ytdlp::max_video_resolution_from_entry(&entry);
+    assert_eq!(h, Some(1080));
+    assert_eq!(w, Some(1920));
+}
+
+#[test]
+fn parse_flat_playlist_json_caps_entries() {
+    let root = json!({
+        "entries": [
+            { "url": "https://example.com/1", "title": "One" },
+            { "url": "https://example.com/2", "title": "Two" },
+            { "url": "https://example.com/3", "title": "Three" }
+        ]
+    });
+    let preview = ytdlp::parse_flat_playlist_json(&root, 2);
+    assert_eq!(preview.urls.len(), 2);
 }

@@ -1592,6 +1592,51 @@ pub fn dock_height_for_viewport_ratio(viewport_height: f32, ratio: f32) -> f32 {
     (viewport_height * ratio).clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H)
 }
 
+/// Apply a named layout preset (`compact`, `review`, `minimal`) to settings.
+pub fn apply_layout_preset(
+    settings: &mut crate::config::AppSettings,
+    preset: &str,
+    viewport_height: Option<f32>,
+) {
+    match preset {
+        "compact" => {
+            settings.card_list_layout = true;
+            settings.compact_cards = true;
+            settings.hide_card_subtitle = true;
+            settings.show_thumbnails = true;
+            settings.log_dock_height = settings.log_dock_height.min(120.0).max(80.0);
+        }
+        "review" => {
+            settings.card_list_layout = false;
+            settings.compact_cards = false;
+            settings.hide_card_subtitle = false;
+            settings.show_thumbnails = true;
+            settings.logs_open = true;
+            settings.logs_docked = true;
+            if let Some(vh) = viewport_height {
+                settings.videos_dock_height =
+                    dock_height_for_viewport_ratio(vh, REVIEW_DOCK_HEIGHT_RATIO);
+                let log_budget = (settings.videos_dock_height * 0.45).max(80.0);
+                settings.log_dock_height =
+                    scaled_log_dock_height(200.0, log_budget).max(120.0);
+            } else {
+                settings.log_dock_height = 200.0;
+            }
+        }
+        "minimal" => {
+            settings.card_list_layout = true;
+            settings.compact_cards = true;
+            settings.hide_card_subtitle = true;
+            settings.show_thumbnails = false;
+            if let Some(vh) = viewport_height {
+                settings.videos_dock_height =
+                    dock_height_for_viewport_ratio(vh, MINIMAL_DOCK_HEIGHT_RATIO);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// List scroll height between fixed `content_top` and a bottom stack (footer + optional log).
 pub fn queue_list_height_from_layout(
     content_top: f32,
@@ -2744,5 +2789,24 @@ mod tests {
         input.convert_running = true;
         let info = derive_navbar_status(input);
         assert_eq!(info.slug, NavbarStatusSlug::Converting);
+    }
+
+    #[test]
+    fn apply_layout_preset_review_opens_docked_log() {
+        let mut s = crate::config::AppSettings::default();
+        apply_layout_preset(&mut s, "review", Some(900.0));
+        assert!(!s.card_list_layout);
+        assert!(s.logs_open);
+        assert!(s.logs_docked);
+        assert!(s.videos_dock_height >= BOTTOM_PANEL_MIN_H);
+        assert!(s.log_dock_height >= 120.0);
+    }
+
+    #[test]
+    fn apply_layout_preset_minimal_hides_thumbnails() {
+        let mut s = crate::config::AppSettings::default();
+        apply_layout_preset(&mut s, "minimal", Some(800.0));
+        assert!(!s.show_thumbnails);
+        assert!(s.videos_dock_height >= BOTTOM_PANEL_MIN_H);
     }
 }

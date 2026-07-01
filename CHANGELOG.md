@@ -10,6 +10,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- LAN web UI: **More info** per download row (yt-dlp source + ffprobe file details), **Quality watchlist** panel and settings, settings **export/import**, host **Browse** buttons for output folder, cookies, convert paths, and watch folder, and server-driven **command palette** manifest.
+- Shared layout and organize preset APIs (`POST /api/settings/layout-preset/{name}`, `POST /api/settings/organize-preset/{name}`) so desktop and web apply identical preset behavior.
+
 ### Changed
 
 - Downloader queue **Copy URL** briefly shows **Copied!** on desktop (card and list rows) and a toast on the LAN web UI.

@@ -1,4 +1,4 @@
-const TOKEN_KEY = "rustdl_web_token";
+// TOKEN_KEY and HTTP helpers live in api-client.js
 const WEB_THEME_KEY = "rustdl_web_theme";
 const QUEUE_GROUP_COLLAPSED_KEY = "rustdl_web_queue_groups";
 const WEB_LAYOUT_HEIGHTS_KEY = "rustdl_web_layout_heights";
@@ -472,20 +472,20 @@ function exampleOrganizePath(settings) {
   return `${dir}/${parts.join("/")}`;
 }
 
-function applyOrganizePreset(settings, preset) {
-  if (preset === "flat") {
-    settings.download_organize_folder = "flat";
-    settings.download_organize_filename = "title_id";
-  } else if (preset === "uploader") {
-    settings.download_organize_folder = "uploader";
-    settings.download_organize_filename = "title_id";
-  } else if (preset === "playlist") {
-    settings.download_organize_folder = "playlist";
-    settings.download_organize_filename = "playlist_index_title_id";
-  } else if (preset === "date") {
-    settings.download_organize_folder = "date_ym";
-    settings.download_organize_filename = "date_title_id";
-  }
+function applyOrganizePresetViaApi(preset) {
+  return api(`/api/settings/organize-preset/${encodeURIComponent(preset)}`, {
+    method: "POST",
+    body: "{}",
+  }).then(async (res) => {
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Could not apply organize preset."));
+    }
+    const data = await res.json();
+    cachedSettings = data.settings;
+    populateSettingsForm(cachedSettings, data.command_preview);
+    updateOrganizeUi(cachedSettings);
+    return refreshAll();
+  });
 }
 
 function updateOrganizeUi(settings) {
@@ -550,25 +550,6 @@ function initWebLayoutHeightPersistence() {
     }, 250);
   });
   ro.observe(logView);
-}
-
-function applyLayoutPreset(settings, preset) {
-  if (preset === "compact") {
-    settings.card_list_layout = true;
-    settings.compact_cards = true;
-    settings.hide_card_subtitle = true;
-    settings.show_thumbnails = true;
-  } else if (preset === "review") {
-    settings.card_list_layout = false;
-    settings.compact_cards = false;
-    settings.hide_card_subtitle = false;
-    settings.show_thumbnails = true;
-  } else if (preset === "minimal") {
-    settings.card_list_layout = true;
-    settings.compact_cards = true;
-    settings.hide_card_subtitle = true;
-    settings.show_thumbnails = false;
-  }
 }
 
 function itemMatchesSearch(item, query) {
@@ -807,59 +788,11 @@ const thumbInflight = new Map();
 /** @type {HTMLMediaElement | null} */
 let activeMediaEl = null;
 
-function token() {
-  return localStorage.getItem(TOKEN_KEY) || "";
-}
-
-function apiAuthOptional() {
-  return !!token() || ipAuthBypass;
-}
-
-/** Append token query param when the client uses token auth. */
-function apiUrlWithAuth(path) {
-  const t = token();
-  if (!t) return path;
-  const sep = path.includes("?") ? "&" : "?";
-  return `${path}${sep}token=${encodeURIComponent(t)}`;
-}
-
-function headers() {
-  const h = { "Content-Type": "application/json" };
-  const t = token();
-  if (t) h["X-Rustdl-Token"] = t;
-  return h;
-}
-
-/** Auth headers for binary GETs (no JSON Content-Type). */
-function imageFetchHeaders() {
-  const h = {};
-  const t = token();
-  if (t) h["X-Rustdl-Token"] = t;
-  return h;
-}
-
 async function blobFromImageResponse(res) {
   const ct =
     res.headers.get("Content-Type")?.split(";")[0]?.trim() || "image/jpeg";
   const buf = await res.arrayBuffer();
   return new Blob([buf], { type: ct });
-}
-
-async function api(path, options = {}) {
-  const res = await fetch(path, {
-    ...options,
-    headers: { ...headers(), ...(options.headers || {}) },
-  });
-  if (res.status === 401) {
-    const msg =
-      "Token rejected. Copy the current API token from rustdl Settings → Web UI, paste it below, then click Save token.";
-    showAuthPanel(msg);
-    throw new Error(msg);
-  }
-  if (!res.ok) {
-    throw new Error(await readApiError(res, `Request failed (${res.status})`));
-  }
-  return res;
 }
 
 function showAuthPanel(statusText) {
@@ -900,6 +833,7 @@ function showApp() {
   document.getElementById("auth-panel").classList.add("hidden");
   document.getElementById("app-main").classList.remove("hidden");
   initWebLayoutHeightPersistence();
+  loadPaletteCommands().catch(console.error);
 }
 
 function renderTools(tools) {
@@ -1899,6 +1833,74 @@ function attachReadyRowDragDrop(card, item, readyItems, reorderFn) {
   });
 }
 
+function appendWatchForBetterQualityButton(group, item) {
+  if (statusSlug(item.status) !== "done") return;
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  setButtonLabel(btn, ICON.fact_check, "Watch quality");
+  btn.title = "Add to quality watchlist";
+  btn.onclick = () =>
+    addWatchlistFromQueueItem(item.item_id).catch((e) =>
+      notifyError(e.message || "Could not add to watchlist."),
+    );
+  group.appendChild(btn);
+}
+
+function appendMoreInfoButton(group, item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  setButtonLabel(btn, ICON.info, "More info");
+  btn.onclick = () => showMoreInfoDialog(item.item_id, item.title).catch((e) => notifyError(e.message || String(e)));
+  group.appendChild(btn);
+}
+
+async function showMoreInfoDialog(itemId, titleHint) {
+  const res = await api(`/api/queue/${itemId}/info`);
+  if (!res.ok) {
+    throw new Error(await readApiError(res, "Could not load item info."));
+  }
+  const data = await res.json();
+  const dlg = document.getElementById("more-info-dialog");
+  const titleEl = document.getElementById("more-info-title");
+  const bodyEl = document.getElementById("more-info-body");
+  if (!dlg || !titleEl || !bodyEl) return;
+  titleEl.textContent = titleHint?.trim() ? `More info — ${titleHint.trim()}` : "More info";
+  bodyEl.replaceChildren();
+  if (!data.rows?.length) {
+    const p = document.createElement("p");
+    p.textContent = "No metadata yet — wait for resolve or finish the download.";
+    bodyEl.appendChild(p);
+  } else {
+    let lastSection = "";
+    for (const row of data.rows) {
+      if (row.section !== lastSection) {
+        if (lastSection) {
+          const sep = document.createElement("hr");
+          bodyEl.appendChild(sep);
+        }
+        const h = document.createElement("h3");
+        h.className = "more-info-section";
+        h.textContent = row.section;
+        bodyEl.appendChild(h);
+        lastSection = row.section;
+      }
+      const line = document.createElement("div");
+      line.className = "more-info-row";
+      const label = document.createElement("span");
+      label.className = "more-info-label";
+      label.textContent = `${row.label}:`;
+      const value = document.createElement("span");
+      value.className = "more-info-value";
+      value.textContent = row.value;
+      line.append(label, value);
+      bodyEl.appendChild(line);
+    }
+  }
+  dlg.showModal();
+}
+
 function appendVerifyStreamsButton(group, item) {
   if (statusSlug(item.status) !== "done") return;
   const btn = document.createElement("button");
@@ -2295,6 +2297,8 @@ function renderQueueCard(item, settings, ctx) {
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
+  appendMoreInfoButton(group, item);
+  appendWatchForBetterQualityButton(group, item);
   appendVerifyStreamsButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
@@ -2371,6 +2375,8 @@ function renderQueueCardListRow(item, settings, ctx) {
   }
   appendCancelMenuButton(group, item);
   appendRedownloadButton(group, item);
+  appendMoreInfoButton(group, item);
+  appendWatchForBetterQualityButton(group, item);
   appendVerifyStreamsButton(group, item);
   appendRemoveMenuButton(group, item);
   if (group.childElementCount > 0) {
@@ -2746,36 +2752,14 @@ async function cancelItem(id) {
   await refreshAll();
 }
 
-async function readApiError(res, fallback) {
+/** POST to an action endpoint; shows an error toast when the response is not OK. */
+async function postActionWithToast(path, fallback, options = {}) {
   try {
-    const body = await res.clone().json();
-    if (body && typeof body.error === "string" && body.error.trim()) {
-      return body.error.trim();
-    }
-  } catch {
-    /* ignore */
+    return await postAction(path, fallback, options);
+  } catch (e) {
+    notifyError(e.message || fallback);
+    throw e;
   }
-  try {
-    const text = (await res.text()).trim();
-    if (text) return text;
-  } catch {
-    /* ignore */
-  }
-  if (res.status === 503) {
-    return "Web UI is unavailable (API token not configured in rustdl Settings).";
-  }
-  return fallback;
-}
-
-/** POST to an action endpoint; shows an error toast and throws when the response is not OK. */
-async function postAction(path, fallback, options = {}) {
-  const res = await api(path, { method: "POST", ...options });
-  if (!res.ok) {
-    const msg = await readApiError(res, fallback);
-    showToast(msg, "error");
-    throw new Error(msg);
-  }
-  return res;
 }
 
 async function redownloadItem(id) {
@@ -2989,6 +2973,7 @@ async function refreshAll() {
     refreshQueue(),
     refreshLogs(),
     refreshConvert(),
+    refreshWatchlistPanel(),
   ]);
 }
 
@@ -3230,6 +3215,10 @@ function populateSettingsForm(s, commandPreview) {
   setCheck("set-ffmpeg-remux-mp4", s.ffmpeg_remux_mp4);
   setCheck("set-ffmpeg-mp3", s.ffmpeg_extract_audio_mp3);
   setCheck("set-verify-streams", s.verify_output_video_audio);
+  setCheck("set-watchlist-enabled", s.watchlist_enabled);
+  setVal("set-watchlist-poll-hours", s.watchlist_poll_hours ?? 24);
+  setVal("set-watchlist-min-delta", s.watchlist_min_height_delta ?? 120);
+  setCheck("set-watchlist-auto-enqueue", s.watchlist_auto_enqueue);
 
   setVal("set-convert-target-codec", s.convert_target_codec || "av1");
   setVal("set-convert-bitrate", s.convert_target_bitrate);
@@ -3354,6 +3343,13 @@ function collectSettingsForm(base) {
   s.ffmpeg_remux_mp4 = document.getElementById("set-ffmpeg-remux-mp4").checked;
   s.ffmpeg_extract_audio_mp3 = document.getElementById("set-ffmpeg-mp3").checked;
   s.verify_output_video_audio = document.getElementById("set-verify-streams").checked;
+  s.watchlist_enabled = document.getElementById("set-watchlist-enabled")?.checked ?? false;
+  s.watchlist_poll_hours =
+    parseInt(document.getElementById("set-watchlist-poll-hours")?.value, 10) || 24;
+  s.watchlist_min_height_delta =
+    parseInt(document.getElementById("set-watchlist-min-delta")?.value, 10) || 120;
+  s.watchlist_auto_enqueue =
+    document.getElementById("set-watchlist-auto-enqueue")?.checked ?? false;
 
   s.convert_target_codec = document.getElementById("set-convert-target-codec").value || "av1";
   s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
@@ -3520,23 +3516,20 @@ async function patchHostSettings(patch) {
   return data;
 }
 
-async function applyLayoutPresetViaApi(preset) {
-  if (!cachedSettings) {
-    const res = await api("/api/settings");
-    cachedSettings = (await res.json()).settings;
-  }
-  const patch = { ...cachedSettings };
-  applyLayoutPreset(patch, preset);
-  const res = await api("/api/settings", {
+function applyLayoutPresetViaApi(preset) {
+  const vh =
+    typeof window !== "undefined" && window.innerHeight > 0 ? window.innerHeight : null;
+  return api(`/api/settings/layout-preset/${encodeURIComponent(preset)}`, {
     method: "POST",
-    body: JSON.stringify({ settings: patch }),
+    body: JSON.stringify(vh != null ? { viewport_height: vh } : {}),
+  }).then(async (res) => {
+    if (!res.ok) {
+      throw new Error(await readApiError(res, "Could not apply layout preset."));
+    }
+    const data = await res.json();
+    cachedSettings = data.settings;
+    return refreshAll();
   });
-  if (!res.ok) {
-    throw new Error(await readApiError(res, "Could not apply layout preset."));
-  }
-  const data = await res.json();
-  cachedSettings = data.settings;
-  await refreshAll();
 }
 
 function toggleActivityLogExpanded() {
@@ -3820,10 +3813,7 @@ function onOrganizeFieldChange() {
 
 document.querySelectorAll(".organize-preset-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
-    if (!cachedSettings) return;
-    const draft = collectSettingsForm(cachedSettings);
-    applyOrganizePreset(draft, btn.dataset.organize);
-    populateSettingsForm(draft, document.getElementById("command-preview")?.textContent || "");
+    applyOrganizePresetViaApi(btn.dataset.organize).catch(console.error);
   });
 });
 
@@ -4753,6 +4743,46 @@ async function profileImport() {
   input.click();
 }
 
+async function settingsExportBackup() {
+  const res = await api("/api/settings/export");
+  const data = await res.json();
+  const blob = new Blob([JSON.stringify(data.settings, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "rustdl_config.json";
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Settings exported.");
+}
+
+async function settingsImportBackup() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.onchange = async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const settings = JSON.parse(await file.text());
+      const res = await api("/api/settings/import", {
+        method: "POST",
+        body: JSON.stringify({ settings }),
+      });
+      const data = await res.json();
+      cachedSettings = data.settings;
+      populateSettingsForm(data.settings, data.command_preview);
+      await refreshAll();
+      showToast("Settings imported.");
+    } catch (e) {
+      notifyError(e.message || "Invalid settings file.");
+    }
+  };
+  input.click();
+}
+
 async function reloadProfilesAndSettings() {
   const [settingsRes, profilesRes] = await Promise.all([
     api("/api/settings"),
@@ -4872,6 +4902,12 @@ document.getElementById("btn-profile-export")?.addEventListener("click", () =>
 );
 document.getElementById("btn-profile-import")?.addEventListener("click", () =>
   profileImport().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-settings-export")?.addEventListener("click", () =>
+  settingsExportBackup().catch((e) => notifyError(e.message || String(e))),
+);
+document.getElementById("btn-settings-import")?.addEventListener("click", () =>
+  settingsImportBackup().catch((e) => notifyError(e.message || String(e))),
 );
 document.getElementById("btn-bulk-remove")?.addEventListener("click", () =>
   bulkRemoveSelected().catch((e) => alert(e.message || String(e)))
@@ -5030,50 +5066,7 @@ document.getElementById("library-history-filter")?.addEventListener("change", ()
   refreshLibrary().catch(console.error);
 });
 
-const PALETTE_COMMANDS = [
-  { label: "Open Settings", keywords: "settings preferences options", section: "Settings", run: () => openSettingsDialog() },
-  { label: "Settings → Shared tab", keywords: "shared global theme layout", run: () => openSettingsDialog("shared") },
-  { label: "Settings → Downloader tab", keywords: "download yt-dlp profile", run: () => openSettingsDialog("downloader") },
-  { label: "Settings → Converter tab", keywords: "convert av1 encode video", run: () => openSettingsDialog("convert") },
-  { label: "Settings → Web UI tab", keywords: "web lan api token bind", run: () => openSettingsDialog("webui") },
-  { label: "Reset UI scale to 100% (host app)", keywords: "ui scale zoom reset desktop host", run: () => patchHostSettings({ ui_scale: 1.0 }) },
-  { label: "Start downloads", keywords: "start run download ready", section: "Queue", run: () => postAction("/api/downloads/start", "Downloads could not start.").then(refreshAll).catch(() => {}) },
-  { label: "Pause downloads", keywords: "pause hold stop", run: () => api("/api/downloads/pause", { method: "POST" }).then(refreshAll) },
-  { label: "Resume downloads", keywords: "resume continue", run: () => api("/api/downloads/resume", { method: "POST" }).then(refreshAll) },
-  { label: "Retry all failed", keywords: "retry failed download again", run: () => postAction("/api/downloads/retry-failed", "Could not retry failed downloads.").then(refreshAll).catch(() => {}) },
-  {
-    label: "Remove selected",
-    keywords: "remove delete selected queue bulk",
-    run: () => {
-      if (currentView === "convert") {
-        bulkRemoveConvertSelected().catch((e) => notifyError(e.message || String(e)));
-      } else if (currentView === "downloader") {
-        bulkRemoveSelected().catch((e) => notifyError(e.message || String(e)));
-      } else {
-        showToast("Switch to Downloader or Video Converter to remove selected queue items.");
-      }
-    },
-  },
-  { label: "Clear completed downloads", keywords: "clear done finished remove completed", run: () => clearQueue("done") },
-  { label: "Start Convert batch", keywords: "convert encode start", run: () => convertStart() },
-  { label: "Pause Convert batch", keywords: "convert pause hold", run: () => convertPause() },
-  { label: "Resume Convert batch", keywords: "convert resume continue", run: () => convertResume() },
-  { label: "Switch to Downloader", keywords: "mode download", run: () => setView("downloader") },
-  { label: "Switch to Video Converter", keywords: "mode convert av1", run: () => setView("convert") },
-  { label: "Switch to Library", keywords: "library done history", run: () => setView("library") },
-  { label: "Focus queue search", keywords: "search find filter queue", run: () => focusActiveSearch() },
-  { label: "Toggle activity log", keywords: "log show hide expand activity", run: () => toggleActivityLogExpanded() },
-  { label: "Export activity log", keywords: "export log save file", run: () => exportActivityLog() },
-  { label: "Layout: Compact queue", keywords: "layout compact list small", section: "Layout", run: () => applyLayoutPresetViaApi("compact") },
-  { label: "Layout: Review mode", keywords: "layout review cards thumbnails", run: () => applyLayoutPresetViaApi("review") },
-  { label: "Layout: Minimal", keywords: "layout minimal no thumbnails", run: () => applyLayoutPresetViaApi("minimal") },
-  { label: "Dock Videos panel (host app)", keywords: "dock videos queue panel desktop host", section: "Panels", run: () => patchHostSettings({ videos_docked: true, videos_open: true }) },
-  { label: "Float Videos window (host app)", keywords: "float undock videos window desktop host", run: () => patchHostSettings({ videos_docked: false, videos_open: true }) },
-  { label: "Dock activity log (host app)", keywords: "dock log panel bottom desktop host", run: () => patchHostSettings({ logs_docked: true, logs_open: true }) },
-  { label: "Float activity log (host app)", keywords: "float undock log window desktop host", run: () => patchHostSettings({ logs_open: true, logs_docked: false }) },
-  { label: "Open About", keywords: "about version help", section: "Help", run: () => document.getElementById("about-dialog")?.showModal() },
-  { label: "Refresh page data", keywords: "refresh reload sync", run: () => refreshAll() },
-];
+// PALETTE_COMMANDS is populated from /api/palette/commands (see palette-ui.js)
 
 let paletteActiveIndex = 0;
 
@@ -5145,10 +5138,17 @@ function openCommandPalette() {
   const input = document.getElementById("command-palette-input");
   if (!root || !input) return;
   paletteActiveIndex = 0;
-  input.value = "";
-  renderCommandPaletteList(PALETTE_COMMANDS);
-  root.classList.remove("hidden");
-  input.focus();
+  const open = () => {
+    input.value = "";
+    renderCommandPaletteList(PALETTE_COMMANDS);
+    root.classList.remove("hidden");
+    input.focus();
+  };
+  if (!PALETTE_COMMANDS.length) {
+    loadPaletteCommands().then(open).catch(open);
+    return;
+  }
+  open();
 }
 
 function closeCommandPalette() {
@@ -5202,19 +5202,8 @@ document.getElementById("btn-expand-log")?.addEventListener("click", () => {
 });
 
 document.querySelectorAll(".layout-preset-btn").forEach((btn) => {
-  btn.addEventListener("click", async () => {
-    if (!cachedSettings) return;
-    const patch = { ...cachedSettings };
-    applyLayoutPreset(patch, btn.dataset.preset);
-    const res = await api("/api/settings", {
-      method: "POST",
-      body: JSON.stringify({ settings: patch }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      cachedSettings = data.settings;
-      await refreshAll();
-    }
+  btn.addEventListener("click", () => {
+    applyLayoutPresetViaApi(btn.dataset.preset).catch(console.error);
   });
 });
 

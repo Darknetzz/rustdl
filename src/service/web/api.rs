@@ -196,6 +196,12 @@ struct PatchSettingsBody {
     patch: Option<serde_json::Value>,
 }
 
+#[derive(Deserialize, Default)]
+struct LayoutPresetBody {
+    #[serde(default)]
+    viewport_height: Option<f32>,
+}
+
 #[derive(Deserialize)]
 struct QueueReorderBody {
     dragged_id: u64,
@@ -292,6 +298,7 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/queue/templates/load", post(queue_templates_load))
         .route("/api/queue/:id/overrides", post(queue_item_overrides))
         .route("/api/queue/:id/verify", post(queue_verify_streams))
+        .route("/api/queue/:id/info", get(queue_more_info))
         .route("/api/queue/:id", axum::routing::delete(queue_remove))
         .route("/api/library", get(library_list))
         .route("/api/library/:id/open", post(library_open))
@@ -308,6 +315,17 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/downloads/retry-failed", post(downloads_retry_failed))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
+        .route(
+            "/api/settings/layout-preset/:preset",
+            post(settings_layout_preset),
+        )
+        .route(
+            "/api/settings/organize-preset/:preset",
+            post(settings_organize_preset),
+        )
+        .route("/api/settings/export", get(settings_export))
+        .route("/api/settings/import", post(settings_import))
+        .route("/api/browse", post(browse_host_path))
         .route("/api/profiles", get(profiles_list))
         .route("/api/profiles/apply", post(profiles_apply))
         .route("/api/profiles/delete", post(profiles_delete))
@@ -327,7 +345,9 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/events", get(events_sse))
         .route("/api/thumbnail/:id", get(thumbnail_proxy))
         .route("/api/media/:id", get(media_stream));
-    let protected = super::convert_api::register(protected)
+    let protected = super::convert_api::register(protected);
+    let protected = super::watchlist_api::register(protected);
+    let protected = super::palette::register(protected)
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             |State(st): State<ApiState>, req, next| async move {
@@ -903,6 +923,55 @@ async fn queue_verify_streams(
 }
 
 #[derive(Serialize)]
+struct MoreInfoRowJson {
+    section: String,
+    label: String,
+    value: String,
+}
+
+#[derive(Serialize)]
+struct QueueMoreInfoResponse {
+    rows: Vec<MoreInfoRowJson>,
+}
+
+async fn queue_more_info(
+    State(st): State<ApiState>,
+    Path(id): Path<u64>,
+) -> Result<Json<QueueMoreInfoResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    let Some(idx) = c.resolve_item_idx(id) else {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ApiErrorBody {
+                error: "Item not found.".into(),
+            }),
+        ));
+    };
+    if matches!(
+        c.items[idx].status,
+        crate::models::ItemStatus::Done | crate::models::ItemStatus::Failed
+    ) {
+        c.probe_saved_file_media_for_item(id);
+        if let Some(mtime) = c
+            .done_file_index
+            .find_path_for_queue_item(&c.effective_output_dir(), &c.items[idx])
+            .and_then(|(_, t)| t.duration_since(std::time::UNIX_EPOCH).ok())
+        {
+            c.items[idx].file_saved_mtime = Some(mtime.as_secs());
+        }
+    }
+    let rows = crate::media_metadata::queue_item_more_info_rows(&c.items[idx])
+        .into_iter()
+        .map(|row| MoreInfoRowJson {
+            section: row.section.to_owned(),
+            label: row.label.to_owned(),
+            value: row.value,
+        })
+        .collect();
+    Ok(Json(QueueMoreInfoResponse { rows }))
+}
+
+#[derive(Serialize)]
 struct PlaylistPreviewResponse {
     count: usize,
     urls: Vec<String>,
@@ -1216,6 +1285,125 @@ async fn settings_patch(
         ));
     }
     Ok(Json(settings_response_from_core(&c)))
+}
+
+async fn settings_layout_preset(
+    State(st): State<ApiState>,
+    Path(preset): Path<String>,
+    body: Option<Json<LayoutPresetBody>>,
+) -> Result<Json<SettingsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    if !matches!(preset.as_str(), "compact" | "review" | "minimal") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("unknown layout preset: {preset}"),
+            }),
+        ));
+    }
+    let viewport_height = body.map(|b| b.viewport_height).unwrap_or(None);
+    let mut c = st.core.lock();
+    let mut settings = c.settings.clone();
+    crate::app_ui::apply_layout_preset(&mut settings, &preset, viewport_height);
+    c.apply_settings_patch(settings);
+    Ok(Json(settings_response_from_core(&c)))
+}
+
+async fn settings_organize_preset(
+    State(st): State<ApiState>,
+    Path(preset): Path<String>,
+) -> Result<Json<SettingsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    if !matches!(preset.as_str(), "flat" | "uploader" | "playlist" | "date") {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ApiErrorBody {
+                error: format!("unknown organize preset: {preset}"),
+            }),
+        ));
+    }
+    let mut c = st.core.lock();
+    let mut settings = c.settings.clone();
+    crate::download_organize::apply_organize_preset(&mut settings, &preset);
+    c.apply_settings_patch(settings);
+    Ok(Json(settings_response_from_core(&c)))
+}
+
+#[derive(Serialize, Deserialize)]
+struct SettingsExportResponse {
+    settings: AppSettings,
+}
+
+async fn settings_export(State(st): State<ApiState>) -> Json<SettingsExportResponse> {
+    let c = st.core.lock();
+    Json(SettingsExportResponse {
+        settings: c.settings.clone(),
+    })
+}
+
+async fn settings_import(
+    State(st): State<ApiState>,
+    Json(body): Json<SettingsExportResponse>,
+) -> Result<Json<SettingsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    c.apply_settings_patch(body.settings);
+    Ok(Json(settings_response_from_core(&c)))
+}
+
+#[derive(Deserialize)]
+struct BrowseRequest {
+    #[serde(default = "default_browse_kind")]
+    kind: String,
+    #[serde(default)]
+    title: Option<String>,
+}
+
+fn default_browse_kind() -> String {
+    "folder".to_owned()
+}
+
+#[derive(Serialize)]
+struct BrowseResponse {
+    path: Option<String>,
+    paths: Vec<String>,
+}
+
+async fn browse_host_path(Json(body): Json<BrowseRequest>) -> Json<BrowseResponse> {
+    let kind = body.kind;
+    let title = body
+        .title
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| match kind.as_str() {
+            "file" => "Select file".to_owned(),
+            "files" => "Select files".to_owned(),
+            _ => "Select folder".to_owned(),
+        });
+    let picked = tokio::task::spawn_blocking(move || match kind.as_str() {
+        "file" => rfd::FileDialog::new()
+            .set_title(&title)
+            .pick_file()
+            .map(|p| vec![p]),
+        "files" => Some(
+            rfd::FileDialog::new()
+                .set_title(&title)
+                .pick_files()
+                .unwrap_or_default(),
+        ),
+        _ => rfd::FileDialog::new()
+            .set_title(&title)
+            .pick_folder()
+            .map(|p| vec![p]),
+    })
+    .await
+    .ok()
+    .flatten();
+    let paths: Vec<String> = picked
+        .unwrap_or_default()
+        .into_iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    Json(BrowseResponse {
+        path: paths.first().cloned(),
+        paths,
+    })
 }
 
 fn settings_response_from_core(c: &DownloadCore) -> SettingsResponse {

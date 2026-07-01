@@ -45,6 +45,7 @@ const ICON = {
   fact_check: "fact_check",
   hourglassEmpty: "hourglass_empty",
   block: "block",
+  info: "info",
 };
 
 function statusChipIcon(slug) {

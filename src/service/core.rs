@@ -2335,3 +2335,110 @@ mod queue_save_tests {
         assert!(core.queue_save_deadline.is_none());
     }
 }
+
+#[cfg(test)]
+mod queue_lifecycle_tests {
+    use std::sync::Arc;
+
+    use tempfile::tempdir;
+
+    use super::*;
+    use crate::models::{ItemStatus, QueueItem};
+
+    fn sample_idle_item(id: u64) -> QueueItem {
+        QueueItem {
+            item_id: id,
+            sort_order: id,
+            source_line: format!("https://example.com/watch?v={id}"),
+            webpage_url: format!("https://example.com/watch?v={id}"),
+            video_id: format!("vid{id}"),
+            title: format!("Video {id}"),
+            status: ItemStatus::Idle,
+            ..QueueItem::default()
+        }
+    }
+
+    fn test_core_with_output_dir() -> (SharedCore, tempfile::TempDir) {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().to_string_lossy().into_owned();
+        {
+            let mut core = shared.lock();
+            core.output_dir = path.clone();
+            core.settings.output_dir = path;
+        }
+        (shared, dir)
+    }
+
+    #[test]
+    fn start_downloads_rejects_empty_queue() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.items.clear();
+        core.update_status();
+        assert!(matches!(
+            core.start_downloads(),
+            Err(DownloadStartError::EmptyQueue)
+        ));
+    }
+
+    #[test]
+    fn start_downloads_rejects_when_paused() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.items.push(sample_idle_item(1));
+        core.update_status();
+        core.pause_all_downloads();
+        assert!(matches!(
+            core.start_downloads(),
+            Err(DownloadStartError::Paused)
+        ));
+    }
+
+    #[test]
+    fn reorder_ready_items_updates_sort_order() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.items.clear();
+        core.items = vec![sample_idle_item(1), sample_idle_item(2)];
+        core.rebuild_item_index();
+        assert!(core.reorder_ready_items(2, 1));
+        let item2 = core.items.iter().find(|it| it.item_id == 2).unwrap();
+        assert_eq!(item2.sort_order, 1);
+    }
+
+    #[test]
+    fn remove_item_from_queue_drops_idle_row() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.items.retain(|it| it.item_id != 42);
+        core.items.push(sample_idle_item(42));
+        core.rebuild_item_index();
+        assert!(core.remove_item_from_queue(42));
+        assert!(!core.items.iter().any(|it| it.item_id == 42));
+    }
+
+    #[test]
+    fn pause_and_resume_downloads_toggle_flag() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.items.push(sample_idle_item(1));
+        core.update_status();
+        core.pause_all_downloads();
+        assert!(core.downloads_paused);
+        core.resume_all_downloads();
+        assert!(!core.downloads_paused);
+    }
+
+    #[test]
+    fn retry_failed_items_requires_failed_rows() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.has_yt_dlp = true;
+        assert!(matches!(
+            core.retry_failed_items(),
+            Err(RetryFailedError::NothingToRetry)
+        ));
+    }
+}
