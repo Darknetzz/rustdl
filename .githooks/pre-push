@@ -16,7 +16,7 @@ MINGW* | MSYS* | CYGWIN* | Windows*)
 	;;
 esac
 
-# Start CMD in background; return 0 if it is still running shortly after spawn.
+# Start a command in background; return 0 if it is still running or exited successfully.
 start_background() {
 	"$@" &
 	bg_pid=$!
@@ -24,8 +24,8 @@ start_background() {
 	if kill -0 "$bg_pid" 2>/dev/null; then
 		return 0
 	fi
-	wait "$bg_pid" 2>/dev/null || true
-	return 1
+	wait "$bg_pid" 2>/dev/null
+	return $?
 }
 
 # Returns 0 when a background publish task was scheduled, 1 otherwise.

@@ -27,7 +27,7 @@ pub fn apply_filename_find_replace(
     if find.is_empty() || !path.is_file() {
         return Ok(None);
     }
-    let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+    let Some(stem) = filename_stem(path) else {
         return Ok(None);
     };
     if !stem.contains(find) {
@@ -45,8 +45,17 @@ pub fn apply_filename_find_replace(
     let target = unique_path_for_stem(parent, &new_stem, &ext);
     fs::rename(path, &target)
         .with_context(|| format!("rename {} -> {}", path.display(), target.display()))?;
-    rename_matching_sidecars(parent, stem, parent, &new_stem);
+    rename_matching_sidecars(parent, &stem, parent, &new_stem);
     Ok(Some(target))
+}
+
+/// Filename stem from the last path segment (avoids Windows `file_stem` truncating at `[`).
+fn filename_stem(path: &Path) -> Option<String> {
+    let name = path.file_name()?.to_str()?;
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() && !ext.is_empty() => Some(stem.to_owned()),
+        _ => Some(name.to_owned()),
+    }
 }
 
 fn unique_path_for_stem(parent: &Path, stem: &str, ext: &str) -> PathBuf {
@@ -106,6 +115,14 @@ fn rename_matching_sidecars(
 mod tests {
     use super::*;
     use std::fs::File;
+
+    #[test]
+    fn filename_stem_parses_bracketed_names() {
+        assert_eq!(
+            filename_stem(Path::new("foo [abc123].mp4")).as_deref(),
+            Some("foo [abc123]")
+        );
+    }
 
     #[test]
     fn replace_in_stem_renames_file() {

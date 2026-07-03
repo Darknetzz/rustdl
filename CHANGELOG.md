@@ -27,6 +27,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Queue cards no longer stay on **Fetching thumbnail** while yt-dlp metadata is still loading (**Fetching metadata…** until resolve completes, then thumbnail fetch retries with the resolved preview URL).
 - Video Converter: corrupt or partial source files (e.g. **moov atom not found**) show a plain-language error and skip the pointless CPU encoder retry.
 - Large idle download queues feel smoother: list layout virtualizes sooner (12+ rows per group), idle output-folder rescans run less often, and queue scrolling no longer uses animated repaints.
+- **pre-push** hook on Unix no longer aborts `git push github dev` when the background publish script finishes in under half a second (still fails on non-zero exit).
 - **pre-push** hook fails when `git push github dev` cannot schedule the background **rustdl-dev** / stable release publish (instead of always succeeding silently).
 
 ### Documentation
