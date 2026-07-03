@@ -1154,6 +1154,49 @@ impl DownloadCore {
         }
     }
 
+    /// Find/replace in the downloaded file stem when configured; logs warnings on failure.
+    pub fn apply_post_download_filename_rewrite_for_item(&mut self, item_id: u64) {
+        let find = self.settings.post_download_filename_find.trim();
+        if find.is_empty() {
+            return;
+        }
+        let Some(idx) = self.item_idx(item_id) else {
+            return;
+        };
+        let item = self.items[idx].clone();
+        let output_dir = self.effective_output_dir();
+        let source = item
+            .local_path
+            .as_ref()
+            .and_then(|p| crate::domain::done_file_index::resolve_path_under_output(&output_dir, p))
+            .or_else(|| {
+                self.done_file_index
+                    .find_path_for_queue_item(&output_dir, &item)
+                    .map(|(p, _)| p)
+            });
+        let Some(source) = source else {
+            return;
+        };
+        match crate::filename_rewrite::apply_filename_find_replace(
+            &source,
+            find,
+            &self.settings.post_download_filename_replace,
+        ) {
+            Ok(Some(path)) => {
+                let saved = path.to_string_lossy().into_owned();
+                self.items[idx].local_path = Some(saved.clone());
+                self.schedule_done_file_lookup_refresh();
+                self.append_log(&format!("[item {item_id}] Renamed download → {}", saved));
+            }
+            Ok(None) => {}
+            Err(e) => {
+                self.append_log(&format!(
+                    "[item {item_id}] Post-download filename replace failed: {e:#}"
+                ));
+            }
+        }
+    }
+
     /// Reorders Ready (Idle) items by drag-and-drop; returns false when ids are invalid.
     pub fn reorder_ready_items(&mut self, dragged_id: u64, target_id: u64) -> bool {
         if dragged_id == target_id {

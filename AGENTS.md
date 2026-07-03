@@ -111,7 +111,7 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | **`src/app/videos_panel.rs`** | Download queue panel (docked + floating); `VideosQueueLayout` scroll/footer math |
 | **`src/app/cards.rs`** | Preview cards / list rows, **More info** popup, per-item actions |
 | **`src/app/convert_panel.rs`** | Video Converter queue UI |
-| **`src/app/settings_panel.rs`** | Settings window (Shared / Downloader / Converter / Web UI tabs) |
+| **`src/app/settings_panel.rs`** | Settings window (General / Downloader / Converter / Web UI tabs) |
 | **`src/app/log_panel.rs`** | Activity log (docked under queue + floating window) |
 | **`src/app/watchlist_panel.rs`** | Quality watchlist collapsible panel |
 | **`src/app/command_palette.rs`** | `Ctrl+K` command palette |

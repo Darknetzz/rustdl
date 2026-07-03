@@ -30,6 +30,8 @@ pub struct ConvertPresetFields {
     pub convert_rename_original: bool,
     pub convert_output_dir: String,
     pub convert_post_move_subfolder: String,
+    pub convert_post_filename_find: String,
+    pub convert_post_filename_replace: String,
     pub convert_copy_subtitles: bool,
     pub convert_write_checksum: bool,
     pub convert_audio_extract: String,
@@ -60,6 +62,8 @@ impl Default for ConvertPresetFields {
             convert_rename_original: false,
             convert_output_dir: String::new(),
             convert_post_move_subfolder: String::new(),
+            convert_post_filename_find: String::new(),
+            convert_post_filename_replace: String::new(),
             convert_copy_subtitles: false,
             convert_write_checksum: false,
             convert_audio_extract: "none".to_owned(),
@@ -122,6 +126,8 @@ impl ConvertPresetFields {
             convert_rename_original: settings.convert_rename_original,
             convert_output_dir: settings.convert_output_dir.clone(),
             convert_post_move_subfolder: settings.convert_post_move_subfolder.clone(),
+            convert_post_filename_find: settings.convert_post_filename_find.clone(),
+            convert_post_filename_replace: settings.convert_post_filename_replace.clone(),
             convert_copy_subtitles: settings.convert_copy_subtitles,
             convert_write_checksum: settings.convert_write_checksum,
             convert_audio_extract: settings.convert_audio_extract.clone(),
@@ -151,6 +157,8 @@ impl ConvertPresetFields {
         settings.convert_rename_original = self.convert_rename_original;
         settings.convert_output_dir = self.convert_output_dir.clone();
         settings.convert_post_move_subfolder = self.convert_post_move_subfolder.clone();
+        settings.convert_post_filename_find = self.convert_post_filename_find.clone();
+        settings.convert_post_filename_replace = self.convert_post_filename_replace.clone();
         settings.convert_copy_subtitles = self.convert_copy_subtitles;
         settings.convert_write_checksum = self.convert_write_checksum;
         settings.convert_audio_extract = self.convert_audio_extract.clone();

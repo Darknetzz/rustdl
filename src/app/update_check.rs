@@ -164,13 +164,13 @@ fn github_request(
 fn github_api_error(status: reqwest::StatusCode, has_token: bool) -> String {
     if status.as_u16() == 404 && !has_token {
         "GitHub returned 404. If the repository is private, add a personal access token in \
-         Settings → Shared (GitHub releases token), or set RUSTDL_GITHUB_TOKEN."
+         Settings → General → Backup (GitHub releases token), or set RUSTDL_GITHUB_TOKEN."
             .to_owned()
     } else if status.as_u16() == 404 {
         "GitHub returned 404 (no releases found, or the token lacks access to this repository)."
             .to_owned()
     } else if status.as_u16() == 401 {
-        "GitHub rejected the token (HTTP 401). Check Settings → Shared → GitHub releases token."
+        "GitHub rejected the token (HTTP 401). Check Settings → General → Backup → GitHub releases token."
             .to_owned()
     } else {
         format!("HTTP {status}")

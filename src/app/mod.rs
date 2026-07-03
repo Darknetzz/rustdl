@@ -70,10 +70,19 @@ use crate::ytdlp_download_args::{
 const INPUT_SUMMARY_HOLD_SECS: f64 = 2.5;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum SettingsTab {
-    Shared,
+    General,
     Downloader,
     Convert,
     WebUi,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum GeneralSettingsSubTab {
+    Appearance,
+    PanelsLog,
+    System,
+    Tools,
+    Backup,
 }
 
 pub(super) fn settings_tab_from_str(s: &str) -> SettingsTab {
@@ -81,16 +90,36 @@ pub(super) fn settings_tab_from_str(s: &str) -> SettingsTab {
         "downloader" => SettingsTab::Downloader,
         "convert" => SettingsTab::Convert,
         "web" | "web_ui" => SettingsTab::WebUi,
-        _ => SettingsTab::Shared,
+        _ => SettingsTab::General,
     }
 }
 
 pub(super) fn settings_tab_to_str(tab: SettingsTab) -> &'static str {
     match tab {
-        SettingsTab::Shared => "shared",
+        SettingsTab::General => "general",
         SettingsTab::Downloader => "downloader",
         SettingsTab::Convert => "convert",
         SettingsTab::WebUi => "web",
+    }
+}
+
+pub(super) fn general_settings_subtab_from_str(s: &str) -> GeneralSettingsSubTab {
+    match s.trim().to_ascii_lowercase().as_str() {
+        "panels" | "panels_log" | "layout" => GeneralSettingsSubTab::PanelsLog,
+        "system" => GeneralSettingsSubTab::System,
+        "tools" | "executables" => GeneralSettingsSubTab::Tools,
+        "backup" | "advanced" => GeneralSettingsSubTab::Backup,
+        _ => GeneralSettingsSubTab::Appearance,
+    }
+}
+
+pub(super) fn general_settings_subtab_to_str(tab: GeneralSettingsSubTab) -> &'static str {
+    match tab {
+        GeneralSettingsSubTab::Appearance => "appearance",
+        GeneralSettingsSubTab::PanelsLog => "panels",
+        GeneralSettingsSubTab::System => "system",
+        GeneralSettingsSubTab::Tools => "tools",
+        GeneralSettingsSubTab::Backup => "backup",
     }
 }
 
@@ -179,6 +208,7 @@ pub struct PydlApp {
     input_urls_snapshot: String,
     auto_add_after: Option<f64>,
     settings_tab: SettingsTab,
+    general_settings_subtab: GeneralSettingsSubTab,
     session_restore_prompt_open: bool,
     session_restore_downloader_count: usize,
     session_restore_convert_count: usize,
@@ -373,6 +403,8 @@ impl PydlApp {
         let thumb_semaphore = Arc::new(Semaphore::new(8));
         let convert_mode = settings.last_mode == "convert";
         let settings_tab = settings_tab_from_str(&settings.settings_tab);
+        let general_settings_subtab =
+            general_settings_subtab_from_str(&settings.settings_general_subtab);
         let log_filter = LogFilter::from_slug(&settings.log_filter);
         let queue_search = settings.queue_search.clone();
         let applied_theme = settings.theme.clone();
@@ -447,6 +479,7 @@ impl PydlApp {
             input_urls_snapshot: String::new(),
             auto_add_after: None,
             settings_tab,
+            general_settings_subtab,
             session_restore_prompt_open,
             session_restore_downloader_count,
             session_restore_convert_count,
@@ -1069,6 +1102,14 @@ impl PydlApp {
         }
     }
 
+    pub(super) fn sync_general_settings_subtab_to_disk(&mut self) {
+        let subtab = general_settings_subtab_to_str(self.general_settings_subtab);
+        if self.settings.settings_general_subtab != subtab {
+            self.settings.settings_general_subtab = subtab.to_owned();
+            self.persist_settings();
+        }
+    }
+
     pub(super) fn persist_ui_prefs(&mut self) {
         self.settings.queue_search = self.queue_search.clone();
         self.settings.log_filter = self.log_filter.slug().to_owned();
@@ -1144,7 +1185,7 @@ impl PydlApp {
             } else {
                 self.tray_build_failed = true;
                 eprintln!(
-                    "rustdl: system tray unavailable; turn off 'Minimize to system tray' in Settings → Shared"
+                    "rustdl: system tray unavailable; turn off 'Minimize to system tray' in Settings → General → System"
                 );
             }
         }

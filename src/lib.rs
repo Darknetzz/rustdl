@@ -14,6 +14,7 @@ pub mod convert_state;
 pub mod disk_space;
 pub mod domain;
 pub mod download_organize;
+pub mod filename_rewrite;
 pub mod external_tools;
 pub mod http_client;
 pub mod log_filter;

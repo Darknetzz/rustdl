@@ -24,9 +24,15 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: Some("Settings"),
     },
     PaletteCommandJson {
+        id: "settings_general",
+        label: "Settings → General tab",
+        keywords: "general shared global theme layout",
+        section: None,
+    },
+    PaletteCommandJson {
         id: "settings_shared",
-        label: "Settings → Shared tab",
-        keywords: "shared global theme layout",
+        label: "Settings → General tab",
+        keywords: "shared general global theme layout",
         section: None,
     },
     PaletteCommandJson {

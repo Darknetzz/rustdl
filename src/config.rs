@@ -260,9 +260,12 @@ pub struct AppSettings {
     /// Last top-level mode: `downloader` or `convert`.
     #[serde(default = "default_last_mode")]
     pub last_mode: String,
-    /// Last settings tab: `shared`, `downloader`, or `convert`.
+    /// Last settings tab: `general`, `downloader`, `convert`, or `web`.
     #[serde(default = "default_settings_tab")]
     pub settings_tab: String,
+    /// Last General settings sub-tab: `appearance`, `panels`, `system`, `tools`, or `backup`.
+    #[serde(default = "default_settings_general_subtab")]
+    pub settings_general_subtab: String,
     /// UI theme: `dark`, `light`, or `system`.
     #[serde(default = "default_theme")]
     pub theme: String,
@@ -278,6 +281,12 @@ pub struct AppSettings {
     /// After download, move files into the organize layout when presets are active.
     #[serde(default)]
     pub post_download_organize: bool,
+    /// After download, find this substring in the filename stem (empty = skip).
+    #[serde(default)]
+    pub post_download_filename_find: String,
+    /// After download, replace matches in the filename stem with this text.
+    #[serde(default)]
+    pub post_download_filename_replace: String,
     /// Quality preset: `best`, `1080p`, `720p`, `audio`, or `custom`.
     #[serde(default = "default_quality_preset")]
     pub quality_preset: String,
@@ -381,6 +390,12 @@ pub struct AppSettings {
     /// After encode: move output into this subfolder under the output directory (empty = skip).
     #[serde(default)]
     pub convert_post_move_subfolder: String,
+    /// After encode, find this substring in the output filename stem (empty = skip).
+    #[serde(default)]
+    pub convert_post_filename_find: String,
+    /// After encode, replace matches in the output filename stem with this text.
+    #[serde(default)]
+    pub convert_post_filename_replace: String,
     /// After encode: copy sidecar subtitle files next to output.
     #[serde(default)]
     pub convert_copy_subtitles: bool,
@@ -521,7 +536,11 @@ fn default_last_mode() -> String {
 }
 
 fn default_settings_tab() -> String {
-    "shared".to_owned()
+    "general".to_owned()
+}
+
+fn default_settings_general_subtab() -> String {
+    "appearance".to_owned()
 }
 
 fn default_theme() -> String {
@@ -735,11 +754,14 @@ impl Default for AppSettings {
             convert_remember_queue: true,
             last_mode: default_last_mode(),
             settings_tab: default_settings_tab(),
+            settings_general_subtab: default_settings_general_subtab(),
             theme: default_theme(),
             output_filename_template: default_output_filename_template(),
             download_organize_folder: default_download_organize_folder(),
             download_organize_filename: default_download_organize_filename(),
             post_download_organize: false,
+            post_download_filename_find: String::new(),
+            post_download_filename_replace: String::new(),
             quality_preset: default_quality_preset(),
             quality_format_custom: String::new(),
             download_min_height: 0,
@@ -775,6 +797,8 @@ impl Default for AppSettings {
             convert_watch_folder_enabled: false,
             convert_output_dir: String::new(),
             convert_post_move_subfolder: String::new(),
+            convert_post_filename_find: String::new(),
+            convert_post_filename_replace: String::new(),
             convert_copy_subtitles: false,
             convert_write_checksum: false,
             convert_audio_extract: default_convert_audio_extract(),
@@ -1019,7 +1043,16 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
         "downloader" => "downloader".to_owned(),
         "convert" | "av1" => "convert".to_owned(),
         "web" | "web_ui" => "web".to_owned(),
-        _ => "shared".to_owned(),
+        "general" | "shared" => "general".to_owned(),
+        _ => "general".to_owned(),
+    };
+    let general_subtab = cfg.settings_general_subtab.trim().to_ascii_lowercase();
+    cfg.settings_general_subtab = match general_subtab.as_str() {
+        "panels" | "panels_log" | "layout" => "panels".to_owned(),
+        "system" => "system".to_owned(),
+        "tools" | "executables" => "tools".to_owned(),
+        "backup" | "advanced" => "backup".to_owned(),
+        _ => "appearance".to_owned(),
     };
     let theme = cfg.theme.trim().to_ascii_lowercase();
     cfg.theme = match theme.as_str() {

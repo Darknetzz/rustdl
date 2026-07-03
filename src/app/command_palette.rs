@@ -20,8 +20,8 @@ const COMMANDS: &[PaletteCommand] = &[
         section: Some("Settings"),
     },
     PaletteCommand {
-        label: "Settings → Shared tab",
-        keywords: "shared global theme layout ui scale",
+        label: "Settings → General tab",
+        keywords: "general shared global theme layout ui scale appearance",
         section: None,
     },
     PaletteCommand {
@@ -311,8 +311,8 @@ impl PydlApp {
     fn run_command_palette_action(&mut self, label: &str, ctx: &egui::Context) {
         match label {
             "Open Settings" => self.settings_open = true,
-            "Settings → Shared tab" => {
-                self.settings_tab = SettingsTab::Shared;
+            "Settings → General tab" => {
+                self.settings_tab = SettingsTab::General;
                 self.settings_open = true;
                 self.sync_settings_tab_to_disk();
             }

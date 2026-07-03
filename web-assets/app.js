@@ -3183,6 +3183,8 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-organize-filename", s.download_organize_filename || "title_id");
   setVal("set-output-template", s.output_filename_template);
   setCheck("set-post-organize", s.post_download_organize);
+  setVal("set-post-download-filename-find", s.post_download_filename_find);
+  setVal("set-post-download-filename-replace", s.post_download_filename_replace);
   setVal("set-quality", s.quality_preset);
   setVal("set-quality-custom", s.quality_format_custom);
   setVal("set-download-min-height", s.download_min_height ?? 0);
@@ -3250,6 +3252,8 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-convert-audio-extract", s.convert_audio_extract || "none");
   setCheck("set-convert-copy-subtitles", s.convert_copy_subtitles);
   setCheck("set-convert-write-checksum", s.convert_write_checksum);
+  setVal("set-convert-post-filename-find", s.convert_post_filename_find);
+  setVal("set-convert-post-filename-replace", s.convert_post_filename_replace);
   setVal("set-convert-post-move-subfolder", s.convert_post_move_subfolder);
   setVal("set-convert-max-hw-encodes", s.convert_max_hw_encodes ?? 0);
 
@@ -3309,6 +3313,10 @@ function collectSettingsForm(base) {
   s.download_organize_filename = document.getElementById("set-organize-filename").value;
   s.output_filename_template = document.getElementById("set-output-template").value;
   s.post_download_organize = document.getElementById("set-post-organize").checked;
+  s.post_download_filename_find =
+    document.getElementById("set-post-download-filename-find")?.value || "";
+  s.post_download_filename_replace =
+    document.getElementById("set-post-download-filename-replace")?.value || "";
   s.quality_preset = document.getElementById("set-quality").value;
   s.quality_format_custom = document.getElementById("set-quality-custom").value;
   s.download_min_height =
@@ -3394,6 +3402,10 @@ function collectSettingsForm(base) {
     document.getElementById("set-convert-copy-subtitles")?.checked ?? false;
   s.convert_write_checksum =
     document.getElementById("set-convert-write-checksum")?.checked ?? false;
+  s.convert_post_filename_find =
+    document.getElementById("set-convert-post-filename-find")?.value || "";
+  s.convert_post_filename_replace =
+    document.getElementById("set-convert-post-filename-replace")?.value || "";
   s.convert_post_move_subfolder =
     document.getElementById("set-convert-post-move-subfolder")?.value || "";
   s.convert_max_hw_encodes =
@@ -3436,14 +3448,47 @@ function collectSettingsForm(base) {
   return s;
 }
 
-function switchSettingsTab(name) {
-  document.querySelectorAll(".settings-tab").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tab === name);
+function normalizeSettingsTabName(name) {
+  if (name === "shared") return "general";
+  return name;
+}
+
+function normalizeGeneralSubtabName(name) {
+  const n = (name || "appearance").trim().toLowerCase();
+  if (n === "panels_log" || n === "layout") return "panels";
+  if (n === "executables") return "tools";
+  if (n === "advanced") return "backup";
+  if (["appearance", "panels", "system", "tools", "backup"].includes(n)) return n;
+  return "appearance";
+}
+
+function switchGeneralSubtab(name, persist = false) {
+  const subtab = normalizeGeneralSubtabName(name);
+  document.querySelectorAll(".settings-subtab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.generalSubtab === subtab);
   });
-  document.getElementById("settings-tab-shared").hidden = name !== "shared";
-  document.getElementById("settings-tab-downloader").hidden = name !== "downloader";
-  document.getElementById("settings-tab-convert").hidden = name !== "convert";
-  document.getElementById("settings-tab-webui").hidden = name !== "webui";
+  for (const id of ["appearance", "panels", "system", "tools", "backup"]) {
+    const panel = document.getElementById(`general-subtab-${id}`);
+    if (panel) {
+      const active = id === subtab;
+      panel.hidden = !active;
+      panel.classList.toggle("active", active);
+    }
+  }
+  if (persist && cachedSettings && cachedSettings.settings_general_subtab !== subtab) {
+    patchHostSettings({ settings_general_subtab: subtab }).catch(console.error);
+  }
+}
+
+function switchSettingsTab(name) {
+  const tab = normalizeSettingsTabName(name);
+  document.querySelectorAll(".settings-tab").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.tab === tab || btn.dataset.tab === name);
+  });
+  document.getElementById("settings-tab-general").hidden = tab !== "general";
+  document.getElementById("settings-tab-downloader").hidden = tab !== "downloader";
+  document.getElementById("settings-tab-convert").hidden = tab !== "convert";
+  document.getElementById("settings-tab-webui").hidden = tab !== "webui";
 }
 
 async function refreshQueueTemplatesList() {
@@ -3503,6 +3548,7 @@ async function openSettingsDialog(tab) {
   refreshQueueTemplatesList().catch(() => {});
   document.getElementById("settings-dialog").showModal();
   if (tab) switchSettingsTab(tab);
+  switchGeneralSubtab(cachedSettings.settings_general_subtab || "appearance");
 }
 
 async function patchHostSettings(patch) {
@@ -3795,6 +3841,10 @@ document.getElementById("settings-form").onsubmit = async (e) => {
 
 document.querySelectorAll(".settings-tab").forEach((btn) => {
   btn.onclick = () => switchSettingsTab(btn.dataset.tab);
+});
+
+document.querySelectorAll(".settings-subtab").forEach((btn) => {
+  btn.onclick = () => switchGeneralSubtab(btn.dataset.generalSubtab, true);
 });
 
 document.getElementById("set-quality").onchange = updateQualityCustomVisibility;
@@ -4420,7 +4470,7 @@ function renderConvertEncoder(data) {
   if (!el) return;
   const parts = [];
   if (data.encoder) parts.push(`Encoder: ${data.encoder.label}`);
-  else if (!data.has_ffmpeg) parts.push("Encoder: ffmpeg not found (set the path in Settings → Shared)");
+  else if (!data.has_ffmpeg) parts.push("Encoder: ffmpeg not found (set the path in Settings → General → Tools)");
   if (!data.has_ffprobe) parts.push("ffprobe not found — metadata and start are disabled");
   el.textContent = parts.join(" · ");
 }

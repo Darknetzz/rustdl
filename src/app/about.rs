@@ -207,7 +207,7 @@ impl PydlApp {
                 ui.label(
                     RichText::new(
                         "Checks GitHub releases for Darknetzz/rustdl. Private repos need a token in \
-                         Settings → Shared. On Windows, Download update fetches rustdl.exe and Restart \
+                         Settings → General → Backup. On Windows, Download update fetches rustdl.exe and Restart \
                          replaces the running binary.",
                     )
                     .small()

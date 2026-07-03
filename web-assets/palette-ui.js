@@ -4,7 +4,8 @@ let PALETTE_COMMANDS = [];
 
 const PALETTE_ACTIONS = {
   open_settings: () => openSettingsDialog(),
-  settings_shared: () => openSettingsDialog("shared"),
+  settings_general: () => openSettingsDialog("general"),
+  settings_shared: () => openSettingsDialog("general"),
   settings_downloader: () => openSettingsDialog("downloader"),
   settings_convert: () => openSettingsDialog("convert"),
   settings_webui: () => openSettingsDialog("webui"),

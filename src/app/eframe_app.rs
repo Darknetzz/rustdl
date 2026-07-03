@@ -280,7 +280,7 @@ impl eframe::App for PydlApp {
                     ui.colored_label(
                         LOG_COLOR_WARN,
                         format!(
-                            "Setup hint: missing {} — configure in Settings → Shared → Executables.",
+                            "Setup hint: missing {} — configure in Settings → General → Tools.",
                             missing.join(", ")
                         ),
                     );

@@ -410,9 +410,26 @@ impl DownloadCore {
         self.bump_generation();
     }
 
-    pub fn apply_convert_post_encode_actions(&mut self, source_path: &str, output_path: &str) {
+    pub fn apply_convert_post_encode_actions(&mut self, source_path: &str, output_path: &str) -> String {
         let source = std::path::Path::new(source_path);
-        let output = std::path::Path::new(output_path);
+        let mut output = std::path::PathBuf::from(output_path);
+        let find = self.settings.convert_post_filename_find.trim();
+        if !find.is_empty() {
+            match crate::filename_rewrite::apply_filename_find_replace(
+                &output,
+                find,
+                &self.settings.convert_post_filename_replace,
+            ) {
+                Ok(Some(path)) => {
+                    self.append_log(&format!("Convert: renamed output to {}", path.display()));
+                    output = path;
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    self.append_log(&format!("Convert: filename replace failed: {err:#}"));
+                }
+            }
+        }
         if self.settings.convert_copy_subtitles {
             if let Some(stem) = source.file_stem().and_then(|s| s.to_str()) {
                 if let Some(parent) = output.parent() {
@@ -440,14 +457,15 @@ impl DownloadCore {
                             .file_name()
                             .unwrap_or_else(|| std::ffi::OsStr::new("output")),
                     );
-                    if std::fs::rename(output, &dest).is_ok() {
+                    if std::fs::rename(&output, &dest).is_ok() {
                         self.append_log(&format!("Convert: moved output to {}", dest.display()));
+                        output = dest;
                     }
                 }
             }
         }
         if self.settings.convert_write_checksum && output.is_file() {
-            if let Ok(meta) = std::fs::metadata(output) {
+            if let Ok(meta) = std::fs::metadata(&output) {
                 let sidecar = output.with_extension("sha256.txt");
                 let _ = std::fs::write(
                     sidecar,
@@ -461,7 +479,7 @@ impl DownloadCore {
             && output.is_file()
         {
             let cfg = self.convert_config();
-            match transcode::extract_audio_sidecar(source, output, &cfg, None, |line| {
+            match transcode::extract_audio_sidecar(source, &output, &cfg, None, |line| {
                 self.append_log(&format!("Convert: {line}"));
             }) {
                 Ok(path) => {
@@ -472,6 +490,7 @@ impl DownloadCore {
                 }
             }
         }
+        output.to_string_lossy().into_owned()
     }
 
     pub fn clear_convert_queue(&mut self) {

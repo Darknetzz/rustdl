@@ -154,7 +154,7 @@ Track URLs whose source quality may improve over time (e.g. a live premiere that
 - Supports recursive scan, dry-run, overwrite, delete original, rename to original filename, and optional re-encode when input already matches the target codec.
 - Queue items are remembered between sessions until you click **Clear** (disable in Settings → Converter → *Remember Convert queue between sessions* to start fresh each launch).
 - Encoder auto-detect per target: AV1 → `av1_nvenc` → `av1_amf` → `libsvtav1`; H.265 → `hevc_nvenc` → `hevc_amf` → `libx265`; H.264 → `h264_nvenc` → `h264_amf` → `libx264`.
-- Uses the shared **ffmpeg** and **ffprobe** paths from Settings → Shared.
+- Uses the shared **ffmpeg** and **ffprobe** paths from Settings → General → Tools.
 
 ## Settings
 
@@ -164,7 +164,7 @@ Settings are split into tabs:
 
 ### General
 
-Settings tabs in the app are named **Shared**, **Downloader**, **Video Converter**, and **Web UI**. The table below uses descriptive names; open **Settings → Shared** for executables, UI scale, subprocess priority, and GitHub token.
+Settings tabs in the app are named **General**, **Downloader**, **Video Converter**, and **Web UI**. The **General** tab has sub-sections (**Appearance**, **Panels & log**, **System**, **Tools**, **Backup**). The table below uses descriptive names; open **Settings → General** for UI scale, subprocess priority, executables, and GitHub token.
 
 | Setting | Description |
 | --- | --- |

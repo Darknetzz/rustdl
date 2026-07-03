@@ -299,6 +299,7 @@ impl super::core::DownloadCore {
         detail: String,
         final_output_path: Option<String>,
     ) {
+        let mut post_encode_paths: Option<(String, String)> = None;
         if let Some(idx) = self.convert_item_idx(item_id) {
             let it = &mut self.convert_items[idx];
             if !ok && convert_detail_is_user_cancellation(&detail) {
@@ -349,9 +350,8 @@ impl super::core::DownloadCore {
                                     saved_detail = format!("{saved_detail} · WARNING: {limit_msg}");
                                 }
                                 it.detail = saved_detail;
-                                let source = it.source_path.clone();
-                                let out = it.output_path.clone();
-                                self.apply_convert_post_encode_actions(&source, &out);
+                                post_encode_paths =
+                                    Some((it.source_path.clone(), it.output_path.clone()));
                             }
                         }
                     } else {
@@ -361,6 +361,12 @@ impl super::core::DownloadCore {
                     it.detail = detail.clone();
                 }
             }
+        }
+        if let (Some(idx), Some((source, out))) =
+            (self.convert_item_idx(item_id), post_encode_paths)
+        {
+            let final_path = self.apply_convert_post_encode_actions(&source, &out);
+            self.convert_items[idx].output_path = final_path;
         }
         self.convert_duration_ms.remove(&item_id);
         self.convert_progress_state.remove(&item_id);
@@ -545,6 +551,7 @@ impl super::core::DownloadCore {
             self.schedule_done_file_lookup_refresh();
             self.bind_local_path_for_item(item_id);
             self.apply_post_download_organize_for_item(item_id);
+            self.apply_post_download_filename_rewrite_for_item(item_id);
             if let Some(msg) = self.verify_done_item_streams(item_id) {
                 completed = false;
                 final_detail = msg;

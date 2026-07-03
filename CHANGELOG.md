@@ -12,11 +12,13 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- **Filename find/replace** — Settings → Downloader and Settings → Video Converter: optional find/replace in the output filename stem after each download or encode (e.g. strip ` [id]` or `-av1` suffix). Matching subtitle and yt-dlp sidecar files are renamed with the video.
 - LAN web UI: **More info** per download row (yt-dlp source + ffprobe file details), **Quality watchlist** panel and settings, settings **export/import**, host **Browse** buttons for output folder, cookies, convert paths, and watch folder, and server-driven **command palette** manifest.
 - Shared layout and organize preset APIs (`POST /api/settings/layout-preset/{name}`, `POST /api/settings/organize-preset/{name}`) so desktop and web apply identical preset behavior.
 
 ### Changed
 
+- Settings **General** tab (formerly Shared) is split into sub-sections: **Appearance**, **Panels & log**, **System**, **Tools**, and **Backup**; the last-opened sub-section is remembered.
 - Video Converter: encoded files are written next to each source file by default instead of the downloader **Output folder**; set **Output folder** under Settings → Video Converter to override.
 - Downloader queue **Copy URL** briefly shows **Copied!** on desktop (card and list rows) and a toast on the LAN web UI.
 

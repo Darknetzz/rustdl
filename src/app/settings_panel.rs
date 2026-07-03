@@ -14,7 +14,7 @@ use crate::profiles::{
 };
 use crate::ui_icons;
 
-use super::{DownloadPreset, PydlApp, SettingsTab, LOG_COLOR_WARN};
+use super::{DownloadPreset, GeneralSettingsSubTab, PydlApp, SettingsTab, LOG_COLOR_WARN};
 
 const WEB_TOKEN_COPY_FEEDBACK_SECS: f64 = 2.0;
 const SETTINGS_FORM_LABEL_WIDTH: f32 = 240.0;
@@ -246,6 +246,435 @@ impl PydlApp {
         changed
     }
 
+    fn draw_general_appearance_settings(
+        &mut self,
+        ui: &mut egui::Ui,
+        changed: &mut bool,
+    ) {
+        ui.label(RichText::new("Cards and queue layout").strong());
+        settings_form_grid(ui, "general_appearance_cards", |ui| {
+            let show_thumbnails_changed =
+                settings_checkbox(ui, "Show thumbnails in cards", &mut self.settings.show_thumbnails);
+            *changed |= show_thumbnails_changed;
+            if show_thumbnails_changed && self.settings.show_thumbnails {
+                self.thumbnail_attempted.clear();
+            }
+            *changed |= settings_checkbox(ui, "Use compact cards", &mut self.settings.compact_cards);
+            *changed |= settings_checkbox(
+                ui,
+                "Hide card subtitle/uploader",
+                &mut self.settings.hide_card_subtitle,
+            );
+            *changed |= settings_checkbox(
+                ui,
+                "List layout for queue cards (denser)",
+                &mut self.settings.card_list_layout,
+            );
+            ui.label("UI scale");
+            left_button_row(ui, |ui| {
+                let pct = (self.settings.ui_scale * 100.0).round() as i32;
+                let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
+                let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
+                button_group(ui, "ui_scale", |g| {
+                    if g
+                        .secondary("−", !at_min)
+                        .on_hover_text("Decrease UI scale")
+                        .clicked()
+                    {
+                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
+                        *changed = true;
+                    }
+                    if g
+                        .add(|ui| {
+                            ui.add(
+                                egui::Label::new(RichText::new(format!("{pct:>3}%")).strong())
+                                    .sense(egui::Sense::click()),
+                            )
+                            .on_hover_text("Reset to 100%")
+                        })
+                        .clicked()
+                        && (self.settings.ui_scale - 1.0).abs() > f32::EPSILON
+                    {
+                        self.settings.ui_scale = snap_ui_scale(1.0);
+                        *changed = true;
+                    }
+                    if g
+                        .secondary("+", !at_max)
+                        .on_hover_text("Increase UI scale")
+                        .clicked()
+                    {
+                        bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
+                        *changed = true;
+                    }
+                });
+            });
+            ui.end_row();
+            ui.label("Theme");
+            egui::ComboBox::from_id_salt("settings_theme")
+                .selected_text(self.settings.theme.clone())
+                .show_ui(ui, |ui| {
+                    *changed |= ui
+                        .selectable_value(&mut self.settings.theme, "dark".to_owned(), "Dark")
+                        .changed();
+                    *changed |= ui
+                        .selectable_value(&mut self.settings.theme, "light".to_owned(), "Light")
+                        .changed();
+                    *changed |= ui
+                        .selectable_value(
+                            &mut self.settings.theme,
+                            "system".to_owned(),
+                            "System",
+                        )
+                        .changed();
+                });
+            ui.end_row();
+        });
+        ui.label(RichText::new("Display limits").strong());
+        settings_form_grid(ui, "general_display_limits", |ui| {
+            ui.label("Max content width");
+            *changed |= ui
+                .add(
+                    egui::Slider::new(&mut self.settings.max_content_width, 0.0..=1600.0)
+                        .custom_formatter(|v, _| {
+                            if v <= 0.0 {
+                                "Full width".to_owned()
+                            } else {
+                                format!("{:.0} px", v)
+                            }
+                        }),
+                )
+                .on_hover_text(
+                    "Limits how wide controls stretch on ultrawide monitors (0 = full panel width).",
+                )
+                .changed();
+            ui.end_row();
+        });
+        ui.label(RichText::new("Mode panel colors").strong());
+        ui.label(
+            RichText::new("Tint and accent stripe for Downloader and Video Converter panels.")
+                .small()
+                .color(crate::theme::text_hint(&self.settings.theme)),
+        );
+        settings_form_grid(ui, "general_mode_colors", |ui| {
+            ui.label("Downloader");
+            *changed |= crate::theme::draw_mode_color_controls(
+                ui,
+                &mut self.settings.mode_downloader_color,
+                crate::theme::MODE_DOWNLOADER,
+            );
+            ui.end_row();
+            ui.label("Video Converter");
+            *changed |= crate::theme::draw_mode_color_controls(
+                ui,
+                &mut self.settings.mode_convert_color,
+                crate::theme::MODE_CONVERT,
+            );
+            ui.end_row();
+        });
+        ui.separator();
+        ui.label(RichText::new("Layout presets").strong());
+        ui.label(
+            RichText::new(
+                "One-click display bundles (does not change download or Converter options).",
+            )
+            .small()
+            .color(Color32::GRAY),
+        );
+        left_button_row(ui, |ui| {
+            let vh = main_viewport_size(ui.ctx()).y;
+            button_group(ui, "layout_presets", |g| {
+                if g
+                    .secondary("Compact queue", true)
+                    .on_hover_text("List layout, compact cards, hide subtitle")
+                    .clicked()
+                {
+                    apply_layout_preset(&mut self.settings, "compact", Some(vh));
+                    *changed = true;
+                }
+                if g
+                    .secondary("Review mode", true)
+                    .on_hover_text("Horizontal cards with thumbnails")
+                    .clicked()
+                {
+                    apply_layout_preset(&mut self.settings, "review", Some(vh));
+                    *changed = true;
+                }
+                if g
+                    .secondary("Minimal", true)
+                    .on_hover_text("Compact list without thumbnails")
+                    .clicked()
+                {
+                    apply_layout_preset(&mut self.settings, "minimal", Some(vh));
+                    *changed = true;
+                }
+            });
+        });
+    }
+
+    fn draw_general_panels_log_settings(&mut self, ui: &mut egui::Ui, changed: &mut bool) {
+        ui.label(RichText::new("Panel layout").strong());
+        settings_form_grid(ui, "general_panel_layout", |ui| {
+            let videos_docked_before = self.settings.videos_docked;
+            *changed |= settings_checkbox(
+                ui,
+                "Dock video / Convert queue in main window",
+                &mut self.settings.videos_docked,
+            );
+            if self.settings.videos_docked != videos_docked_before {
+                self.note_videos_dock_user_choice(self.settings.videos_docked);
+            }
+            *changed |= settings_checkbox(
+                ui,
+                "Dock activity log under video queue (when queue is docked)",
+                &mut self.settings.logs_docked,
+            );
+        });
+        ui.label(RichText::new("Activity log").strong());
+        settings_form_grid(ui, "general_activity_log", |ui| {
+            *changed |= settings_checkbox(
+                ui,
+                "Autoscroll log to latest line",
+                &mut self.settings.autoscroll_log,
+            );
+            *changed |= settings_checkbox(
+                ui,
+                "Relative timestamps in activity log",
+                &mut self.settings.log_relative_time,
+            );
+            ui.label("Max log chars");
+            *changed |= ui
+                .add(
+                    egui::Slider::new(&mut self.settings.log_max_chars, 2_000..=200_000).integer(),
+                )
+                .changed();
+            ui.end_row();
+        });
+    }
+
+    fn draw_general_system_settings(&mut self, ui: &mut egui::Ui, changed: &mut bool) {
+        ui.label(RichText::new("App behavior").strong());
+        settings_form_grid(ui, "general_system_behavior", |ui| {
+            *changed |= settings_checkbox_tooltip(
+                ui,
+                "Power save during active work",
+                &mut self.settings.ui_power_save,
+                "Lower UI refresh rate while downloading or converting, \
+                 use denser queue rows sooner, and lighter activity-log rendering",
+            );
+            let tray_hover = if cfg!(target_os = "linux") {
+                "Hide the window in the notification area when you minimize or \
+                 click the close button; use the tray icon to show rustdl again \
+                 or choose Quit to exit. On Linux this uses the \
+                 StatusNotifierItem protocol (D-Bus); disabling the option may \
+                 require a restart to remove the tray icon."
+            } else {
+                "Hide the window in the notification area when you minimize or \
+                 click the close button; use the tray icon to show rustdl again \
+                 or choose Quit to exit"
+            };
+            *changed |= settings_checkbox_tooltip(
+                ui,
+                "Minimize to system tray",
+                &mut self.settings.minimize_to_tray,
+                tray_hover,
+            );
+        });
+        ui.label(RichText::new("Session restore").strong());
+        settings_form_grid(ui, "general_session_restore", |ui| {
+            ui.label("On startup");
+            egui::ComboBox::from_id_salt("settings_session_restore")
+                .selected_text(match self.settings.session_restore_preference.as_str() {
+                    "always" => "Always restore saved queues",
+                    "never" => "Never restore (start fresh)",
+                    _ => "Ask each startup",
+                })
+                .show_ui(ui, |ui| {
+                    *changed |= ui
+                        .selectable_value(
+                            &mut self.settings.session_restore_preference,
+                            "ask".to_owned(),
+                            "Ask each startup",
+                        )
+                        .changed();
+                    *changed |= ui
+                        .selectable_value(
+                            &mut self.settings.session_restore_preference,
+                            "always".to_owned(),
+                            "Always restore saved queues",
+                        )
+                        .changed();
+                    *changed |= ui
+                        .selectable_value(
+                            &mut self.settings.session_restore_preference,
+                            "never".to_owned(),
+                            "Never restore (start fresh)",
+                        )
+                        .changed();
+                });
+            ui.end_row();
+        });
+        ui.label(RichText::new("Background work priority").strong());
+        ui.label(
+            RichText::new(
+                "Lowers yt-dlp and ffmpeg process priority so downloads and encodes \
+                 are less likely to slow down other apps. Not a hard CPU/GPU cap.",
+            )
+            .small()
+            .color(Color32::GRAY),
+        );
+        let mut subprocess_priority =
+            crate::external_tools::normalize_subprocess_priority(&self.settings.subprocess_priority);
+        settings_form_grid(ui, "general_subprocess_priority", |ui| {
+            ui.label("Subprocess priority");
+            egui::ComboBox::from_id_salt("settings_subprocess_priority")
+                .selected_text(crate::external_tools::subprocess_priority_label(
+                    subprocess_priority,
+                ))
+                .show_ui(ui, |ui| {
+                    for (value, label) in [
+                        (crate::external_tools::SubprocessPriority::Normal, "Normal"),
+                        (
+                            crate::external_tools::SubprocessPriority::BelowNormal,
+                            "Below normal",
+                        ),
+                        (crate::external_tools::SubprocessPriority::Idle, "Idle"),
+                    ] {
+                        *changed |= ui.selectable_value(&mut subprocess_priority, value, label).changed();
+                    }
+                });
+            ui.end_row();
+        });
+        let priority_changed = subprocess_priority
+            != crate::external_tools::normalize_subprocess_priority(&self.settings.subprocess_priority);
+        if priority_changed {
+            self.settings.subprocess_priority =
+                crate::external_tools::subprocess_priority_storage_value(subprocess_priority)
+                    .to_owned();
+            *changed = true;
+        }
+    }
+
+    fn draw_general_tools_settings(
+        &mut self,
+        ui: &mut egui::Ui,
+        changed: &mut bool,
+        executable_paths_changed: &mut bool,
+    ) {
+        ui.label(RichText::new("Shared executables").strong());
+        ui.label("Used by the downloader and Video Converter. Leave empty to use PATH.");
+        settings_form_grid(ui, "general_executables", |ui| {
+            ui.label("ffmpeg");
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut self.settings.ffmpeg_path)
+                    .hint_text("ffmpeg.exe or full path"),
+            );
+            *changed |= resp.changed();
+            *executable_paths_changed |= resp.changed();
+            ui.end_row();
+            ui.label("ffprobe");
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut self.settings.ffprobe_path)
+                    .hint_text("ffprobe.exe or full path"),
+            );
+            *changed |= resp.changed();
+            *executable_paths_changed |= resp.changed();
+            ui.end_row();
+        });
+    }
+
+    fn draw_general_backup_settings(&mut self, ui: &mut egui::Ui, changed: &mut bool) {
+        ui.label(RichText::new("GitHub releases").strong());
+        ui.label(
+            RichText::new(
+                "Personal access token for About → Check for updates when the repository is private. \
+                 Read access to repository contents is enough. You can also set RUSTDL_GITHUB_TOKEN.",
+            )
+            .small()
+            .color(Color32::GRAY),
+        );
+        settings_form_grid(ui, "general_github", |ui| {
+            ui.label("GitHub token");
+            let resp = ui.add(
+                egui::TextEdit::singleline(&mut self.settings.github_token)
+                    .password(true)
+                    .hint_text("ghp_… or github_pat_…"),
+            );
+            *changed |= resp.changed();
+            ui.end_row();
+        });
+        ui.separator();
+        ui.label(RichText::new("Settings portability").strong());
+        left_button_row(ui, |ui| {
+            let mut export_settings = false;
+            let mut import_settings = false;
+            button_group(ui, "settings_portability", |g| {
+                g.import_export_menu(true, |ui| {
+                    if ui
+                        .button(format!("{} Export settings", ui_icons::EXPORT))
+                        .clicked()
+                    {
+                        export_settings = true;
+                    }
+                    if ui
+                        .button(format!("{} Import settings", ui_icons::IMPORT_FILE))
+                        .clicked()
+                    {
+                        import_settings = true;
+                    }
+                });
+                if g
+                    .secondary(&format!("{} Reset to defaults", ui_icons::RESET), true)
+                    .clicked()
+                {
+                    let keep_output = self.settings.output_dir.clone();
+                    self.settings = crate::config::AppSettings::default();
+                    self.settings.output_dir = keep_output.clone();
+                    self.output_dir = keep_output;
+                    *changed = true;
+                }
+            });
+            if export_settings {
+                if let Some(path) = rfd::FileDialog::new()
+                    .set_file_name("rustdl_config_export.json")
+                    .save_file()
+                {
+                    match export_settings_json(&self.settings, &path) {
+                        Ok(()) => self.append_log(&format!(
+                            "Exported settings to {}",
+                            path.to_string_lossy()
+                        )),
+                        Err(e) => self.append_log(&format!("Export settings failed: {e:#}")),
+                    }
+                }
+            }
+            if import_settings {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("JSON", &["json"])
+                    .pick_file()
+                {
+                    match import_settings_json(&path) {
+                        Ok(imported) => {
+                            self.settings = imported;
+                            self.output_dir = self.settings.output_dir.clone();
+                            self.worker_count = self.settings.worker_count.clamp(1, 6);
+                            self.settings_tab =
+                                super::settings_tab_from_str(&self.settings.settings_tab);
+                            self.general_settings_subtab = super::general_settings_subtab_from_str(
+                                &self.settings.settings_general_subtab,
+                            );
+                            *changed = true;
+                            self.append_log(&format!(
+                                "Imported settings from {}",
+                                path.to_string_lossy()
+                            ));
+                        }
+                        Err(e) => self.append_log(&format!("Import settings failed: {e:#}")),
+                    }
+                }
+            }
+        });
+    }
+
     pub(super) fn draw_settings_window(&mut self, ctx: &egui::Context) {
         if !self.settings_open {
             return;
@@ -268,8 +697,8 @@ impl PydlApp {
                     g.add(|ui| {
                         ui.selectable_value(
                             &mut self.settings_tab,
-                            SettingsTab::Shared,
-                            format!("{} Shared", ui_icons::TAB_SHARED),
+                            SettingsTab::General,
+                            format!("{} General", ui_icons::TAB_SHARED),
                         )
                     });
                     g.add(|ui| {
@@ -298,10 +727,62 @@ impl PydlApp {
                 if self.settings_tab != prev_settings_tab {
                     self.sync_settings_tab_to_disk();
                 }
+                if self.settings_tab == SettingsTab::General {
+                    let prev_general_subtab = self.general_settings_subtab;
+                    left_button_row(ui, |ui| {
+                        button_group(ui, "general_settings_subtabs", |g| {
+                            g.add(|ui| {
+                                ui.selectable_value(
+                                    &mut self.general_settings_subtab,
+                                    GeneralSettingsSubTab::Appearance,
+                                    "Appearance",
+                                )
+                            });
+                            g.add(|ui| {
+                                ui.selectable_value(
+                                    &mut self.general_settings_subtab,
+                                    GeneralSettingsSubTab::PanelsLog,
+                                    "Panels & log",
+                                )
+                            });
+                            g.add(|ui| {
+                                ui.selectable_value(
+                                    &mut self.general_settings_subtab,
+                                    GeneralSettingsSubTab::System,
+                                    "System",
+                                )
+                            });
+                            g.add(|ui| {
+                                ui.selectable_value(
+                                    &mut self.general_settings_subtab,
+                                    GeneralSettingsSubTab::Tools,
+                                    "Tools",
+                                )
+                            });
+                            g.add(|ui| {
+                                ui.selectable_value(
+                                    &mut self.general_settings_subtab,
+                                    GeneralSettingsSubTab::Backup,
+                                    "Backup",
+                                )
+                            });
+                        });
+                    });
+                    if self.general_settings_subtab != prev_general_subtab {
+                        self.sync_general_settings_subtab_to_disk();
+                    }
+                }
                 ui.separator();
+                let scroll_id = match self.settings_tab {
+                    SettingsTab::General => format!(
+                        "general_{}",
+                        super::general_settings_subtab_to_str(self.general_settings_subtab)
+                    ),
+                    _ => super::settings_tab_to_str(self.settings_tab).to_owned(),
+                };
                 let scroll_h = bounded_ui_height(ui, 240.0).max(240.0);
                 egui::ScrollArea::vertical()
-                    .id_salt(super::settings_tab_to_str(self.settings_tab))
+                    .id_salt(scroll_id)
                     .auto_shrink([false, false])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
@@ -309,450 +790,27 @@ impl PydlApp {
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         match self.settings_tab {
-                    SettingsTab::Shared => {
-                        ui.label(RichText::new("Global settings").strong());
-                        settings_form_grid(ui, "shared_global", |ui| {
-                            let show_thumbnails_changed =
-                                settings_checkbox(ui, "Show thumbnails in cards", &mut self.settings.show_thumbnails);
-                            changed |= show_thumbnails_changed;
-                            if show_thumbnails_changed && self.settings.show_thumbnails {
-                                // Allow lazy loading for already-fetched items after re-enabling thumbnails.
-                                self.thumbnail_attempted.clear();
-                            }
-                            changed |= settings_checkbox(ui, "Use compact cards", &mut self.settings.compact_cards);
-                            changed |= settings_checkbox(
-                                ui,
-                                "Hide card subtitle/uploader",
-                                &mut self.settings.hide_card_subtitle,
-                            );
-                            changed |= settings_checkbox(
-                                ui,
-                                "List layout for queue cards (denser)",
-                                &mut self.settings.card_list_layout,
-                            );
-                            changed |= settings_checkbox_tooltip(
-                                ui,
-                                "Power save during active work",
-                                &mut self.settings.ui_power_save,
-                                "Lower UI refresh rate while downloading or converting, \
-                                 use denser queue rows sooner, and lighter activity-log rendering",
-                            );
-                            let tray_hover = if cfg!(target_os = "linux") {
-                                "Hide the window in the notification area when you minimize or \
-                                 click the close button; use the tray icon to show rustdl again \
-                                 or choose Quit to exit. On Linux this uses the \
-                                 StatusNotifierItem protocol (D-Bus); disabling the option may \
-                                 require a restart to remove the tray icon."
-                            } else {
-                                "Hide the window in the notification area when you minimize or \
-                                 click the close button; use the tray icon to show rustdl again \
-                                 or choose Quit to exit"
-                            };
-                            changed |= settings_checkbox_tooltip(
-                                ui,
-                                "Minimize to system tray",
-                                &mut self.settings.minimize_to_tray,
-                                tray_hover,
-                            );
-                            changed |= settings_checkbox(
-                                ui,
-                                "Autoscroll log to latest line",
-                                &mut self.settings.autoscroll_log,
-                            );
-                            let videos_docked_before = self.settings.videos_docked;
-                            changed |= settings_checkbox(
-                                ui,
-                                "Dock video / Convert queue in main window",
-                                &mut self.settings.videos_docked,
-                            );
-                            if self.settings.videos_docked != videos_docked_before {
-                                self.note_videos_dock_user_choice(self.settings.videos_docked);
-                            }
-                            changed |= settings_checkbox(
-                                ui,
-                                "Dock activity log under video queue (when queue is docked)",
-                                &mut self.settings.logs_docked,
-                            );
-                            changed |= settings_checkbox(
-                                ui,
-                                "Relative timestamps in activity log",
-                                &mut self.settings.log_relative_time,
-                            );
-                            ui.label("UI scale");
-                            left_button_row(ui, |ui| {
-                                let pct = (self.settings.ui_scale * 100.0).round() as i32;
-                                let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
-                                let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
-                                button_group(ui, "ui_scale", |g| {
-                                    if g
-                                        .secondary("−", !at_min)
-                                        .on_hover_text("Decrease UI scale")
-                                        .clicked()
-                                    {
-                                        bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
-                                        changed = true;
-                                    }
-                                    if g
-                                        .add(|ui| {
-                                            ui.add(
-                                                egui::Label::new(
-                                                    RichText::new(format!("{pct:>3}%")).strong(),
-                                                )
-                                                .sense(egui::Sense::click()),
-                                            )
-                                            .on_hover_text("Reset to 100%")
-                                        })
-                                        .clicked()
-                                        && (self.settings.ui_scale - 1.0).abs() > f32::EPSILON
-                                    {
-                                        self.settings.ui_scale = snap_ui_scale(1.0);
-                                        changed = true;
-                                    }
-                                    if g
-                                        .secondary("+", !at_max)
-                                        .on_hover_text("Increase UI scale")
-                                        .clicked()
-                                    {
-                                        bump_ui_scale(&mut self.settings.ui_scale, UI_SCALE_STEP);
-                                        changed = true;
-                                    }
-                                });
-                            });
-                            ui.end_row();
-                            ui.label("Theme");
-                            egui::ComboBox::from_id_salt("settings_theme")
-                                .selected_text(self.settings.theme.clone())
-                                .show_ui(ui, |ui| {
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.theme,
-                                            "dark".to_owned(),
-                                            "Dark",
-                                        )
-                                        .changed();
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.theme,
-                                            "light".to_owned(),
-                                            "Light",
-                                        )
-                                        .changed();
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.theme,
-                                            "system".to_owned(),
-                                            "System",
-                                        )
-                                        .changed();
-                                });
-                            ui.end_row();
-                        });
-                        ui.label(RichText::new("Display limits").strong());
-                        settings_form_grid(ui, "shared_display_limits", |ui| {
-                            ui.label("Max log chars");
-                            changed |= ui
-                                .add(
-                                    egui::Slider::new(
-                                        &mut self.settings.log_max_chars,
-                                        2_000..=200_000,
-                                    )
-                                    .integer(),
-                                )
-                                .changed();
-                            ui.end_row();
-                            ui.label("Max content width");
-                            changed |= ui
-                                .add(
-                                    egui::Slider::new(&mut self.settings.max_content_width, 0.0..=1600.0)
-                                        .custom_formatter(|v, _| {
-                                            if v <= 0.0 {
-                                                "Full width".to_owned()
-                                            } else {
-                                                format!("{:.0} px", v)
-                                            }
-                                        }),
-                                )
-                                .on_hover_text(
-                                    "Limits how wide controls stretch on ultrawide monitors (0 = full panel width).",
-                                )
-                                .changed();
-                            ui.end_row();
-                        });
-                        ui.label(RichText::new("Mode panel colors").strong());
-                        ui.label(
-                            RichText::new(
-                                "Tint and accent stripe for Downloader and Video Converter panels.",
-                            )
-                            .small()
-                            .color(crate::theme::text_hint(&self.settings.theme)),
-                        );
-                        settings_form_grid(ui, "shared_mode_colors", |ui| {
-                            ui.label("Downloader");
-                            changed |= crate::theme::draw_mode_color_controls(
-                                ui,
-                                &mut self.settings.mode_downloader_color,
-                                crate::theme::MODE_DOWNLOADER,
-                            );
-                            ui.end_row();
-                            ui.label("Video Converter");
-                            changed |= crate::theme::draw_mode_color_controls(
-                                ui,
-                                &mut self.settings.mode_convert_color,
-                                crate::theme::MODE_CONVERT,
-                            );
-                            ui.end_row();
-                        });
-                        ui.separator();
-                        ui.label(RichText::new("Layout presets").strong());
-                        ui.label(
-                            RichText::new(
-                                "One-click display bundles (does not change download or Converter options).",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                        left_button_row(ui, |ui| {
-                            let vh = main_viewport_size(ui.ctx()).y;
-                            button_group(ui, "layout_presets", |g| {
-                                if g
-                                    .secondary("Compact queue", true)
-                                    .on_hover_text("List layout, compact cards, hide subtitle")
-                                    .clicked()
-                                {
-                                    apply_layout_preset(&mut self.settings, "compact", Some(vh));
-                                    changed = true;
-                                }
-                                if g
-                                    .secondary("Review mode", true)
-                                    .on_hover_text("Horizontal cards with thumbnails")
-                                    .clicked()
-                                {
-                                    apply_layout_preset(&mut self.settings, "review", Some(vh));
-                                    changed = true;
-                                }
-                                if g
-                                    .secondary("Minimal", true)
-                                    .on_hover_text("Compact list without thumbnails")
-                                    .clicked()
-                                {
-                                    apply_layout_preset(&mut self.settings, "minimal", Some(vh));
-                                    changed = true;
-                                }
-                            });
-                        });
-                        ui.separator();
-                        ui.label(RichText::new("Session restore").strong());
-                        settings_form_grid(ui, "shared_session_restore", |ui| {
-                            ui.label("On startup");
-                            egui::ComboBox::from_id_salt("settings_session_restore")
-                                .selected_text(match self.settings.session_restore_preference.as_str() {
-                                    "always" => "Always restore saved queues",
-                                    "never" => "Never restore (start fresh)",
-                                    _ => "Ask each startup",
-                                })
-                                .show_ui(ui, |ui| {
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.session_restore_preference,
-                                            "ask".to_owned(),
-                                            "Ask each startup",
-                                        )
-                                        .changed();
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.session_restore_preference,
-                                            "always".to_owned(),
-                                            "Always restore saved queues",
-                                        )
-                                        .changed();
-                                    changed |= ui
-                                        .selectable_value(
-                                            &mut self.settings.session_restore_preference,
-                                            "never".to_owned(),
-                                            "Never restore (start fresh)",
-                                        )
-                                        .changed();
-                                });
-                            ui.end_row();
-                        });
-                        ui.separator();
-                        ui.label(RichText::new("Background work priority").strong());
-                        ui.label(
-                            RichText::new(
-                                "Lowers yt-dlp and ffmpeg process priority so downloads and encodes \
-                                 are less likely to slow down other apps. Not a hard CPU/GPU cap.",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                        let mut subprocess_priority = crate::external_tools::normalize_subprocess_priority(
-                            &self.settings.subprocess_priority,
-                        );
-                        settings_form_grid(ui, "shared_subprocess_priority", |ui| {
-                            ui.label("Subprocess priority");
-                            egui::ComboBox::from_id_salt("settings_subprocess_priority")
-                                .selected_text(crate::external_tools::subprocess_priority_label(
-                                    subprocess_priority,
-                                ))
-                                .show_ui(ui, |ui| {
-                                    for (value, label) in [
-                                        (
-                                            crate::external_tools::SubprocessPriority::Normal,
-                                            "Normal",
-                                        ),
-                                        (
-                                            crate::external_tools::SubprocessPriority::BelowNormal,
-                                            "Below normal",
-                                        ),
-                                        (
-                                            crate::external_tools::SubprocessPriority::Idle,
-                                            "Idle",
-                                        ),
-                                    ] {
-                                        changed |= ui
-                                            .selectable_value(&mut subprocess_priority, value, label)
-                                            .changed();
-                                    }
-                                });
-                            ui.end_row();
-                        });
-                        let priority_changed = subprocess_priority
-                            != crate::external_tools::normalize_subprocess_priority(
-                                &self.settings.subprocess_priority,
-                            );
-                        if priority_changed {
-                            self.settings.subprocess_priority =
-                                crate::external_tools::subprocess_priority_storage_value(
-                                    subprocess_priority,
-                                )
-                                .to_owned();
-                            changed = true;
+                    SettingsTab::General => match self.general_settings_subtab {
+                        GeneralSettingsSubTab::Appearance => {
+                            self.draw_general_appearance_settings(ui, &mut changed);
                         }
-                        ui.separator();
-                        ui.label(RichText::new("Shared executables").strong());
-                        ui.label("Used by the downloader and Video Converter.");
-                        settings_form_grid(ui, "shared_executables", |ui| {
-                            ui.label("ffmpeg");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.ffmpeg_path)
-                                    .hint_text("ffmpeg.exe or full path"),
+                        GeneralSettingsSubTab::PanelsLog => {
+                            self.draw_general_panels_log_settings(ui, &mut changed);
+                        }
+                        GeneralSettingsSubTab::System => {
+                            self.draw_general_system_settings(ui, &mut changed);
+                        }
+                        GeneralSettingsSubTab::Tools => {
+                            self.draw_general_tools_settings(
+                                ui,
+                                &mut changed,
+                                &mut executable_paths_changed,
                             );
-                            changed |= resp.changed();
-                            executable_paths_changed |= resp.changed();
-                            ui.end_row();
-                            ui.label("ffprobe");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.ffprobe_path)
-                                    .hint_text("ffprobe.exe or full path"),
-                            );
-                            changed |= resp.changed();
-                            executable_paths_changed |= resp.changed();
-                            ui.end_row();
-                        });
-                        ui.separator();
-                        ui.label(RichText::new("GitHub releases").strong());
-                        ui.label(
-                            RichText::new(
-                                "Personal access token for About → Check for updates when the repository is private. \
-                                 Read access to repository contents is enough. You can also set RUSTDL_GITHUB_TOKEN.",
-                            )
-                            .small()
-                            .color(Color32::GRAY),
-                        );
-                        settings_form_grid(ui, "shared_github", |ui| {
-                            ui.label("GitHub token");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.settings.github_token)
-                                    .password(true)
-                                    .hint_text("ghp_… or github_pat_…"),
-                            );
-                            changed |= resp.changed();
-                            ui.end_row();
-                        });
-                        ui.separator();
-                        ui.label(RichText::new("Settings portability").strong());
-                        left_button_row(ui, |ui| {
-                            let mut export_settings = false;
-                            let mut import_settings = false;
-                            button_group(ui, "settings_portability", |g| {
-                                g.import_export_menu(true, |ui| {
-                                    if ui
-                                        .button(format!(
-                                            "{} Export settings",
-                                            ui_icons::EXPORT
-                                        ))
-                                        .clicked()
-                                    {
-                                        export_settings = true;
-                                    }
-                                    if ui
-                                        .button(format!(
-                                            "{} Import settings",
-                                            ui_icons::IMPORT_FILE
-                                        ))
-                                        .clicked()
-                                    {
-                                        import_settings = true;
-                                    }
-                                });
-                                if g.secondary(
-                                    &format!("{} Reset to defaults", ui_icons::RESET),
-                                    true,
-                                )
-                                .clicked()
-                                {
-                                    let keep_output = self.settings.output_dir.clone();
-                                    self.settings = crate::config::AppSettings::default();
-                                    self.settings.output_dir = keep_output.clone();
-                                    self.output_dir = keep_output;
-                                    changed = true;
-                                }
-                            });
-                            if export_settings {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .set_file_name("rustdl_config_export.json")
-                                    .save_file()
-                                {
-                                    match export_settings_json(&self.settings, &path) {
-                                        Ok(()) => self.append_log(&format!(
-                                            "Exported settings to {}",
-                                            path.to_string_lossy()
-                                        )),
-                                        Err(e) => self.append_log(&format!(
-                                            "Export settings failed: {e:#}"
-                                        )),
-                                    }
-                                }
-                            }
-                            if import_settings {
-                                if let Some(path) = rfd::FileDialog::new()
-                                    .add_filter("JSON", &["json"])
-                                    .pick_file()
-                                {
-                                    match import_settings_json(&path) {
-                                        Ok(imported) => {
-                                            self.settings = imported;
-                                            self.output_dir = self.settings.output_dir.clone();
-                                            self.worker_count =
-                                                self.settings.worker_count.clamp(1, 6);
-                                            self.settings_tab =
-                                                super::settings_tab_from_str(
-                                                    &self.settings.settings_tab,
-                                                );
-                                            changed = true;
-                                            self.append_log(&format!(
-                                                "Imported settings from {}",
-                                                path.to_string_lossy()
-                                            ));
-                                        }
-                                        Err(e) => self.append_log(&format!(
-                                            "Import settings failed: {e:#}"
-                                        )),
-                                    }
-                                }
-                            }
-                        });
-                    }
+                        }
+                        GeneralSettingsSubTab::Backup => {
+                            self.draw_general_backup_settings(ui, &mut changed);
+                        }
+                    },
                     SettingsTab::Downloader => {
                         egui::CollapsingHeader::new("Output & behavior")
                             .default_open(true)
@@ -1303,6 +1361,24 @@ impl PydlApp {
                                 "After download, move files into organize layout",
                                 &mut self.settings.post_download_organize,
                             );
+                            ui.label("Filename find (after download)")
+                                .on_hover_text(
+                                    "Replace text in the downloaded filename stem. Runs after organize move. \
+                                     Leave empty to skip.",
+                                );
+                            changed |= ui
+                                .add(egui::TextEdit::singleline(
+                                    &mut self.settings.post_download_filename_find,
+                                ))
+                                .changed();
+                            ui.end_row();
+                            ui.label("Filename replace");
+                            changed |= ui
+                                .add(egui::TextEdit::singleline(
+                                    &mut self.settings.post_download_filename_replace,
+                                ))
+                                .changed();
+                            ui.end_row();
                             ui.label("Example path");
                             ui.label(
                                 crate::download_organize::example_output_path(
@@ -1706,7 +1782,7 @@ impl PydlApp {
                         ui.label(RichText::new("Video Converter settings").strong());
                         ui.label(
                             RichText::new(
-                                "FFmpeg and ffprobe paths are configured in Settings → Shared.",
+                                "FFmpeg and ffprobe paths are configured in Settings → General → Tools.",
                             )
                             .small()
                             .color(Color32::GRAY),
@@ -2043,6 +2119,24 @@ impl PydlApp {
                                 "Write SHA-256 checksum sidecar",
                                 &mut self.settings.convert_write_checksum,
                             );
+                            ui.label("Filename find (after encode)")
+                                .on_hover_text(
+                                    "Replace text in the encoded output filename stem. Runs before other post-encode \
+                                     steps. Leave empty to skip.",
+                                );
+                            changed |= ui
+                                .add(egui::TextEdit::singleline(
+                                    &mut self.settings.convert_post_filename_find,
+                                ))
+                                .changed();
+                            ui.end_row();
+                            ui.label("Filename replace");
+                            changed |= ui
+                                .add(egui::TextEdit::singleline(
+                                    &mut self.settings.convert_post_filename_replace,
+                                ))
+                                .changed();
+                            ui.end_row();
                             ui.label("Move output to subfolder");
                             changed |= ui
                                 .add(

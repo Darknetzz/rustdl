@@ -226,22 +226,28 @@
       <div class="settings-header">
         <h2>Settings</h2>
         <div class="settings-tabs btn-group" role="tablist">
-          <button type="button" class="settings-tab active" data-tab="shared" data-icon="tune" role="tab">Shared</button>
+          <button type="button" class="settings-tab active" data-tab="general" data-icon="tune" role="tab">General</button>
           <button type="button" class="settings-tab" data-tab="downloader" data-icon="cloud_download" role="tab">Downloader</button>
           <button type="button" class="settings-tab" data-tab="convert" data-icon="bolt" role="tab">Converter</button>
           <button type="button" class="settings-tab" data-tab="webui" data-icon="language" role="tab">Web UI</button>
         </div>
       </div>
       <div class="settings-scroll">
-        <div id="settings-tab-shared" class="settings-panel active" role="tabpanel">
-          <h3>Global</h3>
+        <div id="settings-tab-general" class="settings-panel active" role="tabpanel">
+          <div class="settings-subtabs btn-group" role="tablist" aria-label="General settings sections">
+            <button type="button" class="settings-subtab active" data-general-subtab="appearance" role="tab">Appearance</button>
+            <button type="button" class="settings-subtab" data-general-subtab="panels" role="tab">Panels &amp; log</button>
+            <button type="button" class="settings-subtab" data-general-subtab="system" role="tab">System</button>
+            <button type="button" class="settings-subtab" data-general-subtab="tools" role="tab">Tools</button>
+            <button type="button" class="settings-subtab" data-general-subtab="backup" role="tab">Backup</button>
+          </div>
+
+          <div id="general-subtab-appearance" class="general-subpanel active" role="tabpanel">
+          <h3>Cards and queue layout</h3>
           <label class="check"><input type="checkbox" id="set-show-thumbnails" /> Show thumbnails in cards</label>
           <label class="check"><input type="checkbox" id="set-compact-cards" /> Use compact cards</label>
           <label class="check"><input type="checkbox" id="set-hide-subtitle" /> Hide card subtitle/uploader</label>
           <label class="check"><input type="checkbox" id="set-card-list" /> List layout for queue cards</label>
-          <label class="check"><input type="checkbox" id="set-autoscroll-log" /> Autoscroll log to latest line</label>
-          <label class="check"><input type="checkbox" id="set-log-relative" /> Relative timestamps in activity log</label>
-          <label>Max log chars <input type="number" id="set-log-max" min="2000" max="200000" step="1000" /></label>
 
           <h3>Mode panel colors</h3>
           <p class="hint">Panel tint and accent stripe for Downloader and Video Converter. Leave default or pick a custom color.</p>
@@ -271,7 +277,16 @@
             <button type="button" class="secondary layout-preset-btn" data-preset="review">Review mode</button>
             <button type="button" class="secondary layout-preset-btn" data-preset="minimal">Minimal</button>
           </div>
+          </div>
 
+          <div id="general-subtab-panels" class="general-subpanel" role="tabpanel" hidden>
+          <h3>Activity log</h3>
+          <label class="check"><input type="checkbox" id="set-autoscroll-log" /> Autoscroll log to latest line</label>
+          <label class="check"><input type="checkbox" id="set-log-relative" /> Relative timestamps in activity log</label>
+          <label>Max log chars <input type="number" id="set-log-max" min="2000" max="200000" step="1000" /></label>
+          </div>
+
+          <div id="general-subtab-system" class="general-subpanel" role="tabpanel" hidden>
           <h3>Background work priority</h3>
           <p class="hint">Lowers yt-dlp and ffmpeg priority so downloads and encodes are less likely to slow down other apps. Not a hard CPU/GPU cap.</p>
           <label>Subprocess priority
@@ -281,17 +296,22 @@
               <option value="idle">Idle</option>
             </select>
           </label>
+          </div>
 
+          <div id="general-subtab-tools" class="general-subpanel" role="tabpanel" hidden>
           <h3>Shared executables</h3>
           <p class="hint">Used by the downloader and Video Converter. Leave empty to use PATH.</p>
           <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
           <label>ffprobe path <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" /></label>
+          </div>
 
+          <div id="general-subtab-backup" class="general-subpanel" role="tabpanel" hidden>
           <h3>Backup</h3>
           <p class="hint">Export or import the full rustdl settings JSON (same format as the desktop app).</p>
           <div class="btn-group" role="group" aria-label="Settings backup">
             <button type="button" id="btn-settings-export" class="secondary" data-icon="download">Export settings</button>
             <button type="button" id="btn-settings-import" class="secondary" data-icon="upload">Import settings</button>
+          </div>
           </div>
         </div>
 
@@ -367,6 +387,8 @@
             <input type="text" id="set-output-template" />
           </label>
           <label class="check"><input type="checkbox" id="set-post-organize" /> After download, move files into organize layout</label>
+          <label>Filename find (after download) <input type="text" id="set-post-download-filename-find" placeholder="e.g. [abc123]" title="Replace text in the downloaded filename stem. Runs after organize move." /></label>
+          <label>Filename replace <input type="text" id="set-post-download-filename-replace" placeholder="(empty to remove)" /></label>
           <p id="organize-example-path" class="hint" aria-live="polite"></p>
           <p id="organize-title-only-warn" class="hint hidden" style="color: var(--warn, #c9a227);">Title-only filenames may make it harder to match Done downloads after restart.</p>
 
@@ -487,7 +509,7 @@
 
         <div id="settings-tab-convert" class="settings-panel" role="tabpanel" hidden>
           <h3>Encoding</h3>
-          <p class="hint">ffmpeg/ffprobe paths are shared (see the Shared tab). The fastest available encoder for the target codec is picked automatically unless overridden.</p>
+          <p class="hint">ffmpeg/ffprobe paths are in Settings → General → Tools. The fastest available encoder for the target codec is picked automatically unless overridden.</p>
           <label>Target codec
             <select id="set-convert-target-codec">
               <option value="av1">AV1</option>
@@ -557,6 +579,8 @@
           </label>
           <label class="check"><input type="checkbox" id="set-convert-copy-subtitles" /> Copy subtitle sidecars after encode</label>
           <label class="check"><input type="checkbox" id="set-convert-write-checksum" /> Write SHA-256 checksum sidecar</label>
+          <label>Filename find (after encode) <input type="text" id="set-convert-post-filename-find" placeholder="e.g. -av1" title="Replace text in the encoded output filename stem." /></label>
+          <label>Filename replace <input type="text" id="set-convert-post-filename-replace" placeholder="(empty to remove)" /></label>
           <label>Move output to subfolder <input type="text" id="set-convert-post-move-subfolder" placeholder="encoded (optional)" /></label>
           <label>Max hardware encodes <input type="number" id="set-convert-max-hw-encodes" min="0" max="6" step="1" title="Cap concurrent GPU encodes when parallel conversions &gt; 1 (0 = unlimited)." /></label>
 
