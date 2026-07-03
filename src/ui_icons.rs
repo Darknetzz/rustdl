@@ -57,6 +57,13 @@ pub const TAB_SHARED: &str = m::ICON_TUNE;
 pub const TAB_DOWNLOADER: &str = m::ICON_CLOUD_DOWNLOAD;
 pub const TAB_AV1: &str = m::ICON_VIDEO_SETTINGS;
 
+/// General settings sub-tabs (Settings → General).
+pub const GENERAL_APPEARANCE: &str = m::ICON_PALETTE;
+pub const GENERAL_PANELS_LOG: &str = m::ICON_SPACE_DASHBOARD;
+pub const GENERAL_SYSTEM: &str = m::ICON_COMPUTER;
+pub const GENERAL_TOOLS: &str = m::ICON_BUILD;
+pub const GENERAL_BACKUP: &str = m::ICON_BACKUP;
+
 pub const PRESET_BEST: &str = m::ICON_STAR;
 pub const PRESET_AUDIO: &str = m::ICON_MUSIC_NOTE;
 pub const PRESET_FAST: &str = m::ICON_BOLT;

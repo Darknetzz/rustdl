@@ -1440,6 +1440,14 @@ dialog::backdrop {
   color: var(--muted);
   padding: 0.35rem 0.65rem;
   font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.settings-subtab .material-icons {
+  font-size: 1rem;
+  line-height: 1;
 }
 
 .settings-subtab.active {

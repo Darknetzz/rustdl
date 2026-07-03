@@ -123,6 +123,17 @@ pub(super) fn general_settings_subtab_to_str(tab: GeneralSettingsSubTab) -> &'st
     }
 }
 
+pub(super) fn general_settings_subtab_menu_label(tab: GeneralSettingsSubTab) -> String {
+    let (icon, text) = match tab {
+        GeneralSettingsSubTab::Appearance => (ui_icons::GENERAL_APPEARANCE, "Appearance"),
+        GeneralSettingsSubTab::PanelsLog => (ui_icons::GENERAL_PANELS_LOG, "Panels & log"),
+        GeneralSettingsSubTab::System => (ui_icons::GENERAL_SYSTEM, "System"),
+        GeneralSettingsSubTab::Tools => (ui_icons::GENERAL_TOOLS, "Tools"),
+        GeneralSettingsSubTab::Backup => (ui_icons::GENERAL_BACKUP, "Backup"),
+    };
+    format!("{icon} {text}")
+}
+
 #[derive(Clone, Copy)]
 enum DownloadPreset {
     BestQuality,

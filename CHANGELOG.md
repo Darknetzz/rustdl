@@ -18,7 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
-- Settings **General** tab (formerly Shared) is split into sub-sections: **Appearance**, **Panels & log**, **System**, **Tools**, and **Backup**; the last-opened sub-section is remembered.
+- Settings **General** tab (formerly Shared) is split into sub-sections: **Appearance**, **Panels & log**, **System**, **Tools**, and **Backup** (with icons); the last-opened sub-section is remembered.
 - Video Converter: encoded files are written next to each source file by default instead of the downloader **Output folder**; set **Output folder** under Settings → Video Converter to override.
 - Downloader queue **Copy URL** briefly shows **Copied!** on desktop (card and list rows) and a toast on the LAN web UI.
 

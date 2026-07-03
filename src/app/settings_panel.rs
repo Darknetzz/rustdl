@@ -731,41 +731,21 @@ impl PydlApp {
                     let prev_general_subtab = self.general_settings_subtab;
                     left_button_row(ui, |ui| {
                         button_group(ui, "general_settings_subtabs", |g| {
-                            g.add(|ui| {
-                                ui.selectable_value(
-                                    &mut self.general_settings_subtab,
-                                    GeneralSettingsSubTab::Appearance,
-                                    "Appearance",
-                                )
-                            });
-                            g.add(|ui| {
-                                ui.selectable_value(
-                                    &mut self.general_settings_subtab,
-                                    GeneralSettingsSubTab::PanelsLog,
-                                    "Panels & log",
-                                )
-                            });
-                            g.add(|ui| {
-                                ui.selectable_value(
-                                    &mut self.general_settings_subtab,
-                                    GeneralSettingsSubTab::System,
-                                    "System",
-                                )
-                            });
-                            g.add(|ui| {
-                                ui.selectable_value(
-                                    &mut self.general_settings_subtab,
-                                    GeneralSettingsSubTab::Tools,
-                                    "Tools",
-                                )
-                            });
-                            g.add(|ui| {
-                                ui.selectable_value(
-                                    &mut self.general_settings_subtab,
-                                    GeneralSettingsSubTab::Backup,
-                                    "Backup",
-                                )
-                            });
+                            for subtab in [
+                                GeneralSettingsSubTab::Appearance,
+                                GeneralSettingsSubTab::PanelsLog,
+                                GeneralSettingsSubTab::System,
+                                GeneralSettingsSubTab::Tools,
+                                GeneralSettingsSubTab::Backup,
+                            ] {
+                                g.add(|ui| {
+                                    ui.selectable_value(
+                                        &mut self.general_settings_subtab,
+                                        subtab,
+                                        super::general_settings_subtab_menu_label(subtab),
+                                    )
+                                });
+                            }
                         });
                     });
                     if self.general_settings_subtab != prev_general_subtab {
