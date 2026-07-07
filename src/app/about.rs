@@ -178,17 +178,17 @@ impl PydlApp {
                             {
                                 self.open_release_url();
                             }
-                            #[cfg(not(windows))]
-                            if self.update_has_update {
-                                ui.label(
-                                    RichText::new(
-                                        "In-app download is Windows-only. Use Open release page, then download rustdl for your platform from GitHub Releases.",
-                                    )
-                                    .small()
-                                    .color(Color32::GRAY),
-                                );
-                            }
                         });
+                        #[cfg(not(windows))]
+                        if self.update_has_update {
+                            ui.label(
+                                RichText::new(
+                                    "In-app download is Windows-only. Use Open release page, then download rustdl for your platform from GitHub Releases.",
+                                )
+                                .small()
+                                .color(Color32::GRAY),
+                            );
+                        }
                     });
                     if self.update_check_in_progress || self.update_download_in_progress {
                         ui.spinner();
