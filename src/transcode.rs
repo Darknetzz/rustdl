@@ -1043,12 +1043,23 @@ fn paths_same_directory(a: &Path, b: &Path) -> bool {
 }
 
 /// Target path when restoring the source basename in the output directory (Python parity).
+///
+/// Important: keeps the *output* extension so the container matches the filename.
 pub fn resolve_original_output_path(input: &Path, output: &Path) -> Option<PathBuf> {
     if !paths_same_directory(input, output) {
         return None;
     }
-    let file_name = input.file_name()?;
-    let original_path = output.parent()?.join(file_name);
+    let parent = output.parent()?;
+    let stem = input.file_stem()?.to_str()?.trim();
+    if stem.is_empty() {
+        return None;
+    }
+    let out_ext = output.extension().and_then(|s| s.to_str()).map(str::trim);
+    let file_name = match out_ext {
+        Some(ext) if !ext.is_empty() => format!("{stem}.{ext}"),
+        _ => stem.to_owned(),
+    };
+    let original_path = parent.join(file_name);
     if original_path == output {
         return None;
     }
@@ -1462,7 +1473,7 @@ mod tests {
         let output = tmp.path().join("movie-AV1.mkv");
         assert_eq!(
             resolve_original_output_path(&input, &output),
-            Some(tmp.path().join("movie.mp4"))
+            Some(tmp.path().join("movie.mkv"))
         );
         let output_else = other.path().join("movie-AV1.mkv");
         assert!(resolve_original_output_path(&input, &output_else).is_none());

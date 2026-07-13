@@ -1841,7 +1841,8 @@ impl PydlApp {
                                 .checkbox(&mut self.settings.convert_rename_original, "")
                                 .on_hover_text(
                                     "After success, rename the encoded file back to the source \
-                                     filename when it shares the output folder. Typically used with \
+                                     filename when it shares the output folder (keeps the new container extension). \
+                                     Typically used with \
                                      delete original for in-place replacement.",
                                 )
                                 .changed();
