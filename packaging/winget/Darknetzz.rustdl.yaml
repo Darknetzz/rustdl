@@ -1,6 +1,6 @@
 # Example winget manifest for rustdl (submit via winget-pkgs PR).
 PackageIdentifier: Darknetzz.rustdl
-PackageVersion: 0.12.0
+PackageVersion: 0.13.0
 PackageLocale: en-US
 Publisher: Darknetzz
 PackageName: rustdl
@@ -14,8 +14,8 @@ Tags:
 Installers:
   - Architecture: x64
     InstallerType: portable
-    InstallerUrl: https://github.com/Darknetzz/rustdl/releases/download/rustdl-v0.12.0/rustdl.exe
-    InstallerSha256: B918FF19F457ABD97444A983CF358245A6A22332B24014AFFB7E18FD3316CF95
+    InstallerUrl: https://github.com/Darknetzz/rustdl/releases/download/rustdl-v0.13.0/rustdl.exe
+    InstallerSha256: F385009282B3D25A48C43B558B0E4F081880AEA737F78939FBF8704BDA7B9B2C
     PortableCommandAlias:
       - DisplayName: rustdl
         Command: rustdl.exe
