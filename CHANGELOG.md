@@ -10,6 +10,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-14
+
+
 ### Added
 
 - LAN web UI: **Browse** buttons for ffmpeg, ffprobe, and yt-dlp executable paths (Settings → General → Tools and Downloader).
@@ -763,7 +766,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
 [0.12.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.11.0...rustdl-v0.12.0
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.12.0...dev
+[0.13.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.12.0...rustdl-v0.13.0
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.13.0...dev
 [0.11.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.10.0...rustdl-v0.11.0
 [0.10.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...rustdl-v0.10.0
 [0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
