@@ -10,6 +10,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-13
+
+
 ### Added
 
 - **Filename find/replace** — Settings → Downloader and Settings → Video Converter: optional find/replace in the output filename stem after each download or encode (e.g. strip ` [id]` or `-av1` suffix). Matching subtitle and yt-dlp sidecar files are renamed with the video.
@@ -743,7 +746,8 @@ Initial published version: desktop GUI for yt-dlp with queue, previews, settings
 [0.7.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...8eaf276
 [0.7.2]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.0...rustdl-v0.7.2
 [0.7.3]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.7.2...rustdl-v0.7.3
-[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.11.0...dev
+[0.12.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.11.0...rustdl-v0.12.0
+[Unreleased]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.12.0...dev
 [0.11.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.10.0...rustdl-v0.11.0
 [0.10.0]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.1...rustdl-v0.10.0
 [0.9.1]: https://github.com/Darknetzz/rustdl/compare/rustdl-v0.9.0...rustdl-v0.9.1
