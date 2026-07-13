@@ -161,6 +161,8 @@ MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
 | `scripts/ci_local.ps1`, `scripts/ci_local.sh` | Local fmt / clippy / test / deny / audit |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Optional: finalize `[Unreleased]` changelog + compare links (`release: vX.Y.Z` commit) |
+| `scripts/extract_release_notes.ps1`, `scripts/extract_release_notes.sh` | Extract `## [X.Y.Z]` body from `CHANGELOG.md` for a tag (used by `publish_stable_release`, `release`, and `.github/workflows/release.yml`) |
+| `scripts/refresh_release_notes.ps1`, `scripts/refresh_release_notes.sh` | Re-upload GitHub release descriptions from `CHANGELOG.md` for existing tags |
 | `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
 | `scripts/publish_stable_release.ps1`, `scripts/publish_stable_release.sh` | Tag and publish **`rustdl-vX.Y.Z`** when the Cargo version is new on GitHub |
 | `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev + stable releases, mirror GitLab |
