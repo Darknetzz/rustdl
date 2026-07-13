@@ -315,18 +315,22 @@ mod tests {
     use super::*;
 
     fn settings_with(kind: &str, value: &str, violation: &str) -> AppSettings {
-        let mut s = AppSettings::default();
-        s.convert_size_limit_kind = kind.to_owned();
-        s.convert_size_limit_value = value.to_owned();
-        s.convert_size_limit_violation = violation.to_owned();
+        let mut s = AppSettings {
+            convert_size_limit_kind: kind.to_owned(),
+            convert_size_limit_value: value.to_owned(),
+            convert_size_limit_violation: violation.to_owned(),
+            ..Default::default()
+        };
         normalize_settings_limits(&mut s);
         s
     }
 
     #[test]
     fn migrates_legacy_min_shrink_percent() {
-        let mut s = AppSettings::default();
-        s.convert_min_shrink_percent = 40.0;
+        let mut s = AppSettings {
+            convert_min_shrink_percent: 40.0,
+            ..Default::default()
+        };
         normalize_settings_limits(&mut s);
         assert_eq!(s.convert_size_limit_kind, KIND_MIN_SHRINK_PERCENT);
         assert_eq!(s.convert_size_limit_value, "40");
@@ -366,8 +370,10 @@ mod tests {
     #[test]
     fn per_item_override_disables_with_none_kind() {
         let settings = settings_with(KIND_MIN_SHRINK_PERCENT, "50", VIOLATION_SKIP);
-        let mut item = ConvertQueueItem::default();
-        item.size_limit_kind_override = Some(KIND_NONE.to_owned());
+        let item = ConvertQueueItem {
+            size_limit_kind_override: Some(KIND_NONE.to_owned()),
+            ..Default::default()
+        };
         let limit = ConvertSizeLimit::for_item(&settings, &item);
         assert!(!limit.is_active());
     }

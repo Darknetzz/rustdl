@@ -37,7 +37,7 @@ pub fn format_upload_moment(
         let ago = format_relative_ago(SystemTime::UNIX_EPOCH + Duration::from_secs(ts as u64));
         return Some(format!("{abs} ({ago})"));
     }
-    upload_date.and_then(|d| format_yyyymmdd(d)).map(|d| d)
+    upload_date.and_then(format_yyyymmdd)
 }
 
 pub fn format_container_time(raw: &str) -> String {
@@ -122,7 +122,7 @@ pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
     if let Some(rd) = item
         .release_date
         .as_deref()
-        .and_then(|d| format_yyyymmdd(d))
+        .and_then(format_yyyymmdd)
     {
         push(&mut rows, "Source", "Release date", rd);
     }

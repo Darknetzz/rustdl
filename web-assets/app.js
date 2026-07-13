@@ -482,7 +482,7 @@ function applyOrganizePresetViaApi(preset) {
     }
     const data = await res.json();
     cachedSettings = data.settings;
-    populateSettingsForm(cachedSettings, data.command_preview);
+    populateSettingsForm(cachedSettings, data.command_preview, data.web_ui_browser_url);
     updateOrganizeUi(cachedSettings);
     return refreshAll();
   });
@@ -1042,7 +1042,7 @@ async function resetSettingsToDefaults() {
   const res = await api("/api/settings/reset", { method: "POST" });
   const data = await res.json();
   cachedSettings = data.settings;
-  populateSettingsForm(cachedSettings, "");
+  populateSettingsForm(cachedSettings, data.command_preview || "", data.web_ui_browser_url);
   showToast("Settings reset to defaults.");
   await refreshAll();
 }
@@ -1888,11 +1888,14 @@ function appendMoreInfoButton(group, item) {
   btn.type = "button";
   btn.className = "secondary";
   setButtonLabel(btn, ICON.info, "More info");
-  btn.onclick = () => showMoreInfoDialog(item.item_id, item.title).catch((e) => notifyError(e.message || String(e)));
+  btn.onclick = () =>
+    showMoreInfoDialog(item.item_id, item.title, item.status).catch((e) =>
+      notifyError(e.message || String(e)),
+    );
   group.appendChild(btn);
 }
 
-async function showMoreInfoDialog(itemId, titleHint) {
+async function showMoreInfoDialog(itemId, titleHint, status) {
   const res = await api(`/api/queue/${itemId}/info`);
   if (!res.ok) {
     throw new Error(await readApiError(res, "Could not load item info."));
@@ -1901,9 +1904,21 @@ async function showMoreInfoDialog(itemId, titleHint) {
   const dlg = document.getElementById("more-info-dialog");
   const titleEl = document.getElementById("more-info-title");
   const bodyEl = document.getElementById("more-info-body");
+  const watchBtn = document.getElementById("more-info-watch-quality");
   if (!dlg || !titleEl || !bodyEl) return;
   titleEl.textContent = titleHint?.trim() ? `More info — ${titleHint.trim()}` : "More info";
   bodyEl.replaceChildren();
+  if (watchBtn) {
+    const isDone = statusSlug(status) === "done";
+    watchBtn.classList.toggle("hidden", !isDone);
+    watchBtn.onclick = isDone
+      ? () => {
+          addWatchlistFromQueueItem(itemId).catch((e) =>
+            notifyError(e.message || "Could not add to watchlist."),
+          );
+        }
+      : null;
+  }
   if (!data.rows?.length) {
     const p = document.createElement("p");
     p.textContent = "No metadata yet — wait for resolve or finish the download.";
@@ -3180,7 +3195,7 @@ function updateConvertSizeLimitFieldsVisibility() {
   }
 }
 
-function populateSettingsForm(s, commandPreview) {
+function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-show-thumbnails", s.show_thumbnails);
   setCheck("set-compact-cards", s.compact_cards);
   setCheck("set-hide-subtitle", s.hide_card_subtitle);
@@ -3308,6 +3323,8 @@ function populateSettingsForm(s, commandPreview) {
   setVal("set-convert-max-hw-encodes", s.convert_max_hw_encodes ?? 0);
 
   setCheck("set-web-ui-enabled", s.web_ui_enabled);
+  const webUrlEl = document.getElementById("set-web-ui-url");
+  if (webUrlEl && webUiBrowserUrl) webUrlEl.value = webUiBrowserUrl;
   setVal("set-web-bind-address", s.web_bind_address || "0.0.0.0:8765");
   setVal("set-web-tls-cert", s.web_tls_cert_path);
   setVal("set-web-tls-key", s.web_tls_key_path);
@@ -3606,7 +3623,7 @@ async function openSettingsDialog(tab) {
   const settingsData = await settingsRes.json();
   const profilesData = await profilesRes.json();
   cachedSettings = settingsData.settings;
-  populateSettingsForm(cachedSettings, settingsData.command_preview);
+  populateSettingsForm(cachedSettings, settingsData.command_preview, settingsData.web_ui_browser_url);
   populateProfiles(profilesData);
   refreshQueueTemplatesList().catch(() => {});
   document.getElementById("settings-dialog").showModal();
@@ -3658,7 +3675,7 @@ async function applyProfile(name) {
   const res = await api("/api/settings");
   const data = await res.json();
   cachedSettings = data.settings;
-  populateSettingsForm(cachedSettings, data.command_preview);
+  populateSettingsForm(cachedSettings, data.command_preview, data.web_ui_browser_url);
   const profilesRes = await api("/api/profiles");
   populateProfiles(await profilesRes.json());
   await refreshToolsOnly();
@@ -5022,7 +5039,7 @@ async function settingsImportBackup() {
       });
       const data = await res.json();
       cachedSettings = data.settings;
-      populateSettingsForm(data.settings, data.command_preview);
+      populateSettingsForm(data.settings, data.command_preview, data.web_ui_browser_url);
       await refreshAll();
       showToast("Settings imported.");
     } catch (e) {
@@ -5039,7 +5056,7 @@ async function reloadProfilesAndSettings() {
   ]);
   const settingsData = await settingsRes.json();
   cachedSettings = settingsData.settings;
-  populateSettingsForm(settingsData.settings, settingsData.command_preview);
+  populateSettingsForm(settingsData.settings, settingsData.command_preview, settingsData.web_ui_browser_url);
   populateProfiles(await profilesRes.json());
   await refreshAll();
 }
@@ -5277,6 +5294,20 @@ document.getElementById("btn-generate-web-token")?.addEventListener("click", asy
     showToast("New API token generated and saved.");
   } catch (e) {
     notifyError(e.message || "Could not generate token.");
+  }
+});
+
+document.getElementById("btn-copy-web-ui-url")?.addEventListener("click", async () => {
+  const url = document.getElementById("set-web-ui-url")?.value?.trim();
+  if (!url) {
+    notifyError("No web UI URL to copy.");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast("Web UI link copied.");
+  } catch {
+    notifyError("Could not copy link.");
   }
 });
 

@@ -50,9 +50,9 @@ try {
 
         Write-Host ''
         Write-Host '--- stable release (if new version) ---'
-        $stableArgs = @('-SkipBuild')
+        $stableArgs = @()
         if ($DryRun) { $stableArgs += '-DryRun' }
-        & (Join-Path $PSScriptRoot 'publish_stable_release.ps1') @stableArgs
+        & (Join-Path $PSScriptRoot 'publish_stable_release.ps1') -SkipBuild @stableArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
 

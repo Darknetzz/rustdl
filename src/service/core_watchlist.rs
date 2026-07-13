@@ -254,10 +254,8 @@ impl DownloadCore {
         let auto_enqueue = self.settings.watchlist_auto_enqueue;
         entry.improved_pending = improved && !auto_enqueue;
         let log_title = entry.title.clone();
-        if improved {
-            if auto_enqueue {
-                entry.improved_pending = false;
-            }
+        if improved && auto_enqueue {
+            entry.improved_pending = false;
         }
         if improved {
             let base = crate::watchlist::format_resolution_height(baseline_height);

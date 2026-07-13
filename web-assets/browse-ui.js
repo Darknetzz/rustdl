@@ -28,6 +28,9 @@ function wireBrowseButton(buttonId, inputId, kind, title) {
 }
 
 function initBrowseButtons() {
+  wireBrowseButton("btn-browse-ffmpeg", "set-ffmpeg-path", "file", "Select ffmpeg executable");
+  wireBrowseButton("btn-browse-ffprobe", "set-ffprobe-path", "file", "Select ffprobe executable");
+  wireBrowseButton("btn-browse-yt-dlp", "set-yt-dlp-path", "file", "Select yt-dlp executable");
   wireBrowseButton("btn-browse-output-dir", "set-output-dir", "folder", "Select output folder");
   wireBrowseButton("btn-browse-cookies", "set-cookies", "file", "Select cookies file");
   wireBrowseButton("btn-browse-convert-input", "convert-input", "files", "Select video file(s)");

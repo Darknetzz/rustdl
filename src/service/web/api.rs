@@ -222,6 +222,7 @@ struct QueueRequeueResponse {
 struct SettingsResponse {
     settings: AppSettings,
     command_preview: String,
+    web_ui_browser_url: String,
 }
 
 #[derive(Serialize)]
@@ -1479,6 +1480,7 @@ fn settings_response_from_core(c: &DownloadCore) -> SettingsResponse {
     SettingsResponse {
         settings: c.settings.clone(),
         command_preview: parts.join(" "),
+        web_ui_browser_url: super::web_ui_browser_url(&c.settings),
     }
 }
 

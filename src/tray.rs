@@ -83,10 +83,7 @@ fn build_tray_icon_menu() -> Result<tray_icon::menu::Menu, tray_icon::Error> {
     let quit = MenuItem::with_id(MENU_QUIT_ID, "Quit", true, None);
     let separator = PredefinedMenuItem::separator();
     Menu::with_items(&[&show, &separator, &quit]).map_err(|e| {
-        tray_icon::Error::OsError(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            e.to_string(),
-        ))
+        tray_icon::Error::OsError(std::io::Error::other(e.to_string()))
     })
 }
 

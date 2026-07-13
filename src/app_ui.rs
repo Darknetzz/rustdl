@@ -1419,9 +1419,7 @@ pub fn max_bottom_panel_height(viewport_h: f32) -> f32 {
     if !viewport_h.is_finite() || viewport_h < 1.0 {
         return BOTTOM_PANEL_MAX_H;
     }
-    (viewport_h * VIDEOS_DOCKED_HEIGHT_RATIO)
-        .max(BOTTOM_PANEL_MIN_H)
-        .min(BOTTOM_PANEL_MAX_H)
+    (viewport_h * VIDEOS_DOCKED_HEIGHT_RATIO).clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H)
 }
 
 pub fn main_body_scroll_min(viewport_h: f32) -> f32 {
@@ -1604,7 +1602,7 @@ pub fn apply_layout_preset(
             settings.compact_cards = true;
             settings.hide_card_subtitle = true;
             settings.show_thumbnails = true;
-            settings.log_dock_height = settings.log_dock_height.min(120.0).max(80.0);
+            settings.log_dock_height = settings.log_dock_height.clamp(80.0, 120.0);
         }
         "review" => {
             settings.card_list_layout = false;
@@ -1648,9 +1646,7 @@ pub fn queue_list_height_from_layout(
     }
     let stack_h = footer_h + log_block_h;
     let stack_top = body_bottom - stack_h;
-    finite_ui_span(stack_top - content_top, 0.0)
-        .min(QUEUE_LIST_LAYOUT_MAX_H)
-        .max(0.0)
+    finite_ui_span(stack_top - content_top, 0.0).clamp(0.0, QUEUE_LIST_LAYOUT_MAX_H)
 }
 
 /// Max activity-log scroll height (slider cap) from remaining panel budget below chrome.
@@ -2310,6 +2306,7 @@ impl<'a> ButtonGroup<'a> {
     }
 
     /// Verify saved file streams, re-download, or watch for better quality (done rows).
+    #[allow(clippy::too_many_arguments)]
     pub fn verify_menu(
         &mut self,
         show_verify_file: bool,

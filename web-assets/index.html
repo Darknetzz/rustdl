@@ -345,8 +345,18 @@
           <div id="general-subtab-tools" class="general-subpanel" role="tabpanel" hidden>
           <h3>Shared executables</h3>
           <p class="hint">Used by the downloader and Video Converter. Leave empty to use PATH.</p>
-          <label>ffmpeg path <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" /></label>
-          <label>ffprobe path <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" /></label>
+          <label>ffmpeg path
+            <span class="input-with-button">
+              <input type="text" id="set-ffmpeg-path" placeholder="ffmpeg or full path" />
+              <button type="button" id="btn-browse-ffmpeg" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
+          <label>ffprobe path
+            <span class="input-with-button">
+              <input type="text" id="set-ffprobe-path" placeholder="ffprobe or full path" />
+              <button type="button" id="btn-browse-ffprobe" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
           </div>
 
           <div id="general-subtab-backup" class="general-subpanel" role="tabpanel" hidden>
@@ -381,7 +391,12 @@
           <p id="settings-output-disk" class="hint hidden" aria-live="polite"></p>
 
           <h3>Downloader executables</h3>
-          <label>yt-dlp path <input type="text" id="set-yt-dlp-path" placeholder="yt-dlp or full path" /></label>
+          <label>yt-dlp path
+            <span class="input-with-button">
+              <input type="text" id="set-yt-dlp-path" placeholder="yt-dlp or full path" />
+              <button type="button" id="btn-browse-yt-dlp" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
 
           <h3>Download profile</h3>
           <div class="row profile-row">
@@ -653,6 +668,13 @@
           <h3>LAN access</h3>
           <p class="hint">HTTP by default on your local network with token auth. Optional TLS certificate paths enable HTTPS when both PEM files exist on disk.</p>
           <label class="check"><input type="checkbox" id="set-web-ui-enabled" /> Enable web UI (restart rustdl to apply bind changes)</label>
+          <label>Open locally
+            <span class="input-with-button">
+              <input type="text" id="set-web-ui-url" readonly spellcheck="false" />
+              <button type="button" id="btn-copy-web-ui-url" class="secondary" data-icon="content_copy">Copy link</button>
+            </span>
+          </label>
+          <p class="hint">Link omits the API token. Whitelisted IPs skip the token; other clients need the token from below or the desktop app.</p>
           <label>Bind address <input type="text" id="set-web-bind-address" placeholder="0.0.0.0:8765" /></label>
           <label>IP whitelist
             <textarea id="set-web-ip-whitelist" rows="4" placeholder="127.0.0.1&#10;::1&#10;192.168.1.0/24" spellcheck="false"></textarea>
@@ -792,6 +814,7 @@
       <div id="more-info-body" class="more-info-body"></div>
       <div class="dialog-actions">
         <div class="btn-group" role="group">
+          <button type="button" id="more-info-watch-quality" class="secondary hidden" data-icon="fact_check">Watch for better quality</button>
           <button type="submit" class="secondary" data-icon="close">Close</button>
         </div>
       </div>

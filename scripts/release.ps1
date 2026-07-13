@@ -7,6 +7,7 @@
   .\scripts\release.ps1 -DryRun
   .\scripts\release.ps1
   .\scripts\release.ps1 -Push -Yes
+  .\scripts\release.ps1 -NonInteractive   # skip confirmation (also when $env:CI is set)
 #>
 [CmdletBinding()]
 param(
@@ -14,7 +15,8 @@ param(
     [switch] $SkipChecks,
     [switch] $Push,
     [string] $Remote = 'github',
-    [switch] $Yes
+    [switch] $Yes,
+    [switch] $NonInteractive
 )
 
 Set-StrictMode -Version Latest
@@ -161,7 +163,7 @@ try {
         exit 0
     }
 
-    if (-not $Yes) {
+    if (-not $Yes -and -not $NonInteractive -and -not $env:CI) {
         $reply = Read-Host 'Proceed with release commit and tag? [y/N]'
         if ($reply -notmatch '^(y|yes)$') {
             Write-Host 'Aborted.'

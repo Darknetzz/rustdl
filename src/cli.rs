@@ -374,8 +374,9 @@ pub async fn run_headless_convert_batch() -> Result<()> {
     Ok(())
 }
 
-pub fn parse_cli_enqueue_args(args: &[String]) -> Result<String> {
+pub fn parse_cli_enqueue_args(args: &[String]) -> Result<(String, bool)> {
     let mut source = None;
+    let mut start = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -387,11 +388,15 @@ pub fn parse_cli_enqueue_args(args: &[String]) -> Result<String> {
                         .clone(),
                 );
             }
+            "--start" => {
+                start = true;
+            }
             s => return Err(anyhow!("unknown option: {s}")),
         }
         i += 1;
     }
-    source.ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))
+    let source = source.ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))?;
+    Ok((source, start))
 }
 
 pub async fn run_headless_batch(urls: Vec<String>, opts: CliDownloadOptions) -> Result<()> {
@@ -453,7 +458,7 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
             true
         }
         "--enqueue" => match parse_cli_enqueue_args(&args) {
-            Ok(source) => {
+            Ok((source, start)) => {
                 let rt = tokio::runtime::Runtime::new().expect("tokio runtime");
                 match read_urls_from_batch_source(&source) {
                     Ok(urls) if urls.is_empty() => {
@@ -464,6 +469,12 @@ pub fn run_cli_or_exit(args: Vec<String>) -> bool {
                         if let Err(e) = rt.block_on(run_headless_enqueue(urls)) {
                             eprintln!("Enqueue failed: {e:#}");
                             process::exit(1);
+                        }
+                        if start {
+                            if let Err(e) = rt.block_on(run_headless_start_queue()) {
+                                eprintln!("Start queue failed: {e:#}");
+                                process::exit(1);
+                            }
                         }
                     }
                     Err(e) => {
@@ -573,6 +584,7 @@ fn print_help() {
     println!("Usage:");
     println!("  rustdl                          Start the graphical interface");
     println!("  rustdl --enqueue URL|@file|-   Append URLs to the saved download queue");
+    println!("  rustdl --enqueue --start URL   Enqueue URLs, then start the download queue");
     println!("  rustdl --download URL [OPTS]    Headless download (no GUI)");
     println!("  rustdl --web-only [OPTS]        Headless LAN web UI (no GUI)");
     println!("  rustdl --start-queue            Start persisted download queue and wait");

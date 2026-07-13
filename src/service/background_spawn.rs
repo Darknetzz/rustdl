@@ -64,6 +64,7 @@ async fn run_download_attempt(
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn download_with_transient_retries(
     item_id: u64,
     target_url: &str,

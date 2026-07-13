@@ -56,11 +56,12 @@ cargo run -- --download @urls.txt          # batch from file (one URL per line)
 cargo run -- --download -                  # batch from stdin
 cargo run -- --list-profiles
 cargo run -- --enqueue URL|@file|-         # append URLs to the saved download queue
+cargo run -- --enqueue --start URL|@file|- # enqueue, then start the download queue
 cargo run -- --start-queue                 # start persisted download queue and wait
 cargo run -- --convert-batch               # start persisted convert batch and wait
 ```
 
-`--download` runs yt-dlp directly (no shared download queue, activity log persistence, or LAN web UI). Use the GUI or `--web-only` for full queue/history behavior. `--enqueue`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the desktop app.
+`--download` runs yt-dlp directly (no shared download queue, activity log persistence, or LAN web UI). Use the GUI or `--web-only` for full queue/history behavior. `--enqueue`, `--enqueue --start`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the desktop app.
 
 Headless web UI (no GUI window; uses saved queue, settings, and profiles):
 
@@ -111,7 +112,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - **Quality watchlist** — save URLs to re-probe on a schedule; rustdl logs when max available resolution increases (e.g. a premiere later replaced by HD). Add from a Done download (**Verify… → Watch for better quality**), paste in **Settings → Downloader → Quality watchlist**, or use the **Quality watchlist** panel in the main column. Optional auto-enqueue when quality improves.
 - **More info** on each download queue row — yt-dlp source fields (title, uploader, views, …) and, after download, ffprobe file details (container, codecs, path).
 - **Minimum height / FPS** filters (Settings → Downloader → Quality & network) — optional `height>=` / `fps>=` on quality presets (audio-only preset unchanged).
-- Headless queue modes: `--enqueue`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the GUI.
+- Headless queue modes: `--enqueue`, `--enqueue --start`, `--start-queue`, and `--convert-batch` use the same saved queue and settings as the GUI.
 - **Scheduled download start** (Settings → Downloader): optional daily `HH:MM` local time to start ready downloads.
 - **GPU encode fairness** and **parallel conversions** (`1..=6`) when running Video Converter batches.
 

@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::rustdl_config_dir;
 use crate::ytdlp;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WatchlistEntry {
     pub entry_id: u64,
@@ -29,27 +29,6 @@ pub struct WatchlistEntry {
     pub linked_item_id: Option<u64>,
     pub paused: bool,
     pub note: String,
-}
-
-impl Default for WatchlistEntry {
-    fn default() -> Self {
-        Self {
-            entry_id: 0,
-            url: String::new(),
-            title: String::new(),
-            video_id: String::new(),
-            baseline_height: None,
-            baseline_width: None,
-            last_probe_height: None,
-            last_probe_width: None,
-            last_probe_at: None,
-            last_probe_error: None,
-            improved_pending: false,
-            linked_item_id: None,
-            paused: false,
-            note: String::new(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

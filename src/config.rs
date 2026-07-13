@@ -1341,8 +1341,10 @@ mod tests {
 
     #[test]
     fn ensure_web_auth_token_if_enabled_generates_when_missing() {
-        let mut s = AppSettings::default();
-        s.web_ui_enabled = true;
+        let mut s = AppSettings {
+            web_ui_enabled: true,
+            ..Default::default()
+        };
         assert!(ensure_web_auth_token_if_enabled(&mut s));
         assert!(!s.web_auth_token.trim().is_empty());
         assert!(!ensure_web_auth_token_if_enabled(&mut s));

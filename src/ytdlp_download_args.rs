@@ -139,7 +139,7 @@ pub fn build_download_extra_args(settings: &AppSettings) -> Vec<String> {
         args.push("--retry-sleep".to_owned());
         args.push(sleep.clone());
         args.push("--retry-sleep".to_owned());
-        args.push(format!("fragment:linear=1:10"));
+        args.push("fragment:linear=1:10".to_owned());
     }
     args.push("--continue".to_owned());
     args.extend(ytdlp::impersonate_args_from_setting(

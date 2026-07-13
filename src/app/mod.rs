@@ -2671,7 +2671,7 @@ impl PydlApp {
         let convert_ids: Vec<u64> = self.convert_items.iter().map(|it| it.item_id).collect();
         self.download_core_action(|core| core.clear_all_queues_for_exit());
         self.convert_input_paths.clear();
-        for id in downloader_ids.into_iter().chain(convert_ids.into_iter()) {
+        for id in downloader_ids.into_iter().chain(convert_ids) {
             self.textures.remove(&id);
             self.thumbnail_inflight.remove(&id);
             self.thumbnail_attempted.remove(&id);
