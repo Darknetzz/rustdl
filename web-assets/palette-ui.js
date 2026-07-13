@@ -10,6 +10,11 @@ const PALETTE_ACTIONS = {
   settings_convert: () => openSettingsDialog("convert"),
   settings_webui: () => openSettingsDialog("webui"),
   reset_ui_scale: () => patchHostSettings({ ui_scale: 1.0 }),
+  add_urls_from_input: () => {
+    setView("downloader");
+    document.getElementById("url-input")?.focus();
+    document.getElementById("btn-add")?.click();
+  },
   start_downloads: () =>
     postAction("/api/downloads/start", "Downloads could not start.")
       .then(refreshAll)
@@ -36,6 +41,10 @@ const PALETTE_ACTIONS = {
   mode_downloader: () => setView("downloader"),
   mode_convert: () => setView("convert"),
   mode_library: () => setView("library"),
+  open_output_folder: () =>
+    api("/api/open-output-folder", { method: "POST" })
+      .then(() => showToast("Opened output folder on host."))
+      .catch((e) => notifyError(e.message || String(e))),
   focus_search: () => focusActiveSearch(),
   toggle_log: () => toggleActivityLogExpanded(),
   export_log: () => exportActivityLog(),
@@ -46,7 +55,8 @@ const PALETTE_ACTIONS = {
   float_videos: () => patchHostSettings({ videos_docked: false, videos_open: true }),
   dock_log: () => patchHostSettings({ logs_docked: true, logs_open: true }),
   float_log: () => patchHostSettings({ logs_open: true, logs_docked: false }),
-  open_about: () => document.getElementById("about-dialog")?.showModal(),
+  open_about: () => openAboutDialog(false),
+  show_keyboard_shortcuts: () => openAboutDialog(true),
   refresh_all: () => refreshAll(),
 };
 

@@ -587,7 +587,10 @@ pub fn max_video_resolution_from_entry(entry: &serde_json::Value) -> (Option<u32
         .map(|v| v as u32);
 
     let mut scan = |f: &serde_json::Value| {
-        let vcodec = f.get("vcodec").and_then(serde_json::Value::as_str).unwrap_or("");
+        let vcodec = f
+            .get("vcodec")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("");
         if vcodec == "none" || vcodec.is_empty() {
             return;
         }
@@ -606,7 +609,10 @@ pub fn max_video_resolution_from_entry(entry: &serde_json::Value) -> (Option<u32
             scan(f);
         }
     }
-    if let Some(req) = entry.get("requested_formats").and_then(serde_json::Value::as_array) {
+    if let Some(req) = entry
+        .get("requested_formats")
+        .and_then(serde_json::Value::as_array)
+    {
         for f in req {
             scan(f);
         }

@@ -1156,64 +1156,70 @@ impl PydlApp {
                                     .and_then(|s| s.to_str())
                                     .unwrap_or(&it.source_path);
                                 ui.add(
-                                    egui::Label::new(RichText::new(name).small().color(text_muted(&theme)))
-                                        .truncate(),
+                                    egui::Label::new(
+                                        RichText::new(name).small().color(text_muted(&theme)),
+                                    )
+                                    .truncate(),
                                 );
                             }
                         });
 
                         if !compact {
-                        if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
-                            let mut pb =
-                                egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
-                                    .desired_width(ui.available_width().min(280.0))
-                                    .show_percentage()
-                                    .animate(it.status == ItemStatus::Downloading);
-                            if it.status == ItemStatus::Downloading {
-                                pb = pb.fill(item_color);
+                            if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
+                                let mut pb =
+                                    egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
+                                        .desired_width(ui.available_width().min(280.0))
+                                        .show_percentage()
+                                        .animate(it.status == ItemStatus::Downloading);
+                                if it.status == ItemStatus::Downloading {
+                                    pb = pb.fill(item_color);
+                                }
+                                ui.add(pb);
                             }
-                            ui.add(pb);
-                        }
 
-                        let probing = self.convert_media_inflight.contains(&it.item_id);
-                        if will_skip_target {
-                            draw_convert_will_skip_notice(ui, &self.settings.convert_target_codec);
-                        }
-                        draw_convert_media_badges(ui, it, probing, &theme);
-                        if let Some(label) =
-                            convert_item_size_limit_override_label(it, &self.settings)
-                        {
-                            draw_meta_badge(ui, &label, MetaBadgeKind::ShrinkPercent);
-                        }
+                            let probing = self.convert_media_inflight.contains(&it.item_id);
+                            if will_skip_target {
+                                draw_convert_will_skip_notice(
+                                    ui,
+                                    &self.settings.convert_target_codec,
+                                );
+                            }
+                            draw_convert_media_badges(ui, it, probing, &theme);
+                            if let Some(label) =
+                                convert_item_size_limit_override_label(it, &self.settings)
+                            {
+                                draw_meta_badge(ui, &label, MetaBadgeKind::ShrinkPercent);
+                            }
 
-                        draw_convert_path_line(ui, "in:", &it.source_path, &theme);
-                        draw_convert_path_line(ui, "out:", &it.output_path, &theme);
+                            draw_convert_path_line(ui, "in:", &it.source_path, &theme);
+                            draw_convert_path_line(ui, "out:", &it.output_path, &theme);
 
-                        if it.status == ItemStatus::Done
-                            && !convert_item_is_skipped(it)
-                            && it.input_bytes > 0
-                        {
-                            if let Some(output_bytes) = it.output_bytes {
-                                ui.horizontal(|ui| {
-                                    ui.spacing_mut().item_spacing.x = 8.0;
-                                    if !it.detail.is_empty() {
-                                        ui.label(
-                                            RichText::new(&it.detail).small().color(item_color),
+                            if it.status == ItemStatus::Done
+                                && !convert_item_is_skipped(it)
+                                && it.input_bytes > 0
+                            {
+                                if let Some(output_bytes) = it.output_bytes {
+                                    ui.horizontal(|ui| {
+                                        ui.spacing_mut().item_spacing.x = 8.0;
+                                        if !it.detail.is_empty() {
+                                            ui.label(
+                                                RichText::new(&it.detail).small().color(item_color),
+                                            );
+                                        }
+                                        draw_convert_bytes_arrow(
+                                            ui,
+                                            &human_bytes_ui(it.input_bytes),
+                                            &human_bytes_ui(output_bytes),
+                                            item_color,
+                                            &theme,
                                         );
-                                    }
-                                    draw_convert_bytes_arrow(
-                                        ui,
-                                        &human_bytes_ui(it.input_bytes),
-                                        &human_bytes_ui(output_bytes),
-                                        item_color,
-                                        &theme,
-                                    );
-                                });
+                                    });
+                                }
+                            } else if !it.detail.is_empty() {
+                                ui.label(RichText::new(&it.detail).small());
                             }
-                        } else if !it.detail.is_empty() {
-                            ui.label(RichText::new(&it.detail).small());
-                        }
-                        } else if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued) {
+                        } else if matches!(it.status, ItemStatus::Downloading | ItemStatus::Queued)
+                        {
                             let mut pb =
                                 egui::ProgressBar::new((it.percent / 100.0).clamp(0.0, 1.0))
                                     .desired_width(ui.available_width().min(200.0))

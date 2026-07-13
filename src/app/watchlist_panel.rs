@@ -5,7 +5,7 @@ use eframe::egui::{self, RichText};
 use crate::app_ui::{button_group, left_button_row, with_full_width};
 use crate::theme::TEXT_MUTED;
 use crate::ui_icons;
-use crate::watchlist::{format_resolution_height};
+use crate::watchlist::format_resolution_height;
 
 use super::PydlApp;
 
@@ -119,7 +119,11 @@ impl PydlApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if ui.small_button(ui_icons::REMOVE).on_hover_text("Remove").clicked() {
+                                    if ui
+                                        .small_button(ui_icons::REMOVE)
+                                        .on_hover_text("Remove")
+                                        .clicked()
+                                    {
                                         remove_id = Some(entry.entry_id);
                                     }
                                     if entry.improved_pending
@@ -203,7 +207,10 @@ impl PydlApp {
                     .desired_width(320.0),
             );
             if ui
-                .add_enabled(self.has_yt_dlp, egui::Button::new(format!("{} Add", ui_icons::ADD)))
+                .add_enabled(
+                    self.has_yt_dlp,
+                    egui::Button::new(format!("{} Add", ui_icons::ADD)),
+                )
                 .clicked()
                 && !self.watchlist_add_url_buf.trim().is_empty()
             {

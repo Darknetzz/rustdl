@@ -6,7 +6,8 @@ use crate::app_ui::{
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, layout_breakpoint,
     main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height, show_mode_panel,
     url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    VIDEOS_DOCK_PANEL_ID,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -99,9 +100,7 @@ impl eframe::App for PydlApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(1500));
         } else if ui_suspended {
             let hz = (self.background_busy_repaint_hz() * 0.2).max(2.0);
-            ctx.request_repaint_after(std::time::Duration::from_secs_f64(
-                1.0 / f64::from(hz),
-            ));
+            ctx.request_repaint_after(std::time::Duration::from_secs_f64(1.0 / f64::from(hz)));
         }
         if let Some(deadline) = self.auto_add_after {
             let now = ctx.input(|i| i.time);
@@ -159,35 +158,39 @@ impl eframe::App for PydlApp {
         }
 
         if !ui_suspended {
-        if self.settings.videos_docked {
-            egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
-                .resizable(true)
-                .default_height(self.settings.videos_dock_height)
-                .height_range(BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H)
-                .frame(dock_panel_horizontal_frame())
-                .show(ctx, |ui| {
-                    self.draw_docked_videos_panel(ui);
-                });
-            patch_resizable_panel_state_height(ctx, VIDEOS_DOCK_PANEL_ID);
-        } else {
-            let log_docked = self.settings.logs_open && self.settings.logs_docked;
-            let (default_h, height_range, resizable) = if log_docked {
-                (self.settings.undocked_footer_height, BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H, true)
+            if self.settings.videos_docked {
+                egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
+                    .resizable(true)
+                    .default_height(self.settings.videos_dock_height)
+                    .height_range(BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H)
+                    .frame(dock_panel_horizontal_frame())
+                    .show(ctx, |ui| {
+                        self.draw_docked_videos_panel(ui);
+                    });
+                patch_resizable_panel_state_height(ctx, VIDEOS_DOCK_PANEL_ID);
             } else {
-                (UNDOCKED_VIDEOS_STRIP_H, 72.0..=140.0, false)
-            };
-            egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
-                .resizable(resizable)
-                .default_height(default_h)
-                .height_range(height_range)
-                .frame(dock_panel_horizontal_frame())
-                .show(ctx, |ui| {
-                    self.draw_queue_footer(ui);
-                });
-            patch_resizable_panel_state_height(ctx, UNDOCKED_FOOTER_PANEL_ID);
-        }
+                let log_docked = self.settings.logs_open && self.settings.logs_docked;
+                let (default_h, height_range, resizable) = if log_docked {
+                    (
+                        self.settings.undocked_footer_height,
+                        BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H,
+                        true,
+                    )
+                } else {
+                    (UNDOCKED_VIDEOS_STRIP_H, 72.0..=140.0, false)
+                };
+                egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
+                    .resizable(resizable)
+                    .default_height(default_h)
+                    .height_range(height_range)
+                    .frame(dock_panel_horizontal_frame())
+                    .show(ctx, |ui| {
+                        self.draw_queue_footer(ui);
+                    });
+                patch_resizable_panel_state_height(ctx, UNDOCKED_FOOTER_PANEL_ID);
+            }
 
-        egui::CentralPanel::default()
+            egui::CentralPanel::default()
             .frame(content_panel_frame())
             .show(ctx, |ui| {
                 self.constrain_content(ui);
@@ -469,22 +472,22 @@ impl eframe::App for PydlApp {
         });
                     }); // central panel
 
-        self.draw_settings_window(ctx);
-        self.draw_about_window(ctx);
-        self.draw_command_palette(ctx);
-        self.draw_library_window(ctx);
-        if !self.settings.videos_docked {
-            self.draw_videos_window(ctx);
-        }
-        if self.settings.logs_open && !self.settings.logs_docked {
-            self.draw_logs_window(ctx);
-        }
-        self.maybe_notify_session_complete();
-        self.maybe_notify_convert_batch_complete();
-        self.draw_playlist_preview_dialog(ctx);
-        self.draw_downloader_options_dialog(ctx);
+            self.draw_settings_window(ctx);
+            self.draw_about_window(ctx);
+            self.draw_command_palette(ctx);
+            self.draw_library_window(ctx);
+            if !self.settings.videos_docked {
+                self.draw_videos_window(ctx);
+            }
+            if self.settings.logs_open && !self.settings.logs_docked {
+                self.draw_logs_window(ctx);
+            }
+            self.maybe_notify_session_complete();
+            self.maybe_notify_convert_batch_complete();
+            self.draw_playlist_preview_dialog(ctx);
+            self.draw_downloader_options_dialog(ctx);
 
-        self.input_urls_snapshot = self.input_urls.clone();
+            self.input_urls_snapshot = self.input_urls.clone();
         } // !ui_suspended
 
         self.draw_session_restore_dialog(ctx);

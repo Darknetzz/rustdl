@@ -777,17 +777,14 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
             .format_name
             .map(|n| n.split(',').next().unwrap_or(&n).trim().to_owned())
             .filter(|n| !n.is_empty()),
-        creation_time: format
-            .tags
-            .as_ref()
-            .and_then(|t| {
-                t.creation_time
-                    .as_deref()
-                    .or(t.date.as_deref())
-                    .map(str::trim)
-                    .filter(|s| !s.is_empty())
-                    .map(str::to_owned)
-            }),
+        creation_time: format.tags.as_ref().and_then(|t| {
+            t.creation_time
+                .as_deref()
+                .or(t.date.as_deref())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+        }),
         encoder_tag: format
             .tags
             .and_then(|t| t.encoder)

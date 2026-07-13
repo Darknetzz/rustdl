@@ -213,6 +213,18 @@
       <p class="hint">This page is the LAN web UI. Settings, queue control, and shutdown run on the rustdl instance on your network.</p>
       <p class="hint">Check for updates from the desktop app (<strong>About rustdl</strong> on the logo in the main window).</p>
       <p><a id="about-releases-link" href="https://github.com/Darknetzz/rustdl/releases" target="_blank" rel="noopener noreferrer">View releases on GitHub</a> · <a href="https://github.com/Darknetzz/rustdl" target="_blank" rel="noopener noreferrer">Source repository</a></p>
+      <h3 id="about-shortcuts-heading">Keyboard shortcuts</h3>
+      <p class="hint">Shortcuts marked <em>host app</em> apply to the rustdl desktop window on the PC running this server.</p>
+      <dl class="about-shortcuts">
+        <dt><kbd>Ctrl</kbd>+<kbd>K</kbd> / <kbd>Cmd</kbd>+<kbd>K</kbd></dt><dd>Command palette (this page)</dd>
+        <dt><kbd>/</kbd></dt><dd>Focus queue search (this page)</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close dialogs and menus (this page)</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>Enter</kbd> <span class="hint">(host app)</span></dt><dd>Add URLs from input</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>D</kbd> <span class="hint">(host app)</span></dt><dd>Start downloads for ready items</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>,</kbd> <span class="hint">(host app)</span></dt><dd>Open Settings</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>F</kbd> <span class="hint">(host app)</span></dt><dd>Focus queue search</dd>
+        <dt><kbd>Ctrl</kbd>+<kbd>L</kbd> <span class="hint">(host app)</span></dt><dd>Show or hide activity log</dd>
+      </dl>
     </div>
     <div class="dialog-actions">
       <div class="btn-group" role="group" aria-label="About dialog">
@@ -248,6 +260,25 @@
           <label class="check"><input type="checkbox" id="set-compact-cards" /> Use compact cards</label>
           <label class="check"><input type="checkbox" id="set-hide-subtitle" /> Hide card subtitle/uploader</label>
           <label class="check"><input type="checkbox" id="set-card-list" /> List layout for queue cards</label>
+
+          <h3>Desktop app appearance (host)</h3>
+          <p class="hint">These settings apply to the rustdl desktop window on the PC running rustdl, not this browser page theme toggle.</p>
+          <label>UI scale (%)
+            <span class="input-with-button">
+              <input type="number" id="set-ui-scale" min="85" max="150" step="5" title="Desktop app zoom (85–150%, 5% steps)." />
+              <button type="button" id="btn-ui-scale-reset" class="secondary" title="Reset to 100%">100%</button>
+            </span>
+          </label>
+          <label>Host theme
+            <select id="set-host-theme">
+              <option value="dark">Dark</option>
+              <option value="light">Light</option>
+              <option value="system">System</option>
+            </select>
+          </label>
+          <label>Max content width (px, 0 = full width)
+            <input type="number" id="set-max-content-width" min="0" max="1600" step="50" title="Limits how wide controls stretch on ultrawide monitors in the desktop app." />
+          </label>
 
           <h3>Mode panel colors</h3>
           <p class="hint">Panel tint and accent stripe for Downloader and Video Converter. Leave default or pick a custom color.</p>
@@ -287,6 +318,19 @@
           </div>
 
           <div id="general-subtab-system" class="general-subpanel" role="tabpanel" hidden>
+          <h3>Host app behavior</h3>
+          <p class="hint">Applies to the rustdl desktop app on the PC running this server.</p>
+          <label class="check"><input type="checkbox" id="set-ui-power-save" /> Power save during active work (host app)</label>
+          <p class="hint">Lowers UI refresh rate while downloading or converting and uses denser queue rows sooner.</p>
+          <label class="check"><input type="checkbox" id="set-minimize-to-tray" /> Minimize to system tray (host app)</label>
+          <p class="hint">Hide the desktop window to the tray when minimizing or closing; downloads and encodes continue.</p>
+          <label>On startup (session restore)
+            <select id="set-session-restore">
+              <option value="ask">Ask each startup</option>
+              <option value="always">Always restore saved queues</option>
+              <option value="never">Never restore (start fresh)</option>
+            </select>
+          </label>
           <h3>Background work priority</h3>
           <p class="hint">Lowers yt-dlp and ffmpeg priority so downloads and encodes are less likely to slow down other apps. Not a hard CPU/GPU cap.</p>
           <label>Subprocess priority
@@ -306,11 +350,17 @@
           </div>
 
           <div id="general-subtab-backup" class="general-subpanel" role="tabpanel" hidden>
-          <h3>Backup</h3>
+          <h3>GitHub releases</h3>
+          <p class="hint">Personal access token for About → Check for updates when the repository is private. Read access to repository contents is enough.</p>
+          <label>GitHub token
+            <input type="password" id="set-github-token" placeholder="ghp_… or github_pat_…" autocomplete="off" />
+          </label>
+          <h3>Settings portability</h3>
           <p class="hint">Export or import the full rustdl settings JSON (same format as the desktop app).</p>
           <div class="btn-group" role="group" aria-label="Settings backup">
             <button type="button" id="btn-settings-export" class="secondary" data-icon="download">Export settings</button>
             <button type="button" id="btn-settings-import" class="secondary" data-icon="upload">Import settings</button>
+            <button type="button" id="btn-settings-reset" class="secondary danger" data-icon="restart_alt">Reset to defaults</button>
           </div>
           </div>
         </div>
@@ -559,7 +609,12 @@
           <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
           <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename output to original filename (in-place replacement)</label>
           <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>
-          <label>Output folder <input type="text" id="set-convert-output-dir" placeholder="same folder as each input (default)" title="When empty, encoded files are written next to each source file." /></label>
+          <label>Output folder
+            <span class="input-with-button">
+              <input type="text" id="set-convert-output-dir" placeholder="same folder as each input (default)" title="When empty, encoded files are written next to each source file." />
+              <button type="button" id="btn-browse-convert-output-dir" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
 
           <h3>Post-encode options</h3>
           <label>Subtitle handling (during encode)
@@ -586,7 +641,12 @@
 
           <h3>Watch folder</h3>
           <label class="check"><input type="checkbox" id="set-convert-watch-enabled" /> Auto-scan new videos into the convert queue</label>
-          <label>Convert watch folder <input type="text" id="set-convert-watch-path" placeholder="D:\Videos\incoming" /></label>
+          <label>Convert watch folder
+            <span class="input-with-button">
+              <input type="text" id="set-convert-watch-path" placeholder="D:\Videos\incoming" />
+              <button type="button" id="btn-browse-convert-watch-path" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
         </div>
 
         <div id="settings-tab-webui" class="settings-panel" role="tabpanel" hidden>
@@ -602,8 +662,18 @@
           <label class="check"><input type="checkbox" id="set-web-browser-notifications" /> Browser notifications on session complete</label>
           <p class="hint">Shows a browser notification when download or convert batches finish (requires permission).</p>
           <h3>TLS (optional)</h3>
-          <label>TLS certificate <input type="text" id="set-web-tls-cert" placeholder="fullchain.pem" /></label>
-          <label>TLS private key <input type="text" id="set-web-tls-key" placeholder="privkey.pem" /></label>
+          <label>TLS certificate
+            <span class="input-with-button">
+              <input type="text" id="set-web-tls-cert" placeholder="fullchain.pem" />
+              <button type="button" id="btn-browse-web-tls-cert" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
+          <label>TLS private key
+            <span class="input-with-button">
+              <input type="text" id="set-web-tls-key" placeholder="privkey.pem" />
+              <button type="button" id="btn-browse-web-tls-key" class="secondary" data-icon="folder_open">Browse…</button>
+            </span>
+          </label>
           <p class="hint">When both PEM files exist on the host, rustdl serves HTTPS on the bind address.</p>
           <h3>API token</h3>
           <p class="hint">Token for LAN clients without IP whitelist access. Copy from the desktop app or generate a new one here (saved to settings).</p>
@@ -613,6 +683,10 @@
           <div class="row btn-group">
             <button type="button" id="btn-generate-web-token" class="secondary" data-icon="vpn_key">Generate new token</button>
             <button type="button" id="btn-copy-web-token" class="secondary" data-icon="content_copy">Copy token</button>
+          </div>
+          <div id="web-ui-qr-wrap" class="web-ui-qr-wrap hidden">
+            <p class="hint">Scan to open the web UI on a phone (swap 127.0.0.1 for this PC's LAN IP):</p>
+            <img id="web-ui-qr-img" alt="QR code for web UI URL with token" width="128" height="128" decoding="async" />
           </div>
         </div>
       </div>
@@ -674,6 +748,39 @@
         <div class="btn-group" role="group">
           <button type="button" id="btn-import-urls-cancel" class="secondary" data-icon="close">Cancel</button>
           <button type="submit" id="btn-import-urls-ok" class="primary" data-icon="add">Import</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="convert-size-limit-dialog" class="settings-dialog">
+    <form method="dialog" id="convert-size-limit-form">
+      <h2 id="convert-size-limit-title">Size limit</h2>
+      <p id="convert-size-limit-hint" class="hint"></p>
+      <label class="check"><input type="checkbox" id="convert-size-limit-use-global" /> Use global default (Settings → Converter)</label>
+      <div id="convert-size-limit-fields">
+        <label>Limit type
+          <select id="convert-size-limit-kind">
+            <option value="none">Off</option>
+            <option value="min_shrink_percent">Min shrink (%)</option>
+            <option value="max_percent_of_source">Max % of source</option>
+            <option value="max_output_bytes">Max output size</option>
+          </select>
+        </label>
+        <label>Value <input type="text" id="convert-size-limit-value" placeholder="e.g. 50 or 500M" /></label>
+        <label>If limit exceeded
+          <select id="convert-size-limit-violation">
+            <option value="skip">Skip (estimate)</option>
+            <option value="fail">Fail</option>
+            <option value="encode_delete">Encode, delete if over</option>
+            <option value="keep">Keep anyway</option>
+          </select>
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <div class="btn-group" role="group">
+          <button type="button" id="btn-convert-size-limit-cancel" class="secondary" data-icon="close">Cancel</button>
+          <button type="submit" id="btn-convert-size-limit-apply" class="primary" data-icon="save">Apply</button>
         </div>
       </div>
     </form>

@@ -849,11 +849,7 @@ pub(crate) fn spawn_watchlist_poll_cycle(shared: crate::service::core::SharedCor
         for (entry_id, url, bin, metadata_args) in work {
             let url_for_probe = url.clone();
             let probe = match tokio::task::spawn_blocking(move || {
-                ytdlp::probe_max_video_resolution_with_bin(
-                    &url_for_probe,
-                    &bin,
-                    &metadata_args,
-                )
+                ytdlp::probe_max_video_resolution_with_bin(&url_for_probe, &bin, &metadata_args)
             })
             .await
             {

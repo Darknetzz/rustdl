@@ -119,7 +119,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 
 When enabled in **Settings → Web UI**, rustdl serves a built-in web interface on the configured bind address (default `0.0.0.0:8765`). Open `http://<this-pc-ip>:8765/` from another device on the same network, paste the **API token** shown in Settings (unless your IP is on the whitelist), then use the page to control the **Downloader** queue, **Video Converter** queue, and **Library** of completed downloads. **127.0.0.1** and **::1** are whitelisted by default so the web UI on this PC does not require a token.
 
-**Still desktop-only:** native queue/settings file pickers (web uses API import/export), desktop notifications on session complete, in-app update download (Windows only), browser URL drag-and-drop (Windows only), **Quality watchlist** panel and settings.
+**Still desktop-only:** native OS file pickers (web uses API import/export plus host **Browse** buttons), desktop OS notifications on session complete (web offers optional browser notifications), in-app update download/apply (Windows today), browser URL drag-and-drop (Windows today), dock/float panel layout for the host egui window.
 
 **Security notes:**
 
@@ -142,7 +142,7 @@ Switch modes from the **Mode** toggle near the top of the main window.
 
 Track URLs whose source quality may improve over time (e.g. a live premiere that later gets a full HD upload on the same link):
 
-- **Add** from a Done item (**Verify… → Watch for better quality**), paste a URL under **Settings → Downloader → Quality watchlist**, or use the collapsible **Quality watchlist** panel in the main column.
+- **Add** from a Done item (**Verify… → Watch for better quality**), paste a URL under **Settings → Downloader → Quality watchlist**, or use the collapsible **Quality watchlist** panel in the main column (desktop) or on the LAN web UI.
 - **Settings → Downloader → Quality watchlist**: enable/disable polling, interval (hours), minimum height delta to count as an improvement, and optional **auto-enqueue** when quality improves.
 - Entries persist in `rustdl_watchlist.json` under your config folder.
 

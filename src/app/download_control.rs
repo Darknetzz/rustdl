@@ -146,17 +146,13 @@ impl PydlApp {
             core.append_log("Watchlist: checking URLs…");
         });
         if self.settings.watchlist_enabled && self.has_yt_dlp {
-            crate::service::background_spawn::spawn_watchlist_poll_cycle(
-                self.shared_core.clone(),
-            );
+            crate::service::background_spawn::spawn_watchlist_poll_cycle(self.shared_core.clone());
         }
     }
 
     fn spawn_watchlist_probe_if_enabled(&self) {
         if self.settings.watchlist_enabled && self.has_yt_dlp {
-            crate::service::background_spawn::spawn_watchlist_poll_cycle(
-                self.shared_core.clone(),
-            );
+            crate::service::background_spawn::spawn_watchlist_poll_cycle(self.shared_core.clone());
         }
     }
 }

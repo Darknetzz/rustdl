@@ -6,16 +6,15 @@ use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
     allocate_bottom_up_rect, allocate_top_down_rect, bounded_ui_height, button_group,
-    button_toolbar_wrapped, compact_button_group, consume_remaining_ui_space, content_width,
-    docked_log_lines_max_h, draw_batch_progress_bar, draw_queue_status_compact_row,
-    fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
-    note_resizable_panel_height, pin_allocated_rect, queue_footer_reserve, queue_list_height_from_layout,
-    queue_list_min_scroll_h, queue_log_block_height, queue_panel_layout_heights,
-    queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
-    show_persisted_resizable_window, status_color, with_full_width,
-    compact_convert_list_row, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
-    VIDEOS_DOCK_PANEL_ID,
+    button_toolbar_wrapped, compact_button_group, compact_convert_list_row,
+    consume_remaining_ui_space, content_width, docked_log_lines_max_h, draw_batch_progress_bar,
+    draw_queue_status_compact_row, fill_allocated_rect, finite_ui_span, height_to_bottom,
+    left_button_row, note_resizable_panel_height, pin_allocated_rect, queue_footer_reserve,
+    queue_list_height_from_layout, queue_list_min_scroll_h, queue_log_block_height,
+    queue_panel_layout_heights, queue_status_compact, queue_undocked_strip_reserve,
+    show_mode_panel, show_persisted_resizable_window, status_color, with_full_width,
+    PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -89,8 +88,8 @@ impl PydlApp {
         docked: bool,
         outer_scroll_h: f32,
     ) {
-        let compact_convert =
-            self.convert_mode && compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
+        let compact_convert = self.convert_mode
+            && compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
         let min_h = queue_list_min_scroll_h(docked, self.convert_mode, compact_convert);
         let cap = if docked {
             bounded_ui_height(ui, min_h).max(min_h)
@@ -530,8 +529,12 @@ impl PydlApp {
         );
         let log_block_est =
             queue_log_block_height(layout.dock_log, self.settings.log_dock_height, true);
-        let predicted_list_h =
-            queue_list_height_from_layout(content_top_after_search, body_bottom, footer_h, log_block_est);
+        let predicted_list_h = queue_list_height_from_layout(
+            content_top_after_search,
+            body_bottom,
+            footer_h,
+            log_block_est,
+        );
         let status_compact = queue_status_compact(predicted_list_h, self.convert_mode);
 
         if self.convert_mode {
@@ -556,13 +559,7 @@ impl PydlApp {
         let content_top = ui.cursor().min.y;
         let (list_h, stack_h) =
             queue_panel_layout_heights(content_top, body_bottom, footer_h, log_block_est);
-        self.draw_queue_list_body(
-            ui,
-            list_h,
-            layout.scroll_id,
-            layout.docked,
-            list_h,
-        );
+        self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked, list_h);
 
         allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
             ui.add_space(2.0);

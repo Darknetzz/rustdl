@@ -20,8 +20,8 @@ The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` 
 
 - **Downloader mode** — paste URLs, preview cards, queue downloads, activity log, profiles, scheduled start, watch folders, queue templates, download library.
 - **Video Converter mode** — local file/folder transcoding via ffmpeg (AV1 default; H.265/H.264 optional); parallel workers, GPU encode fairness, convert presets; desktop + LAN web UI.
-- **Quality watchlist** — periodically re-probe saved URLs; log when max available resolution improves; optional auto-enqueue (`watchlist.rs`, `watchlist_panel.rs`, `core_watchlist.rs`; Settings → Downloader). **Desktop only** — not exposed on LAN web UI yet.
-- **Command palette** — `Ctrl+K` / `Cmd+K`; layout presets (Compact / Review / Minimal), dock/float panels, quick queue actions (`command_palette.rs`; mirrored in `web-assets/app.js`).
+- **Quality watchlist** — periodically re-probe saved URLs; log when max available resolution improves; optional auto-enqueue (`watchlist.rs`, `watchlist_panel.rs`, `core_watchlist.rs`; Settings → Downloader). Desktop panel + LAN web UI (`watchlist_api.rs`, `web-assets/watchlist-ui.js`).
+- **Command palette** — `Ctrl+K` / `Cmd+K`; layout presets (Compact / Review / Minimal), dock/float panels, quick queue actions (`command_palette.rs`; mirrored in `web-assets/palette-ui.js` + server manifest in `service/web/palette.rs`).
 - **Download library** — index of completed files under the output folder; desktop window + LAN **Library** tab (`domain/done_file_index.rs`, `core.rs` refresh loop).
 - **More info** — per-row popup with yt-dlp source fields and ffprobe file details after download (`cards.rs`).
 - **System tray** — Windows + Linux minimize-to-tray while downloads/encodes continue (`tray.rs`).

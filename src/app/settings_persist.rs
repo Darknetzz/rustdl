@@ -36,8 +36,7 @@ impl PydlApp {
         let settings = self.settings.clone();
         let rt = self.runtime.clone();
         rt.spawn(async move {
-            let save_result =
-                tokio::task::spawn_blocking(move || save_settings(&settings)).await;
+            let save_result = tokio::task::spawn_blocking(move || save_settings(&settings)).await;
             if let Ok(Err(err)) = save_result {
                 eprintln!("rustdl: failed to save settings: {err}");
             }

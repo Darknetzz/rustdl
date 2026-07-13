@@ -110,8 +110,14 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/watchlist", get(watchlist_list))
         .route("/api/watchlist", post(watchlist_add))
         .route("/api/watchlist/probe", post(watchlist_probe_now))
-        .route("/api/watchlist/from-queue/:item_id", post(watchlist_add_from_queue))
+        .route(
+            "/api/watchlist/from-queue/:item_id",
+            post(watchlist_add_from_queue),
+        )
         .route("/api/watchlist/:entry_id/enqueue", post(watchlist_enqueue))
         .route("/api/watchlist/:entry_id/pause", post(watchlist_set_paused))
-        .route("/api/watchlist/:entry_id", axum::routing::delete(watchlist_remove))
+        .route(
+            "/api/watchlist/:entry_id",
+            axum::routing::delete(watchlist_remove),
+        )
 }

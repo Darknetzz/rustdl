@@ -1005,10 +1005,46 @@ function populateAboutDialog(data) {
   }
 }
 
-function openAboutDialog() {
+function openAboutDialog(scrollToShortcuts = false) {
   populateAboutDialog(lastStatusPayload);
   const dlg = document.getElementById("about-dialog");
-  if (dlg) dlg.showModal();
+  if (dlg) {
+    dlg.showModal();
+    if (scrollToShortcuts) {
+      requestAnimationFrame(() => {
+        document.getElementById("about-shortcuts-heading")?.scrollIntoView({ block: "start" });
+      });
+    }
+  }
+}
+
+function updateWebUiQrImage(hasToken) {
+  const wrap = document.getElementById("web-ui-qr-wrap");
+  const img = document.getElementById("web-ui-qr-img");
+  if (!wrap || !img) return;
+  if (!hasToken) {
+    wrap.classList.add("hidden");
+    img.removeAttribute("src");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  const base = apiUrlWithAuth("/api/web-ui/qr");
+  const sep = base.includes("?") ? "&" : "?";
+  img.src = `${base}${sep}_=${Date.now()}`;
+}
+
+async function resetSettingsToDefaults() {
+  const ok = await showConfirmDialog(
+    "Reset all settings to defaults? Your download output folder path is kept.",
+    "Reset settings",
+  );
+  if (!ok) return;
+  const res = await api("/api/settings/reset", { method: "POST" });
+  const data = await res.json();
+  cachedSettings = data.settings;
+  populateSettingsForm(cachedSettings, "");
+  showToast("Settings reset to defaults.");
+  await refreshAll();
 }
 
 function updateDownloadControlButtons(data) {
@@ -3100,6 +3136,13 @@ function setVal(id, v) {
   if (el) el.value = v ?? "";
 }
 
+/** Snap desktop UI scale percent to 85–150 in 5% steps (matches host app). */
+function snapUiScalePercent(pct) {
+  const clamped = Math.min(150, Math.max(85, pct));
+  const snapped = Math.round(clamped / 5) * 5;
+  return snapped / 100;
+}
+
 function updateQualityCustomVisibility() {
   const sel = document.getElementById("set-quality");
   const wrap = document.getElementById("wrap-quality-custom");
@@ -3159,6 +3202,13 @@ function populateSettingsForm(s, commandPreview) {
     s.mode_convert_color,
     DEFAULT_MODE_CONVERT,
   );
+  setVal("set-ui-scale", Math.round((s.ui_scale ?? 1) * 100));
+  setVal("set-host-theme", s.theme || "dark");
+  setVal("set-max-content-width", Math.round(s.max_content_width ?? 0));
+  setCheck("set-ui-power-save", s.ui_power_save);
+  setCheck("set-minimize-to-tray", s.minimize_to_tray);
+  setVal("set-session-restore", s.session_restore_preference || "ask");
+  setVal("set-github-token", s.github_token || "");
   setVal("set-subprocess-priority", s.subprocess_priority || "normal");
   setVal("set-ffmpeg-path", s.ffmpeg_path);
   setVal("set-ffprobe-path", s.ffprobe_path);
@@ -3277,6 +3327,7 @@ function populateSettingsForm(s, commandPreview) {
   document.getElementById("command-preview").textContent = commandPreview || "";
   updateQualityCustomVisibility();
   updateOrganizeUi(s);
+  updateWebUiQrImage(!!(s.web_auth_token || "").trim());
 }
 
 function collectSettingsForm(base) {
@@ -3294,6 +3345,18 @@ function collectSettingsForm(base) {
     "set-mode-downloader-hex",
   );
   s.mode_convert_color = readModeColorField("set-mode-convert-color", "set-mode-convert-hex");
+  s.ui_scale = snapUiScalePercent(
+    parseInt(document.getElementById("set-ui-scale")?.value, 10) || 100,
+  );
+  s.theme = document.getElementById("set-host-theme")?.value || "dark";
+  s.max_content_width =
+    parseFloat(document.getElementById("set-max-content-width")?.value) || 0;
+  s.max_content_width = Math.min(1600, Math.max(0, s.max_content_width));
+  s.ui_power_save = document.getElementById("set-ui-power-save")?.checked ?? false;
+  s.minimize_to_tray = document.getElementById("set-minimize-to-tray")?.checked ?? false;
+  s.session_restore_preference =
+    document.getElementById("set-session-restore")?.value || "ask";
+  s.github_token = document.getElementById("set-github-token")?.value || "";
   s.subprocess_priority =
     document.getElementById("set-subprocess-priority").value || "normal";
   s.ffmpeg_path = document.getElementById("set-ffmpeg-path").value;
@@ -3803,6 +3866,40 @@ document.getElementById("btn-about-close")?.addEventListener("click", () => {
 document.getElementById("about-dialog")?.addEventListener("click", (e) => {
   if (e.target === e.currentTarget) e.currentTarget.close();
 });
+document.getElementById("convert-size-limit-use-global")?.addEventListener("change", () =>
+  updateConvertSizeLimitDialogFieldsVisibility(),
+);
+document.getElementById("btn-convert-size-limit-cancel")?.addEventListener("click", () => {
+  document.getElementById("convert-size-limit-dialog")?.close();
+});
+document.getElementById("convert-size-limit-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const itemId = convertSizeLimitDialogItemId;
+  if (!itemId) return;
+  const useGlobal = document.getElementById("convert-size-limit-use-global")?.checked;
+  let body;
+  if (useGlobal) {
+    body = { kind: null, value: null, violation: null };
+  } else {
+    const kind = document.getElementById("convert-size-limit-kind")?.value || "none";
+    body = {
+      kind,
+      value: document.getElementById("convert-size-limit-value")?.value?.trim() || "",
+      violation: document.getElementById("convert-size-limit-violation")?.value || "skip",
+    };
+    if (kind === "none") {
+      body.value = null;
+      body.violation = null;
+    }
+  }
+  try {
+    await applyConvertItemSizeLimit(itemId, body);
+    document.getElementById("convert-size-limit-dialog")?.close();
+    showToast("Size limit updated.");
+  } catch (err) {
+    notifyError(err.message || "Could not update size limit.");
+  }
+});
 document.getElementById("btn-settings").onclick = () => openSettingsDialog().catch(console.error);
 
 document.getElementById("btn-settings-cancel").onclick = () => {
@@ -4266,6 +4363,97 @@ function toggleConvertCardMedia(item, thumb) {
   el.play().catch(() => {});
 }
 
+let convertSizeLimitDialogItemId = null;
+
+function convertSizeLimitKindLabel(kind) {
+  switch (kind) {
+    case "min_shrink_percent":
+      return "Min shrink (%)";
+    case "max_percent_of_source":
+      return "Max % of source";
+    case "max_output_bytes":
+      return "Max output size";
+    default:
+      return "Off";
+  }
+}
+
+function convertSizeLimitOverrideBadgeText(item) {
+  if (!item.size_limit_kind_override) return null;
+  const kind = item.size_limit_kind_override || "none";
+  if (kind === "none") return "Size limit: off";
+  const value = (item.size_limit_value_override || "").trim();
+  return value
+    ? `Size limit: ${convertSizeLimitKindLabel(kind)} (${value})`
+    : `Size limit: ${convertSizeLimitKindLabel(kind)}`;
+}
+
+function updateConvertSizeLimitDialogFieldsVisibility() {
+  const useGlobal = document.getElementById("convert-size-limit-use-global")?.checked;
+  const fields = document.getElementById("convert-size-limit-fields");
+  if (fields) fields.hidden = !!useGlobal;
+}
+
+async function applyConvertItemSizeLimit(itemId, body) {
+  await api(`/api/convert/${itemId}/size-limit`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  await refreshAll();
+}
+
+function showConvertSizeLimitDialog(item) {
+  const dlg = document.getElementById("convert-size-limit-dialog");
+  if (!dlg) return;
+  convertSizeLimitDialogItemId = item.item_id;
+  const title = document.getElementById("convert-size-limit-title");
+  const hint = document.getElementById("convert-size-limit-hint");
+  if (title) {
+    title.textContent = `Size limit — ${baseName(item.source_path) || item.source_path || "item"}`;
+  }
+  if (hint) {
+    hint.textContent =
+      "Override the global convert size limit for this file only. Use global default to follow Settings → Converter.";
+  }
+  const useGlobal = document.getElementById("convert-size-limit-use-global");
+  const hasOverride = item.size_limit_kind_override != null;
+  if (useGlobal) useGlobal.checked = !hasOverride;
+  const kindEl = document.getElementById("convert-size-limit-kind");
+  const valueEl = document.getElementById("convert-size-limit-value");
+  const violationEl = document.getElementById("convert-size-limit-violation");
+  const settings = cachedSettings || {};
+  if (kindEl) {
+    kindEl.value =
+      item.size_limit_kind_override ||
+      settings.convert_size_limit_kind ||
+      "none";
+  }
+  if (valueEl) {
+    valueEl.value =
+      item.size_limit_value_override ||
+      settings.convert_size_limit_value ||
+      "";
+  }
+  if (violationEl) {
+    violationEl.value =
+      item.size_limit_violation_override ||
+      settings.convert_size_limit_violation ||
+      "skip";
+  }
+  updateConvertSizeLimitDialogFieldsVisibility();
+  dlg.showModal();
+}
+
+function appendConvertSizeLimitButton(group, item) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "secondary";
+  setButtonLabel(btn, ICON.tune, "Size limit…");
+  btn.title = "Override size limit for this file";
+  btn.onclick = () => showConvertSizeLimitDialog(item);
+  group.appendChild(btn);
+}
+
 function appendConvertPlayButton(group, item, thumb) {
   if (!item.playable) return;
   const play = document.createElement("button");
@@ -4366,6 +4554,14 @@ function renderConvertCard(item, settings, ctx) {
   const chip = document.createElement("span");
   setStatusChip(chip, slug, item.status_label || item.status || "");
   badges.appendChild(chip);
+  const limitBadge = convertSizeLimitOverrideBadgeText(item);
+  if (limitBadge) {
+    const limitEl = document.createElement("span");
+    limitEl.className = "status-badge status-idle";
+    limitEl.textContent = limitBadge;
+    limitEl.title = limitBadge;
+    badges.appendChild(limitEl);
+  }
   body.appendChild(badges);
 
   if (active) {
@@ -4395,6 +4591,7 @@ function renderConvertCard(item, settings, ctx) {
   card.appendChild(body);
 
   const { bar: actions, group } = createCardActionBar();
+  appendConvertSizeLimitButton(group, item);
   appendConvertPlayButton(group, item, thumb);
   appendConvertOpenMenuButton(group, item);
   if (slug === "idle" && readyItems.length > 1) {
@@ -4961,6 +5158,13 @@ document.getElementById("btn-settings-export")?.addEventListener("click", () =>
 document.getElementById("btn-settings-import")?.addEventListener("click", () =>
   settingsImportBackup().catch((e) => notifyError(e.message || String(e))),
 );
+document.getElementById("btn-settings-reset")?.addEventListener("click", () =>
+  resetSettingsToDefaults().catch((e) => notifyError(e.message || String(e))),
+);
+document.getElementById("btn-ui-scale-reset")?.addEventListener("click", () => {
+  const el = document.getElementById("set-ui-scale");
+  if (el) el.value = "100";
+});
 document.getElementById("btn-bulk-remove")?.addEventListener("click", () =>
   bulkRemoveSelected().catch((e) => alert(e.message || String(e)))
 );

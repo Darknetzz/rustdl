@@ -1263,11 +1263,7 @@ pub fn draw_queue_status_row(
 }
 
 /// Single-line queue status summary when vertical space is tight.
-pub fn draw_queue_status_compact_row(
-    ui: &mut egui::Ui,
-    heading: &str,
-    parts: &[QueueStatusPart],
-) {
+pub fn draw_queue_status_compact_row(ui: &mut egui::Ui, heading: &str, parts: &[QueueStatusPart]) {
     if parts.is_empty() {
         return;
     }
@@ -1277,7 +1273,11 @@ pub fn draw_queue_status_compact_row(
         .collect::<Vec<_>>()
         .join(" · ");
     ui.horizontal(|ui| {
-        ui.label(RichText::new(heading).small().color(crate::theme::TEXT_MUTED));
+        ui.label(
+            RichText::new(heading)
+                .small()
+                .color(crate::theme::TEXT_MUTED),
+        );
         ui.label(RichText::new(summary).small().weak());
     });
 }
@@ -1617,8 +1617,7 @@ pub fn apply_layout_preset(
                 settings.videos_dock_height =
                     dock_height_for_viewport_ratio(vh, REVIEW_DOCK_HEIGHT_RATIO);
                 let log_budget = (settings.videos_dock_height * 0.45).max(80.0);
-                settings.log_dock_height =
-                    scaled_log_dock_height(200.0, log_budget).max(120.0);
+                settings.log_dock_height = scaled_log_dock_height(200.0, log_budget).max(120.0);
             } else {
                 settings.log_dock_height = 200.0;
             }
@@ -1739,13 +1738,11 @@ pub fn draw_mode_nav_bar(
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 0.0;
                         let dl_text = if dl_active { Color32::WHITE } else { muted };
-                        let dl_label = RichText::new(format!(
-                            "{} {dl_name}",
-                            crate::ui_icons::NAV_DOWNLOADER
-                        ))
-                        .color(dl_text)
-                        .size(14.0)
-                        .strong();
+                        let dl_label =
+                            RichText::new(format!("{} {dl_name}", crate::ui_icons::NAV_DOWNLOADER))
+                                .color(dl_text)
+                                .size(14.0)
+                                .strong();
                         let dl = ui.add_sized(
                             [btn_w, 34.0],
                             egui::Button::new(dl_label)
@@ -1761,13 +1758,11 @@ pub fn draw_mode_nav_bar(
                             dl_clicked = true;
                         }
                         let av1_text = if av1_active { Color32::WHITE } else { muted };
-                        let av1_label = RichText::new(format!(
-                            "{} {convert_name}",
-                            crate::ui_icons::NAV_AV1
-                        ))
-                        .color(av1_text)
-                        .size(14.0)
-                        .strong();
+                        let av1_label =
+                            RichText::new(format!("{} {convert_name}", crate::ui_icons::NAV_AV1))
+                                .color(av1_text)
+                                .size(14.0)
+                                .strong();
                         let av1 = ui.add_sized(
                             [btn_w, 34.0],
                             egui::Button::new(av1_label)
@@ -2650,7 +2645,10 @@ mod tests {
             queue_footer_toolbar_reserve(599.0, false, true, 1.0),
             130.0 + 24.0
         );
-        assert_eq!(queue_footer_toolbar_reserve(601.0, false, true, 1.0), 96.0 + 24.0);
+        assert_eq!(
+            queue_footer_toolbar_reserve(601.0, false, true, 1.0),
+            96.0 + 24.0
+        );
         assert_eq!(queue_footer_toolbar_reserve(901.0, false, true, 1.0), 72.0);
     }
 

@@ -32,6 +32,20 @@ function initBrowseButtons() {
   wireBrowseButton("btn-browse-cookies", "set-cookies", "file", "Select cookies file");
   wireBrowseButton("btn-browse-convert-input", "convert-input", "files", "Select video file(s)");
   wireBrowseButton("btn-browse-watch-folder", "set-watch-folder-path", "folder", "Select watch folder");
+  wireBrowseButton(
+    "btn-browse-convert-output-dir",
+    "set-convert-output-dir",
+    "folder",
+    "Select convert output folder",
+  );
+  wireBrowseButton(
+    "btn-browse-convert-watch-path",
+    "set-convert-watch-path",
+    "folder",
+    "Select convert watch folder",
+  );
+  wireBrowseButton("btn-browse-web-tls-cert", "set-web-tls-cert", "file", "Select TLS certificate");
+  wireBrowseButton("btn-browse-web-tls-key", "set-web-tls-key", "file", "Select TLS private key");
 }
 
 document.addEventListener("DOMContentLoaded", () => initBrowseButtons());

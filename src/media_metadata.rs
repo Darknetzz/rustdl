@@ -26,7 +26,10 @@ pub fn format_yyyymmdd(date: &str) -> Option<String> {
     Some(nd.format("%Y-%m-%d").to_string())
 }
 
-pub fn format_upload_moment(upload_date: Option<&str>, upload_timestamp: Option<i64>) -> Option<String> {
+pub fn format_upload_moment(
+    upload_date: Option<&str>,
+    upload_timestamp: Option<i64>,
+) -> Option<String> {
     if let Some(ts) = upload_timestamp.filter(|t| *t > 0) {
         let dt = Utc.timestamp_opt(ts, 0).single()?;
         let local: DateTime<Local> = dt.into();
@@ -34,9 +37,7 @@ pub fn format_upload_moment(upload_date: Option<&str>, upload_timestamp: Option<
         let ago = format_relative_ago(SystemTime::UNIX_EPOCH + Duration::from_secs(ts as u64));
         return Some(format!("{abs} ({ago})"));
     }
-    upload_date
-        .and_then(|d| format_yyyymmdd(d))
-        .map(|d| d)
+    upload_date.and_then(|d| format_yyyymmdd(d)).map(|d| d)
 }
 
 pub fn format_container_time(raw: &str) -> String {
@@ -82,16 +83,17 @@ pub fn format_view_count(n: u64) -> String {
 
 pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
     let mut rows = Vec::new();
-    let push = |rows: &mut Vec<InfoRow>, section: &'static str, label: &'static str, value: String| {
-        if value.is_empty() || value == "—" {
-            return;
-        }
-        rows.push(InfoRow {
-            section,
-            label,
-            value,
-        });
-    };
+    let push =
+        |rows: &mut Vec<InfoRow>, section: &'static str, label: &'static str, value: String| {
+            if value.is_empty() || value == "—" {
+                return;
+            }
+            rows.push(InfoRow {
+                section,
+                label,
+                value,
+            });
+        };
 
     push(
         &mut rows,
@@ -110,23 +112,18 @@ pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
         push(&mut rows, "Source", "Uploader", u.to_owned());
     }
     if let Some(d) = item.duration {
-        push(
-            &mut rows,
-            "Source",
-            "Duration",
-            format_duration_secs(d),
-        );
+        push(&mut rows, "Source", "Duration", format_duration_secs(d));
     }
     if let Some(v) = format_upload_moment(item.upload_date.as_deref(), item.upload_timestamp) {
         push(&mut rows, "Source", "Published", v);
-    } else if let Some(d) = item
-        .upload_date
-        .as_deref()
-        .and_then(format_yyyymmdd)
-    {
+    } else if let Some(d) = item.upload_date.as_deref().and_then(format_yyyymmdd) {
         push(&mut rows, "Source", "Upload date", d);
     }
-    if let Some(rd) = item.release_date.as_deref().and_then(|d| format_yyyymmdd(d)) {
+    if let Some(rd) = item
+        .release_date
+        .as_deref()
+        .and_then(|d| format_yyyymmdd(d))
+    {
         push(&mut rows, "Source", "Release date", rd);
     }
     if let Some(n) = item.view_count {
@@ -135,7 +132,11 @@ pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
     if let Some(ls) = item.live_status.as_deref().filter(|s| !s.is_empty()) {
         push(&mut rows, "Source", "Live", ls.to_owned());
     }
-    if let Some((w, h)) = item.width.zip(item.height).filter(|(w, h)| *w > 0 && *h > 0) {
+    if let Some((w, h)) = item
+        .width
+        .zip(item.height)
+        .filter(|(w, h)| *w > 0 && *h > 0)
+    {
         push(
             &mut rows,
             "Source",
@@ -199,12 +200,7 @@ pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
             );
         }
         if let Some(bps) = item.file_bitrate_bps {
-            push(
-                &mut rows,
-                "Downloaded file",
-                "Bitrate",
-                format_bitrate(bps),
-            );
+            push(&mut rows, "Downloaded file", "Bitrate", format_bitrate(bps));
         }
         if let Some(ct) = item.file_creation_time.as_deref() {
             push(

@@ -60,6 +60,12 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: None,
     },
     PaletteCommandJson {
+        id: "add_urls_from_input",
+        label: "Add URLs from input",
+        keywords: "add paste url input queue",
+        section: Some("Queue"),
+    },
+    PaletteCommandJson {
         id: "start_downloads",
         label: "Start downloads",
         keywords: "start run download ready",
@@ -132,6 +138,12 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: None,
     },
     PaletteCommandJson {
+        id: "open_output_folder",
+        label: "Open output folder (host)",
+        keywords: "folder output directory explorer host",
+        section: None,
+    },
+    PaletteCommandJson {
         id: "focus_search",
         label: "Focus queue search",
         keywords: "search find filter queue",
@@ -196,6 +208,12 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         label: "Open About",
         keywords: "about version help",
         section: Some("Help"),
+    },
+    PaletteCommandJson {
+        id: "show_keyboard_shortcuts",
+        label: "Show keyboard shortcuts",
+        keywords: "shortcuts keys help hotkeys",
+        section: None,
     },
     PaletteCommandJson {
         id: "refresh_all",

@@ -75,6 +75,11 @@ const COMMANDS: &[PaletteCommand] = &[
         section: None,
     },
     PaletteCommand {
+        label: "Start Convert batch",
+        keywords: "convert encode start batch",
+        section: None,
+    },
+    PaletteCommand {
         label: "Retry all failed",
         keywords: "retry failed download again",
         section: None,
@@ -127,6 +132,11 @@ const COMMANDS: &[PaletteCommand] = &[
     PaletteCommand {
         label: "Open Download library",
         keywords: "library done history downloads",
+        section: None,
+    },
+    PaletteCommand {
+        label: "Switch to Library",
+        keywords: "library done history view",
         section: None,
     },
     PaletteCommand {
@@ -349,6 +359,12 @@ impl PydlApp {
             "Resume Convert batch" => {
                 self.convert_core_action(|core| core.resume_convert_batch());
             }
+            "Start Convert batch" => {
+                self.persist_settings();
+                self.convert_core_action(|core| {
+                    let _ = core.start_convert_batch();
+                });
+            }
             "Retry all failed" => self.retry_failed_items(),
             "Remove selected" => self.remove_selected_items(),
             "Clear completed downloads" => self.clear_completed_downloads(),
@@ -369,6 +385,7 @@ impl PydlApp {
                 self.about_open = true;
             }
             "Open Download library" => self.library_open = true,
+            "Switch to Library" => self.library_open = true,
             "Export activity log" => self.export_activity_log(),
             "Dock Videos panel" => {
                 self.note_videos_dock_user_choice(true);
@@ -392,31 +409,19 @@ impl PydlApp {
             }
             "Layout: Compact queue" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app_ui::apply_layout_preset(
-                    &mut self.settings,
-                    "compact",
-                    Some(vh),
-                );
+                crate::app_ui::apply_layout_preset(&mut self.settings, "compact", Some(vh));
                 self.settings_dirty = true;
                 self.persist_settings();
             }
             "Layout: Review mode" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app_ui::apply_layout_preset(
-                    &mut self.settings,
-                    "review",
-                    Some(vh),
-                );
+                crate::app_ui::apply_layout_preset(&mut self.settings, "review", Some(vh));
                 self.settings_dirty = true;
                 self.persist_settings();
             }
             "Layout: Minimal" => {
                 let vh = crate::app_ui::main_viewport_size(ctx).y;
-                crate::app_ui::apply_layout_preset(
-                    &mut self.settings,
-                    "minimal",
-                    Some(vh),
-                );
+                crate::app_ui::apply_layout_preset(&mut self.settings, "minimal", Some(vh));
                 self.settings_dirty = true;
                 self.persist_settings();
             }

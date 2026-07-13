@@ -410,7 +410,11 @@ impl DownloadCore {
         self.bump_generation();
     }
 
-    pub fn apply_convert_post_encode_actions(&mut self, source_path: &str, output_path: &str) -> String {
+    pub fn apply_convert_post_encode_actions(
+        &mut self,
+        source_path: &str,
+        output_path: &str,
+    ) -> String {
         let source = std::path::Path::new(source_path);
         let mut output = std::path::PathBuf::from(output_path);
         let find = self.settings.convert_post_filename_find.trim();

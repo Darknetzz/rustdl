@@ -5,7 +5,7 @@ use crate::app_ui::{
     apply_layout_preset, bounded_ui_height, button_group, left_button_row, main_viewport_size,
 };
 use crate::config::{
-    bump_ui_scale,     export_settings_json, import_settings_json, snap_ui_scale, trim_activity_log,
+    bump_ui_scale, export_settings_json, import_settings_json, snap_ui_scale, trim_activity_log,
     UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP,
 };
 use crate::profiles::{
@@ -28,8 +28,14 @@ const DOWNLOAD_MIN_HEIGHT_OPTIONS: &[(u32, &str)] = &[
     (2160, "4K (2160p)"),
 ];
 
-const DOWNLOAD_MIN_FPS_OPTIONS: &[(u32, &str)] =
-    &[(0, "Any"), (24, "24"), (25, "25"), (30, "30"), (50, "50"), (60, "60")];
+const DOWNLOAD_MIN_FPS_OPTIONS: &[(u32, &str)] = &[
+    (0, "Any"),
+    (24, "24"),
+    (25, "25"),
+    (30, "30"),
+    (50, "50"),
+    (60, "60"),
+];
 
 fn download_min_height_label(value: u32) -> &'static str {
     DOWNLOAD_MIN_HEIGHT_OPTIONS
@@ -246,20 +252,20 @@ impl PydlApp {
         changed
     }
 
-    fn draw_general_appearance_settings(
-        &mut self,
-        ui: &mut egui::Ui,
-        changed: &mut bool,
-    ) {
+    fn draw_general_appearance_settings(&mut self, ui: &mut egui::Ui, changed: &mut bool) {
         ui.label(RichText::new("Cards and queue layout").strong());
         settings_form_grid(ui, "general_appearance_cards", |ui| {
-            let show_thumbnails_changed =
-                settings_checkbox(ui, "Show thumbnails in cards", &mut self.settings.show_thumbnails);
+            let show_thumbnails_changed = settings_checkbox(
+                ui,
+                "Show thumbnails in cards",
+                &mut self.settings.show_thumbnails,
+            );
             *changed |= show_thumbnails_changed;
             if show_thumbnails_changed && self.settings.show_thumbnails {
                 self.thumbnail_attempted.clear();
             }
-            *changed |= settings_checkbox(ui, "Use compact cards", &mut self.settings.compact_cards);
+            *changed |=
+                settings_checkbox(ui, "Use compact cards", &mut self.settings.compact_cards);
             *changed |= settings_checkbox(
                 ui,
                 "Hide card subtitle/uploader",
@@ -276,30 +282,27 @@ impl PydlApp {
                 let at_min = self.settings.ui_scale <= UI_SCALE_MIN;
                 let at_max = self.settings.ui_scale >= UI_SCALE_MAX;
                 button_group(ui, "ui_scale", |g| {
-                    if g
-                        .secondary("−", !at_min)
+                    if g.secondary("−", !at_min)
                         .on_hover_text("Decrease UI scale")
                         .clicked()
                     {
                         bump_ui_scale(&mut self.settings.ui_scale, -UI_SCALE_STEP);
                         *changed = true;
                     }
-                    if g
-                        .add(|ui| {
-                            ui.add(
-                                egui::Label::new(RichText::new(format!("{pct:>3}%")).strong())
-                                    .sense(egui::Sense::click()),
-                            )
-                            .on_hover_text("Reset to 100%")
-                        })
-                        .clicked()
+                    if g.add(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(format!("{pct:>3}%")).strong())
+                                .sense(egui::Sense::click()),
+                        )
+                        .on_hover_text("Reset to 100%")
+                    })
+                    .clicked()
                         && (self.settings.ui_scale - 1.0).abs() > f32::EPSILON
                     {
                         self.settings.ui_scale = snap_ui_scale(1.0);
                         *changed = true;
                     }
-                    if g
-                        .secondary("+", !at_max)
+                    if g.secondary("+", !at_max)
                         .on_hover_text("Increase UI scale")
                         .clicked()
                     {
@@ -320,11 +323,7 @@ impl PydlApp {
                         .selectable_value(&mut self.settings.theme, "light".to_owned(), "Light")
                         .changed();
                     *changed |= ui
-                        .selectable_value(
-                            &mut self.settings.theme,
-                            "system".to_owned(),
-                            "System",
-                        )
+                        .selectable_value(&mut self.settings.theme, "system".to_owned(), "System")
                         .changed();
                 });
             ui.end_row();
@@ -383,24 +382,21 @@ impl PydlApp {
         left_button_row(ui, |ui| {
             let vh = main_viewport_size(ui.ctx()).y;
             button_group(ui, "layout_presets", |g| {
-                if g
-                    .secondary("Compact queue", true)
+                if g.secondary("Compact queue", true)
                     .on_hover_text("List layout, compact cards, hide subtitle")
                     .clicked()
                 {
                     apply_layout_preset(&mut self.settings, "compact", Some(vh));
                     *changed = true;
                 }
-                if g
-                    .secondary("Review mode", true)
+                if g.secondary("Review mode", true)
                     .on_hover_text("Horizontal cards with thumbnails")
                     .clicked()
                 {
                     apply_layout_preset(&mut self.settings, "review", Some(vh));
                     *changed = true;
                 }
-                if g
-                    .secondary("Minimal", true)
+                if g.secondary("Minimal", true)
                     .on_hover_text("Compact list without thumbnails")
                     .clicked()
                 {
@@ -443,9 +439,7 @@ impl PydlApp {
             );
             ui.label("Max log chars");
             *changed |= ui
-                .add(
-                    egui::Slider::new(&mut self.settings.log_max_chars, 2_000..=200_000).integer(),
-                )
+                .add(egui::Slider::new(&mut self.settings.log_max_chars, 2_000..=200_000).integer())
                 .changed();
             ui.end_row();
         });
@@ -522,8 +516,9 @@ impl PydlApp {
             .small()
             .color(Color32::GRAY),
         );
-        let mut subprocess_priority =
-            crate::external_tools::normalize_subprocess_priority(&self.settings.subprocess_priority);
+        let mut subprocess_priority = crate::external_tools::normalize_subprocess_priority(
+            &self.settings.subprocess_priority,
+        );
         settings_form_grid(ui, "general_subprocess_priority", |ui| {
             ui.label("Subprocess priority");
             egui::ComboBox::from_id_salt("settings_subprocess_priority")
@@ -539,13 +534,17 @@ impl PydlApp {
                         ),
                         (crate::external_tools::SubprocessPriority::Idle, "Idle"),
                     ] {
-                        *changed |= ui.selectable_value(&mut subprocess_priority, value, label).changed();
+                        *changed |= ui
+                            .selectable_value(&mut subprocess_priority, value, label)
+                            .changed();
                     }
                 });
             ui.end_row();
         });
         let priority_changed = subprocess_priority
-            != crate::external_tools::normalize_subprocess_priority(&self.settings.subprocess_priority);
+            != crate::external_tools::normalize_subprocess_priority(
+                &self.settings.subprocess_priority,
+            );
         if priority_changed {
             self.settings.subprocess_priority =
                 crate::external_tools::subprocess_priority_storage_value(subprocess_priority)
@@ -622,8 +621,7 @@ impl PydlApp {
                         import_settings = true;
                     }
                 });
-                if g
-                    .secondary(&format!("{} Reset to defaults", ui_icons::RESET), true)
+                if g.secondary(&format!("{} Reset to defaults", ui_icons::RESET), true)
                     .clicked()
                 {
                     let keep_output = self.settings.output_dir.clone();

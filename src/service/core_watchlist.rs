@@ -74,8 +74,13 @@ impl DownloadCore {
         (w, h)
     }
 
-    pub fn add_watchlist_from_queue_item(&mut self, item_id: u64) -> Result<u64, WatchlistAddError> {
-        let idx = self.item_idx(item_id).ok_or(WatchlistAddError::MissingItem)?;
+    pub fn add_watchlist_from_queue_item(
+        &mut self,
+        item_id: u64,
+    ) -> Result<u64, WatchlistAddError> {
+        let idx = self
+            .item_idx(item_id)
+            .ok_or(WatchlistAddError::MissingItem)?;
         let item = self.items[idx].clone();
         let url = self
             .watchlist_url_for_item(&item)
@@ -184,22 +189,13 @@ impl DownloadCore {
         if !self.settings.watchlist_enabled || !self.has_yt_dlp {
             return;
         }
-        if self
-            .watchlist_poll_inflight
-            .load(Ordering::Relaxed)
-        {
+        if self.watchlist_poll_inflight.load(Ordering::Relaxed) {
             return;
         }
-        if !self
-            .watchlist
-            .entries
-            .iter()
-            .any(|e| !e.paused)
-        {
+        if !self.watchlist.entries.iter().any(|e| !e.paused) {
             return;
         }
-        let interval =
-            Duration::from_secs(self.settings.watchlist_poll_hours.max(1) as u64 * 3600);
+        let interval = Duration::from_secs(self.settings.watchlist_poll_hours.max(1) as u64 * 3600);
         if let Some(last) = self.watchlist_last_cycle {
             if Instant::now().saturating_duration_since(last) < interval {
                 return;
@@ -226,9 +222,7 @@ impl DownloadCore {
         entry.last_probe_error = probe.error.clone();
         if let Some(err) = &probe.error {
             entry.improved_pending = false;
-            self.append_log(&format!(
-                "Watchlist probe failed for \"{title}\": {err}"
-            ));
+            self.append_log(&format!("Watchlist probe failed for \"{title}\": {err}"));
             self.persist_watchlist();
             return;
         }

@@ -7,9 +7,9 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
-    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback, url_menu_above,
+    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback,
     should_flatten_nested_group_scroll, show_menu_popup, show_queue_group_section, status_color,
-    status_dot_with_label, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
+    status_dot_with_label, url_menu_above, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
 };
 use crate::media_metadata::queue_item_more_info_rows;
 use crate::models::{ItemStatus, QueueItem};
@@ -576,8 +576,7 @@ impl PydlApp {
                     if status == ItemStatus::Downloading || status == ItemStatus::Queued {
                         ui.add_sized(
                             [120.0, row_h],
-                            egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0))
-                                .show_percentage(),
+                            egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage(),
                         );
                     }
                     if status == ItemStatus::Idle {
@@ -645,9 +644,9 @@ impl PydlApp {
     fn draw_more_info_button(&mut self, ui: &mut egui::Ui, item_id: u64) {
         let popup_id = ui.id().with(("more_info_popup", item_id));
         let label = format!("{} More info", ui_icons::MORE_INFO);
-        let button = ui
-            .button(label)
-            .on_hover_text("Source metadata from yt-dlp; file details from ffprobe when downloaded");
+        let button = ui.button(label).on_hover_text(
+            "Source metadata from yt-dlp; file details from ffprobe when downloaded",
+        );
         if button.clicked() {
             self.ensure_queue_item_metadata(item_id);
             ui.memory_mut(|mem| mem.toggle_popup(popup_id));

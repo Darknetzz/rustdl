@@ -72,12 +72,7 @@ fn unique_path_for_stem(parent: &Path, stem: &str, ext: &str) -> PathBuf {
     parent.join(format!("{stem}-dup{ext}"))
 }
 
-fn rename_matching_sidecars(
-    old_parent: &Path,
-    old_stem: &str,
-    new_parent: &Path,
-    new_stem: &str,
-) {
+fn rename_matching_sidecars(old_parent: &Path, old_stem: &str, new_parent: &Path, new_stem: &str) {
     let Ok(entries) = fs::read_dir(old_parent) else {
         return;
     };
@@ -141,7 +136,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("video.mp4");
         File::create(&path).unwrap();
-        assert!(apply_filename_find_replace(&path, "", "x").unwrap().is_none());
+        assert!(apply_filename_find_replace(&path, "", "x")
+            .unwrap()
+            .is_none());
         assert!(path.is_file());
     }
 

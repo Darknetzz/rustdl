@@ -325,6 +325,9 @@ pub fn api_router(state: ApiState) -> Router {
         )
         .route("/api/settings/export", get(settings_export))
         .route("/api/settings/import", post(settings_import))
+        .route("/api/settings/reset", post(settings_reset))
+        .route("/api/open-output-folder", post(open_output_folder))
+        .route("/api/web-ui/qr", get(web_ui_qr_png))
         .route("/api/browse", post(browse_host_path))
         .route("/api/profiles", get(profiles_list))
         .route("/api/profiles/apply", post(profiles_apply))
@@ -1346,6 +1349,58 @@ async fn settings_import(
     let mut c = st.core.lock();
     c.apply_settings_patch(body.settings);
     Ok(Json(settings_response_from_core(&c)))
+}
+
+async fn settings_reset(
+    State(st): State<ApiState>,
+) -> Result<Json<SettingsResponse>, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    let keep_output = c.settings.output_dir.clone();
+    let defaults = AppSettings {
+        output_dir: keep_output,
+        ..Default::default()
+    };
+    c.apply_settings_patch(defaults);
+    Ok(Json(settings_response_from_core(&c)))
+}
+
+async fn open_output_folder(
+    State(st): State<ApiState>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let c = st.core.lock();
+    let dir = c.settings.output_dir.trim();
+    if dir.is_empty() || !std::path::Path::new(dir).is_dir() {
+        return Err(api_err(
+            StatusCode::BAD_REQUEST,
+            "Output folder does not exist.",
+        ));
+    }
+    crate::app_actions::open_str_path(dir)
+        .map_err(|e| api_err(StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(StatusCode::OK)
+}
+
+async fn web_ui_qr_png(
+    State(st): State<ApiState>,
+) -> Result<Response, (StatusCode, Json<ApiErrorBody>)> {
+    use axum::http::header;
+    use qrcode::render::svg;
+
+    let c = st.core.lock();
+    let token = c.settings.web_auth_token.trim();
+    if token.is_empty() {
+        return Err(api_err(StatusCode::BAD_REQUEST, "No API token configured."));
+    }
+    let url = super::web_ui_browser_url(&c.settings);
+    let qr_target = format!("{}?token={}", url.trim_end_matches('/'), token);
+    let code = qrcode::QrCode::new(qr_target.as_bytes()).map_err(|_| {
+        api_err(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Could not encode QR data.",
+        )
+    })?;
+    let image = code.render::<svg::Color>().min_dimensions(256, 256).build();
+    Ok(([(header::CONTENT_TYPE, "image/svg+xml")], image).into_response())
 }
 
 #[derive(Deserialize)]

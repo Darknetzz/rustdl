@@ -14,7 +14,9 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 - **Filename find/replace** — Settings → Downloader and Settings → Video Converter: optional find/replace in the output filename stem after each download or encode (e.g. strip ` [id]` or `-av1` suffix). Matching subtitle and yt-dlp sidecar files are renamed with the video.
 - LAN web UI: **More info** per download row (yt-dlp source + ffprobe file details), **Quality watchlist** panel and settings, settings **export/import**, host **Browse** buttons for output folder, cookies, convert paths, and watch folder, and server-driven **command palette** manifest.
+- LAN web UI: host **Browse** buttons for convert output folder, convert watch folder, and TLS certificate/key paths; **General** settings for desktop UI scale, theme, max content width, power save, minimize-to-tray, session restore, and GitHub token; per-row convert **Size limit…** override dialog; **Reset to defaults** (keeps output folder); pairing **QR code** in Settings → Web UI; **keyboard shortcuts** in About; command palette actions **Add URLs from input**, **Open output folder**, and **Show keyboard shortcuts**.
 - Shared layout and organize preset APIs (`POST /api/settings/layout-preset/{name}`, `POST /api/settings/organize-preset/{name}`) so desktop and web apply identical preset behavior.
+- Desktop command palette: **Start Convert batch** and **Switch to Library**.
 
 ### Changed
 
@@ -33,6 +35,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Documentation
 
 - **README** and **AGENTS.md** now document the full product scope (Quality watchlist, More info, minimum height/FPS, config files, module map, and architecture notes for agents).
+- **README** and **AGENTS.md** LAN web parity list updated (watchlist and host Browse are on web; clarified remaining desktop-only items).
 
 ## [0.11.0] - 2026-06-29
 

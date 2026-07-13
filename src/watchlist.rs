@@ -150,7 +150,9 @@ pub fn format_resolution(width: Option<u32>, height: Option<u32>) -> String {
 }
 
 pub fn format_resolution_height(height: Option<u32>) -> String {
-    height.map(|h| format!("{h}p")).unwrap_or_else(|| "—".to_owned())
+    height
+        .map(|h| format!("{h}p"))
+        .unwrap_or_else(|| "—".to_owned())
 }
 
 #[cfg(test)]
