@@ -600,6 +600,7 @@ fn print_help() {
     println!("  --profile NAME       Apply named profile before download");
     println!("  --output-dir PATH    Override output folder");
     println!("  --dry-run            Print planned download args without executing");
+    println!("  --start              With --enqueue: start the download queue after enqueue");
     println!("  --web-only           Serve the LAN web UI without opening a window");
     println!("  --host ADDR          Bind host (default: from saved settings, else 0.0.0.0)");
     println!("  --port PORT          Bind port (default: from saved settings, else 8765)");
@@ -620,6 +621,22 @@ mod tests {
         let opts = parse_web_only_args(&args).unwrap();
         assert_eq!(opts.host.as_deref(), Some("0.0.0.0"));
         assert_eq!(opts.port, Some(8765));
+    }
+
+    #[test]
+    fn parse_cli_enqueue_args_accepts_start_flag() {
+        let args = vec![
+            "--enqueue".to_owned(),
+            "--start".to_owned(),
+            "https://example.test".to_owned(),
+        ];
+        let (source, start) = parse_cli_enqueue_args(&args).unwrap();
+        assert_eq!(source, "https://example.test");
+        assert!(start);
+
+        let args = vec!["--enqueue".to_owned(), "https://example.test".to_owned()];
+        let (_, start) = parse_cli_enqueue_args(&args).unwrap();
+        assert!(!start);
     }
 
     #[test]

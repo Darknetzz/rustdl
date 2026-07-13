@@ -119,11 +119,7 @@ pub fn queue_item_more_info_rows(item: &QueueItem) -> Vec<InfoRow> {
     } else if let Some(d) = item.upload_date.as_deref().and_then(format_yyyymmdd) {
         push(&mut rows, "Source", "Upload date", d);
     }
-    if let Some(rd) = item
-        .release_date
-        .as_deref()
-        .and_then(format_yyyymmdd)
-    {
+    if let Some(rd) = item.release_date.as_deref().and_then(format_yyyymmdd) {
         push(&mut rows, "Source", "Release date", rd);
     }
     if let Some(n) = item.view_count {

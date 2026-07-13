@@ -82,9 +82,8 @@ fn build_tray_icon_menu() -> Result<tray_icon::menu::Menu, tray_icon::Error> {
     let show = MenuItem::with_id(MENU_SHOW_ID, "Show rustdl", true, None);
     let quit = MenuItem::with_id(MENU_QUIT_ID, "Quit", true, None);
     let separator = PredefinedMenuItem::separator();
-    Menu::with_items(&[&show, &separator, &quit]).map_err(|e| {
-        tray_icon::Error::OsError(std::io::Error::other(e.to_string()))
-    })
+    Menu::with_items(&[&show, &separator, &quit])
+        .map_err(|e| tray_icon::Error::OsError(std::io::Error::other(e.to_string())))
 }
 
 #[cfg(windows)]

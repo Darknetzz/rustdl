@@ -10,6 +10,22 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- LAN web UI: **Browse** buttons for ffmpeg, ffprobe, and yt-dlp executable paths (Settings → General → Tools and Downloader).
+- LAN web UI: **Watch for better quality** in the **More info** dialog for completed downloads (same action as the row button).
+- LAN web UI: copyable **Open locally** web UI URL in Settings → Web UI (without the API token).
+- Headless CLI: **`--enqueue --start`** enqueues URLs then immediately runs the saved download queue.
+
+### Fixed
+
+- **`push_dev.ps1`** stable release publish no longer passes `-SkipBuild` as the GitHub repo name on Windows PowerShell 5.1.
+- Local **CI clippy** is green again (minor lint fixes across the codebase).
+
+### Changed
+
+- **`release.ps1`** skips the confirmation prompt when `-NonInteractive` is set or `$env:CI` is set (use `-Yes` otherwise).
+
 ## [0.12.0] - 2026-07-13
 
 
