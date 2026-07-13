@@ -382,18 +382,34 @@ pub fn parse_cli_enqueue_args(args: &[String]) -> Result<(String, bool)> {
         match args[i].as_str() {
             "--enqueue" => {
                 i += 1;
-                source = Some(
-                    args.get(i)
-                        .ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))?
-                        .clone(),
-                );
+                while i < args.len() {
+                    match args[i].as_str() {
+                        "--start" => {
+                            start = true;
+                            i += 1;
+                        }
+                        s if s.starts_with('-') => {
+                            return Err(anyhow!("unknown option: {s}"));
+                        }
+                        s => {
+                            if source.is_some() {
+                                return Err(anyhow!(
+                                    "--enqueue accepts only one URL, @file, or - source"
+                                ));
+                            }
+                            source = Some(s.to_owned());
+                            i += 1;
+                            break;
+                        }
+                    }
+                }
             }
             "--start" => {
                 start = true;
+                i += 1;
             }
             s => return Err(anyhow!("unknown option: {s}")),
         }
-        i += 1;
     }
     let source = source.ok_or_else(|| anyhow!("--enqueue requires a URL, @file, or -"))?;
     Ok((source, start))
@@ -637,6 +653,15 @@ mod tests {
         let args = vec!["--enqueue".to_owned(), "https://example.test".to_owned()];
         let (_, start) = parse_cli_enqueue_args(&args).unwrap();
         assert!(!start);
+
+        let args = vec![
+            "--enqueue".to_owned(),
+            "https://example.test".to_owned(),
+            "--start".to_owned(),
+        ];
+        let (source, start) = parse_cli_enqueue_args(&args).unwrap();
+        assert_eq!(source, "https://example.test");
+        assert!(start);
     }
 
     #[test]
