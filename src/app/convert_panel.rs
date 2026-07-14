@@ -729,7 +729,7 @@ impl PydlApp {
             .animated(false)
             .drag_to_scroll(true)
             .show(ui, |ui| {
-                ui.set_width(ui.available_width());
+                ui.set_width(crate::app_ui::clip_bounded_width(ui));
                 ui.spacing_mut().item_spacing.y = 2.0;
                 if self.convert_items.is_empty() {
                     ui.vertical_centered(|ui| {
@@ -863,7 +863,10 @@ impl PydlApp {
                         let mut draw_row = |ui: &mut egui::Ui, item_id: u64| {
                             if let Some(idx) = self.convert_item_idx(item_id) {
                                 let it = self.convert_items[idx].clone();
+                                let row_w = crate::app_ui::clip_bounded_width(ui);
+                                ui.set_max_width(row_w);
                                 ui.group(|ui| {
+                                    ui.set_max_width(row_w);
                                     self.draw_convert_queue_card(
                                         ui,
                                         &it,
@@ -890,7 +893,10 @@ impl PydlApp {
                                 continue;
                             };
                             let it = self.convert_items[idx].clone();
+                            let row_w = crate::app_ui::clip_bounded_width(ui);
+                            ui.set_max_width(row_w);
                             ui.group(|ui| {
+                                ui.set_max_width(row_w);
                                 self.draw_convert_queue_card(ui, &it, label == "Ready", false);
                             });
                         }
@@ -1051,6 +1057,8 @@ impl PydlApp {
         allow_reorder: bool,
         compact: bool,
     ) {
+        let row_w = crate::app_ui::clip_bounded_width(ui);
+        ui.set_max_width(row_w);
         let theme = self.settings.theme.clone();
         let done = it.status == ItemStatus::Done && !convert_item_is_skipped(it);
         let item_color = convert_item_status_color(it);
@@ -1079,6 +1087,7 @@ impl PydlApp {
             .rounding(egui::Rounding::same(6.0))
             .show(ui, |ui| {
                 let row_response = ui.horizontal(|ui| {
+                    ui.set_max_width(row_w);
                     if allow_reorder && it.status == ItemStatus::Idle {
                         let drag_id = egui::Id::new(("convert_ready_drag", id));
                         let _drag = ui.dnd_drag_source(drag_id, std::sync::Arc::new(id), |ui| {

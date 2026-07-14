@@ -939,9 +939,12 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
+            let max_w = clip_bounded_width(ui);
+            ui.set_max_width(max_w);
             let bg_idx = ui.painter().add(Shape::Noop);
             let ret = add_contents(ui);
-            let paint_rect = ui.min_rect() + inner_margin;
+            let mut paint_rect = ui.min_rect() + inner_margin;
+            paint_rect.max.x = paint_rect.max.x.min(ui.clip_rect().right());
             if ui.is_rect_visible(paint_rect) {
                 paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
             }

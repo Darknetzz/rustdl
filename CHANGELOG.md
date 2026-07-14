@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Desktop **Convert queue** panel no longer extends past the window width (list rows and footer controls clamp to the panel clip rect; docked panel uses pinned allocation).
 - LAN web UI: download and convert queue panels no longer extend past the window width (card grid and list rows stay within the panel on narrow or large queues).
 
 ## [0.13.0] - 2026-07-14

@@ -565,7 +565,7 @@ impl PydlApp {
             ui.add_space(2.0);
             let footer_top = ui.cursor().min.y;
             self.constrain_content(ui);
-            self.draw_videos_footer_toolbar(ui, !layout.is_docked());
+            self.draw_videos_footer_toolbar(ui, !layout.is_docked() || self.convert_mode);
             let footer_measured = (ui.min_rect().max.y - footer_top).max(0.0) + 2.0;
             ui.ctx().data_mut(|d| {
                 d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_measured);
@@ -885,7 +885,7 @@ impl PydlApp {
         let convert_color = self.settings.mode_convert_color.clone();
         let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
         allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
-            fill_allocated_rect(ui);
+            pin_allocated_rect(ui);
             let body_bottom = ui.max_rect().bottom();
             let layout = VideosQueueLayout {
                 scroll_id: "rustdl_videos_dock_scroll",
