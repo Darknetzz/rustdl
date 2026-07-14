@@ -28,6 +28,24 @@ start_background() {
 	return $?
 }
 
+# Detached publish on Windows (Git Bash / MSYS). Pass values via env — do not interpolate into -Command.
+start_windows_publish_detached() {
+	launcher=$1
+	RUSTDL_PUBLISH_REMOTE=$remote \
+	RUSTDL_PUBLISH_COMMIT=$commit \
+	RUSTDL_PUBLISH_SCRIPT=$wait_script \
+	"$launcher" -NoProfile -ExecutionPolicy Bypass -Command "
+		Start-Process -FilePath '$launcher' -WindowStyle Hidden -ArgumentList @(
+			'-NoProfile',
+			'-ExecutionPolicy', 'Bypass',
+			'-File', \$env:RUSTDL_PUBLISH_SCRIPT,
+			'-Remote', \$env:RUSTDL_PUBLISH_REMOTE,
+			'-Commit', \$env:RUSTDL_PUBLISH_COMMIT,
+			'-Quiet'
+		) | Out-Null
+	"
+}
+
 # Returns 0 when a background publish task was scheduled, 1 otherwise.
 schedule_publish() {
 	commit="$1"
@@ -40,16 +58,7 @@ schedule_publish() {
 		case "$(uname -s 2>/dev/null)" in
 		MINGW* | MSYS* | CYGWIN* | Windows*)
 			# Detach from the terminal: plain '&' still shares stdout with git push / pushall.
-			if ! pwsh -NoProfile -ExecutionPolicy Bypass -Command "
-				Start-Process -FilePath pwsh -WindowStyle Hidden -ArgumentList @(
-					'-NoProfile',
-					'-ExecutionPolicy', 'Bypass',
-					'-File', '$wait_script',
-					'-Remote', '$remote',
-					'-Commit', '$commit',
-					'-Quiet'
-				) | Out-Null
-			"; then
+			if ! start_windows_publish_detached pwsh; then
 				echo "rustdl: could not schedule dev release publish (pwsh Start-Process failed)" >&2
 				return 1
 			fi
@@ -68,16 +77,7 @@ schedule_publish() {
 		fi
 		case "$(uname -s 2>/dev/null)" in
 		MINGW* | MSYS* | CYGWIN* | Windows*)
-			if ! powershell -NoProfile -ExecutionPolicy Bypass -Command "
-				Start-Process -FilePath powershell -WindowStyle Hidden -ArgumentList @(
-					'-NoProfile',
-					'-ExecutionPolicy', 'Bypass',
-					'-File', '$wait_script',
-					'-Remote', '$remote',
-					'-Commit', '$commit',
-					'-Quiet'
-				) | Out-Null
-			"; then
+			if ! start_windows_publish_detached powershell; then
 				echo "rustdl: could not schedule dev release publish (powershell Start-Process failed)" >&2
 				return 1
 			fi
