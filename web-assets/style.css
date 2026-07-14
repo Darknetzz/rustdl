@@ -147,6 +147,11 @@ body {
   font-size: 14px;
 }
 
+#app-main {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .topbar {
   display: flex;
   flex-wrap: wrap;
@@ -401,6 +406,8 @@ body {
   background: var(--panel);
   border: 1px solid var(--border-panel);
   border-radius: 10px;
+  max-width: 100%;
+  min-width: 0;
 }
 
 body.view-downloader #downloader-main .panel {
@@ -711,18 +718,23 @@ button.danger:disabled,
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .queue-group {
   border: 0;
   margin: 0;
   padding: 0;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .queue-group-summary {
   list-style: none;
   cursor: pointer;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.45rem;
   font-size: 0.88rem;
@@ -731,6 +743,7 @@ button.danger:disabled,
   padding: 0.35rem 0.15rem 0.25rem;
   border-bottom: 1px solid var(--border);
   user-select: none;
+  min-width: 0;
 }
 
 .queue-group-summary::-webkit-details-marker {
@@ -751,10 +764,12 @@ button.danger:disabled,
 
 .queue-group-body {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
   gap: 0.85rem;
   align-items: start;
   padding-top: 0.65rem;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .queue.list-layout,
@@ -771,7 +786,8 @@ button.danger:disabled,
 }
 
 .queue.list-layout .card {
-  max-width: none;
+  max-width: 100%;
+  min-width: 0;
   flex-direction: row;
   align-items: center;
   padding: 0.5rem 0.75rem;
@@ -786,7 +802,16 @@ button.danger:disabled,
 }
 
 .queue.list-layout .card-body { flex: 1; min-width: 0; }
-.queue.list-layout .card-actions { border-top: none; padding-top: 0; }
+.queue.list-layout .card-actions {
+  border-top: none;
+  padding-top: 0;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.queue.list-layout .card-actions .btn-group {
+  flex-wrap: wrap;
+}
 
 .card {
   display: flex;

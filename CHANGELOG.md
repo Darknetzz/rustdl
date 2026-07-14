@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Fixed
+
+- LAN web UI: download and convert queue panels no longer extend past the window width (card grid and list rows stay within the panel on narrow or large queues).
+
 ## [0.13.0] - 2026-07-14
 
 
