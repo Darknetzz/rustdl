@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- **Remove from queue** on download cards (including failed rows) now removes the row from the list immediately instead of appearing to do nothing.
 - Desktop **Videos / Convert queue** docked panel no longer extends past the window width (mode panel chrome and card rows clamp to the panel clip rect; footer toolbars wrap when docked).
 - LAN web UI: download and convert queue panels no longer extend past the window width (card grid and list rows stay within the panel on narrow or large queues).
 

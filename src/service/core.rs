@@ -1580,6 +1580,7 @@ impl DownloadCore {
         self.invalidate_queue_caches();
         self.update_status();
         self.flush_queue_to_disk();
+        self.bump_generation();
         true
     }
 
@@ -2458,8 +2459,10 @@ mod queue_lifecycle_tests {
         core.items.retain(|it| it.item_id != 42);
         core.items.push(sample_idle_item(42));
         core.rebuild_item_index();
+        let gen_before = core.generation;
         assert!(core.remove_item_from_queue(42));
         assert!(!core.items.iter().any(|it| it.item_id == 42));
+        assert!(core.generation > gen_before);
     }
 
     #[test]
