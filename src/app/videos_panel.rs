@@ -434,28 +434,26 @@ impl PydlApp {
         } else {
             "Videos"
         };
-        // Convert batch controls are primary actions — use full-size grouped buttons in the footer.
-        let compact_footer = !self.convert_mode;
         if wrapped {
             button_toolbar_wrapped(ui, |ui| {
                 ui.label(RichText::new(heading).strong());
-                self.draw_video_queue_controls_inner(ui, compact_footer);
+                self.draw_video_queue_controls_inner(ui, false);
                 if self.convert_mode {
-                    self.draw_convert_queue_action_groups(ui, compact_footer);
+                    self.draw_convert_queue_action_groups(ui, false);
                 } else {
-                    self.draw_downloader_queue_action_groups(ui, true);
+                    self.draw_downloader_queue_action_groups(ui, false);
                 }
             });
         } else {
             left_button_row(ui, |ui| {
                 ui.label(RichText::new(heading).strong());
-                self.draw_video_queue_controls_inner(ui, compact_footer);
+                self.draw_video_queue_controls_inner(ui, false);
             });
             left_button_row(ui, |ui| {
                 if self.convert_mode {
-                    self.draw_convert_queue_action_groups(ui, compact_footer);
+                    self.draw_convert_queue_action_groups(ui, false);
                 } else {
-                    self.draw_downloader_queue_action_fused(ui, true);
+                    self.draw_downloader_queue_action_fused(ui, false);
                 }
             });
         }
