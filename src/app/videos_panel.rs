@@ -103,7 +103,7 @@ impl PydlApp {
         let w = crate::app_ui::clip_bounded_width(ui);
         allocate_top_down_rect(ui, egui::vec2(w, scroll_h), |ui| {
             ui.set_min_height(scroll_h);
-            self.constrain_content(ui);
+            self.constrain_panel_content(ui);
             let inner_h = finite_ui_span(ui.max_rect().height(), scroll_h).clamp(1.0, scroll_h);
             if self.convert_mode {
                 self.draw_convert_queue_list_scroll(ui, inner_h, min_h, scroll_h);
@@ -497,7 +497,7 @@ impl PydlApp {
 
     /// Status row, scrollable cards, toolbar, optional docked log — bottom stack pinned to body bottom.
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
-        self.constrain_content(ui);
+        self.constrain_panel_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
         let body_bottom = layout
             .body_bottom
@@ -564,8 +564,8 @@ impl PydlApp {
         allocate_bottom_up_rect(ui, body_bottom, cw, stack_h, |ui| {
             ui.add_space(2.0);
             let footer_top = ui.cursor().min.y;
-            self.constrain_content(ui);
-            self.draw_videos_footer_toolbar(ui, !layout.is_docked() || self.convert_mode);
+            self.constrain_panel_content(ui);
+            self.draw_videos_footer_toolbar(ui, layout.is_docked() || self.convert_mode);
             let footer_measured = (ui.min_rect().max.y - footer_top).max(0.0) + 2.0;
             ui.ctx().data_mut(|d| {
                 d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_measured);
@@ -886,6 +886,7 @@ impl PydlApp {
         let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
         allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
             pin_allocated_rect(ui);
+            self.constrain_panel_content(ui);
             let body_bottom = ui.max_rect().bottom();
             let layout = VideosQueueLayout {
                 scroll_id: "rustdl_videos_dock_scroll",

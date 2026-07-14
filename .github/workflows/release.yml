@@ -97,10 +97,18 @@ jobs:
         id: notes
         shell: bash
         run: |
+          set -euo pipefail
           tag="${{ steps.resolve.outputs.tag }}"
-          chmod +x scripts/extract_release_notes.sh
-          ./scripts/extract_release_notes.sh CHANGELOG.md "$tag" > release-notes.md
-          echo "path=release-notes.md" >> "$GITHUB_OUTPUT"
+          notes_file="release-notes.md"
+          if ! bash scripts/extract_release_notes.sh CHANGELOG.md "$tag" >"$notes_file"; then
+            echo "extract_release_notes.sh failed for tag $tag" >&2
+            exit 1
+          fi
+          if [[ ! -s "$notes_file" ]]; then
+            echo "Release notes file is empty: $notes_file" >&2
+            exit 1
+          fi
+          echo "path=$notes_file" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub release
         env:

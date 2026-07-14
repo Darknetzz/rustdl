@@ -846,6 +846,7 @@ pub fn show_queue_group_section<R>(
         .rounding(egui::Rounding::same(8.0))
         .show(ui, |ui| {
             ui.set_max_width(max_w);
+            ui.set_width(max_w);
             add_contents(ui)
         })
 }
@@ -939,16 +940,15 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
-            let max_w = clip_bounded_width(ui);
-            ui.set_max_width(max_w);
-            let bg_idx = ui.painter().add(Shape::Noop);
-            let ret = add_contents(ui);
-            let mut paint_rect = ui.min_rect() + inner_margin;
-            paint_rect.max.x = paint_rect.max.x.min(ui.clip_rect().right());
-            if ui.is_rect_visible(paint_rect) {
-                paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
-            }
-            ret
+            with_full_width(ui, |ui| {
+                let bg_idx = ui.painter().add(Shape::Noop);
+                let ret = add_contents(ui);
+                let paint_rect = (ui.min_rect() + inner_margin).intersect(ui.clip_rect());
+                if ui.is_rect_visible(paint_rect) {
+                    paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
+                }
+                ret
+            })
         })
 }
 
@@ -1824,6 +1824,13 @@ pub fn constrain_content_width(ui: &mut egui::Ui, max_content_width: f32) -> f32
         w = w.min(max_content_width);
     }
     ui.set_max_width(w);
+    w
+}
+
+/// Like [`constrain_content_width`], but also sets explicit width (mode/queue panels).
+pub fn constrain_panel_width(ui: &mut egui::Ui, max_content_width: f32) -> f32 {
+    let w = constrain_content_width(ui, max_content_width);
+    ui.set_width(w);
     w
 }
 

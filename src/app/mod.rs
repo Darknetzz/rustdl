@@ -1131,6 +1131,10 @@ impl PydlApp {
         crate::app_ui::constrain_content_width(ui, self.settings.max_content_width)
     }
 
+    pub(super) fn constrain_panel_content(&self, ui: &mut egui::Ui) -> f32 {
+        crate::app_ui::constrain_panel_width(ui, self.settings.max_content_width)
+    }
+
     /// User toggled dock/undock (toolbar or Settings); overrides size-driven auto layout.
     pub(super) fn note_videos_dock_user_choice(&mut self, docked: bool) {
         self.videos_auto_undocked_for_size = false;

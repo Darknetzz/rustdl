@@ -933,7 +933,8 @@ impl PydlApp {
                                 }
                             });
                     } else {
-                        let row_width = ui.available_width().max(1.0);
+                        let row_width = clip_bounded_width(ui);
+                        ui.set_max_width(row_width);
                         ui.set_width(row_width);
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing = egui::vec2(8.0, 8.0);
