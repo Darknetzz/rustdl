@@ -89,13 +89,13 @@ schedule_publish() {
 			fi
 			;;
 		esac
-	elif [ -x "$wait_script_sh" ]; then
-		if ! start_background "$wait_script_sh" "$remote" "$commit"; then
+	elif [ -f "$wait_script_sh" ]; then
+		if ! start_background sh "$wait_script_sh" "$remote" "$commit"; then
 			echo "rustdl: could not schedule dev release publish ($wait_script_sh failed to start)" >&2
 			return 1
 		fi
 	else
-		echo "rustdl: could not schedule dev release publish (no pwsh/powershell/wait script)" >&2
+		echo "rustdl: could not schedule dev release publish (pwsh and powershell not on PATH; missing $wait_script_sh)" >&2
 		return 1
 	fi
 	return 0
