@@ -797,7 +797,7 @@ impl PydlApp {
         ui.add_space(4.0);
         egui::Frame::dark_canvas(ui.style())
             .fill(BG_CANVAS)
-            .stroke(egui::Stroke::new(1.0, BORDER_PANEL))
+            .stroke(egui::Stroke::new(1.0_f32, BORDER_PANEL))
             .inner_margin(egui::Margin::same(10.0))
             .rounding(egui::Rounding::same(8.0))
             .show(ui, |ui| {

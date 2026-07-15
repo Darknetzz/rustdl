@@ -192,7 +192,7 @@ pub fn draw_kbd_key(ui: &mut egui::Ui, label: &str) -> Response {
     let (fill, border, text) = kbd_chip_colors(ui);
     egui::Frame::none()
         .fill(fill)
-        .stroke(Stroke::new(1.0, border))
+        .stroke(Stroke::new(1.0_f32, border))
         .inner_margin(egui::Margin::symmetric(5.0, 2.0))
         .rounding(egui::Rounding::same(4.0))
         .show(ui, |ui| {
@@ -281,7 +281,7 @@ pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
     let radius = dot * 0.38;
     ui.painter().circle_filled(center, radius, color);
     ui.painter()
-        .circle_stroke(center, radius, egui::Stroke::new(1.0, shade(color, 0.72)));
+        .circle_stroke(center, radius, egui::Stroke::new(1.0_f32, shade(color, 0.72)));
 }
 
 /// Status dot immediately before colored label text.
@@ -498,7 +498,7 @@ pub fn draw_navbar_status_badge(ui: &mut egui::Ui, info: &NavbarStatusInfo) -> R
     };
     egui::Frame::none()
         .stroke(egui::Stroke::new(
-            1.0,
+            1.0_f32,
             fade_color(border_color, border_alpha),
         ))
         .rounding(egui::Rounding::same(999.0))
@@ -775,7 +775,7 @@ fn colored_button(
 }
 
 fn standalone_button_stroke(bg_fill: Color32) -> egui::Stroke {
-    egui::Stroke::new(1.0, shade(bg_fill, 0.78))
+    egui::Stroke::new(1.0_f32, shade(bg_fill, 0.78))
 }
 
 fn grouped_button_stroke() -> egui::Stroke {
@@ -835,7 +835,7 @@ pub fn show_queue_group_section<R>(
     let max_w = clip_bounded_width(ui);
     egui::Frame::none()
         .fill(queue_group_section_fill(theme))
-        .stroke(Stroke::new(1.0, mode_border(accent)))
+        .stroke(Stroke::new(1.0_f32, mode_border(accent)))
         .inner_margin(egui::Margin::symmetric(10.0, 8.0))
         .outer_margin(egui::Margin {
             left: 0.0,
@@ -934,7 +934,7 @@ pub fn show_mode_panel<R>(
         panel,
         soft,
         rounding,
-        stroke: Stroke::new(1.0, border),
+        stroke: Stroke::new(1.0_f32, border),
     };
 
     egui::Frame::none()
@@ -1731,7 +1731,7 @@ pub fn draw_mode_nav_bar(
             let btn_w = row_w * 0.5;
             egui::Frame::none()
                 .fill(group_fill)
-                .stroke(Stroke::new(1.0, group_border))
+                .stroke(Stroke::new(1.0_f32, group_border))
                 .rounding(egui::Rounding::same(6.0))
                 .show(ui, |ui| {
                     ui.horizontal(|ui| {
@@ -1899,7 +1899,7 @@ fn alert_box<R>(
         let width = content_width(ui);
         egui::Frame::none()
             .fill(bg)
-            .stroke(egui::Stroke::new(1.0, border))
+            .stroke(egui::Stroke::new(1.0_f32, border))
             .rounding(egui::Rounding::same(6.0))
             .inner_margin(egui::Margin::same(12.0))
             .show(ui, |ui| {

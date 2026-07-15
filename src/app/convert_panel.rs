@@ -1075,7 +1075,7 @@ impl PydlApp {
             Color32::TRANSPARENT
         };
         let stroke = if will_skip_target {
-            egui::Stroke::new(1.5, CONVERT_SKIPPED_COLOR)
+            egui::Stroke::new(1.5_f32, CONVERT_SKIPPED_COLOR)
         } else {
             egui::Stroke::NONE
         };

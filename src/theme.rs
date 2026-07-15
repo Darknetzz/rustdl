@@ -237,11 +237,11 @@ fn style_text_fields(v: &mut Visuals, dark: bool) {
     };
 
     v.widgets.inactive.bg_fill = bg;
-    v.widgets.inactive.bg_stroke = Stroke::new(1.0, border);
+    v.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, border);
     v.widgets.hovered.bg_fill = bg_hover;
-    v.widgets.hovered.bg_stroke = Stroke::new(1.0, border_hover);
+    v.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, border_hover);
     v.widgets.active.bg_fill = bg_active;
-    v.widgets.active.bg_stroke = Stroke::new(1.5, border_active);
+    v.widgets.active.bg_stroke = Stroke::new(1.5_f32, border_active);
 }
 
 pub fn visuals_for_theme(theme: &str) -> Visuals {

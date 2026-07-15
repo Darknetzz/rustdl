@@ -470,7 +470,7 @@ impl PydlApp {
         if highlight_completed {
             egui::Frame::none()
                 .fill(done_fill)
-                .stroke(egui::Stroke::new(2.0, status_color(ItemStatus::Done)))
+                .stroke(egui::Stroke::new(2.0_f32, status_color(ItemStatus::Done)))
                 .rounding(egui::Rounding::same(10.0))
                 .inner_margin(egui::Margin::same(8.0))
                 .show(ui, card_inner);

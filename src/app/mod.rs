@@ -1404,7 +1404,7 @@ impl PydlApp {
         let mut close_only = false;
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = BG_LOG;
-        modal_frame.stroke = egui::Stroke::new(1.0, BORDER_PANEL);
+        modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
         egui::Window::new("Playlist preview")
@@ -1499,7 +1499,7 @@ impl PydlApp {
         let mut close = false;
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = crate::theme::BG_LOG;
-        modal_frame.stroke = egui::Stroke::new(1.0, crate::theme::BORDER_PANEL);
+        modal_frame.stroke = egui::Stroke::new(1.0_f32, crate::theme::BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
         egui::Window::new("Download options")
@@ -2581,7 +2581,7 @@ impl PydlApp {
         let body = self.session_restore_prompt_body();
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = BG_LOG;
-        modal_frame.stroke = egui::Stroke::new(1.0, BORDER_PANEL);
+        modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
         let mut open = true;
@@ -2712,7 +2712,7 @@ impl PydlApp {
         let work_active = self.exit_work_in_progress();
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = BG_LOG;
-        modal_frame.stroke = egui::Stroke::new(1.0, BORDER_PANEL);
+        modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
         egui::Window::new("Quit rustdl?")
