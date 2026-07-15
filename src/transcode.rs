@@ -103,6 +103,8 @@ pub struct ConvertConfig {
     pub audio_extract: String,
     /// In-encode subtitle handling: `none`, `soft`, or `burn`.
     pub subtitle_mode: String,
+    /// When true, ffprobe must find video and audio on the encoded output before the source is removed.
+    pub verify_output_video_audio: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -1063,6 +1065,111 @@ pub fn resolve_original_output_path(input: &Path, output: &Path) -> Option<PathB
     Some(original_path)
 }
 
+fn remove_partial_output(output: &Path) {
+    if output.is_file() {
+        let _ = std::fs::remove_file(output);
+    }
+}
+
+/// Minimum encoded duration as a fraction of the source duration (allows small container rounding drift).
+const OUTPUT_DURATION_MIN_RATIO: f64 = 0.95;
+/// Extra slack when comparing source vs output duration (milliseconds).
+const OUTPUT_DURATION_SLACK_MS: u64 = 2_000;
+
+fn output_duration_looks_complete(
+    input_duration_ms: Option<u64>,
+    output_duration_ms: Option<u64>,
+) -> Result<(), String> {
+    let Some(in_ms) = input_duration_ms.filter(|d| *d > 0) else {
+        return Ok(());
+    };
+    let Some(out_ms) = output_duration_ms.filter(|d| *d > 0) else {
+        return Err(
+            "Encoded output is missing duration metadata (often means the file is incomplete)."
+                .to_owned(),
+        );
+    };
+    let threshold_ms = ((in_ms as f64) * OUTPUT_DURATION_MIN_RATIO).floor() as u64;
+    if out_ms.saturating_add(OUTPUT_DURATION_SLACK_MS) < threshold_ms {
+        return Err(format!(
+            "Encoded output duration ({:.1}s) is much shorter than the source ({:.1}s); the encode may be incomplete.",
+            out_ms as f64 / 1000.0,
+            in_ms as f64 / 1000.0
+        ));
+    }
+    Ok(())
+}
+
+fn output_decodes_without_premature_end(output: &Path, ffmpeg_path: &str) -> Result<()> {
+    let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
+    let mut cmd = Command::new(ffmpeg);
+    no_console_window(&mut cmd);
+    let out = cmd
+        .args([
+            "-v",
+            "error",
+            "-i",
+            &output.to_string_lossy(),
+            "-f",
+            "null",
+            "-",
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .output()?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let lower = stderr.to_ascii_lowercase();
+    if lower.contains("file ended prematurely")
+        || lower.contains("invalid data found when processing input")
+    {
+        let hint = stderr
+            .lines()
+            .find(|l| !l.trim().is_empty())
+            .unwrap_or("decode error");
+        return Err(anyhow!(
+            "Encoded output appears incomplete or corrupt ({hint})."
+        ));
+    }
+    if !out.status.success() {
+        let hint = stderr.trim();
+        if hint.is_empty() {
+            return Err(anyhow!("Encoded output failed decode verification."));
+        }
+        return Err(anyhow!("Encoded output failed decode verification: {hint}"));
+    }
+    Ok(())
+}
+
+/// Returns an error when the encoded file looks truncated or is missing required streams.
+pub fn validate_convert_output(
+    input: &Path,
+    output: &Path,
+    ffprobe_path: &str,
+    ffmpeg_path: &str,
+    verify_streams: bool,
+) -> Result<()> {
+    let output_media = probe_input_media(output, ffprobe_path)
+        .ok_or_else(|| anyhow!("Could not probe encoded output."))?;
+    if verify_streams {
+        if output_media.codec.is_empty() {
+            return Err(anyhow!("Encoded output has no video stream."));
+        }
+        if output_media.audio_codec.is_none() {
+            return Err(anyhow!("Encoded output has no audio stream."));
+        }
+    }
+    let input_media = probe_input_media(input, ffprobe_path);
+    let input_duration_ms = input_media.and_then(|m| m.duration_ms);
+    if let Err(msg) = output_duration_looks_complete(input_duration_ms, output_media.duration_ms) {
+        return Err(anyhow!("{msg}"));
+    }
+    let output_duration_known = output_media.duration_ms.is_some_and(|d| d > 0);
+    if !output_duration_known {
+        output_decodes_without_premature_end(output, ffmpeg_path)?;
+    }
+    Ok(())
+}
+
 fn finalize_output_file(plan: &ConvertPlanItem, cfg: &ConvertConfig) -> Result<PathBuf> {
     let output = plan.output.clone();
     let original_deleted = if cfg.delete_original {
@@ -1248,6 +1355,7 @@ where
         {
             let _ = child.kill();
             let _ = child.wait();
+            remove_partial_output(&plan.output);
             return Err(anyhow!("Cancelled by user."));
         }
         line.clear();
@@ -1268,6 +1376,7 @@ where
             .ok()
             .map(|g| g.trim().to_owned())
             .unwrap_or_default();
+        remove_partial_output(&plan.output);
         if stderr_text.is_empty() {
             return Err(anyhow!("ffmpeg failed with status {st}"));
         }
@@ -1281,6 +1390,18 @@ where
             .collect::<Vec<_>>()
             .join("\n");
         return Err(anyhow!("ffmpeg failed with status {st}\n{short}"));
+    }
+    if let Err(err) = validate_convert_output(
+        &plan.input,
+        &plan.output,
+        &cfg.ffprobe_path,
+        &cfg.ffmpeg_path,
+        cfg.verify_output_video_audio,
+    ) {
+        remove_partial_output(&plan.output);
+        return Err(err.context(
+            "Encode output failed verification; the original file was kept.",
+        ));
     }
     finalize_output_file(plan, cfg)
 }
@@ -1311,6 +1432,7 @@ mod tests {
             subprocess_priority: "normal".to_owned(),
             audio_extract: "none".to_owned(),
             subtitle_mode: "none".to_owned(),
+            verify_output_video_audio: true,
         }
     }
 
@@ -1550,6 +1672,14 @@ mod tests {
         assert!(args.contains(&"0:s?".to_owned()));
         assert!(args.contains(&"-c:s".to_owned()));
         assert!(args.contains(&"copy".to_owned()));
+    }
+
+    #[test]
+    fn output_duration_looks_complete_rejects_short_or_missing() {
+        assert!(output_duration_looks_complete(Some(600_000), Some(590_000)).is_ok());
+        assert!(output_duration_looks_complete(Some(600_000), Some(500_000)).is_err());
+        assert!(output_duration_looks_complete(Some(600_000), None).is_err());
+        assert!(output_duration_looks_complete(None, None).is_ok());
     }
 
     #[test]

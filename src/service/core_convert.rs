@@ -55,6 +55,7 @@ impl DownloadCore {
             subprocess_priority: self.settings.subprocess_priority.clone(),
             audio_extract: self.settings.convert_audio_extract.clone(),
             subtitle_mode: self.settings.convert_subtitle_mode.clone(),
+            verify_output_video_audio: self.settings.verify_output_video_audio,
         }
     }
 
