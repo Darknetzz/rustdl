@@ -34,8 +34,9 @@ start_windows_publish_detached() {
 	RUSTDL_PUBLISH_REMOTE=$remote \
 	RUSTDL_PUBLISH_COMMIT=$commit \
 	RUSTDL_PUBLISH_SCRIPT=$wait_script \
+	RUSTDL_PUBLISH_LAUNCHER=$launcher \
 	"$launcher" -NoProfile -ExecutionPolicy Bypass -Command "
-		Start-Process -FilePath '$launcher' -WindowStyle Hidden -ArgumentList @(
+		Start-Process -FilePath \$env:RUSTDL_PUBLISH_LAUNCHER -WindowStyle Hidden -ArgumentList @(
 			'-NoProfile',
 			'-ExecutionPolicy', 'Bypass',
 			'-File', \$env:RUSTDL_PUBLISH_SCRIPT,
