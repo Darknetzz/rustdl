@@ -940,10 +940,17 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
-            with_full_width(ui, |ui| {
+            with_full_panel(ui, |ui| {
                 let bg_idx = ui.painter().add(Shape::Noop);
                 let ret = add_contents(ui);
-                let paint_rect = (ui.min_rect() + inner_margin).intersect(ui.clip_rect());
+                let mut paint_rect = ui.min_rect() + inner_margin;
+                let max = ui.max_rect();
+                if max.height().is_finite() && max.height() > paint_rect.height() + 2.0 {
+                    paint_rect.max.y =
+                        (max.max.y - inner_margin.bottom).min(ui.clip_rect().bottom());
+                }
+                paint_rect.max.x = paint_rect.max.x.min(ui.clip_rect().right());
+                paint_rect = paint_rect.intersect(ui.clip_rect());
                 if ui.is_rect_visible(paint_rect) {
                     paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
                 }
@@ -1445,6 +1452,23 @@ pub fn scaled_log_dock_height(user_pref: f32, available_for_log: f32) -> f32 {
     user_pref.min(max_lines * 0.55).clamp(80.0, 480.0)
 }
 
+/// User log line height scaled to remaining docked queue body space (footer + chrome).
+pub fn queue_log_lines_for_dock_layout(
+    user_pref: f32,
+    body_bottom: f32,
+    content_top: f32,
+    footer_h: f32,
+) -> f32 {
+    let avail_body = finite_ui_span(body_bottom - content_top, 0.0);
+    let log_budget = (avail_body
+        - footer_h
+        - DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
+        - DOCKED_LOG_HEADING_H
+        - DOCKED_LOG_CHROME_H)
+        .max(0.0);
+    scaled_log_dock_height(user_pref, log_budget)
+}
+
 /// Card width for wrapped grid layout (`columns` in 1..=4).
 pub fn queue_card_grid_width(avail: f32, compact: bool) -> f32 {
     let (card_min, card_max) = if compact {
@@ -1883,6 +1907,26 @@ pub fn with_full_width<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
         egui::Layout::top_down(egui::Align::Min),
         |ui| {
             ui.set_max_width(width);
+            add_contents(ui)
+        },
+    )
+    .inner
+}
+
+/// Full panel width; also fills a fixed-height parent (docked/floating queue shells).
+pub fn with_full_panel<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let width = clip_bounded_width(ui);
+    let parent_h = finite_ui_span(ui.max_rect().height(), 0.0);
+    let fixed_h = parent_h > 1.0;
+    let height = if fixed_h { parent_h } else { 0.0 };
+    ui.allocate_ui_with_layout(
+        egui::vec2(width, height),
+        egui::Layout::top_down(egui::Align::Min),
+        |ui| {
+            ui.set_max_width(width);
+            if fixed_h {
+                ui.set_min_height(parent_h);
+            }
             add_contents(ui)
         },
     )

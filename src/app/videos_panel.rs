@@ -5,14 +5,15 @@ use eframe::egui::{self, RichText};
 use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
-    allocate_bottom_up_rect, allocate_top_down_rect, bounded_ui_height, button_group,
+    allocate_bottom_up_rect, allocate_top_down_rect, button_group,
     button_toolbar_wrapped, compact_button_group, compact_convert_list_row,
     consume_remaining_ui_space, content_width, docked_log_lines_max_h, draw_batch_progress_bar,
     draw_queue_status_compact_row, fill_allocated_rect, finite_ui_span, height_to_bottom,
     left_button_row, note_resizable_panel_height, pin_allocated_rect, queue_footer_reserve,
     queue_list_height_from_layout, queue_list_min_scroll_h, queue_log_block_height,
     queue_panel_layout_heights, queue_status_compact, queue_undocked_strip_reserve,
-    show_mode_panel, show_persisted_resizable_window, status_color, with_full_width,
+    queue_log_lines_for_dock_layout, show_mode_panel, show_persisted_resizable_window,
+    status_color, with_full_width,
     PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
     UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
@@ -91,12 +92,7 @@ impl PydlApp {
         let compact_convert = self.convert_mode
             && compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
         let min_h = queue_list_min_scroll_h(docked, self.convert_mode, compact_convert);
-        let cap = if docked {
-            bounded_ui_height(ui, min_h).max(min_h)
-        } else {
-            finite_ui_span(scroll_h, min_h).max(min_h)
-        };
-        let scroll_h = finite_ui_span(scroll_h, min_h).clamp(0.0, cap);
+        let scroll_h = finite_ui_span(scroll_h, min_h).max(min_h);
         if scroll_h < 1.0 {
             return;
         }
@@ -525,8 +521,17 @@ impl PydlApp {
             ui_scale,
             resizing,
         );
-        let log_block_est =
-            queue_log_block_height(layout.dock_log, self.settings.log_dock_height, true);
+        let log_lines = if layout.dock_log {
+            queue_log_lines_for_dock_layout(
+                self.settings.log_dock_height,
+                body_bottom,
+                content_top_after_search,
+                footer_h,
+            )
+        } else {
+            self.settings.log_dock_height
+        };
+        let log_block_est = queue_log_block_height(layout.dock_log, log_lines, true);
         let predicted_list_h = queue_list_height_from_layout(
             content_top_after_search,
             body_bottom,
@@ -883,6 +888,7 @@ impl PydlApp {
         let convert_color = self.settings.mode_convert_color.clone();
         let mode_colors = crate::theme::ModePanelColors::new(&dl_color, &convert_color);
         allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
+            fill_allocated_rect(ui);
             pin_allocated_rect(ui);
             self.constrain_panel_content(ui);
             let body_bottom = ui.max_rect().bottom();
