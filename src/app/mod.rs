@@ -241,6 +241,8 @@ pub struct PydlApp {
     exit_allowed: bool,
     /// User confirmed quit while work was active; wait for graceful cancellation.
     exit_pending_after_cancel: bool,
+    /// When graceful quit started (for force-exit timeout).
+    exit_pending_since: Option<Instant>,
     /// When set, queues are cleared instead of saved when exit completes.
     exit_clear_queues_on_quit: bool,
     /// When set, only the matching queue section is shown (click download summary).
@@ -510,6 +512,7 @@ impl PydlApp {
             web_server_banner_dismissed: false,
             exit_allowed: false,
             exit_pending_after_cancel: false,
+            exit_pending_since: None,
             exit_clear_queues_on_quit: false,
             queue_group_focus: None,
             scroll_to_queue_group: None,
@@ -2225,6 +2228,10 @@ impl PydlApp {
         core_sync::push_app_to_core(self, &shared);
         let yt_dlp_bin = self.yt_dlp_bin();
         let metadata_args = self.metadata_extra_args();
+        let cancel = {
+            let mut core = shared.lock();
+            core.take_url_resolve_cancel_flag()
+        };
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
             &self.ui_bus,
@@ -2232,6 +2239,7 @@ impl PydlApp {
             metadata_args,
             self.settings.playlist_preview_cap,
             vec![line],
+            cancel,
         );
     }
 
@@ -2641,13 +2649,24 @@ impl PydlApp {
         self.exit_confirm_open = true;
     }
 
+    /// Max time to wait for cancel before force-closing (stuck yt-dlp / metadata).
+    const EXIT_CANCEL_TIMEOUT: Duration = Duration::from_secs(8);
+
     fn confirm_exit(&mut self, ctx: &egui::Context, clear_queues: bool) {
         self.exit_confirm_open = false;
         self.exit_clear_queues_on_quit = clear_queues;
+        // Second Quit while still waiting: do not hang on stuck subprocesses.
+        if self.exit_pending_after_cancel {
+            self.append_log("Force quit: abandoning wait for active jobs…");
+            self.finish_exit(ctx);
+            return;
+        }
         if self.exit_work_in_progress() {
             self.exit_pending_after_cancel = true;
+            self.exit_pending_since = Some(Instant::now());
             self.convert_core_action(|core| core.cancel_convert_batch());
             self.cancel_all_active(CancelPostAction::Ready);
+            self.download_core_action(|core| core.cancel_url_resolve_pipeline());
             self.append_log(if clear_queues {
                 "Graceful shutdown requested: cancelling active jobs, then clearing saved queue(s) before exit…"
             } else {
@@ -2658,7 +2677,10 @@ impl PydlApp {
         self.finish_exit(ctx);
     }
 
-    fn finish_exit(&mut self, ctx: &egui::Context) {
+    /// Complete quit after cancel (or timeout / force). Safe to call repeatedly.
+    pub(super) fn finish_exit(&mut self, ctx: &egui::Context) {
+        self.exit_pending_after_cancel = false;
+        self.exit_pending_since = None;
         if self.exit_clear_queues_on_quit {
             self.clear_queues_and_persist_empty();
         } else {
@@ -2668,6 +2690,13 @@ impl PydlApp {
         self.exit_clear_queues_on_quit = false;
         self.exit_allowed = true;
         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+    }
+
+    /// True when graceful quit has waited long enough to force-close.
+    pub(super) fn exit_cancel_timed_out(&self) -> bool {
+        self.exit_pending_since
+            .map(|t| t.elapsed() >= Self::EXIT_CANCEL_TIMEOUT)
+            .unwrap_or(false)
     }
 
     fn clear_queues_and_persist_empty(&mut self) {
@@ -2710,12 +2739,17 @@ impl PydlApp {
         let mut exit_confirm_open = self.exit_confirm_open;
         let mut cancel_exit_confirm = false;
         let work_active = self.exit_work_in_progress();
+        let shutting_down = self.exit_pending_after_cancel;
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = BG_LOG;
         modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
-        egui::Window::new("Quit rustdl?")
+        egui::Window::new(if shutting_down {
+            "Still shutting down…"
+        } else {
+            "Quit rustdl?"
+        })
             .open(&mut exit_confirm_open)
             .frame(modal_frame)
             .collapsible(false)
@@ -2733,14 +2767,27 @@ impl PydlApp {
                             ui.label(
                                 RichText::new(ui_icons::EXIT)
                                     .size(40.0)
-                                    .color(if work_active {
+                                    .color(if work_active || shutting_down {
                                         ALERT_WARNING_TEXT
                                     } else {
                                         ALERT_DANGER_TEXT
                                     }),
                             );
                             ui.add_space(12.0);
-                            if work_active {
+                            if shutting_down {
+                                ui.label(
+                                    RichText::new("Waiting for active jobs to cancel…")
+                                        .strong()
+                                        .color(ALERT_WARNING_TEXT),
+                                );
+                                ui.add_space(6.0);
+                                ui.label(
+                                    RichText::new(
+                                        "A job may be stuck (for example a long metadata fetch). Press Force Quit to close immediately, or wait a few seconds for an automatic timeout.",
+                                    )
+                                    .color(ALERT_WARNING_TEXT),
+                                );
+                            } else if work_active {
                                 ui.label(
                                     RichText::new("Downloads or metadata fetches are still running.")
                                         .strong()
@@ -2769,7 +2816,7 @@ impl PydlApp {
                             }
                         });
                     };
-                    if work_active {
+                    if work_active || shutting_down {
                         alert_warning(ui, draw_alert_body);
                     } else {
                         alert_danger(ui, draw_alert_body);
@@ -2782,19 +2829,33 @@ impl PydlApp {
                         {
                             cancel_exit_confirm = true;
                         }
-                        if g
-                            .warning(
-                                &format!("{} Quit and Clear Queue", ui_icons::CLEAR_QUEUE),
-                                true,
-                            )
-                            .on_hover_text(
-                                "Close rustdl and remove all saved downloader and converter queue items.",
-                            )
+                        if !shutting_down {
+                            if g
+                                .warning(
+                                    &format!("{} Quit and Clear Queue", ui_icons::CLEAR_QUEUE),
+                                    true,
+                                )
+                                .on_hover_text(
+                                    "Close rustdl and remove all saved downloader and converter queue items.",
+                                )
+                                .clicked()
+                            {
+                                self.confirm_exit(ctx, true);
+                            }
+                        }
+                        let quit_label = if shutting_down {
+                            format!("{} Force Quit", ui_icons::EXIT)
+                        } else {
+                            format!("{} Quit", ui_icons::EXIT)
+                        };
+                        if g.danger(&quit_label, true)
+                            .on_hover_text(if shutting_down {
+                                "Close immediately without waiting for stuck jobs to finish cancelling."
+                            } else {
+                                "Close rustdl."
+                            })
                             .clicked()
                         {
-                            self.confirm_exit(ctx, true);
-                        }
-                        if g.danger(&format!("{} Quit", ui_icons::EXIT), true).clicked() {
                             self.confirm_exit(ctx, false);
                         }
                     });

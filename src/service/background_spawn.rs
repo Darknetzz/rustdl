@@ -221,12 +221,29 @@ pub(crate) fn spawn_url_resolve_pipeline(
     metadata_args: Vec<String>,
     playlist_cap: usize,
     queued_lines: Vec<String>,
+    cancel_flag: std::sync::Arc<std::sync::atomic::AtomicBool>,
 ) {
     let bus = bus.clone();
     let rt = rt.clone();
     rt.spawn(async move {
         let total = queued_lines.len();
         for (idx, line) in queued_lines.into_iter().enumerate() {
+            if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                try_send_ui(
+                    &bus,
+                    UiEvent::AddResolved {
+                        rows: vec![VideoPreview {
+                            source_line: line.clone(),
+                            webpage_url: line.clone(),
+                            title: String::new(),
+                            error: Some("Cancelled by user.".to_owned()),
+                            ..Default::default()
+                        }],
+                        source_line: line,
+                    },
+                );
+                break;
+            }
             try_send_ui(
                 &bus,
                 UiEvent::AddProgress {
@@ -238,12 +255,14 @@ pub(crate) fn spawn_url_resolve_pipeline(
             let bin = yt_dlp_bin.clone();
             let line_for_resolve = line.clone();
             let metadata_args = metadata_args.clone();
+            let cancel_for_resolve = cancel_flag.clone();
             let rows = match tokio::task::spawn_blocking(move || {
-                ytdlp::resolve_url_to_previews_with_bin(
+                ytdlp::resolve_url_to_previews_with_bin_cancel(
                     &line_for_resolve,
                     &bin,
                     &metadata_args,
                     playlist_cap,
+                    Some(&cancel_for_resolve),
                 )
             })
             .await
@@ -272,6 +291,9 @@ pub(crate) fn spawn_url_resolve_pipeline(
                     current: None,
                 },
             );
+            if cancel_flag.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
         }
         try_send_ui(&bus, UiEvent::AddDone);
     });

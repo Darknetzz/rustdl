@@ -243,6 +243,8 @@ pub struct DownloadCore {
     pub add_current_url: Option<String>,
     pub queue_running: usize,
     pub download_cancel_flags: HashMap<u64, Arc<AtomicBool>>,
+    /// Shared cancel for the in-flight URL metadata resolve pipeline (Add URLs / refetch).
+    pub url_resolve_cancel: Option<Arc<AtomicBool>>,
     pub cancel_post_actions: HashMap<u64, CancelPostAction>,
     pub downloads_paused: bool,
     pub session_complete_notified: bool,
@@ -400,6 +402,7 @@ impl DownloadCore {
             add_current_url: None,
             queue_running: 0,
             download_cancel_flags: HashMap::new(),
+            url_resolve_cancel: None,
             cancel_post_actions: HashMap::new(),
             downloads_paused: false,
             session_complete_notified: false,
@@ -747,6 +750,7 @@ impl DownloadCore {
         self.append_log("Graceful shutdown requested from web UI: cancelling active jobs…");
         self.cancel_convert_batch();
         self.cancel_all_active(CancelPostAction::Ready);
+        self.cancel_url_resolve_pipeline();
         self.maybe_finish_shutdown();
     }
 
@@ -1772,6 +1776,47 @@ impl DownloadCore {
         self.append_log(&format!("Cancel requested for {count} item(s)."));
     }
 
+    /// Abort in-flight metadata resolve (Add URLs / refetch). Killable yt-dlp `-J` runs honor this.
+    pub fn cancel_url_resolve_pipeline(&mut self) {
+        if let Some(flag) = &self.url_resolve_cancel {
+            if !flag.swap(true, Ordering::Relaxed) {
+                self.append_log("Cancelling metadata fetch…");
+            }
+        }
+    }
+
+    /// Turn leftover Resolving placeholders into idle error rows after an early cancel.
+    pub(crate) fn fail_orphan_resolving_items(&mut self, detail: &str) {
+        if self.pending_resolve_ids.is_empty() {
+            return;
+        }
+        let orphans: Vec<(String, u64)> = self.pending_resolve_ids.drain().collect();
+        let mut changed = false;
+        for (source_line, iid) in orphans {
+            if let Some(idx) = self.item_idx(iid) {
+                if self.items[idx].status == ItemStatus::Resolving {
+                    self.items[idx].status = ItemStatus::Idle;
+                    self.items[idx].error = Some(detail.to_owned());
+                    self.items[idx].detail = detail.to_owned();
+                    changed = true;
+                }
+            } else {
+                let _ = source_line;
+            }
+        }
+        if changed {
+            self.update_status();
+            self.invalidate_queue_caches();
+            self.schedule_queue_save();
+        }
+    }
+
+    pub(crate) fn take_url_resolve_cancel_flag(&mut self) -> Arc<AtomicBool> {
+        let flag = Arc::new(AtomicBool::new(false));
+        self.url_resolve_cancel = Some(flag.clone());
+        flag
+    }
+
     pub fn retry_download_item_id(&mut self, item_id: u64) {
         let Some(idx) = self.resolve_item_idx(item_id) else {
             return;
@@ -1895,6 +1940,7 @@ impl DownloadCore {
             self.append_log("No new URLs to add (all duplicates).");
             return filter_stats;
         }
+        let cancel = self.take_url_resolve_cancel_flag();
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
             &self.ui_event_bus(),
@@ -1902,6 +1948,7 @@ impl DownloadCore {
             self.metadata_extra_args(),
             self.settings.playlist_preview_cap,
             queued_lines,
+            cancel,
         );
         filter_stats
     }
@@ -1988,6 +2035,7 @@ impl DownloadCore {
         self.flush_queue_to_disk();
         self.bump_generation();
         self.append_log(&format!("Refetching metadata for {line}"));
+        let cancel = self.take_url_resolve_cancel_flag();
         background_spawn::spawn_url_resolve_pipeline(
             &self.runtime,
             &self.ui_event_bus(),
@@ -1995,6 +2043,7 @@ impl DownloadCore {
             self.metadata_extra_args(),
             self.settings.playlist_preview_cap,
             vec![line],
+            cancel,
         );
         Ok(())
     }

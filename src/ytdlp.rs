@@ -844,9 +844,31 @@ pub fn resolve_url_to_previews_with_bin(
     extra_args: &[String],
     playlist_cap: usize,
 ) -> Vec<VideoPreview> {
+    resolve_url_to_previews_with_bin_cancel(url, yt_dlp_path, extra_args, playlist_cap, None)
+}
+
+/// Like [`resolve_url_to_previews_with_bin`], but kills the yt-dlp child when `cancel` is set.
+pub fn resolve_url_to_previews_with_bin_cancel(
+    url: &str,
+    yt_dlp_path: &str,
+    extra_args: &[String],
+    playlist_cap: usize,
+    cancel: Option<&AtomicBool>,
+) -> Vec<VideoPreview> {
+    use std::io::Read;
+
     let trimmed = url.trim();
     if trimmed.is_empty() {
         return vec![];
+    }
+    if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+        return vec![VideoPreview {
+            source_line: trimmed.to_owned(),
+            webpage_url: trimmed.to_owned(),
+            title: String::new(),
+            error: Some("Cancelled by user.".to_owned()),
+            ..Default::default()
+        }];
     }
     let bin = resolve_executable(yt_dlp_path, "yt-dlp");
     let mut cmd = Command::new(&bin);
@@ -856,8 +878,10 @@ pub fn resolve_url_to_previews_with_bin(
         cmd.arg(arg);
     }
     cmd.arg(trimmed);
-    let output = match cmd.output() {
-        Ok(o) => o,
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::piped());
+    let mut child = match cmd.spawn() {
+        Ok(c) => c,
         Err(e) => {
             return vec![VideoPreview {
                 source_line: trimmed.to_owned(),
@@ -868,8 +892,42 @@ pub fn resolve_url_to_previews_with_bin(
             }];
         }
     };
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+    let status = loop {
+        if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return vec![VideoPreview {
+                source_line: trimmed.to_owned(),
+                webpage_url: trimmed.to_owned(),
+                title: String::new(),
+                error: Some("Cancelled by user.".to_owned()),
+                ..Default::default()
+            }];
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(80)),
+            Err(e) => {
+                return vec![VideoPreview {
+                    source_line: trimmed.to_owned(),
+                    webpage_url: trimmed.to_owned(),
+                    title: String::new(),
+                    error: Some(format!("yt-dlp wait failed: {e}")),
+                    ..Default::default()
+                }];
+            }
+        }
+    };
+    let mut stdout = Vec::new();
+    let mut stderr = Vec::new();
+    if let Some(mut out) = child.stdout.take() {
+        let _ = out.read_to_end(&mut stdout);
+    }
+    if let Some(mut err) = child.stderr.take() {
+        let _ = err.read_to_end(&mut stderr);
+    }
+    if !status.success() {
+        let err = String::from_utf8_lossy(&stderr).trim().to_owned();
         return vec![VideoPreview {
             source_line: trimmed.to_owned(),
             webpage_url: trimmed.to_owned(),
@@ -882,7 +940,7 @@ pub fn resolve_url_to_previews_with_bin(
             ..Default::default()
         }];
     }
-    let Ok(root) = serde_json::from_slice::<Value>(&output.stdout) else {
+    let Ok(root) = serde_json::from_slice::<Value>(&stdout) else {
         return vec![VideoPreview {
             source_line: trimmed.to_owned(),
             webpage_url: trimmed.to_owned(),

@@ -128,6 +128,9 @@ impl super::core::DownloadCore {
                 self.add_in_progress = false;
                 self.add_processed_urls = self.add_total_urls;
                 self.add_current_url = None;
+                self.url_resolve_cancel = None;
+                // Early cancel can leave Resolving placeholders that never got AddResolved.
+                self.fail_orphan_resolving_items("Cancelled by user.");
                 self.maybe_auto_start_downloads();
                 self.bump_generation();
             }

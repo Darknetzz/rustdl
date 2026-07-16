@@ -63,9 +63,17 @@ impl eframe::App for PydlApp {
         }
         let ui_suspended = self.main_window_ui_suspended(ctx);
         self.maybe_adjust_videos_dock_for_viewport(ctx);
-        if self.exit_pending_after_cancel && !self.exit_work_in_progress() {
-            self.exit_pending_after_cancel = false;
-            self.finish_exit(ctx);
+        if self.exit_pending_after_cancel {
+            ctx.request_repaint_after(std::time::Duration::from_millis(100));
+            let timed_out = self.exit_cancel_timed_out();
+            if !self.exit_work_in_progress() || timed_out {
+                if timed_out && self.exit_work_in_progress() {
+                    self.append_log(
+                        "Graceful shutdown timed out after 8s; exiting without waiting for stuck jobs…",
+                    );
+                }
+                self.finish_exit(ctx);
+            }
         }
         self.poll_done_file_lookup();
         if !ui_suspended {

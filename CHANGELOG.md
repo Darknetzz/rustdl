@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Quit no longer hangs forever when metadata fetches or downloads stick during graceful shutdown: **Force Quit** on a second confirm, an 8s timeout, and cancellable yt-dlp metadata resolves.
 - **Remove from queue** on download cards (including failed rows) now removes the row from the list immediately instead of appearing to do nothing.
 - Docked **Videos / Convert queue** panel list area no longer collapses to a thin strip with a large empty gap above the footer (mode panel now fills the resizable dock height; list scroll uses layout height directly).
 - Desktop **Videos / Convert queue** docked panel no longer extends past the window width (mode panel chrome and card rows clamp to the panel clip rect; footer toolbars wrap when docked).
