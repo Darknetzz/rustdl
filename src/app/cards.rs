@@ -7,9 +7,9 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
-    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback,
-    should_flatten_nested_group_scroll, show_menu_popup, show_queue_group_section, status_color,
-    status_dot_with_label, url_menu_above, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
+    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback, show_menu_popup,
+    show_queue_group_section, show_virtualized_rows, status_color, status_dot_with_label,
+    url_menu_above, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
 };
 use crate::media_metadata::queue_item_more_info_rows;
 use crate::models::{ItemStatus, QueueItem};
@@ -907,31 +907,15 @@ impl PydlApp {
                     let use_list = self.effective_card_list_layout_for_panel(outer_scroll_h)
                         || ids.len() >= self.queue_card_list_fallback_threshold()
                         || queue_short_panel_list_fallback(outer_scroll_h, false);
-                    let flatten = should_flatten_nested_group_scroll(outer_scroll_h);
                     if use_list {
                         let list_row_h = QUEUE_DL_LIST_ROW_H;
-                        let row_count = ids.len().max(1);
-                        let outer_cap = outer_scroll_h.max(list_row_h);
-                        let max_h = if flatten {
-                            outer_cap
-                        } else {
-                            (row_count as f32 * list_row_h + 8.0)
-                                .clamp(list_row_h, 600.0)
-                                .min(outer_cap)
-                        };
-                        egui::ScrollArea::vertical()
-                            .id_salt(format!("rustdl_list_{label}"))
-                            .max_height(max_h)
-                            .auto_shrink([false, true])
-                            .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
-                                for row in row_range {
-                                    if let Some(item_id) = ids.get(row) {
-                                        if let Some(idx) = self.item_idx(*item_id) {
-                                            self.draw_card_list(ui, idx, allow_reorder);
-                                        }
-                                    }
+                        show_virtualized_rows(ui, list_row_h, ids.len(), |ui, row| {
+                            if let Some(item_id) = ids.get(row) {
+                                if let Some(idx) = self.item_idx(*item_id) {
+                                    self.draw_card_list(ui, idx, allow_reorder);
                                 }
-                            });
+                            }
+                        });
                     } else {
                         let row_width = clip_bounded_width(ui);
                         ui.set_max_width(row_width);

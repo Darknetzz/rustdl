@@ -915,6 +915,9 @@ fn paint_mode_panel_background(
 }
 
 /// Panel chrome for Downloader / AV1 sections (muted tint + left accent; matches web `.panel`).
+///
+/// Use `fill_height = true` for docked/floating queue shells so the accent frame fills the
+/// allocated panel; main-column panels should pass `false` (shrink-wrap).
 pub fn show_mode_panel<R>(
     ui: &mut egui::Ui,
     theme: &str,
@@ -922,6 +925,7 @@ pub fn show_mode_panel<R>(
     colors: ModePanelColors<'_>,
     inner_margin: egui::Margin,
     rounding: f32,
+    fill_height: bool,
     add_contents: impl FnOnce(&mut egui::Ui) -> R,
 ) -> InnerResponse<R> {
     let accent = mode_accent_for(av1, &colors);
@@ -940,14 +944,16 @@ pub fn show_mode_panel<R>(
     egui::Frame::none()
         .inner_margin(inner_margin)
         .show(ui, |ui| {
-            with_full_panel(ui, |ui| {
+            let draw = |ui: &mut egui::Ui| {
                 let bg_idx = ui.painter().add(Shape::Noop);
                 let ret = add_contents(ui);
                 let mut paint_rect = ui.min_rect() + inner_margin;
-                let max = ui.max_rect();
-                if max.height().is_finite() && max.height() > paint_rect.height() + 2.0 {
-                    paint_rect.max.y =
-                        (max.max.y - inner_margin.bottom).min(ui.clip_rect().bottom());
+                if fill_height {
+                    let max = ui.max_rect();
+                    if max.height().is_finite() && max.height() > paint_rect.height() + 2.0 {
+                        paint_rect.max.y =
+                            (max.max.y - inner_margin.bottom).min(ui.clip_rect().bottom());
+                    }
                 }
                 paint_rect.max.x = paint_rect.max.x.min(ui.clip_rect().right());
                 paint_rect = paint_rect.intersect(ui.clip_rect());
@@ -955,8 +961,60 @@ pub fn show_mode_panel<R>(
                     paint_mode_panel_background(ui.painter(), bg_idx, paint_rect, &style);
                 }
                 ret
-            })
+            };
+            if fill_height {
+                with_full_panel(ui, draw)
+            } else {
+                with_full_width(ui, draw)
+            }
         })
+}
+
+/// Virtualized evenly spaced rows inside an outer [`egui::ScrollArea`] (no nested scroll).
+///
+/// Reserves `total_rows × (row_height + spacing)` and only paints rows that intersect the clip rect.
+pub fn show_virtualized_rows(
+    ui: &mut egui::Ui,
+    row_height: f32,
+    total_rows: usize,
+    mut add_row: impl FnMut(&mut egui::Ui, usize),
+) {
+    if total_rows == 0 || !row_height.is_finite() || row_height < 1.0 {
+        return;
+    }
+    let spacing_y = ui.spacing().item_spacing.y.max(0.0);
+    let row_step = row_height + spacing_y;
+    let total_h = (row_step * total_rows as f32 - spacing_y).max(0.0);
+    let width = clip_bounded_width(ui).max(1.0);
+    let top = ui.cursor().min.y;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(width, total_h), egui::Sense::hover());
+    let clip = ui.clip_rect().intersect(rect);
+    if clip.height() < 0.5 || clip.width() < 0.5 {
+        return;
+    }
+    let mut min_row = ((clip.top() - top) / row_step).floor().max(0.0) as usize;
+    let mut max_row = ((clip.bottom() - top) / row_step).ceil() as usize + 1;
+    if max_row > total_rows {
+        let diff = max_row.saturating_sub(min_row);
+        max_row = total_rows;
+        min_row = total_rows.saturating_sub(diff);
+    }
+    min_row = min_row.min(max_row);
+    for row in min_row..max_row {
+        let y = top + row as f32 * row_step;
+        let row_rect =
+            egui::Rect::from_min_size(egui::pos2(rect.left(), y), egui::vec2(width, row_height));
+        ui.allocate_new_ui(
+            egui::UiBuilder::new()
+                .max_rect(row_rect)
+                .layout(egui::Layout::top_down(egui::Align::Min)),
+            |ui| {
+                ui.set_max_width(width);
+                ui.set_min_height(row_height);
+                add_row(ui, row);
+            },
+        );
+    }
 }
 
 pub const VIDEOS_DOCKED_HEIGHT_RATIO: f32 = 0.52;
@@ -971,9 +1029,9 @@ pub const BOTTOM_PANEL_MAX_H: f32 = 800.0;
 /// Downloader queue list row height (virtualized list layout).
 pub const QUEUE_DL_LIST_ROW_H: f32 = 42.0;
 /// Convert queue list row height (full detail).
-pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 118.0;
+pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 140.0;
 /// Convert queue list row height (compact panels / minimal preset).
-pub const QUEUE_CONVERT_LIST_ROW_COMPACT_H: f32 = 72.0;
+pub const QUEUE_CONVERT_LIST_ROW_COMPACT_H: f32 = 88.0;
 pub const QUEUE_FLOATING_LIST_MIN_H: f32 = 80.0;
 pub const QUEUE_DOCKED_LIST_MIN_PAD: f32 = 8.0;
 

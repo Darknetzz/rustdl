@@ -318,6 +318,7 @@ impl eframe::App for PydlApp {
                         mode_colors,
                         egui::Margin::same(12.0),
                         10.0,
+                        false,
                         |ui| {
                             self.draw_convert_panel(ui);
                         },
@@ -330,6 +331,7 @@ impl eframe::App for PydlApp {
                     mode_colors,
                     egui::Margin::same(12.0),
                     10.0,
+                    false,
                     |ui| {
                 with_full_width(ui, |ui| {
                 ui.label("URLs (one per line)");

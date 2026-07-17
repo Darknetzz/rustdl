@@ -4,9 +4,8 @@ use crate::app_actions;
 use crate::app_parsing::human_bytes_ui;
 use crate::app_ui::{
     button_group, compact_convert_list_row, convert_list_row_height, draw_labeled_meta_badge,
-    draw_meta_badge, left_button_row, queue_short_panel_list_fallback,
-    should_flatten_nested_group_scroll, show_queue_group_section, status_color,
-    status_dot_with_label, MetaBadgeKind,
+    draw_meta_badge, left_button_row, queue_short_panel_list_fallback, show_queue_group_section,
+    show_virtualized_rows, status_color, status_dot_with_label, MetaBadgeKind,
 };
 use crate::config::AppSettings;
 use crate::convert_size_limit::{
@@ -847,20 +846,13 @@ impl PydlApp {
                         compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
                     let use_list = self.effective_convert_list_layout_for_panel(outer_scroll_h)
                         || queue_short_panel_list_fallback(outer_scroll_h, true);
-                    let flatten = should_flatten_nested_group_scroll(outer_scroll_h);
                     if use_list {
                         let list_row_h = convert_list_row_height(list_compact);
-                        let row_count = ids.len().max(1);
-                        let outer_cap = outer_scroll_h.max(list_row_h);
-                        let max_h = if flatten {
-                            outer_cap
-                        } else {
-                            (row_count as f32 * list_row_h + 8.0)
-                                .clamp(list_row_h, 600.0)
-                                .min(outer_cap)
-                        };
                         let allow_reorder = label == "Ready";
-                        let mut draw_row = |ui: &mut egui::Ui, item_id: u64| {
+                        show_virtualized_rows(ui, list_row_h, ids.len(), |ui, row| {
+                            let Some(item_id) = ids.get(row).copied() else {
+                                return;
+                            };
                             if let Some(idx) = self.convert_item_idx(item_id) {
                                 let it = self.convert_items[idx].clone();
                                 let row_w = crate::app_ui::clip_bounded_width(ui);
@@ -875,18 +867,7 @@ impl PydlApp {
                                     );
                                 });
                             }
-                        };
-                        egui::ScrollArea::vertical()
-                            .id_salt(format!("rustdl_convert_list_{label}"))
-                            .max_height(max_h)
-                            .auto_shrink([false, true])
-                            .show_rows(ui, list_row_h, ids.len(), |ui, row_range| {
-                                for row in row_range {
-                                    if let Some(item_id) = ids.get(row) {
-                                        draw_row(ui, *item_id);
-                                    }
-                                }
-                            });
+                        });
                     } else {
                         for item_id in &ids {
                             let Some(idx) = self.convert_item_idx(*item_id) else {
