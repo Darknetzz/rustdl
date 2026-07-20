@@ -4142,6 +4142,7 @@ dependencies = [
  "uuid",
  "which",
  "windows-sys 0.52.0",
+ "winit",
  "winres",
 ]
 

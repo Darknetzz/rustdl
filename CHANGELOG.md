@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Linux GUI: prefer **X11/XWayland** by default so the window actually appears on GNOME/Zorin (native Wayland often left only a dock icon). Set `RUSTDL_USE_WAYLAND=1` to keep native Wayland.
 - Docked **Videos / Convert queue** list no longer shows a large empty gap under group headers (rows virtualize in the outer scroll; mode-panel height fill is limited to the queue shell).
 - Quit no longer hangs forever when metadata fetches or downloads stick during graceful shutdown: **Force Quit** on a second confirm, an 8s timeout, and cancellable yt-dlp metadata resolves.
 - **Remove from queue** on download cards (including failed rows) now removes the row from the list immediately instead of appearing to do nothing.

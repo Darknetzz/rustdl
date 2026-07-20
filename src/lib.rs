@@ -53,7 +53,7 @@ use tokio::runtime::Runtime;
 pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
     // eframe only clamps restored window positions on Windows; off-screen restore on Linux
     // can leave the window invisible. Always center instead of restoring position.
-    let native_options = eframe::NativeOptions {
+    let mut native_options = eframe::NativeOptions {
         // Center on first launch so the window is easy to spot (especially on multi-monitor setups).
         centered: true,
         viewport: egui::ViewportBuilder::default()
@@ -67,6 +67,22 @@ pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
         persist_window: false,
         ..Default::default()
     };
+
+    // winit 0.30 prefers Wayland when WAYLAND_DISPLAY is set. On some GNOME/Zorin setups the
+    // Wayland surface shows a dock icon but never maps a visible window. Prefer XWayland unless
+    // the user opts into native Wayland with RUSTDL_USE_WAYLAND=1.
+    #[cfg(target_os = "linux")]
+    {
+        let prefer_wayland = std::env::var_os("RUSTDL_USE_WAYLAND")
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        if !prefer_wayland {
+            use winit::platform::x11::EventLoopBuilderExtX11;
+            native_options.event_loop_builder = Some(Box::new(|b| {
+                b.with_x11();
+            }));
+        }
+    }
 
     eframe::run_native(
         "rustdl",

@@ -68,6 +68,8 @@ windows-sys = { version = "0.52", features = [
 
 [target.'cfg(target_os = "linux")'.dependencies]
 ksni = "0.2"
+# Match eframe's winit; used to force X11 when Wayland maps an invisible window (GNOME/Zorin).
+winit = "0.30"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
