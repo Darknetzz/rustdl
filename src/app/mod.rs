@@ -2374,19 +2374,43 @@ impl PydlApp {
         if lines.is_empty() {
             return;
         }
-        if !self.input_urls.trim().is_empty() && !self.input_urls.ends_with('\n') {
-            self.input_urls.push('\n');
-        }
-        self.input_urls.push_str(&lines.join("\n"));
-        if !self.input_urls.ends_with('\n') {
-            self.input_urls.push('\n');
-        }
+        input_lines::append_paste_text_to_multiline(&mut self.input_urls, &lines.join("\n"));
         self.refresh_input_line_info();
         self.auto_add_after = if self.settings.auto_add_pasted_urls {
             auto_add_deadline
         } else {
             None
         };
+    }
+
+    /// Ctrl/Cmd+V into the mode primary input when no text field has focus.
+    pub(super) fn maybe_global_paste_into_primary_input(&mut self, ctx: &egui::Context) {
+        if self.command_palette_open || self.settings_open || self.about_open {
+            return;
+        }
+        if ctx.wants_keyboard_input() {
+            return;
+        }
+        let paste_pressed = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::V));
+        if !paste_pressed {
+            return;
+        }
+        let Some(text) = arboard::Clipboard::new()
+            .ok()
+            .and_then(|mut cb| cb.get_text().ok())
+            .filter(|t| !t.trim().is_empty())
+        else {
+            return;
+        };
+        if self.convert_mode {
+            input_lines::append_paste_text_to_multiline(&mut self.convert_input_paths, &text);
+        } else {
+            let deadline = ctx.input(|i| i.time + 0.7);
+            self.extend_input_urls_with_lines(
+                crate::app_parsing::parse_urls_from_text_blob(&text),
+                Some(deadline),
+            );
+        }
     }
 
     fn extend_convert_input_paths_with_lines(&mut self, lines: Vec<String>) {

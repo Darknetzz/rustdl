@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- **Ctrl+V** / **Cmd+V** pastes into the URL input (Downloader) or path input (Converter) even when that field is not focused, unless another text field or dialog already has keyboard focus.
+
 ### Fixed
 
 - Linux GUI: prefer **X11/XWayland** by default so the window actually appears on GNOME/Zorin (native Wayland often left only a dock icon). Set `RUSTDL_USE_WAYLAND=1` to keep native Wayland.

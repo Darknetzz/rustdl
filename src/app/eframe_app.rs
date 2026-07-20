@@ -135,6 +135,7 @@ impl eframe::App for PydlApp {
         let trigger_toggle_log = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::L));
         let trigger_palette = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K));
         let trigger_escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        self.maybe_global_paste_into_primary_input(ctx);
         if trigger_settings {
             self.settings_open = true;
         }

@@ -84,8 +84,13 @@ impl PydlApp {
                 ui.add_space(2.0);
                 let theme = self.settings.theme.clone();
                 #[allow(clippy::type_complexity)]
-                const SHORTCUTS: [(&[&str], Option<&[&str]>, &str); 7] = [
+                const SHORTCUTS: [(&[&str], Option<&[&str]>, &str); 8] = [
                     (&["Ctrl", "Enter"], Some(&["Cmd", "Enter"]), "Add URLs from input"),
+                    (
+                        &["Ctrl", "V"],
+                        Some(&["Cmd", "V"]),
+                        "Paste into URL / convert path input (even when unfocused)",
+                    ),
                     (
                         &["Ctrl", "D"],
                         Some(&["Cmd", "D"]),

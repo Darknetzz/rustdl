@@ -48,6 +48,25 @@ pub(crate) fn is_only_duplicate_lines(info: &[InputLineInfo]) -> bool {
         })
 }
 
+/// Append non-empty lines from a clipboard/paste blob to a multiline text buffer.
+pub(crate) fn append_paste_text_to_multiline(buf: &mut String, raw: &str) {
+    let lines: Vec<&str> = raw
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    if lines.is_empty() {
+        return;
+    }
+    if !buf.trim().is_empty() && !buf.ends_with('\n') {
+        buf.push('\n');
+    }
+    buf.push_str(&lines.join("\n"));
+    if !buf.ends_with('\n') {
+        buf.push('\n');
+    }
+}
+
 /// If the last line is a valid URL and the edit looks like a paste (paste event or a large
 /// append-only insert), append `\n` so the next paste starts on a new line.
 pub(crate) fn append_newline_after_pasted_valid_url(
@@ -82,8 +101,8 @@ mod tests {
     use std::collections::HashSet;
 
     use super::{
-        analyze_input_lines, append_newline_after_pasted_valid_url, is_only_duplicate_lines,
-        InputLineKind,
+        analyze_input_lines, append_newline_after_pasted_valid_url, append_paste_text_to_multiline,
+        is_only_duplicate_lines, InputLineKind,
     };
 
     #[test]
@@ -112,6 +131,13 @@ mod tests {
         let lines = vec!["https://example.com/a".to_owned(), "not a url".to_owned()];
         let out = analyze_input_lines(&lines, &HashSet::new());
         assert!(!is_only_duplicate_lines(&out));
+    }
+
+    #[test]
+    fn append_paste_text_joins_with_newline() {
+        let mut buf = "https://a.example".to_owned();
+        append_paste_text_to_multiline(&mut buf, "https://b.example\n\nhttps://c.example");
+        assert_eq!(buf, "https://a.example\nhttps://b.example\nhttps://c.example\n");
     }
 
     #[test]
