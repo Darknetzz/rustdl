@@ -1024,6 +1024,8 @@ pub const REVIEW_DOCK_HEIGHT_RATIO: f32 = 0.60;
 pub const MINIMAL_DOCK_HEIGHT_RATIO: f32 = 0.40;
 /// Shared absolute min/max for docked queue and undocked footer (log docked).
 pub const BOTTOM_PANEL_MIN_H: f32 = 180.0;
+/// Minimum bottom panel when the activity log is docked under the queue (list + log chrome).
+pub const BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG: f32 = 360.0;
 pub const BOTTOM_PANEL_MAX_H: f32 = 800.0;
 
 /// Downloader queue list row height (virtualized list layout).
@@ -1394,6 +1396,10 @@ pub const DOCKED_LOG_CHROME_H: f32 = 100.0;
 pub const DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H: f32 = 11.0;
 /// "Activity log" placement row above docked log chrome (under queue or in footer frame).
 pub const DOCKED_LOG_HEADING_H: f32 = 24.0;
+/// Soft floor for docked log *lines* when the panel has room (slider / preference).
+pub const DOCKED_LOG_LINES_PREF_MIN_H: f32 = 80.0;
+/// Absolute minimum visible log lines height when the dock is cramped (still above chrome).
+pub const DOCKED_LOG_LINES_ABS_MIN_H: f32 = 40.0;
 /// Outer spacing + frame margins for log docked in the undocked main footer (no under-queue separator).
 pub const UNDOCKED_LOG_SECTION_FRAME_H: f32 = 25.0;
 /// Main header switches from one row to stacked layout at this content width.
@@ -1504,27 +1510,81 @@ pub fn url_input_height(viewport_h: f32) -> f32 {
     (viewport_h * 0.12).clamp(72.0, 140.0)
 }
 
-/// Cap log line area so it does not dominate a small bottom panel.
+/// Cap log *lines* height so it does not dominate a small bottom panel.
+///
+/// `available_for_log` is the lines-only budget (chrome / heading / separator already excluded).
 pub fn scaled_log_dock_height(user_pref: f32, available_for_log: f32) -> f32 {
-    let max_lines = docked_log_lines_max_h(available_for_log.max(0.0));
-    user_pref.min(max_lines * 0.55).clamp(80.0, 480.0)
+    let max_lines = available_for_log.max(0.0).min(480.0);
+    if max_lines < 1.0 {
+        return 0.0;
+    }
+    let soft_min = if max_lines >= DOCKED_LOG_LINES_PREF_MIN_H {
+        DOCKED_LOG_LINES_PREF_MIN_H
+    } else {
+        DOCKED_LOG_LINES_ABS_MIN_H.min(max_lines)
+    };
+    user_pref
+        .min(max_lines * 0.55)
+        .clamp(soft_min, 480.0)
+        .min(max_lines)
 }
 
-/// User log line height scaled to remaining docked queue body space (footer + chrome).
+/// Chrome above docked-under-videos log lines (separator + heading + slider/toolbar).
+pub fn docked_log_under_videos_chrome_h() -> f32 {
+    DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H + DOCKED_LOG_HEADING_H + DOCKED_LOG_CHROME_H
+}
+
+/// User log line height scaled to remaining docked queue body space.
+///
+/// Reserves `min_list_h` for the queue list first so a short panel does not collapse the cards.
 pub fn queue_log_lines_for_dock_layout(
     user_pref: f32,
     body_bottom: f32,
     content_top: f32,
     footer_h: f32,
+    min_list_h: f32,
 ) -> f32 {
     let avail_body = finite_ui_span(body_bottom - content_top, 0.0);
     let log_budget = (avail_body
         - footer_h
-        - DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H
-        - DOCKED_LOG_HEADING_H
-        - DOCKED_LOG_CHROME_H)
-        .max(0.0);
+        - min_list_h.max(0.0)
+        - docked_log_under_videos_chrome_h())
+    .max(0.0);
     scaled_log_dock_height(user_pref, log_budget)
+}
+
+/// Docked-under-videos log block that fits after footer + minimum list height.
+///
+/// Returns `(lines_h, block_h)`. `block_h` is 0 when the panel is too short for a usable log.
+pub fn queue_docked_under_videos_log_fit(
+    dock_log: bool,
+    user_pref: f32,
+    body_bottom: f32,
+    content_top: f32,
+    footer_h: f32,
+    min_list_h: f32,
+) -> (f32, f32) {
+    if !dock_log {
+        return (0.0, 0.0);
+    }
+    let avail = finite_ui_span(body_bottom - content_top, 0.0);
+    let max_block = (avail - footer_h - min_list_h.max(0.0)).max(0.0);
+    let chrome = docked_log_under_videos_chrome_h();
+    // Need chrome plus a sliver of lines, otherwise skip the log reservation this frame.
+    if max_block < chrome + DOCKED_LOG_LINES_ABS_MIN_H * 0.5 {
+        return (0.0, 0.0);
+    }
+    let lines = queue_log_lines_for_dock_layout(
+        user_pref,
+        body_bottom,
+        content_top,
+        footer_h,
+        min_list_h,
+    );
+    let preferred = queue_log_block_height(true, lines, true);
+    let block = preferred.min(max_block);
+    let fitted_lines = (block - chrome).clamp(0.0, 480.0);
+    (fitted_lines, block)
 }
 
 /// Card width for wrapped grid layout (`columns` in 1..=4).
@@ -1603,7 +1663,11 @@ pub fn queue_log_block_height(dock_log: bool, log_dock_height: f32, under_videos
     if !dock_log {
         return 0.0;
     }
-    let lines = log_dock_height.clamp(80.0, 480.0);
+    let lines = log_dock_height.clamp(0.0, 480.0);
+    if lines < 1.0 && under_videos {
+        // Caller asked for an empty under-videos log; do not reserve chrome alone.
+        return 0.0;
+    }
     let mut h = lines + DOCKED_LOG_CHROME_H + DOCKED_LOG_HEADING_H;
     if under_videos {
         h += DOCKED_LOG_UNDER_VIDEOS_SEPARATOR_H;
@@ -1734,9 +1798,12 @@ pub fn queue_list_height_from_layout(
     finite_ui_span(stack_top - content_top, 0.0).clamp(0.0, QUEUE_LIST_LAYOUT_MAX_H)
 }
 
-/// Max activity-log scroll height (slider cap) from remaining panel budget below chrome.
+/// Max activity-log *lines* height from remaining space that still includes chrome (slider+toolbar).
+///
+/// Returns 0 when `remaining_h` cannot cover chrome — callers must not floor this back to 80px
+/// or a short Videos dock will collapse the queue list.
 pub fn docked_log_lines_max_h(remaining_h: f32) -> f32 {
-    (remaining_h - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0)
+    (remaining_h - DOCKED_LOG_CHROME_H).clamp(0.0, 480.0)
 }
 
 /// Allocate a fixed-height region anchored to `body_bottom` (bottom-up layout).
@@ -2713,9 +2780,39 @@ mod tests {
     fn docked_log_lines_max_h_respects_chrome() {
         assert_eq!(
             docked_log_lines_max_h(200.0),
-            (200.0 - DOCKED_LOG_CHROME_H).clamp(80.0, 480.0)
+            (200.0 - DOCKED_LOG_CHROME_H).clamp(0.0, 480.0)
         );
-        assert_eq!(docked_log_lines_max_h(50.0), 80.0);
+        // Short remaining space must not invent an 80px floor (that crushed the queue list).
+        assert_eq!(docked_log_lines_max_h(50.0), 0.0);
+        assert_eq!(docked_log_lines_max_h(DOCKED_LOG_CHROME_H + 40.0), 40.0);
+    }
+
+    #[test]
+    fn queue_docked_under_videos_log_fit_protects_list() {
+        let footer = 74.0;
+        let min_list = 50.0;
+        let content_top = 40.0;
+        // ~360px panel body: old math reserved ≥215px log and left the list near zero.
+        let body_bottom = 360.0;
+        let (lines, block) = queue_docked_under_videos_log_fit(
+            true,
+            180.0,
+            body_bottom,
+            content_top,
+            footer,
+            min_list,
+        );
+        let list_h =
+            queue_list_height_from_layout(content_top, body_bottom, footer, block);
+        assert!(list_h + 0.5 >= min_list, "list_h={list_h} block={block} lines={lines}");
+        assert!(block > 0.0);
+        // Very short panel: drop log reservation rather than steal the list.
+        let (lines2, block2) =
+            queue_docked_under_videos_log_fit(true, 180.0, 200.0, 40.0, footer, min_list);
+        let list2 = queue_list_height_from_layout(40.0, 200.0, footer, block2);
+        assert_eq!(block2, 0.0);
+        assert_eq!(lines2, 0.0);
+        assert!(list2 + 0.5 >= min_list, "list2={list2}");
     }
 
     #[test]

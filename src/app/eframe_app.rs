@@ -6,8 +6,8 @@ use crate::app_ui::{
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, layout_breakpoint,
     main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height, show_mode_panel,
     url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
-    VIDEOS_DOCK_PANEL_ID,
+    BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG, LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -168,10 +168,16 @@ impl eframe::App for PydlApp {
 
         if !ui_suspended {
             if self.settings.videos_docked {
+                let dock_log = self.settings.logs_open && self.settings.logs_docked;
+                let panel_min = if dock_log {
+                    BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
+                } else {
+                    BOTTOM_PANEL_MIN_H
+                };
                 egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
                     .resizable(true)
-                    .default_height(self.settings.videos_dock_height)
-                    .height_range(BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H)
+                    .default_height(self.settings.videos_dock_height.max(panel_min))
+                    .height_range(panel_min..=BOTTOM_PANEL_MAX_H)
                     .frame(dock_panel_horizontal_frame())
                     .show(ctx, |ui| {
                         self.draw_docked_videos_panel(ui);
@@ -181,8 +187,10 @@ impl eframe::App for PydlApp {
                 let log_docked = self.settings.logs_open && self.settings.logs_docked;
                 let (default_h, height_range, resizable) = if log_docked {
                     (
-                        self.settings.undocked_footer_height,
-                        BOTTOM_PANEL_MIN_H..=BOTTOM_PANEL_MAX_H,
+                        self.settings
+                            .undocked_footer_height
+                            .max(BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG),
+                        BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG..=BOTTOM_PANEL_MAX_H,
                         true,
                     )
                 } else {

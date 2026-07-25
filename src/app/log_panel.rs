@@ -283,9 +283,6 @@ impl PydlApp {
     }
 
     fn draw_log_dock_controls_inner(&mut self, ui: &mut egui::Ui, compact: bool) {
-        if !self.settings.logs_open {
-            return;
-        }
         let draw = |ui: &mut egui::Ui, add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
             if compact {
                 compact_button_group(ui, "queue_logs_controls", |g| add(g));
@@ -293,6 +290,20 @@ impl PydlApp {
                 button_group(ui, "queue_logs_controls", |g| add(g));
             }
         };
+        if !self.settings.logs_open {
+            draw(ui, &mut |g| {
+                if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                    .on_hover_text(
+                        "Open the activity log (dock under the queue or in its own window)",
+                    )
+                    .clicked()
+                {
+                    self.settings.logs_open = true;
+                    self.persist_settings();
+                }
+            });
+            return;
+        }
         draw(ui, &mut |g| {
             let log_dock_label = if self.settings.logs_docked {
                 format!("{} Undock log", ui_icons::UNDOCK_LOG)
@@ -445,18 +456,32 @@ impl PydlApp {
         max_log_h: f32,
         placement: LogToolbarPlacement,
     ) {
-        let max_log = max_log_h.clamp(80.0, 480.0);
-        self.draw_log_height_slider(ui, max_log);
+        let max_log = max_log_h.clamp(0.0, 480.0);
+        if max_log < 1.0 {
+            return;
+        }
+        // Slider preference floor stays 80 when there is room; never force taller than `max_log`.
+        let slider_max = max_log.max(crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H).min(480.0);
+        self.draw_log_height_slider(ui, slider_max);
         self.draw_activity_log_toolbar_inner(ui, placement);
-        let log_h = self.settings.log_dock_height.clamp(80.0, max_log);
+        let log_h = if max_log >= crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H {
+            self.settings
+                .log_dock_height
+                .clamp(crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H, max_log)
+        } else {
+            self.settings.log_dock_height.min(max_log).max(0.0)
+        };
         self.draw_activity_log_lines_scroll(ui, log_h);
     }
 
     /// Scrollable log lines only (toolbar is separate).
     pub(super) fn draw_activity_log_lines_scroll(&mut self, ui: &mut egui::Ui, scroll_h: f32) {
-        let scroll_h = finite_ui_span(scroll_h, 80.0).max(60.0);
+        let scroll_h = finite_ui_span(scroll_h, scroll_h.max(1.0)).max(1.0);
+        if scroll_h < 8.0 {
+            return;
+        }
         let w = content_width(ui).max(1.0);
-        let inner_h = (scroll_h - ACTIVITY_LOG_LINES_SCROLL_CHROME_H).max(40.0);
+        let inner_h = (scroll_h - ACTIVITY_LOG_LINES_SCROLL_CHROME_H).max(4.0);
         ui.allocate_ui(egui::vec2(w, scroll_h), |ui| {
             ui.set_min_size(egui::vec2(w, scroll_h));
             egui::Frame::dark_canvas(ui.style())

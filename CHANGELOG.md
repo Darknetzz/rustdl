@@ -18,6 +18,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Docked **Videos** queue list no longer collapses to a thin strip when the activity log is open: the log shrinks to fit after reserving space for at least one queue row (instead of always claiming ~215px), and the bottom panel minimum grows when the log is docked so both stay usable.
+- **Show log** is available on the Videos / Convert queue footer when the activity log is closed (in addition to the header button and Ctrl/Cmd+L).
 - Linux GUI: prefer **X11/XWayland** by default so the window actually appears on GNOME/Zorin (native Wayland often left only a dock icon). Set `RUSTDL_USE_WAYLAND=1` to keep native Wayland.
 - Metadata fetch no longer freezes forever on sites that return large yt-dlp `-J` JSON (pipe was filling while waiting for the process to exit); stdout/stderr are drained while the child runs.
 - Docked **Videos / Convert queue** list no longer shows a large empty gap under group headers (rows virtualize in the outer scroll; mode-panel height fill is limited to the queue shell).

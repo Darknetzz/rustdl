@@ -9,10 +9,10 @@ use crate::app_ui::{
     button_toolbar_wrapped, compact_button_group, compact_convert_list_row,
     consume_remaining_ui_space, content_width, docked_log_lines_max_h, draw_batch_progress_bar,
     draw_queue_status_compact_row, fill_allocated_rect, finite_ui_span, height_to_bottom,
-    left_button_row, note_resizable_panel_height, pin_allocated_rect, queue_footer_reserve,
-    queue_list_height_from_layout, queue_list_min_scroll_h, queue_log_block_height,
-    queue_panel_layout_heights, queue_status_compact, queue_undocked_strip_reserve,
-    queue_log_lines_for_dock_layout, show_mode_panel, show_persisted_resizable_window,
+    left_button_row, note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
+    queue_footer_reserve, queue_list_height_from_layout, queue_list_min_scroll_h,
+    queue_log_block_height, queue_panel_layout_heights, queue_status_compact,
+    queue_undocked_strip_reserve, show_mode_panel, show_persisted_resizable_window,
     status_color, with_full_width,
     PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
     UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
@@ -427,6 +427,17 @@ impl PydlApp {
                     self.persist_settings();
                 }
             }
+            if !self.settings.logs_open {
+                if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                    .on_hover_text(
+                        "Open the activity log (dock under the queue or in its own window)",
+                    )
+                    .clicked()
+                {
+                    self.settings.logs_open = true;
+                    self.persist_settings();
+                }
+            }
         });
     }
 
@@ -532,17 +543,20 @@ impl PydlApp {
             ui_scale,
             resizing,
         );
-        let log_lines = if layout.dock_log {
-            queue_log_lines_for_dock_layout(
+        // Prefer at least one queue row; shrink the docked log before collapsing the list.
+        let min_list_h = queue_list_min_scroll_h(layout.is_docked(), self.convert_mode, false);
+        let (_, log_block_est) = if layout.dock_log {
+            queue_docked_under_videos_log_fit(
+                true,
                 self.settings.log_dock_height,
                 body_bottom,
                 content_top_after_search,
                 footer_h,
+                min_list_h,
             )
         } else {
-            self.settings.log_dock_height
+            (0.0, 0.0)
         };
-        let log_block_est = queue_log_block_height(layout.dock_log, log_lines, true);
         let predicted_list_h = queue_list_height_from_layout(
             content_top_after_search,
             body_bottom,
@@ -571,6 +585,20 @@ impl PydlApp {
         }
 
         let content_top = ui.cursor().min.y;
+        // Re-fit after status rows so list vs log still honor min_list_h.
+        let (log_lines, log_block_est) = if layout.dock_log {
+            queue_docked_under_videos_log_fit(
+                true,
+                self.settings.log_dock_height,
+                body_bottom,
+                content_top,
+                footer_h,
+                min_list_h,
+            )
+        } else {
+            (0.0, 0.0)
+        };
+        let show_dock_log = layout.dock_log && log_block_est > 1.0;
         let (list_h, stack_h) =
             queue_panel_layout_heights(content_top, body_bottom, footer_h, log_block_est);
         self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked, list_h);
@@ -584,12 +612,12 @@ impl PydlApp {
             ui.ctx().data_mut(|d| {
                 d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_measured);
             });
-            if layout.dock_log {
+            if show_dock_log {
                 ui.add_space(6.0);
                 ui.separator();
                 ui.add_space(4.0);
                 let remaining = height_to_bottom(ui, body_bottom) - DOCKED_LOG_HEADING_H;
-                let max_log = docked_log_lines_max_h(remaining.max(0.0));
+                let max_log = docked_log_lines_max_h(remaining.max(0.0)).max(log_lines);
                 self.draw_docked_log_under_videos(ui, max_log);
             }
         });
@@ -845,7 +873,7 @@ impl PydlApp {
                 ui.clip_rect().height(),
                 self.settings.undocked_footer_height,
             )
-            .max(180.0);
+            .max(crate::app_ui::BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG);
             let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
             allocate_top_down_rect(ui, egui::vec2(panel_w, panel_h), |ui| {
                 fill_allocated_rect(ui);
@@ -874,8 +902,10 @@ impl PydlApp {
             if !ui.ctx().input(|i| i.pointer.any_down())
                 && (panel_h - self.settings.undocked_footer_height).abs() > 1.0
             {
-                self.settings.undocked_footer_height =
-                    panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
+                self.settings.undocked_footer_height = panel_h.clamp(
+                    crate::app_ui::BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG,
+                    BOTTOM_PANEL_MAX_H,
+                );
                 self.schedule_settings_save();
             }
         } else {
@@ -890,9 +920,14 @@ impl PydlApp {
     /// Pinned bottom panel when the video queue is docked.
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
         // Capture before any shrink-wrapped children run (egui uses this for PanelState).
-        let panel_h = finite_ui_span(ui.clip_rect().height(), 360.0).max(180.0);
-        let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
+        let panel_min = if dock_log {
+            crate::app_ui::BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
+        } else {
+            BOTTOM_PANEL_MIN_H
+        };
+        let panel_h = finite_ui_span(ui.clip_rect().height(), 360.0).max(panel_min);
+        let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
         let dl_color = self.settings.mode_downloader_color.clone();
@@ -926,8 +961,7 @@ impl PydlApp {
         if !ui.ctx().input(|i| i.pointer.any_down())
             && (panel_h - self.settings.videos_dock_height).abs() > 1.0
         {
-            self.settings.videos_dock_height =
-                panel_h.clamp(BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MAX_H);
+            self.settings.videos_dock_height = panel_h.clamp(panel_min, BOTTOM_PANEL_MAX_H);
             self.schedule_settings_save();
         }
     }
