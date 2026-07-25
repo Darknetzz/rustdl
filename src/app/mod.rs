@@ -2690,7 +2690,7 @@ impl PydlApp {
             self.exit_pending_since = Some(Instant::now());
             self.convert_core_action(|core| core.cancel_convert_batch());
             self.cancel_all_active(CancelPostAction::Ready);
-            self.download_core_action(|core| core.cancel_url_resolve_pipeline());
+            self.cancel_url_resolve_pipeline();
             self.append_log(if clear_queues {
                 "Graceful shutdown requested: cancelling active jobs, then clearing saved queue(s) before exit…"
             } else {

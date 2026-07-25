@@ -319,6 +319,10 @@ pub fn api_router(state: ApiState) -> Router {
             "/api/downloads/refetch-failed",
             post(downloads_refetch_failed),
         )
+        .route(
+            "/api/downloads/cancel-add",
+            post(downloads_cancel_add),
+        )
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route(
@@ -1277,6 +1281,12 @@ async fn downloads_refetch_failed(
     c.refetch_failed_items()
         .map_err(|e: RefetchFailedError| api_err(StatusCode::CONFLICT, e.message()))?;
     Ok(StatusCode::OK)
+}
+
+async fn downloads_cancel_add(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.cancel_url_resolve_pipeline();
+    StatusCode::OK
 }
 
 async fn settings_get(State(st): State<ApiState>) -> Json<SettingsResponse> {

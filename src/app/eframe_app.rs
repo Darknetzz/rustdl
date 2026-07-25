@@ -458,6 +458,13 @@ impl eframe::App for PydlApp {
                             }
                         }
                         ui.label(RichText::new(msg).small().color(Color32::LIGHT_BLUE));
+                        if ui
+                            .small_button(format!("{} Cancel", ui_icons::CANCEL_TO_READY))
+                            .on_hover_text("Stop the metadata fetch and leave remaining URLs as cancelled.")
+                            .clicked()
+                        {
+                            self.cancel_url_resolve_pipeline();
+                        }
                     }
                 });
                 }); // pinned URL block

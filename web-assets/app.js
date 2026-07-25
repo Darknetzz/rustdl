@@ -870,6 +870,13 @@ async function refreshStatus() {
   statusFlags.add_in_progress = !!data.add_in_progress;
   statusFlags.shutdown_pending = !!data.shutdown_pending;
   if (data.shutdown_pending) shuttingDown = true;
+  const cancelAddBtn = document.getElementById("btn-cancel-add");
+  if (cancelAddBtn) {
+    cancelAddBtn.classList.toggle("hidden", !statusFlags.add_in_progress);
+    cancelAddBtn.disabled = !statusFlags.add_in_progress;
+  }
+  const addBtn = document.getElementById("btn-add");
+  if (addBtn) addBtn.disabled = !!statusFlags.add_in_progress;
   renderStatusSummary(data);
   renderNavbarStatus();
   renderNavbarSystemUsage(data.system_usage);
@@ -3806,6 +3813,12 @@ document.getElementById("btn-add").onclick = async () => {
   clearTimeout(autoAddTimer);
   await flushAutoAddFromInput();
 };
+
+document.getElementById("btn-cancel-add")?.addEventListener("click", () =>
+  postAction("/api/downloads/cancel-add", "Could not cancel metadata fetch.")
+    .then(() => refreshAll())
+    .catch(() => {})
+);
 
 let pendingPlaylistUrls = [];
 

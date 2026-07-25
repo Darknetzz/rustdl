@@ -89,6 +89,10 @@ impl PydlApp {
         });
     }
 
+    pub(super) fn cancel_url_resolve_pipeline(&mut self) {
+        self.download_core_action(|core| core.cancel_url_resolve_pipeline());
+    }
+
     pub(super) fn set_item_download_overrides(
         &mut self,
         item_id: u64,

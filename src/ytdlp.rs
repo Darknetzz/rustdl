@@ -892,10 +892,30 @@ pub fn resolve_url_to_previews_with_bin_cancel(
             }];
         }
     };
+    // Drain pipes on side threads while we poll for exit/cancel. Waiting with
+    // try_wait alone deadlocks when yt-dlp dumps large `-J` JSON (pipe fills).
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut out) = stdout_pipe {
+            let _ = out.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut err) = stderr_pipe {
+            let _ = err.read_to_end(&mut buf);
+        }
+        buf
+    });
     let status = loop {
         if cancel.is_some_and(|c| c.load(Ordering::Relaxed)) {
             let _ = child.kill();
             let _ = child.wait();
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
             return vec![VideoPreview {
                 source_line: trimmed.to_owned(),
                 webpage_url: trimmed.to_owned(),
@@ -908,6 +928,10 @@ pub fn resolve_url_to_previews_with_bin_cancel(
             Ok(Some(status)) => break status,
             Ok(None) => std::thread::sleep(std::time::Duration::from_millis(80)),
             Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                let _ = stdout_reader.join();
+                let _ = stderr_reader.join();
                 return vec![VideoPreview {
                     source_line: trimmed.to_owned(),
                     webpage_url: trimmed.to_owned(),
@@ -918,14 +942,8 @@ pub fn resolve_url_to_previews_with_bin_cancel(
             }
         }
     };
-    let mut stdout = Vec::new();
-    let mut stderr = Vec::new();
-    if let Some(mut out) = child.stdout.take() {
-        let _ = out.read_to_end(&mut stdout);
-    }
-    if let Some(mut err) = child.stderr.take() {
-        let _ = err.read_to_end(&mut stderr);
-    }
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
     if !status.success() {
         let err = String::from_utf8_lossy(&stderr).trim().to_owned();
         return vec![VideoPreview {
