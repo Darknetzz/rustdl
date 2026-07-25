@@ -575,7 +575,16 @@ impl PydlApp {
             }
         }
         let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
-        draw_navbar_status_badge(ui, &navbar);
+        let badge = draw_navbar_status_badge(ui, &navbar);
+        if matches!(navbar.slug, crate::app_ui::NavbarStatusSlug::Adding) {
+            let badge = badge.on_hover_text(format!(
+                "{} — click to cancel",
+                navbar.title
+            ));
+            if badge.clicked() {
+                self.cancel_url_resolve_pipeline();
+            }
+        }
     }
 
     fn draw_main_header_tool_checks(&mut self, ui: &mut egui::Ui, compact: bool) {

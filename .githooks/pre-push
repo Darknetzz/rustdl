@@ -6,7 +6,11 @@
 # ref matches the commit being pushed (see scripts/wait_and_publish_dev.*).
 
 remote="$1"
-repo_root=$(git rev-parse --show-toplevel) || exit 0
+if ! repo_root=$(git rev-parse --show-toplevel); then
+	echo "rustdl: could not resolve repository root (git rev-parse --show-toplevel failed)." >&2
+	echo "rustdl: push aborted — cannot schedule rustdl-dev / stable release publish." >&2
+	exit 1
+fi
 wait_script="$repo_root/scripts/wait_and_publish_dev.ps1"
 wait_script_sh="$repo_root/scripts/wait_and_publish_dev.sh"
 log_hint="${TMPDIR:-/tmp}/rustdl-dev-release.log"

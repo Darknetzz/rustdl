@@ -712,22 +712,18 @@ impl PydlApp {
     /// still active) doesn't linger and keep a small/finished group collapsed once the regime
     /// that justified collapsing it no longer applies.
     fn queue_group_open_regime(&self, label: &str) -> bool {
-        let done_collapse = if self.settings.ui_power_save { 15 } else { 30 };
-        if label == "Done" && self.items.len() > done_collapse {
-            return false;
-        }
-        match label {
-            "Done" => {
-                self.status_done > 0
-                    && self.status_active == 0
-                    && self.status_queued == 0
-                    && self.status_ready == 0
-                    && self.status_resolving == 0
-            }
-            "Ready" => self.items.len() <= 12,
-            "Issues" => self.items.len() <= 20,
-            _ => self.queue_search.is_empty() && self.items.len() <= 15,
-        }
+        downloader_queue_group_open_regime(
+            label,
+            self.items.len(),
+            self.status_ready,
+            self.status_failed,
+            self.status_active,
+            self.status_queued,
+            self.status_resolving,
+            self.status_done,
+            self.settings.ui_power_save,
+            self.queue_search.is_empty(),
+        )
     }
 
     fn queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
@@ -739,7 +735,7 @@ impl PydlApp {
     fn rebuild_queue_group_cache(&mut self) {
         use std::collections::HashMap;
 
-        let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
+        let groups = ["Active", "Resolving", "Ready", "Issues", "Done"];
         let mut map = HashMap::new();
         for label in groups {
             let mut ids: Vec<u64> = self
@@ -840,7 +836,7 @@ impl PydlApp {
             self.rebuild_item_index();
         }
         self.ensure_queue_group_cache();
-        let groups = ["Active", "Ready", "Issues", "Done", "Resolving"];
+        let groups = ["Active", "Resolving", "Ready", "Issues", "Done"];
         for label in groups {
             if self.queue_group_focus.is_some_and(|f| f != label) {
                 continue;
@@ -960,6 +956,42 @@ impl PydlApp {
     }
 }
 
+/// Default-open regime for downloader queue groups.
+///
+/// Important: use *per-bucket* counts for Ready/Issues — gating on total queue length collapsed
+/// Active/Issues on large libraries and left only thin headers over an empty scroll void.
+pub(crate) fn downloader_queue_group_open_regime(
+    label: &str,
+    total_items: usize,
+    status_ready: usize,
+    status_failed: usize,
+    status_active: usize,
+    status_queued: usize,
+    status_resolving: usize,
+    status_done: usize,
+    ui_power_save: bool,
+    queue_search_empty: bool,
+) -> bool {
+    let done_collapse = if ui_power_save { 15 } else { 30 };
+    if label == "Done" && total_items > done_collapse {
+        return false;
+    }
+    match label {
+        // Always show in-progress work, even in huge queues.
+        "Active" | "Resolving" => true,
+        "Done" => {
+            status_done > 0
+                && status_active == 0
+                && status_queued == 0
+                && status_ready == 0
+                && status_resolving == 0
+        }
+        "Ready" => status_ready <= 12,
+        "Issues" => status_failed <= 40,
+        _ => queue_search_empty && total_items <= 15,
+    }
+}
+
 /// Fit `natural` inside `max` preserving aspect ratio; never larger than `max`; never upscale past native size.
 fn fit_thumbnail_draw_size(natural: egui::Vec2, max: egui::Vec2) -> egui::Vec2 {
     if natural.x < 1.0 || natural.y < 1.0 {
@@ -1002,5 +1034,41 @@ fn format_resolution_label(width: Option<u32>, height: Option<u32>) -> Option<St
         (Some(w), None) if w > 0 => Some(format!("{w}w")),
         (None, Some(h)) if h > 0 => Some(format!("{h}p")),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::downloader_queue_group_open_regime;
+
+    #[test]
+    fn large_queue_still_opens_active_and_issues() {
+        // Mirrors the stuck UI case: hundreds Done, a few Active/Issues — must not collapse
+        // Active just because total_items is large.
+        assert!(downloader_queue_group_open_regime(
+            "Active", 442, 1, 17, 1, 0, 1, 422, false, true
+        ));
+        assert!(downloader_queue_group_open_regime(
+            "Resolving", 442, 1, 17, 1, 0, 1, 422, false, true
+        ));
+        assert!(downloader_queue_group_open_regime(
+            "Ready", 442, 1, 17, 1, 0, 1, 422, false, true
+        ));
+        assert!(downloader_queue_group_open_regime(
+            "Issues", 442, 1, 17, 1, 0, 1, 422, false, true
+        ));
+        assert!(!downloader_queue_group_open_regime(
+            "Done", 442, 1, 17, 1, 0, 1, 422, false, true
+        ));
+    }
+
+    #[test]
+    fn ready_and_issues_close_when_their_buckets_are_huge() {
+        assert!(!downloader_queue_group_open_regime(
+            "Ready", 500, 50, 0, 0, 0, 0, 450, false, true
+        ));
+        assert!(!downloader_queue_group_open_regime(
+            "Issues", 500, 0, 80, 0, 0, 0, 420, false, true
+        ));
     }
 }

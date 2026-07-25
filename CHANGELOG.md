@@ -18,6 +18,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Large download queues no longer leave **Active** / **Issues** as empty thin headers over a blank scroll area: those groups default open based on their own counts (not total queue size), **Resolving** sits under Active, and clicking the header **Adding URLs** badge cancels a stuck metadata fetch.
+- **pre-push** hook no longer exits successfully when `git rev-parse --show-toplevel` fails (that skipped scheduling the background release publish); the push is aborted instead.
 - Docked **Videos** queue list no longer collapses to a thin strip when the activity log is open: the log shrinks to fit after reserving space for at least one queue row (instead of always claiming ~215px), and the bottom panel minimum grows when the log is docked so both stay usable.
 - **Show log** is available on the Videos / Convert queue footer when the activity log is closed (in addition to the header button and Ctrl/Cmd+L).
 - Linux GUI: prefer **X11/XWayland** by default so the window actually appears on GNOME/Zorin (native Wayland often left only a dock icon). Set `RUSTDL_USE_WAYLAND=1` to keep native Wayland.
