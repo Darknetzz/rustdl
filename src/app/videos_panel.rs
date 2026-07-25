@@ -225,6 +225,17 @@ impl PydlApp {
         {
             self.retry_failed_items();
         }
+        if self.status_failed > 0
+            && !self.add_in_progress
+            && g.secondary(&format!("{} Refetch all failed", ui_icons::RETRY), true)
+                .on_hover_text(
+                    "Run yt-dlp metadata again for every failed row that still has a source URL \
+                     (use when a stale format/title, not the download itself, caused the failure).",
+                )
+                .clicked()
+        {
+            self.refetch_failed_items();
+        }
         if g
             .warning(
                 &format!("{} Re-check saved files", ui_icons::RECHECK),

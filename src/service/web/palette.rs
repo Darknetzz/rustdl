@@ -90,6 +90,12 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: None,
     },
     PaletteCommandJson {
+        id: "refetch_failed",
+        label: "Refetch all failed",
+        keywords: "refetch metadata failed download again",
+        section: None,
+    },
+    PaletteCommandJson {
         id: "remove_selected",
         label: "Remove selected",
         keywords: "remove delete selected queue bulk",

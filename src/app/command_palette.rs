@@ -85,6 +85,11 @@ const COMMANDS: &[PaletteCommand] = &[
         section: None,
     },
     PaletteCommand {
+        label: "Refetch all failed",
+        keywords: "refetch metadata failed download again",
+        section: None,
+    },
+    PaletteCommand {
         label: "Remove selected",
         keywords: "delete remove selected queue rows",
         section: None,
@@ -366,6 +371,7 @@ impl PydlApp {
                 });
             }
             "Retry all failed" => self.retry_failed_items(),
+            "Refetch all failed" => self.refetch_failed_items(),
             "Remove selected" => self.remove_selected_items(),
             "Clear completed downloads" => self.clear_completed_downloads(),
             "Toggle activity log" => {

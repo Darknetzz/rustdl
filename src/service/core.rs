@@ -123,6 +123,27 @@ impl RetryFailedError {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefetchFailedError {
+    AddInProgress,
+    NoYtDlp,
+    NothingToRefetch,
+}
+
+impl RefetchFailedError {
+    pub fn message(self) -> &'static str {
+        match self {
+            Self::AddInProgress => {
+                "Wait for the current metadata batch to finish before refetching."
+            }
+            Self::NoYtDlp => "yt-dlp not found (check PATH or Settings executable path).",
+            Self::NothingToRefetch => {
+                "No failed items have a source URL to refetch. Check the row or re-add the link."
+            }
+        }
+    }
+}
+
 /// LAN web / desktop-shared thumbnail bytes keyed by queue or AV1 item id.
 #[derive(Clone, Debug)]
 pub struct CachedThumbnail {
@@ -1885,6 +1906,81 @@ impl DownloadCore {
         Ok(())
     }
 
+    /// Re-runs yt-dlp metadata resolution (title, formats, thumbnail) for every **Failed** row
+    /// that still has a source URL, replacing each row in place (same item id/position) and
+    /// re-queuing it as pending metadata. Unlike [`Self::retry_failed_items`] this does not
+    /// re-attempt the download itself; it is meant for failures caused by stale/incomplete
+    /// metadata (e.g. a format that disappeared) rather than transient download errors.
+    pub fn refetch_failed_items(&mut self) -> Result<usize, RefetchFailedError> {
+        if self.add_in_progress {
+            return Err(RefetchFailedError::AddInProgress);
+        }
+        if !self.has_yt_dlp {
+            self.refresh_deps();
+        }
+        if !self.has_yt_dlp {
+            self.append_log("yt-dlp not found (check PATH or Settings executable path).");
+            return Err(RefetchFailedError::NoYtDlp);
+        }
+        let failed_no_url = self
+            .items
+            .iter()
+            .filter(|it| it.status == ItemStatus::Failed && it.source_line.trim().is_empty())
+            .count();
+        let targets: Vec<(u64, String)> = self
+            .items
+            .iter()
+            .filter(|it| it.status == ItemStatus::Failed && !it.source_line.trim().is_empty())
+            .map(|it| (it.item_id, it.source_line.clone()))
+            .collect();
+        if targets.is_empty() {
+            if self.status_failed > 0 {
+                self.append_log(
+                    "No failed items have a source URL to refetch. Check the row or re-add the link.",
+                );
+            } else {
+                self.append_log("No failed downloads to refetch.");
+            }
+            return Err(RefetchFailedError::NothingToRefetch);
+        }
+        self.add_in_progress = true;
+        self.add_total_urls = targets.len();
+        self.add_processed_urls = 0;
+        self.add_current_url = None;
+        let mut lines = Vec::with_capacity(targets.len());
+        for (item_id, line) in targets {
+            self.pending_resolve_ids.insert(line.clone(), item_id);
+            if let Some(idx) = self.item_idx(item_id) {
+                self.items[idx] = QueueItem::pending_metadata(item_id, line.clone());
+            }
+            lines.push(line);
+        }
+        let count = lines.len();
+        self.update_status();
+        self.invalidate_queue_caches();
+        self.flush_queue_to_disk();
+        self.bump_generation();
+        self.append_log(&format!(
+            "Refetching metadata for {count} failed item(s).{}",
+            if failed_no_url > 0 {
+                format!(" Skipped {failed_no_url} without a URL.")
+            } else {
+                String::new()
+            }
+        ));
+        let cancel = self.take_url_resolve_cancel_flag();
+        background_spawn::spawn_url_resolve_pipeline(
+            &self.runtime,
+            &self.ui_event_bus(),
+            self.yt_dlp_bin(),
+            self.metadata_extra_args(),
+            self.settings.playlist_preview_cap,
+            lines,
+            cancel,
+        );
+        Ok(count)
+    }
+
     pub fn queue_urls_for_resolve(&mut self, lines: Vec<String>) -> UrlLineFilterStats {
         if lines.is_empty() {
             self.append_log("Add at least one URL.");
@@ -2451,6 +2547,14 @@ mod queue_lifecycle_tests {
         }
     }
 
+    fn sample_failed_item(id: u64) -> QueueItem {
+        QueueItem {
+            status: ItemStatus::Failed,
+            error: Some("boom".to_owned()),
+            ..sample_idle_item(id)
+        }
+    }
+
     fn test_core_with_output_dir() -> (SharedCore, tempfile::TempDir) {
         let runtime = Arc::new(Runtime::new().expect("runtime"));
         let (shared, _rx) = DownloadCore::new_shared(runtime, true);
@@ -2534,6 +2638,59 @@ mod queue_lifecycle_tests {
         assert!(matches!(
             core.retry_failed_items(),
             Err(RetryFailedError::NothingToRetry)
+        ));
+    }
+
+    #[test]
+    fn refetch_failed_items_requires_failed_rows() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.has_yt_dlp = true;
+        assert!(matches!(
+            core.refetch_failed_items(),
+            Err(RefetchFailedError::NothingToRefetch)
+        ));
+    }
+
+    #[test]
+    fn refetch_failed_items_requeues_failed_rows_with_urls() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.has_yt_dlp = true;
+        core.items = vec![
+            sample_failed_item(1),
+            sample_failed_item(2),
+            sample_idle_item(3),
+        ];
+        core.rebuild_item_index();
+        core.update_status();
+
+        let count = core.refetch_failed_items().expect("should refetch");
+        assert_eq!(count, 2);
+        assert!(core.add_in_progress);
+
+        let item1 = core.items.iter().find(|it| it.item_id == 1).unwrap();
+        assert_eq!(item1.status, ItemStatus::Resolving);
+        assert!(item1.error.is_none());
+        let item2 = core.items.iter().find(|it| it.item_id == 2).unwrap();
+        assert_eq!(item2.status, ItemStatus::Resolving);
+        // Untouched idle row stays as-is.
+        let item3 = core.items.iter().find(|it| it.item_id == 3).unwrap();
+        assert_eq!(item3.status, ItemStatus::Idle);
+    }
+
+    #[test]
+    fn refetch_failed_items_rejects_while_add_in_progress() {
+        let (shared, _dir) = test_core_with_output_dir();
+        let mut core = shared.lock();
+        core.has_yt_dlp = true;
+        core.items = vec![sample_failed_item(1)];
+        core.rebuild_item_index();
+        core.update_status();
+        core.add_in_progress = true;
+        assert!(matches!(
+            core.refetch_failed_items(),
+            Err(RefetchFailedError::AddInProgress)
         ));
     }
 }

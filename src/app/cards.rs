@@ -704,10 +704,14 @@ impl PydlApp {
         }
     }
 
-    fn queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
-        if scroll_here || self.queue_group_focus.is_some_and(|f| f == label) {
-            return true;
-        }
+    /// Whether a queue group should default to open based on current item counts/status alone
+    /// (ignores the transient scroll-to/focus overrides in [`Self::queue_group_default_open`]).
+    ///
+    /// Used to salt the group's persisted collapse-state id (see `draw_grouped_cards`) so a
+    /// stale "closed" memory from a different regime (e.g. a much longer list, or downloads
+    /// still active) doesn't linger and keep a small/finished group collapsed once the regime
+    /// that justified collapsing it no longer applies.
+    fn queue_group_open_regime(&self, label: &str) -> bool {
         let done_collapse = if self.settings.ui_power_save { 15 } else { 30 };
         if label == "Done" && self.items.len() > done_collapse {
             return false;
@@ -724,6 +728,12 @@ impl PydlApp {
             "Issues" => self.items.len() <= 20,
             _ => self.queue_search.is_empty() && self.items.len() <= 15,
         }
+    }
+
+    fn queue_group_default_open(&self, label: &str, scroll_here: bool) -> bool {
+        scroll_here
+            || self.queue_group_focus.is_some_and(|f| f == label)
+            || self.queue_group_open_regime(label)
     }
 
     fn rebuild_queue_group_cache(&mut self) {
@@ -855,7 +865,7 @@ impl PydlApp {
             let scroll_here = self.scroll_to_queue_group == Some(label);
             let default_open = self.queue_group_default_open(label, scroll_here);
             let header_text = format!("{label} ({})", ids.len());
-            let id = ui.make_persistent_id(label);
+            let id = ui.make_persistent_id((label, self.queue_group_open_regime(label)));
             let theme = self.settings.theme.clone();
             let mut header_inner = None;
             show_queue_group_section(ui, &theme, header_color, |ui| {

@@ -83,6 +83,12 @@ impl PydlApp {
         });
     }
 
+    pub(super) fn refetch_failed_items(&mut self) {
+        self.download_core_action(|core| {
+            let _ = core.refetch_failed_items();
+        });
+    }
+
     pub(super) fn set_item_download_overrides(
         &mut self,
         item_id: u64,

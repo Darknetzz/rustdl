@@ -13,11 +13,13 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Added
 
 - **Ctrl+V** / **Cmd+V** pastes into the URL input (Downloader) or path input (Converter) even when that field is not focused, unless another text field or dialog already has keyboard focus.
+- **Refetch all failed** button next to **Retry all failed** on the download queue (desktop + LAN web UI + command palette): re-runs yt-dlp metadata resolution for every failed row that still has a source URL, for failures caused by stale metadata rather than the download itself.
 
 ### Fixed
 
 - Linux GUI: prefer **X11/XWayland** by default so the window actually appears on GNOME/Zorin (native Wayland often left only a dock icon). Set `RUSTDL_USE_WAYLAND=1` to keep native Wayland.
 - Docked **Videos / Convert queue** list no longer shows a large empty gap under group headers (rows virtualize in the outer scroll; mode-panel height fill is limited to the queue shell).
+- Download queue **Active / Ready / Issues / Resolving / Done** group sections no longer stay collapsed (leaving an empty-looking queue panel) once the queue shrinks back down to a size where they should default to open; a stale collapsed memory from a larger queue no longer sticks around.
 - Quit no longer hangs forever when metadata fetches or downloads stick during graceful shutdown: **Force Quit** on a second confirm, an 8s timeout, and cancellable yt-dlp metadata resolves.
 - **Remove from queue** on download cards (including failed rows) now removes the row from the list immediately instead of appearing to do nothing.
 - Docked **Videos / Convert queue** panel list area no longer collapses to a thin strip with a large empty gap above the footer (mode panel now fills the resizable dock height; list scroll uses layout height directly).

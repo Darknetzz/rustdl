@@ -21,7 +21,8 @@ use crate::models::QueueItem;
 use crate::profiles::{all_profiles, delete_user_profile, find_profile, rename_user_profile};
 use crate::service::core::DownloadCore;
 use crate::service::core::{
-    CancelPostAction, DownloadStartError, QueueClearFilter, RetryFailedError, SharedCore,
+    CancelPostAction, DownloadStartError, QueueClearFilter, RefetchFailedError, RetryFailedError,
+    SharedCore,
 };
 use crate::service::web::media;
 use crate::ytdlp::{self, thumbnail_url_candidates};
@@ -314,6 +315,10 @@ pub fn api_router(state: ApiState) -> Router {
         .route("/api/downloads/cancel/:id", post(downloads_cancel))
         .route("/api/downloads/redownload/:id", post(downloads_redownload))
         .route("/api/downloads/retry-failed", post(downloads_retry_failed))
+        .route(
+            "/api/downloads/refetch-failed",
+            post(downloads_refetch_failed),
+        )
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route(
@@ -1262,6 +1267,15 @@ async fn downloads_retry_failed(
     let mut c = st.core.lock();
     c.retry_failed_items()
         .map_err(|e: RetryFailedError| api_err(StatusCode::CONFLICT, e.message()))?;
+    Ok(StatusCode::OK)
+}
+
+async fn downloads_refetch_failed(
+    State(st): State<ApiState>,
+) -> Result<StatusCode, (StatusCode, Json<ApiErrorBody>)> {
+    let mut c = st.core.lock();
+    c.refetch_failed_items()
+        .map_err(|e: RefetchFailedError| api_err(StatusCode::CONFLICT, e.message()))?;
     Ok(StatusCode::OK)
 }
 

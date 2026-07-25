@@ -25,6 +25,10 @@ const PALETTE_ACTIONS = {
     postAction("/api/downloads/retry-failed", "Could not retry failed downloads.")
       .then(refreshAll)
       .catch(() => {}),
+  refetch_failed: () =>
+    postAction("/api/downloads/refetch-failed", "Could not refetch failed downloads.")
+      .then(refreshAll)
+      .catch(() => {}),
   remove_selected: () => {
     if (currentView === "convert") {
       bulkRemoveConvertSelected().catch((e) => notifyError(e.message || String(e)));

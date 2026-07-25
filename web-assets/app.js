@@ -1105,6 +1105,23 @@ function updateDownloadControlButtons(data) {
           ? "yt-dlp not available (check Settings or Refresh tools)"
           : `Retry ${failed} failed download(s) that still have a URL`;
   }
+
+  const refetchFailedBtn = document.getElementById("btn-refetch-failed");
+  if (refetchFailedBtn) {
+    const failed = s.failed || 0;
+    const canRefetchFailed =
+      !isShuttingDown && failed > 0 && cachedHasYtDlp && !statusFlags.add_in_progress;
+    refetchFailedBtn.disabled = !canRefetchFailed;
+    refetchFailedBtn.title = isShuttingDown
+      ? "Unavailable while shutting down"
+      : failed === 0
+        ? "No failed downloads"
+        : !cachedHasYtDlp
+          ? "yt-dlp not available (check Settings or Refresh tools)"
+          : statusFlags.add_in_progress
+            ? "Wait for the current metadata batch to finish before refetching"
+            : `Refetch metadata for ${failed} failed row(s) that still have a source URL`;
+  }
 }
 
 function updateQuitButtonState() {
@@ -3872,6 +3889,11 @@ document.getElementById("btn-resume").onclick = () =>
 
 document.getElementById("btn-retry-failed")?.addEventListener("click", () =>
   postAction("/api/downloads/retry-failed", "Could not retry failed downloads.")
+    .then(() => refreshAll())
+    .catch(() => {})
+);
+document.getElementById("btn-refetch-failed")?.addEventListener("click", () =>
+  postAction("/api/downloads/refetch-failed", "Could not refetch failed downloads.")
     .then(() => refreshAll())
     .catch(() => {})
 );
