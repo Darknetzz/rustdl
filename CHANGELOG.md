@@ -18,6 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Docked **Videos / Convert queue** no longer leaves empty space below the footer toolbar when the activity log is closed (footer reserve follows measured height instead of an inflated width estimate).
 - Large download queues no longer leave **Active** / **Issues** as empty thin headers over a blank scroll area: those groups default open based on their own counts (not total queue size), **Resolving** sits under Active, and clicking the header **Adding URLs** badge cancels a stuck metadata fetch.
 - **pre-push** hook no longer exits successfully when `git rev-parse --show-toplevel` fails (that skipped scheduling the background release publish); the push is aborted instead.
 - Docked **Videos** queue list no longer collapses to a thin strip when the activity log is open: the log shrinks to fit after reserving space for at least one queue row (instead of always claiming ~215px), and the bottom panel minimum grows when the log is docked so both stay usable.

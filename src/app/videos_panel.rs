@@ -29,7 +29,7 @@ struct VideosQueueLayout<'a> {
     scroll_id: &'a str,
     docked: bool,
     dock_log: bool,
-    /// Bottom edge of the allocated queue body (set by docked/float shell before the mode panel).
+    /// Bottom edge of the allocated queue body (sampled inside the mode panel after margins).
     body_bottom: Option<f32>,
 }
 
@@ -937,13 +937,6 @@ impl PydlApp {
             fill_allocated_rect(ui);
             pin_allocated_rect(ui);
             self.constrain_panel_content(ui);
-            let body_bottom = ui.max_rect().bottom();
-            let layout = VideosQueueLayout {
-                scroll_id: "rustdl_videos_dock_scroll",
-                docked: true,
-                dock_log,
-                body_bottom: Some(body_bottom),
-            };
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
@@ -951,6 +944,14 @@ impl PydlApp {
                 mode_colors,
                 QUEUE_MODE_PANEL_MARGIN,
                 |ui| {
+                    // Sample after mode-panel margins so the bottom stack pins flush.
+                    let body_bottom = ui.max_rect().bottom();
+                    let layout = VideosQueueLayout {
+                        scroll_id: "rustdl_videos_dock_scroll",
+                        docked: true,
+                        dock_log,
+                        body_bottom: Some(body_bottom),
+                    };
                     self.draw_videos_queue_body(ui, layout);
                 },
             );
@@ -994,13 +995,6 @@ impl PydlApp {
         };
         let outcome = show_persisted_resizable_window(ctx, &mut open, &params, |ui| {
             pin_allocated_rect(ui);
-            let body_bottom = ui.max_rect().bottom();
-            let layout = VideosQueueLayout {
-                scroll_id: "rustdl_videos_float_v8",
-                docked: false,
-                dock_log: false,
-                body_bottom: Some(body_bottom),
-            };
             Self::draw_mode_queue_panel(
                 ui,
                 &theme,
@@ -1008,6 +1002,14 @@ impl PydlApp {
                 mode_colors,
                 QUEUE_MODE_PANEL_MARGIN,
                 |ui| {
+                    // Sample after mode-panel margins so the bottom stack pins flush.
+                    let body_bottom = ui.max_rect().bottom();
+                    let layout = VideosQueueLayout {
+                        scroll_id: "rustdl_videos_float_v8",
+                        docked: false,
+                        dock_log: false,
+                        body_bottom: Some(body_bottom),
+                    };
                     self.draw_videos_queue_body(ui, layout);
                 },
             );
