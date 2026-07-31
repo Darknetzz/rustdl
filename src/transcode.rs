@@ -1399,9 +1399,7 @@ where
         cfg.verify_output_video_audio,
     ) {
         remove_partial_output(&plan.output);
-        return Err(err.context(
-            "Encode output failed verification; the original file was kept.",
-        ));
+        return Err(err.context("Encode output failed verification; the original file was kept."));
     }
     finalize_output_file(plan, cfg)
 }

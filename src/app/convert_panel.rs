@@ -482,6 +482,19 @@ impl PydlApp {
             .iter()
             .filter(|item| convert_item_is_skipped(item))
             .count();
+        let failed_count = self
+            .convert_items
+            .iter()
+            .filter(|item| item.status == ItemStatus::Failed)
+            .count();
+        let selected_ids = self.selected_item_ids.clone();
+        let selected_failed_count = self
+            .convert_items
+            .iter()
+            .filter(|item| {
+                item.status == ItemStatus::Failed && selected_ids.contains(&item.item_id)
+            })
+            .count();
         let draw = |ui: &mut egui::Ui,
                     id: &str,
                     add: &mut dyn FnMut(&mut crate::app_ui::ButtonGroup<'_>)| {
@@ -534,9 +547,21 @@ impl PydlApp {
                 &format!("{} Retry skipped", ui_icons::RETRY),
                 !self.convert_running && skipped_count > 0,
             )
+            .on_hover_text("Reset skipped items to ready (e.g. after changing size-limit settings)")
             .clicked()
             {
                 self.convert_core_action(|core| core.retry_skipped_convert_items());
+            }
+            if g.warning(
+                &format!("{} Retry all failed", ui_icons::RETRY),
+                !self.convert_running && failed_count > 0,
+            )
+            .on_hover_text(
+                "Reset every failed convert job to ready, then start the batch to encode again.",
+            )
+            .clicked()
+            {
+                self.convert_core_action(|core| core.retry_failed_convert_items());
             }
         });
         draw(ui, "av1_queue", &mut |g| {
@@ -552,6 +577,20 @@ impl PydlApp {
                 .clicked()
             {
                 self.remove_selected_convert_items();
+            }
+            if selected_failed_count > 0
+                && g.warning(
+                    &format!(
+                        "{} Retry selected ({selected_failed_count})",
+                        ui_icons::RETRY
+                    ),
+                    !self.convert_running,
+                )
+                .on_hover_text("Reset selected failed convert jobs to ready")
+                .clicked()
+            {
+                let ids: Vec<u64> = self.selected_item_ids.iter().copied().collect();
+                self.convert_core_action(|core| core.retry_failed_convert_items_by_ids(&ids));
             }
             if g.secondary(
                 &format!("{} Export batch CSV", ui_icons::EXPORT),

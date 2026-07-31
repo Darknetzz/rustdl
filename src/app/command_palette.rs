@@ -80,6 +80,11 @@ const COMMANDS: &[PaletteCommand] = &[
         section: None,
     },
     PaletteCommand {
+        label: "Retry all failed converts",
+        keywords: "retry failed convert encode again",
+        section: None,
+    },
+    PaletteCommand {
         label: "Retry all failed",
         keywords: "retry failed download again",
         section: None,
@@ -369,6 +374,9 @@ impl PydlApp {
                 self.convert_core_action(|core| {
                     let _ = core.start_convert_batch();
                 });
+            }
+            "Retry all failed converts" => {
+                self.convert_core_action(|core| core.retry_failed_convert_items());
             }
             "Retry all failed" => self.retry_failed_items(),
             "Refetch all failed" => self.refetch_failed_items(),

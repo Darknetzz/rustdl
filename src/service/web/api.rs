@@ -319,10 +319,7 @@ pub fn api_router(state: ApiState) -> Router {
             "/api/downloads/refetch-failed",
             post(downloads_refetch_failed),
         )
-        .route(
-            "/api/downloads/cancel-add",
-            post(downloads_cancel_add),
-        )
+        .route("/api/downloads/cancel-add", post(downloads_cancel_add))
         .route("/api/settings", get(settings_get))
         .route("/api/settings", post(settings_patch))
         .route(

@@ -86,6 +86,11 @@ pub(super) fn register(router: Router<ApiState>) -> Router<ApiState> {
         .route("/api/convert/reorder", post(convert_reorder))
         .route("/api/convert/bulk-remove", post(convert_bulk_remove))
         .route("/api/convert/retry-skipped", post(convert_retry_skipped))
+        .route("/api/convert/retry-failed", post(convert_retry_failed))
+        .route(
+            "/api/convert/bulk-retry-failed",
+            post(convert_bulk_retry_failed),
+        )
         .route(
             "/api/convert/fallback-software",
             post(convert_fallback_software),
@@ -267,6 +272,21 @@ async fn convert_bulk_remove(
 async fn convert_retry_skipped(State(st): State<ApiState>) -> StatusCode {
     let mut c = st.core.lock();
     c.retry_skipped_convert_items();
+    StatusCode::OK
+}
+
+async fn convert_retry_failed(State(st): State<ApiState>) -> StatusCode {
+    let mut c = st.core.lock();
+    c.retry_failed_convert_items();
+    StatusCode::OK
+}
+
+async fn convert_bulk_retry_failed(
+    State(st): State<ApiState>,
+    Json(body): Json<ConvertBulkRemoveBody>,
+) -> StatusCode {
+    let mut c = st.core.lock();
+    c.retry_failed_convert_items_by_ids(&body.item_ids);
     StatusCode::OK
 }
 

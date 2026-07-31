@@ -461,7 +461,9 @@ impl PydlApp {
             return;
         }
         // Slider preference floor stays 80 when there is room; never force taller than `max_log`.
-        let slider_max = max_log.max(crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H).min(480.0);
+        let slider_max = max_log
+            .max(crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H)
+            .min(480.0);
         self.draw_log_height_slider(ui, slider_max);
         self.draw_activity_log_toolbar_inner(ui, placement);
         let log_h = if max_log >= crate::app_ui::DOCKED_LOG_LINES_PREF_MIN_H {

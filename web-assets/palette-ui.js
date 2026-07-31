@@ -40,6 +40,8 @@ const PALETTE_ACTIONS = {
   },
   clear_done: () => clearQueue("done"),
   convert_start: () => convertStart(),
+  convert_retry_failed: () =>
+    convertRetryFailed().catch((e) => alert(e.message || String(e))),
   convert_pause: () => convertPause(),
   convert_resume: () => convertResume(),
   mode_downloader: () => setView("downloader"),

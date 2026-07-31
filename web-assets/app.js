@@ -4816,6 +4816,19 @@ function updateConvertBulkSelectionUi() {
   const n = selectedConvertIds.size;
   const removeBtn = document.getElementById("btn-convert-bulk-remove");
   if (removeBtn) removeBtn.disabled = n === 0;
+  const items = lastConvertPayload?.items || [];
+  const selectedFailed = items.filter(
+    (it) => it.status === "Failed" && selectedConvertIds.has(it.item_id),
+  ).length;
+  const retrySelectedBtn = document.getElementById("btn-convert-bulk-retry-failed");
+  if (retrySelectedBtn) {
+    const running = !!lastConvertPayload?.running;
+    retrySelectedBtn.disabled = running || selectedFailed === 0;
+    retrySelectedBtn.title =
+      selectedFailed > 0
+        ? `Reset ${selectedFailed} selected failed item(s) to ready`
+        : "Select failed items to retry";
+  }
 }
 
 async function bulkRemoveConvertSelected() {
@@ -4862,8 +4875,10 @@ async function refreshConvert() {
   const resumeBtn = document.getElementById("btn-convert-resume");
   const cancelBtn = document.getElementById("btn-convert-cancel");
   const retrySkippedBtn = document.getElementById("btn-convert-retry-skipped");
+  const retryFailedBtn = document.getElementById("btn-convert-retry-failed");
   const readyCount = data.items.filter((it) => it.status === "Idle").length;
   const skippedCount = data.items.filter((it) => it.skipped).length;
+  const failedCount = data.items.filter((it) => it.status === "Failed").length;
   if (startBtn) startBtn.disabled = data.running || !data.has_ffmpeg || !data.has_ffprobe || readyCount === 0;
   if (pauseBtn) {
     pauseBtn.disabled = !data.running || data.paused;
@@ -4885,6 +4900,13 @@ async function refreshConvert() {
       skippedCount > 0
         ? `Reset ${skippedCount} skipped item(s) to ready (adjust size limit settings first if needed)`
         : "No skipped items";
+  }
+  if (retryFailedBtn) {
+    retryFailedBtn.disabled = data.running || failedCount === 0;
+    retryFailedBtn.title =
+      failedCount > 0
+        ? `Reset ${failedCount} failed item(s) to ready, then start the batch`
+        : "No failed items";
   }
 
   const root = document.getElementById("convert-queue");
@@ -4975,6 +4997,24 @@ async function convertClear() {
 
 async function convertRetrySkipped() {
   await api("/api/convert/retry-skipped", { method: "POST" });
+  await refreshConvert();
+}
+
+async function convertRetryFailed() {
+  await api("/api/convert/retry-failed", { method: "POST" });
+  await refreshConvert();
+}
+
+async function bulkRetryFailedConvertSelected() {
+  const items = lastConvertPayload?.items || [];
+  const ids = [...selectedConvertIds].filter((id) =>
+    items.some((it) => it.item_id === id && it.status === "Failed"),
+  );
+  if (!ids.length) return;
+  await api("/api/convert/bulk-retry-failed", {
+    method: "POST",
+    body: JSON.stringify({ item_ids: ids }),
+  });
   await refreshConvert();
 }
 
@@ -5187,6 +5227,12 @@ document.getElementById("btn-convert-bulk-remove")?.addEventListener("click", ()
 );
 document.getElementById("btn-convert-retry-skipped").onclick = () =>
   convertRetrySkipped().catch((e) => alert(e.message || String(e)));
+document.getElementById("btn-convert-retry-failed")?.addEventListener("click", () =>
+  convertRetryFailed().catch((e) => alert(e.message || String(e)))
+);
+document.getElementById("btn-convert-bulk-retry-failed")?.addEventListener("click", () =>
+  bulkRetryFailedConvertSelected().catch((e) => notifyError(e.message || String(e)))
+);
 document.getElementById("btn-convert-settings").onclick = () =>
   openSettingsDialog().then(() => switchSettingsTab("convert")).catch(console.error);
 document.getElementById("btn-profile-delete")?.addEventListener("click", () =>

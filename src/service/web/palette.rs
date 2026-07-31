@@ -114,6 +114,12 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: None,
     },
     PaletteCommandJson {
+        id: "convert_retry_failed",
+        label: "Retry all failed converts",
+        keywords: "retry failed convert encode again",
+        section: None,
+    },
+    PaletteCommandJson {
         id: "convert_pause",
         label: "Pause Convert batch",
         keywords: "convert pause hold",

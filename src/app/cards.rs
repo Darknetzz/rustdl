@@ -1049,7 +1049,16 @@ mod tests {
             "Active", 442, 1, 17, 1, 0, 1, 422, false, true
         ));
         assert!(downloader_queue_group_open_regime(
-            "Resolving", 442, 1, 17, 1, 0, 1, 422, false, true
+            "Resolving",
+            442,
+            1,
+            17,
+            1,
+            0,
+            1,
+            422,
+            false,
+            true
         ));
         assert!(downloader_queue_group_open_regime(
             "Ready", 442, 1, 17, 1, 0, 1, 422, false, true

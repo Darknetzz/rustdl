@@ -4,10 +4,10 @@ use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame, content_width,
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, finite_ui_span,
-    layout_breakpoint, main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height,
-    show_mode_panel, url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG, LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H,
+    layout_breakpoint, main_body_scroll_min, main_viewport_size,
+    patch_resizable_panel_state_height, show_mode_panel, url_input_height, with_full_width,
+    BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG,
+    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -583,10 +583,7 @@ impl PydlApp {
         let navbar = crate::app_ui::derive_navbar_status(self.navbar_status_inputs());
         let badge = draw_navbar_status_badge(ui, &navbar);
         if matches!(navbar.slug, crate::app_ui::NavbarStatusSlug::Adding) {
-            let badge = badge.on_hover_text(format!(
-                "{} — click to cancel",
-                navbar.title
-            ));
+            let badge = badge.on_hover_text(format!("{} — click to cancel", navbar.title));
             if badge.clicked() {
                 self.cancel_url_resolve_pipeline();
             }

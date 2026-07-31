@@ -280,8 +280,11 @@ pub fn draw_status_dot(ui: &mut egui::Ui, color: Color32) {
     let center = rect.center();
     let radius = dot * 0.38;
     ui.painter().circle_filled(center, radius, color);
-    ui.painter()
-        .circle_stroke(center, radius, egui::Stroke::new(1.0_f32, shade(color, 0.72)));
+    ui.painter().circle_stroke(
+        center,
+        radius,
+        egui::Stroke::new(1.0_f32, shade(color, 0.72)),
+    );
 }
 
 /// Status dot immediately before colored label text.
@@ -1544,11 +1547,8 @@ pub fn queue_log_lines_for_dock_layout(
     min_list_h: f32,
 ) -> f32 {
     let avail_body = finite_ui_span(body_bottom - content_top, 0.0);
-    let log_budget = (avail_body
-        - footer_h
-        - min_list_h.max(0.0)
-        - docked_log_under_videos_chrome_h())
-    .max(0.0);
+    let log_budget =
+        (avail_body - footer_h - min_list_h.max(0.0) - docked_log_under_videos_chrome_h()).max(0.0);
     scaled_log_dock_height(user_pref, log_budget)
 }
 
@@ -1573,13 +1573,8 @@ pub fn queue_docked_under_videos_log_fit(
     if max_block < chrome + DOCKED_LOG_LINES_ABS_MIN_H * 0.5 {
         return (0.0, 0.0);
     }
-    let lines = queue_log_lines_for_dock_layout(
-        user_pref,
-        body_bottom,
-        content_top,
-        footer_h,
-        min_list_h,
-    );
+    let lines =
+        queue_log_lines_for_dock_layout(user_pref, body_bottom, content_top, footer_h, min_list_h);
     let preferred = queue_log_block_height(true, lines, true);
     let block = preferred.min(max_block);
     let fitted_lines = (block - chrome).clamp(0.0, 480.0);
@@ -2798,9 +2793,11 @@ mod tests {
             footer,
             min_list,
         );
-        let list_h =
-            queue_list_height_from_layout(content_top, body_bottom, footer, block);
-        assert!(list_h + 0.5 >= min_list, "list_h={list_h} block={block} lines={lines}");
+        let list_h = queue_list_height_from_layout(content_top, body_bottom, footer, block);
+        assert!(
+            list_h + 0.5 >= min_list,
+            "list_h={list_h} block={block} lines={lines}"
+        );
         assert!(block > 0.0);
         // Very short panel: drop log reservation rather than steal the list.
         let (lines2, block2) =

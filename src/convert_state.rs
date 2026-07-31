@@ -18,16 +18,40 @@ pub fn convert_item_is_skipped(item: &ConvertQueueItem) -> bool {
     item.status == ItemStatus::Done && item.detail.to_ascii_lowercase().starts_with("skipped")
 }
 
-/// Move skipped rows back to Ready so they can be encoded again (e.g. after lowering min shrink %).
-pub fn reset_skipped_convert_items(items: &mut [ConvertQueueItem]) -> usize {
+/// Reset convert rows matching `matches` back to Ready.
+pub fn reset_convert_items_matching(
+    items: &mut [ConvertQueueItem],
+    mut matches: impl FnMut(&ConvertQueueItem) -> bool,
+) -> usize {
     let mut count = 0usize;
     for item in items.iter_mut() {
-        if convert_item_is_skipped(item) {
+        if matches(item) {
             reset_convert_item_to_ready(item);
             count += 1;
         }
     }
     count
+}
+
+/// Move skipped rows back to Ready so they can be encoded again (e.g. after lowering min shrink %).
+pub fn reset_skipped_convert_items(items: &mut [ConvertQueueItem]) -> usize {
+    reset_convert_items_matching(items, convert_item_is_skipped)
+}
+
+/// Move failed rows back to Ready so they can be encoded again.
+pub fn reset_failed_convert_items(items: &mut [ConvertQueueItem]) -> usize {
+    reset_convert_items_matching(items, |item| item.status == ItemStatus::Failed)
+}
+
+/// Move failed rows among `ids` back to Ready.
+pub fn reset_failed_convert_items_by_ids(items: &mut [ConvertQueueItem], ids: &[u64]) -> usize {
+    if ids.is_empty() {
+        return 0;
+    }
+    let id_set: HashSet<u64> = ids.iter().copied().collect();
+    reset_convert_items_matching(items, |item| {
+        item.status == ItemStatus::Failed && id_set.contains(&item.item_id)
+    })
 }
 
 /// True when the queue row points at a path that is not an existing file on disk.
@@ -507,6 +531,64 @@ mod tests {
         assert_eq!(items[0].status, ItemStatus::Idle);
         assert!(items[0].detail.starts_with("Ready"));
         assert_eq!(items[1].status, ItemStatus::Done);
+    }
+
+    #[test]
+    fn reset_failed_moves_rows_to_ready() {
+        let mut items = vec![
+            ConvertQueueItem {
+                item_id: 1,
+                status: ItemStatus::Failed,
+                detail: "ffmpeg failed with status exit code -1".to_owned(),
+                input_bytes: 2_000_000,
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 2,
+                status: ItemStatus::Done,
+                detail: "Saved 100 KiB".to_owned(),
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 3,
+                status: ItemStatus::Failed,
+                detail: "Invalid data found".to_owned(),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(reset_failed_convert_items(&mut items), 2);
+        assert_eq!(items[0].status, ItemStatus::Idle);
+        assert!(items[0].detail.starts_with("Ready"));
+        assert_eq!(items[1].status, ItemStatus::Done);
+        assert_eq!(items[2].status, ItemStatus::Idle);
+    }
+
+    #[test]
+    fn reset_failed_by_ids_only_touches_selected_failed() {
+        let mut items = vec![
+            ConvertQueueItem {
+                item_id: 1,
+                status: ItemStatus::Failed,
+                detail: "fail a".to_owned(),
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 2,
+                status: ItemStatus::Failed,
+                detail: "fail b".to_owned(),
+                ..Default::default()
+            },
+            ConvertQueueItem {
+                item_id: 3,
+                status: ItemStatus::Idle,
+                detail: "Ready".to_owned(),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(reset_failed_convert_items_by_ids(&mut items, &[2, 3]), 1);
+        assert_eq!(items[0].status, ItemStatus::Failed);
+        assert_eq!(items[1].status, ItemStatus::Idle);
+        assert_eq!(items[2].status, ItemStatus::Idle);
     }
 
     #[test]

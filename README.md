@@ -102,7 +102,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, speed limit, and SponsorBlock options.
 - Light / dark / system theme; last mode (Downloader vs Video Converter) remembered across restarts.
 - Desktop notification when a download session finishes (where supported by the OS).
-- **Video Converter** mode for local file/folder transcoding to AV1 (default), H.265, or H.264 with queue progress, dry-run, cancel, and encoder auto-detect.
+- **Video Converter** mode for local file/folder transcoding to AV1 (default), H.265, or H.264 with queue progress, dry-run, cancel, retry failed/skipped, and encoder auto-detect.
 - Optional: enqueue each completed video download into the Video Converter queue (Settings → Downloader).
 - Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → **Web UI**).
 - **Command palette** (`Ctrl+K` / `Cmd+K`): keyboard shortcuts, layout presets (Compact / Review / Minimal), dock/float panels, export log, and quick navigation.

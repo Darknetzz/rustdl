@@ -14,7 +14,8 @@ use crate::app_parsing::human_bytes_ui;
 use crate::config::{save_convert_queue_snapshot, ConvertQueueSnapshot};
 use crate::convert_size_limit::ConvertSizeLimit;
 use crate::convert_state::{
-    normalize_convert_source_key, remove_scanned_convert_input_lines, reset_skipped_convert_items,
+    normalize_convert_source_key, remove_scanned_convert_input_lines, reset_failed_convert_items,
+    reset_failed_convert_items_by_ids, reset_skipped_convert_items,
 };
 use crate::models::{ConvertQueueItem, ItemStatus};
 use crate::transcode::{self, ConvertConfig, ConvertInput};
@@ -394,6 +395,41 @@ impl DownloadCore {
         ));
         self.update_convert_status();
         self.bump_generation();
+    }
+
+    fn finish_convert_retry_reset(&mut self, count: usize, kind: &str) {
+        if count == 0 {
+            self.append_log(&format!("Convert: no {kind} items to retry."));
+            return;
+        }
+        self.schedule_convert_queue_save();
+        self.append_log(&format!(
+            "Convert: reset {count} {kind} item(s) to ready. Start the batch when ready."
+        ));
+        self.update_convert_status();
+        self.bump_generation();
+    }
+
+    pub fn retry_failed_convert_items(&mut self) {
+        if self.convert_running {
+            self.append_log(
+                "Convert: wait for the running batch to finish before retrying failed items.",
+            );
+            return;
+        }
+        let count = reset_failed_convert_items(&mut self.convert_items);
+        self.finish_convert_retry_reset(count, "failed");
+    }
+
+    pub fn retry_failed_convert_items_by_ids(&mut self, item_ids: &[u64]) {
+        if self.convert_running {
+            self.append_log(
+                "Convert: wait for the running batch to finish before retrying failed items.",
+            );
+            return;
+        }
+        let count = reset_failed_convert_items_by_ids(&mut self.convert_items, item_ids);
+        self.finish_convert_retry_reset(count, "failed");
     }
 
     pub fn fallback_convert_encoder_to_software(&mut self) {

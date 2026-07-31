@@ -5,17 +5,16 @@ use eframe::egui::{self, RichText};
 use crate::app_parsing::human_bytes_ui;
 use crate::app_state::compute_download_batch_progress;
 use crate::app_ui::{
-    allocate_bottom_up_rect, allocate_top_down_rect, button_group,
-    button_toolbar_wrapped, compact_button_group, compact_convert_list_row,
-    consume_remaining_ui_space, content_width, docked_log_lines_max_h, draw_batch_progress_bar,
-    draw_queue_status_compact_row, fill_allocated_rect, finite_ui_span, height_to_bottom,
-    left_button_row, note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
+    allocate_bottom_up_rect, allocate_top_down_rect, button_group, button_toolbar_wrapped,
+    compact_button_group, compact_convert_list_row, consume_remaining_ui_space, content_width,
+    docked_log_lines_max_h, draw_batch_progress_bar, draw_queue_status_compact_row,
+    fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
+    note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
     queue_footer_reserve, queue_list_height_from_layout, queue_list_min_scroll_h,
     queue_log_block_height, queue_panel_layout_heights, queue_status_compact,
-    queue_undocked_strip_reserve, show_mode_panel, show_persisted_resizable_window,
-    status_color, with_full_width,
-    PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
-    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    queue_undocked_strip_reserve, show_mode_panel, show_persisted_resizable_window, status_color,
+    with_full_width, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
+    DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -77,7 +76,17 @@ impl PydlApp {
         inner_margin: egui::Margin,
         add_contents: impl FnOnce(&mut egui::Ui) -> R,
     ) -> R {
-        show_mode_panel(ui, theme, av1, colors, inner_margin, 8.0, true, add_contents).inner
+        show_mode_panel(
+            ui,
+            theme,
+            av1,
+            colors,
+            inner_margin,
+            8.0,
+            true,
+            add_contents,
+        )
+        .inner
     }
 
     /// Scrollable card list in a fixed-height region (cards align from the top).

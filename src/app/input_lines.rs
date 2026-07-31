@@ -137,7 +137,10 @@ mod tests {
     fn append_paste_text_joins_with_newline() {
         let mut buf = "https://a.example".to_owned();
         append_paste_text_to_multiline(&mut buf, "https://b.example\n\nhttps://c.example");
-        assert_eq!(buf, "https://a.example\nhttps://b.example\nhttps://c.example\n");
+        assert_eq!(
+            buf,
+            "https://a.example\nhttps://b.example\nhttps://c.example\n"
+        );
     }
 
     #[test]
