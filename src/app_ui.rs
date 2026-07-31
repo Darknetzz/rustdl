@@ -1012,7 +1012,9 @@ pub fn show_virtualized_rows(
                 .max_rect(row_rect)
                 .layout(egui::Layout::top_down(egui::Align::Min)),
             |ui| {
-                ui.set_max_width(width);
+                // Keep paint/layout inside the slot so tall content cannot overlap the next row.
+                ui.set_max_size(egui::vec2(width, row_height));
+                ui.shrink_clip_rect(row_rect);
                 ui.set_min_height(row_height);
                 add_row(ui, row);
             },
@@ -1033,10 +1035,10 @@ pub const BOTTOM_PANEL_MAX_H: f32 = 800.0;
 
 /// Downloader queue list row height (virtualized list layout).
 pub const QUEUE_DL_LIST_ROW_H: f32 = 42.0;
-/// Convert queue list row height (full detail).
-pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 140.0;
+/// Convert queue list row height (full detail: paths, badges, actions).
+pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 200.0;
 /// Convert queue list row height (compact panels / minimal preset).
-pub const QUEUE_CONVERT_LIST_ROW_COMPACT_H: f32 = 88.0;
+pub const QUEUE_CONVERT_LIST_ROW_COMPACT_H: f32 = 112.0;
 pub const QUEUE_FLOATING_LIST_MIN_H: f32 = 80.0;
 pub const QUEUE_DOCKED_LIST_MIN_PAD: f32 = 8.0;
 

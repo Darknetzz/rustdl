@@ -880,7 +880,7 @@ impl PydlApp {
                     status_dot_with_label(ui, &header_text, group_color, true);
                 });
                 let (_toggle, inner, _) = header.body(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 8.0);
+                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 10.0);
                     let list_compact =
                         compact_convert_list_row(self.settings.compact_cards, outer_scroll_h);
                     let use_list = self.effective_convert_list_layout_for_panel(outer_scroll_h)
@@ -894,17 +894,12 @@ impl PydlApp {
                             };
                             if let Some(idx) = self.convert_item_idx(item_id) {
                                 let it = self.convert_items[idx].clone();
-                                let row_w = crate::app_ui::clip_bounded_width(ui);
-                                ui.set_max_width(row_w);
-                                ui.group(|ui| {
-                                    ui.set_max_width(row_w);
-                                    self.draw_convert_queue_card(
-                                        ui,
-                                        &it,
-                                        allow_reorder,
-                                        list_compact,
-                                    );
-                                });
+                                self.draw_convert_queue_card(
+                                    ui,
+                                    &it,
+                                    allow_reorder,
+                                    list_compact,
+                                );
                             }
                         });
                     } else {
@@ -913,12 +908,7 @@ impl PydlApp {
                                 continue;
                             };
                             let it = self.convert_items[idx].clone();
-                            let row_w = crate::app_ui::clip_bounded_width(ui);
-                            ui.set_max_width(row_w);
-                            ui.group(|ui| {
-                                ui.set_max_width(row_w);
-                                self.draw_convert_queue_card(ui, &it, label == "Ready", false);
-                            });
+                            self.draw_convert_queue_card(ui, &it, label == "Ready", false);
                         }
                     }
                 });
@@ -1097,7 +1087,7 @@ impl PydlApp {
         let stroke = if will_skip_target {
             egui::Stroke::new(1.5_f32, CONVERT_SKIPPED_COLOR)
         } else {
-            egui::Stroke::NONE
+            egui::Stroke::new(1.0_f32, theme::BORDER_PANEL)
         };
 
         egui::Frame::none()
