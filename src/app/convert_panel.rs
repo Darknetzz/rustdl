@@ -894,12 +894,7 @@ impl PydlApp {
                             };
                             if let Some(idx) = self.convert_item_idx(item_id) {
                                 let it = self.convert_items[idx].clone();
-                                self.draw_convert_queue_card(
-                                    ui,
-                                    &it,
-                                    allow_reorder,
-                                    list_compact,
-                                );
+                                self.draw_convert_queue_card(ui, &it, allow_reorder, list_compact);
                             }
                         });
                     } else {

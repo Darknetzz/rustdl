@@ -26,13 +26,25 @@ pub fn normalize_target_codec(raw: &str) -> &'static str {
     }
 }
 
-/// True when ffmpeg could not read the input (corrupt/partial/missing)—CPU encoder retry won't help.
+/// True when ffmpeg could not open/demux the input at all (missing/truncated)—CPU encoder retry won't help.
+/// Mid-stream bitstream damage ("Invalid data…") is *not* included: players often still play those files,
+/// and convert can recover with resilient demux flags / audio copy.
 pub fn convert_failure_is_unreadable_source(err: &str) -> bool {
     let s = err.to_ascii_lowercase();
     s.contains("moov atom not found")
-        || s.contains("invalid data found when processing input")
         || s.contains("error opening input")
         || s.contains("no such file or directory")
+}
+
+/// True when encode failed on damaged packets (NAL/AAC) that often still play in VLC/mpv.
+pub fn convert_failure_may_retry_audio_copy(err: &str) -> bool {
+    let s = err.to_ascii_lowercase();
+    s.contains("invalid data found when processing input")
+        || s.contains("error splitting the input into nal")
+        || s.contains("invalid nal unit size")
+        || s.contains("error reinitializing filters")
+        || s.contains("error submitting packet to decoder")
+        || s.contains("error processing packet in decoder")
 }
 
 fn convert_source_error_summary(err: &str) -> Option<&'static str> {
@@ -43,11 +55,14 @@ fn convert_source_error_summary(err: &str) -> Option<&'static str> {
              This usually means the download was interrupted or the file is still being written. \
              Re-download the video fully, then convert again.",
         )
-    } else if s.contains("invalid data found when processing input")
-        || s.contains("error opening input")
-    {
+    } else if s.contains("error opening input") {
         Some(
-            "ffmpeg could not read the source file—it may be corrupt, incomplete, or not a valid video container.",
+            "ffmpeg could not open the source file—it may be missing, incomplete, or not a valid video container.",
+        )
+    } else if convert_failure_may_retry_audio_copy(err) {
+        Some(
+            "The source has bitstream damage that players may conceal, but ffmpeg could not finish encoding. \
+             Try re-downloading a clean copy, or remux/repair the file first.",
         )
     } else {
         None
@@ -1207,6 +1222,148 @@ fn finalize_output_file(plan: &ConvertPlanItem, cfg: &ConvertConfig) -> Result<P
     Ok(output)
 }
 
+fn append_resilient_input_args(cmd: &mut Command) {
+    // Damaged H.264/AAC streams often still play in GUI players; these flags keep encode going.
+    cmd.args([
+        "-err_detect",
+        "ignore_err",
+        "-fflags",
+        "+genpts+discardcorrupt",
+        "-max_error_rate",
+        "1.0",
+    ]);
+}
+
+fn ffmpeg_status_error(status: std::process::ExitStatus, stderr_text: &str) -> anyhow::Error {
+    if stderr_text.trim().is_empty() {
+        return anyhow!("ffmpeg failed with status {status}");
+    }
+    let short = stderr_text
+        .lines()
+        .rev()
+        .take(8)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>()
+        .join("\n");
+    anyhow!("ffmpeg failed with status {status}\n{short}")
+}
+
+struct FfmpegEncodePass<'a> {
+    plan: &'a ConvertPlanItem,
+    cfg: &'a ConvertConfig,
+    enc: &'a EncoderChoice,
+    target: &'a str,
+    target_bitrate_bps: i64,
+    vf: &'a str,
+    subtitle_mode: &'a str,
+    has_subtitles: bool,
+    copy_audio: bool,
+}
+
+fn run_ffmpeg_convert_encode<F>(
+    pass: &FfmpegEncodePass<'_>,
+    cancel_flag: Option<&Arc<AtomicBool>>,
+    mut on_line: F,
+) -> Result<()>
+where
+    F: FnMut(String),
+{
+    let ffmpeg = resolve_executable(&pass.cfg.ffmpeg_path, "ffmpeg");
+    let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+    let mut cmd = Command::new(ffmpeg);
+    apply_subprocess_launch(
+        &mut cmd,
+        normalize_subprocess_priority(&pass.cfg.subprocess_priority),
+    );
+    cmd.arg("-hide_banner")
+        .arg("-loglevel")
+        .arg("error")
+        .arg(if pass.cfg.overwrite { "-y" } else { "-n" })
+        .arg("-progress")
+        .arg("pipe:1")
+        .arg("-nostats");
+    if let Some(threads) = effective_cpu_threads(pass.cfg.cpu_threads) {
+        cmd.arg("-threads").arg(threads.to_string());
+    }
+    append_resilient_input_args(&mut cmd);
+    cmd.arg("-i")
+        .arg(&pass.plan.input)
+        .arg("-vf")
+        .arg(pass.vf)
+        .arg("-c:v")
+        .arg(pass.enc.encoder);
+    append_cpu_thread_args(&mut cmd, pass.enc, pass.cfg.cpu_threads);
+    if pass.enc.codec == "hevc" && pass.enc.hw_type != "cpu" {
+        cmd.args(["-tag:v", "hvc1"]);
+    }
+    append_encoder_rate_control(&mut cmd, pass.enc, pass.target_bitrate_bps);
+    if pass.subtitle_mode == "soft" && pass.has_subtitles {
+        append_soft_subtitle_maps(&mut cmd);
+    }
+    if pass.copy_audio {
+        cmd.args(["-c:a", "copy"]);
+    } else {
+        let (audio_codec, audio_bitrate) = default_audio_for_output(&pass.plan.output, pass.target);
+        cmd.arg("-c:a")
+            .arg(audio_codec)
+            .arg("-b:a")
+            .arg(audio_bitrate);
+    }
+    append_container_mux_args(&mut cmd, &pass.plan.output, pass.enc);
+    cmd.arg(&pass.plan.output)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn()?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("missing stdout"))?;
+    let stderr = child.stderr.take();
+    let stderr_capture = stderr_buf.clone();
+    let stderr_thread = std::thread::spawn(move || {
+        if let Some(mut s) = stderr {
+            let mut text = String::new();
+            let _ = std::io::Read::read_to_string(&mut s, &mut text);
+            if let Ok(mut guard) = stderr_capture.lock() {
+                *guard = text;
+            }
+        }
+    });
+    let mut rdr = std::io::BufReader::new(stdout);
+    let mut line = String::new();
+    loop {
+        if cancel_flag.is_some_and(|f| f.load(Ordering::Relaxed)) {
+            let _ = child.kill();
+            let _ = child.wait();
+            remove_partial_output(&pass.plan.output);
+            return Err(anyhow!("Cancelled by user."));
+        }
+        line.clear();
+        let n = std::io::BufRead::read_line(&mut rdr, &mut line)?;
+        if n == 0 {
+            break;
+        }
+        let t = line.trim().to_owned();
+        if !t.is_empty() {
+            on_line(t);
+        }
+    }
+    let st = child.wait()?;
+    let _ = stderr_thread.join();
+    if !st.success() {
+        let stderr_text = stderr_buf
+            .lock()
+            .ok()
+            .map(|g| g.trim().to_owned())
+            .unwrap_or_default();
+        remove_partial_output(&pass.plan.output);
+        return Err(ffmpeg_status_error(st, &stderr_text));
+    }
+    Ok(())
+}
+
 pub fn run_single<F>(
     plan: &ConvertPlanItem,
     cfg: &ConvertConfig,
@@ -1278,7 +1435,6 @@ where
     if let Some(parent) = plan.output.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let ffmpeg = resolve_executable(&cfg.ffmpeg_path, "ffmpeg");
     let pix_fmt = select_pixel_format(enc.hw_type);
     let subtitle_mode = crate::config::normalize_convert_subtitle_mode(&cfg.subtitle_mode);
     let has_subtitles =
@@ -1291,105 +1447,34 @@ where
         &plan.input,
         has_subtitles,
     );
-    let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-    let mut cmd = Command::new(ffmpeg);
-    apply_subprocess_launch(
-        &mut cmd,
-        normalize_subprocess_priority(&cfg.subprocess_priority),
-    );
-    cmd.arg("-hide_banner")
-        .arg("-loglevel")
-        .arg("error")
-        .arg(if cfg.overwrite { "-y" } else { "-n" })
-        .arg("-progress")
-        .arg("pipe:1")
-        .arg("-nostats");
-    if let Some(threads) = effective_cpu_threads(cfg.cpu_threads) {
-        cmd.arg("-threads").arg(threads.to_string());
-    }
-    cmd.arg("-i")
-        .arg(&plan.input)
-        .arg("-vf")
-        .arg(vf)
-        .arg("-c:v")
-        .arg(enc.encoder);
-    append_cpu_thread_args(&mut cmd, enc, cfg.cpu_threads);
-    if enc.codec == "hevc" && enc.hw_type != "cpu" {
-        cmd.args(["-tag:v", "hvc1"]);
-    }
-    append_encoder_rate_control(&mut cmd, enc, target_bitrate_bps);
-    if subtitle_mode == "soft" && has_subtitles {
-        append_soft_subtitle_maps(&mut cmd);
-    }
-    let (audio_codec, audio_bitrate) = default_audio_for_output(&plan.output, target);
-    cmd.arg("-c:a")
-        .arg(audio_codec)
-        .arg("-b:a")
-        .arg(audio_bitrate);
-    append_container_mux_args(&mut cmd, &plan.output, enc);
-    cmd.arg(&plan.output)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = cmd.spawn()?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| anyhow!("missing stdout"))?;
-    let stderr = child.stderr.take();
-    let stderr_capture = stderr_buf.clone();
-    let stderr_thread = std::thread::spawn(move || {
-        if let Some(mut s) = stderr {
-            let mut text = String::new();
-            let _ = std::io::Read::read_to_string(&mut s, &mut text);
-            if let Ok(mut guard) = stderr_capture.lock() {
-                *guard = text;
-            }
+    let cancel = cancel_flag.as_ref();
+    let mut pass = FfmpegEncodePass {
+        plan,
+        cfg,
+        enc,
+        target,
+        target_bitrate_bps,
+        vf: &vf,
+        subtitle_mode: &subtitle_mode,
+        has_subtitles,
+        copy_audio: false,
+    };
+    if let Err(err) = run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)) {
+        let err_text = err.to_string();
+        if err_text.to_ascii_lowercase().contains("cancelled") {
+            return Err(err);
         }
-    });
-    let mut rdr = std::io::BufReader::new(stdout);
-    let mut line = String::new();
-    loop {
-        if cancel_flag
-            .as_ref()
-            .is_some_and(|f| f.load(Ordering::Relaxed))
-        {
-            let _ = child.kill();
-            let _ = child.wait();
-            remove_partial_output(&plan.output);
-            return Err(anyhow!("Cancelled by user."));
+        if convert_failure_may_retry_audio_copy(&err_text) {
+            on_line(
+                "audio_reencode_failed; retrying with audio copy (damaged source bitstream)"
+                    .to_owned(),
+            );
+            pass.copy_audio = true;
+            run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line))
+                .map_err(|retry_err| anyhow!("{err_text}\nAudio-copy retry failed: {retry_err}"))?;
+        } else {
+            return Err(err);
         }
-        line.clear();
-        let n = std::io::BufRead::read_line(&mut rdr, &mut line)?;
-        if n == 0 {
-            break;
-        }
-        let t = line.trim().to_owned();
-        if !t.is_empty() {
-            on_line(t);
-        }
-    }
-    let st = child.wait()?;
-    let _ = stderr_thread.join();
-    if !st.success() {
-        let stderr_text = stderr_buf
-            .lock()
-            .ok()
-            .map(|g| g.trim().to_owned())
-            .unwrap_or_default();
-        remove_partial_output(&plan.output);
-        if stderr_text.is_empty() {
-            return Err(anyhow!("ffmpeg failed with status {st}"));
-        }
-        let short = stderr_text
-            .lines()
-            .rev()
-            .take(8)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(anyhow!("ffmpeg failed with status {st}\n{short}"));
     }
     if let Err(err) = validate_convert_output(
         &plan.input,
@@ -1446,6 +1531,18 @@ mod tests {
         let msg = format_convert_failure(err);
         assert!(msg.contains("incomplete or corrupt"));
         assert!(msg.contains("moov atom not found"));
+    }
+
+    #[test]
+    fn convert_failure_midstream_damage_is_not_unreadable() {
+        let err = "ffmpeg failed with status exit code: 1\n\
+Invalid NAL unit size (-807092710 > 14555).\n\
+Error splitting the input into NAL units.\n\
+Invalid data found when processing input";
+        assert!(!convert_failure_is_unreadable_source(err));
+        assert!(convert_failure_may_retry_audio_copy(err));
+        let msg = format_convert_failure(err);
+        assert!(msg.contains("bitstream damage"));
     }
 
     #[test]

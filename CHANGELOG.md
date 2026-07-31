@@ -19,6 +19,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Video Converter now finishes files that play fine but have damaged mid-stream packets (discard corrupt packets; if audio re-encode fails, automatically retry with audio copy).
 - Convert queue rows no longer overlap each other in list layout (virtualized slots clip to their row height; row height matches full convert card content).
 - Docked **Videos / Convert queue** sits directly under the Converter/Downloader controls and fills the remaining window height (no empty gap above a fixed bottom dock).
 - Docked **Videos / Convert queue** panel is no longer manually resizable; height follows window size / layout presets, and the queue list fills the space above a shrink-wrapped footer (fixes the cramped list and empty void, including while clicking toolbar buttons).
