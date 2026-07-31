@@ -18,6 +18,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Docked **Videos / Convert queue** sits directly under the Converter/Downloader controls and fills the remaining window height (no empty gap above a fixed bottom dock).
 - Docked **Videos / Convert queue** panel is no longer manually resizable; height follows window size / layout presets, and the queue list fills the space above a shrink-wrapped footer (fixes the cramped list and empty void, including while clicking toolbar buttons).
 - Docked **Videos / Convert queue** no longer leaves empty space below the footer toolbar when the activity log is closed (footer reserve follows measured height instead of an inflated width estimate).
 - Large download queues no longer leave **Active** / **Issues** as empty thin headers over a blank scroll area: those groups default open based on their own counts (not total queue size), **Resolving** sits under Active, and clicking the header **Adding URLs** badge cancels a stuck metadata fetch.

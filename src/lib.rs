@@ -53,6 +53,8 @@ use tokio::runtime::Runtime;
 pub fn run_gui(runtime: Arc<Runtime>) -> eframe::Result<()> {
     // eframe only clamps restored window positions on Windows; off-screen restore on Linux
     // can leave the window invisible. Always center instead of restoring position.
+    // Mutated only on Linux (X11 event-loop preference below).
+    #[cfg_attr(not(target_os = "linux"), allow(unused_mut))]
     let mut native_options = eframe::NativeOptions {
         // Center on first launch so the window is easy to spot (especially on multi-monitor setups).
         centered: true,

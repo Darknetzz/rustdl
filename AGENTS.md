@@ -232,7 +232,7 @@ When editing UI spacing or panels, check both **docked** (main window) and **flo
 
 After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `app_ui.rs`):
 
-1. **Docked Videos** — card list fills the fixed dock height below toolbar; footer controls stay visible (panel height follows window / layout presets, not a drag grip).
+1. **Docked Videos** — queue sits flush under Converter/Downloader controls and fills remaining height; footer controls stay visible.
 2. **Floating Videos** — resize window; list scrolls; dock/undock toggles work.
 3. **Docked log under Videos** — log lines fill remaining panel height after resize.
 4. **Floating Activity log** — resize window; log lines fill viewport.

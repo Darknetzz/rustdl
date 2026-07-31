@@ -915,7 +915,7 @@ impl PydlApp {
         }
     }
 
-    /// Pinned bottom panel when the video queue is docked (fixed height; not user-resizable).
+    /// Queue panel docked under Converter/Downloader controls (fills remaining central height).
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let panel_min = if dock_log {
@@ -923,11 +923,7 @@ impl PydlApp {
         } else {
             BOTTOM_PANEL_MIN_H
         };
-        let panel_h = self
-            .settings
-            .videos_dock_height
-            .max(panel_min)
-            .min(BOTTOM_PANEL_MAX_H);
+        let panel_h = finite_ui_span(ui.available_height(), panel_min).max(panel_min);
         let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;

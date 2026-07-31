@@ -3,11 +3,11 @@ use std::time::{Duration, Instant};
 use super::*;
 use crate::app_ui::{
     bounded_ui_height, button_group, button_toolbar_wrapped, content_panel_frame, content_width,
-    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, layout_breakpoint,
-    main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height, show_mode_panel,
-    url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
+    dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, finite_ui_span,
+    layout_breakpoint, main_body_scroll_min, main_viewport_size, patch_resizable_panel_state_height,
+    show_mode_panel, url_input_height, with_full_width, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
     BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG, LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID,
-    UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -167,26 +167,9 @@ impl eframe::App for PydlApp {
         }
 
         if !ui_suspended {
-            if self.settings.videos_docked {
-                let dock_log = self.settings.logs_open && self.settings.logs_docked;
-                let panel_min = if dock_log {
-                    BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
-                } else {
-                    BOTTOM_PANEL_MIN_H
-                };
-                let dock_h = self
-                    .settings
-                    .videos_dock_height
-                    .max(panel_min)
-                    .min(BOTTOM_PANEL_MAX_H);
-                egui::TopBottomPanel::bottom(VIDEOS_DOCK_PANEL_ID)
-                    .resizable(false)
-                    .exact_height(dock_h)
-                    .frame(dock_panel_horizontal_frame())
-                    .show(ctx, |ui| {
-                        self.draw_docked_videos_panel(ui);
-                    });
-            } else {
+            // Docked queue lives in the central column under Converter/Downloader controls
+            // (fills remaining height). Only the undocked strip uses a bottom panel.
+            if !self.settings.videos_docked {
                 let log_docked = self.settings.logs_open && self.settings.logs_docked;
                 let (default_h, height_range, resizable) = if log_docked {
                     (
@@ -239,11 +222,27 @@ impl eframe::App for PydlApp {
                     self.set_app_mode(true);
                 }
                 let viewport_h = main_viewport_size(ctx).y;
+                let videos_docked = self.settings.videos_docked;
+                let queue_min = if videos_docked {
+                    if self.settings.logs_open && self.settings.logs_docked {
+                        BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
+                    } else {
+                        BOTTOM_PANEL_MIN_H
+                    }
+                } else {
+                    0.0
+                };
                 let scroll_min = main_body_scroll_min(viewport_h);
-                let scroll_h = bounded_ui_height(ui, scroll_min).max(scroll_min);
+                let scroll_h = if videos_docked {
+                    // Leave room for the queue; shrink to Converter/Downloader content height.
+                    let avail = finite_ui_span(ui.available_height(), scroll_min);
+                    (avail - queue_min).max(80.0).min(avail)
+                } else {
+                    bounded_ui_height(ui, scroll_min).max(scroll_min)
+                };
                 egui::ScrollArea::vertical()
-                    .id_salt("rustdl_main_body_v1")
-                    .auto_shrink([false, false])
+                    .id_salt("rustdl_main_body_v2")
+                    .auto_shrink([false, videos_docked])
                     .max_height(scroll_h)
                     .drag_to_scroll(true)
                     .show(ui, |ui| {
@@ -499,6 +498,10 @@ impl eframe::App for PydlApp {
                 }); // mode panel
                 } // downloader mode
         });
+                if self.settings.videos_docked {
+                    ui.add_space(8.0);
+                    self.draw_docked_videos_panel(ui);
+                }
                     }); // central panel
 
             self.draw_settings_window(ctx);
