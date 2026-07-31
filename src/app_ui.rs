@@ -1052,7 +1052,6 @@ pub const QUEUE_COMPACT_CONVERT_ROW_THRESHOLD: f32 = 260.0;
 
 pub const QUEUE_STATUS_COMPACT_DL_THRESHOLD: f32 = 120.0;
 pub const QUEUE_STATUS_COMPACT_CONVERT_THRESHOLD: f32 = 200.0;
-pub const FOOTER_RESERVE_RESIZE_MARGIN: f32 = 12.0;
 pub const MODE_NAV_COMPACT_BREAKPOINT: f32 = 720.0;
 const LAYOUT_UI_SCALE_FLOOR: f32 = 0.85;
 
@@ -1087,7 +1086,7 @@ pub fn viewport_large_enough_to_redock_videos(size: egui::Vec2) -> bool {
 }
 
 /// [`egui::TopBottomPanel`] id for the docked video queue.
-pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v5";
+pub const VIDEOS_DOCK_PANEL_ID: &str = "rustdl_videos_dock_v6";
 /// [`egui::TopBottomPanel`] id for the undocked queue footer strip.
 pub const UNDOCKED_FOOTER_PANEL_ID: &str = "rustdl_undocked_footer_v6";
 
@@ -1630,26 +1629,21 @@ pub fn queue_footer_toolbar_reserve(
     base + convert_extra + docked_extra
 }
 
-/// Footer toolbar reserve: prefer last frame's measured height when stable.
+/// Footer toolbar reserve: prefer last frame's measured height when available.
 ///
-/// While resizing, take the max of measured and the width estimate (plus a margin) so wrap
-/// transitions during drag do not overlap the list. When stable, trust the measured height so
-/// an inflated estimate does not leave empty space under the footer buttons.
+/// Falls back to the width/mode estimate only before the first measure so an inflated
+/// estimate does not leave empty space under the footer buttons.
 pub fn queue_footer_reserve(
     content_width: f32,
     convert_mode: bool,
     docked: bool,
     measured_h: Option<f32>,
     ui_scale: f32,
-    resizing: bool,
 ) -> f32 {
     let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked, ui_scale) + 2.0;
-    let measured = measured_h.filter(|m| m.is_finite() && *m > 0.0);
-    if resizing {
-        measured.unwrap_or(0.0).max(est) + FOOTER_RESERVE_RESIZE_MARGIN
-    } else {
-        measured.unwrap_or(est)
-    }
+    measured_h
+        .filter(|m| m.is_finite() && *m > 0.0)
+        .unwrap_or(est)
 }
 
 /// Undocked videos strip reserve (compact strip in main footer when queue is floating).
@@ -2873,35 +2867,29 @@ mod tests {
     }
 
     #[test]
-    fn queue_footer_reserve_prefers_measured_when_stable() {
-        let est = queue_footer_reserve(800.0, false, true, None, 1.0, false);
-        let raised = queue_footer_reserve(800.0, false, true, Some(140.0), 1.0, false);
+    fn queue_footer_reserve_prefers_measured() {
+        let est = queue_footer_reserve(800.0, false, true, None, 1.0);
+        let raised = queue_footer_reserve(800.0, false, true, Some(140.0), 1.0);
         assert!(raised >= est);
         assert_eq!(raised, 140.0);
-        // Stable: trust measured even when below the width estimate (avoids under-footer void).
+        // Trust measured even when below the width estimate (avoids under-footer void).
         assert_eq!(
-            queue_footer_reserve(800.0, false, true, Some(50.0), 1.0, false),
+            queue_footer_reserve(800.0, false, true, Some(50.0), 1.0),
             50.0
         );
-        let resizing_no_measure = queue_footer_reserve(800.0, false, true, None, 1.0, true);
-        assert_eq!(resizing_no_measure, est + FOOTER_RESERVE_RESIZE_MARGIN);
-        // Resizing: max(measured, est) + margin so wrap during drag does not crush the list.
-        let resizing_measured = queue_footer_reserve(800.0, false, true, Some(50.0), 1.0, true);
-        assert_eq!(resizing_measured, est + FOOTER_RESERVE_RESIZE_MARGIN);
-        let resizing_tall = queue_footer_reserve(800.0, false, true, Some(140.0), 1.0, true);
-        assert_eq!(resizing_tall, 140.0 + FOOTER_RESERVE_RESIZE_MARGIN);
+        assert_eq!(queue_footer_reserve(800.0, false, true, None, 1.0), est);
     }
 
     #[test]
     fn queue_list_height_recovers_when_measured_footer_below_estimate() {
         let content_top = 100.0;
         let body_bottom = 500.0;
-        let est = queue_footer_reserve(800.0, false, true, None, 1.0, false);
+        let est = queue_footer_reserve(800.0, false, true, None, 1.0);
         let measured = 50.0;
         assert!(measured < est);
         let old_list =
             queue_list_height_from_layout(content_top, body_bottom, est.max(measured), 0.0);
-        let new_footer = queue_footer_reserve(800.0, false, true, Some(measured), 1.0, false);
+        let new_footer = queue_footer_reserve(800.0, false, true, Some(measured), 1.0);
         let new_list = queue_list_height_from_layout(content_top, body_bottom, new_footer, 0.0);
         assert!((new_list - old_list - (est - measured)).abs() < 0.01);
     }

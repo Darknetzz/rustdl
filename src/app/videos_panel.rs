@@ -15,7 +15,7 @@ use crate::app_ui::{
     queue_undocked_strip_reserve, show_mode_panel, show_persisted_resizable_window,
     status_color, with_full_width,
     PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
-    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H, VIDEOS_DOCK_PANEL_ID,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -531,7 +531,6 @@ impl PydlApp {
         let content_top_after_search = ui.cursor().min.y;
         let cw = crate::app_ui::clip_bounded_width(ui).max(1.0);
         let ui_scale = crate::config::snap_ui_scale(self.settings.ui_scale);
-        let resizing = ui.ctx().input(|i| i.pointer.any_down());
         let measured_footer = ui
             .ctx()
             .data(|d| d.get_temp::<f32>(queue_footer_height_id(layout.scroll_id)));
@@ -541,7 +540,6 @@ impl PydlApp {
             layout.is_docked(),
             measured_footer,
             ui_scale,
-            resizing,
         );
         // Prefer at least one queue row; shrink the docked log before collapsing the list.
         let min_list_h = queue_list_min_scroll_h(layout.is_docked(), self.convert_mode, false);
@@ -917,16 +915,19 @@ impl PydlApp {
         }
     }
 
-    /// Pinned bottom panel when the video queue is docked.
+    /// Pinned bottom panel when the video queue is docked (fixed height; not user-resizable).
     pub(super) fn draw_docked_videos_panel(&mut self, ui: &mut egui::Ui) {
-        // Capture before any shrink-wrapped children run (egui uses this for PanelState).
         let dock_log = self.settings.logs_open && self.settings.logs_docked;
         let panel_min = if dock_log {
             crate::app_ui::BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
         } else {
             BOTTOM_PANEL_MIN_H
         };
-        let panel_h = finite_ui_span(ui.clip_rect().height(), 360.0).max(panel_min);
+        let panel_h = self
+            .settings
+            .videos_dock_height
+            .max(panel_min)
+            .min(BOTTOM_PANEL_MAX_H);
         let panel_w = finite_ui_span(ui.clip_rect().width(), 800.0).max(1.0);
         let theme = self.settings.theme.clone();
         let av1 = self.convert_mode;
@@ -958,13 +959,6 @@ impl PydlApp {
             consume_remaining_ui_space(ui);
         });
         consume_remaining_ui_space(ui);
-        note_resizable_panel_height(ui.ctx(), VIDEOS_DOCK_PANEL_ID, panel_h);
-        if !ui.ctx().input(|i| i.pointer.any_down())
-            && (panel_h - self.settings.videos_dock_height).abs() > 1.0
-        {
-            self.settings.videos_dock_height = panel_h.clamp(panel_min, BOTTOM_PANEL_MAX_H);
-            self.schedule_settings_save();
-        }
     }
 
     pub(super) fn draw_videos_window(&mut self, ctx: &egui::Context) {
