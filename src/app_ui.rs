@@ -1035,6 +1035,17 @@ pub const BOTTOM_PANEL_MAX_H: f32 = 800.0;
 
 /// Downloader queue list row height (virtualized list layout).
 pub const QUEUE_DL_LIST_ROW_H: f32 = 42.0;
+/// Issues rows need room for the ERROR line under the main actions (Retry / Refetch).
+pub const QUEUE_DL_LIST_ROW_ISSUES_H: f32 = 72.0;
+
+/// Virtualized downloader list row height for a queue group label.
+pub fn queue_dl_list_row_height(group_label: &str) -> f32 {
+    if group_label == "Issues" {
+        QUEUE_DL_LIST_ROW_ISSUES_H
+    } else {
+        QUEUE_DL_LIST_ROW_H
+    }
+}
 /// Convert queue list row height (full detail: paths, badges, actions).
 pub const QUEUE_CONVERT_LIST_ROW_H: f32 = 200.0;
 /// Convert queue list row height (compact panels / minimal preset).
@@ -2901,6 +2912,15 @@ mod tests {
             queue_list_min_scroll_h(true, true, true),
             QUEUE_CONVERT_LIST_ROW_COMPACT_H + QUEUE_DOCKED_LIST_MIN_PAD
         );
+    }
+
+    #[test]
+    fn queue_dl_list_row_height_taller_for_issues() {
+        assert_eq!(queue_dl_list_row_height("Ready"), QUEUE_DL_LIST_ROW_H);
+        assert_eq!(queue_dl_list_row_height("Done"), QUEUE_DL_LIST_ROW_H);
+        assert_eq!(queue_dl_list_row_height("Active"), QUEUE_DL_LIST_ROW_H);
+        assert_eq!(queue_dl_list_row_height("Issues"), QUEUE_DL_LIST_ROW_ISSUES_H);
+        assert!(QUEUE_DL_LIST_ROW_ISSUES_H > QUEUE_DL_LIST_ROW_H);
     }
 
     #[test]

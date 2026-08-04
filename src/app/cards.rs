@@ -7,9 +7,9 @@ use eframe::egui::{Color32, RichText};
 use crate::app_parsing::{human_bytes_ui, queue_item_file_size_bytes};
 use crate::app_ui::{
     clip_bounded_width, compact_button_group, draw_meta_badge, draw_status_chip, layout_breakpoint,
-    left_button_row, queue_card_grid_width, queue_short_panel_list_fallback, show_menu_popup,
-    show_queue_group_section, show_virtualized_rows, status_color, status_dot_with_label,
-    url_menu_above, MetaBadgeKind, QUEUE_DL_LIST_ROW_H,
+    left_button_row, queue_card_grid_width, queue_dl_list_row_height,
+    queue_short_panel_list_fallback, show_menu_popup, show_queue_group_section,
+    show_virtualized_rows, status_color, status_dot_with_label, url_menu_above, MetaBadgeKind,
 };
 use crate::media_metadata::queue_item_more_info_rows;
 use crate::models::{ItemStatus, QueueItem};
@@ -573,13 +573,24 @@ impl PydlApp {
                             url_menu_above(ui, popup_id, &url, &mut open_url);
                         });
                     }
+                    // Keep Retry/Refetch on the primary action strip so list virtualization
+                    // cannot clip them away under the ERROR line.
+                    if can_retry_download || can_retry_metadata {
+                        self.draw_card_retry_buttons(
+                            ui,
+                            id,
+                            "list_retry",
+                            can_retry_download,
+                            can_retry_metadata,
+                        );
+                    }
                     if status == ItemStatus::Downloading || status == ItemStatus::Queued {
                         ui.add_sized(
                             [120.0, row_h],
                             egui::ProgressBar::new((pct / 100.0).clamp(0.0, 1.0)).show_percentage(),
                         );
                     }
-                    if status == ItemStatus::Idle {
+                    if status == ItemStatus::Idle && !has_error {
                         let current = self.items[idx].format_override.clone().unwrap_or_default();
                         let mut fmt_buf = current.clone();
                         let response = ui.add_sized(
@@ -617,18 +628,6 @@ impl PydlApp {
                 ui.add_space(28.0);
                 let err_display = ellipsize(fail, 96);
                 ui.label(RichText::new(err_display).small().color(LOG_COLOR_ERROR));
-            });
-        }
-        if can_retry_download || can_retry_metadata {
-            ui.horizontal(|ui| {
-                ui.add_space(28.0);
-                self.draw_card_retry_buttons(
-                    ui,
-                    id,
-                    "list_retry",
-                    can_retry_download,
-                    can_retry_metadata,
-                );
             });
         }
         if allow_reorder && status == ItemStatus::Idle {
@@ -914,7 +913,7 @@ impl PydlApp {
                         || ids.len() >= self.queue_card_list_fallback_threshold()
                         || queue_short_panel_list_fallback(outer_scroll_h, false);
                     if use_list {
-                        let list_row_h = QUEUE_DL_LIST_ROW_H;
+                        let list_row_h = queue_dl_list_row_height(label);
                         show_virtualized_rows(ui, list_row_h, ids.len(), |ui, row| {
                             if let Some(item_id) = ids.get(row) {
                                 if let Some(idx) = self.item_idx(*item_id) {
