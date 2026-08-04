@@ -773,6 +773,8 @@ let cachedHasYtDlp = false;
 /** Last queue generation from `/api/queue` (skip rebuild when unchanged). */
 let lastQueueGeneration = 0;
 let lastQueueStructureKey = "";
+/** @type {any[]} */
+let lastQueueItems = [];
 /** Last status generation from `/api/status`. */
 let lastStatusGeneration = 0;
 let sseConnected = false;
@@ -1101,33 +1103,45 @@ function updateDownloadControlButtons(data) {
 
   const retryFailedBtn = document.getElementById("btn-retry-failed");
   if (retryFailedBtn) {
-    const failed = s.failed || 0;
-    const canRetryFailed = !isShuttingDown && failed > 0 && cachedHasYtDlp;
+    const issueCount = lastQueueItems.filter((it) => {
+      const slug = statusSlug(it.status);
+      return (
+        slug === "failed" ||
+        (slug === "idle" && it.error && String(it.error).trim())
+      );
+    }).length;
+    const canRetryFailed = !isShuttingDown && issueCount > 0 && cachedHasYtDlp;
     retryFailedBtn.disabled = !canRetryFailed;
     retryFailedBtn.title = isShuttingDown
       ? "Unavailable while shutting down"
-      : failed === 0
+      : issueCount === 0
         ? "No failed downloads"
         : !cachedHasYtDlp
           ? "yt-dlp not available (check Settings or Refresh tools)"
-          : `Retry ${failed} failed download(s) that still have a URL`;
+          : `Retry ${issueCount} failed download(s) that still have a URL`;
   }
 
   const refetchFailedBtn = document.getElementById("btn-refetch-failed");
   if (refetchFailedBtn) {
-    const failed = s.failed || 0;
+    const issueCount = lastQueueItems.filter((it) => {
+      const slug = statusSlug(it.status);
+      return (
+        slug === "failed" ||
+        (slug === "idle" && it.error && String(it.error).trim())
+      );
+    }).length;
     const canRefetchFailed =
-      !isShuttingDown && failed > 0 && cachedHasYtDlp && !statusFlags.add_in_progress;
+      !isShuttingDown && issueCount > 0 && cachedHasYtDlp && !statusFlags.add_in_progress;
     refetchFailedBtn.disabled = !canRefetchFailed;
     refetchFailedBtn.title = isShuttingDown
       ? "Unavailable while shutting down"
-      : failed === 0
+      : issueCount === 0
         ? "No failed downloads"
         : !cachedHasYtDlp
           ? "yt-dlp not available (check Settings or Refresh tools)"
           : statusFlags.add_in_progress
             ? "Wait for the current metadata batch to finish before refetching"
-            : `Refetch metadata for ${failed} failed row(s) that still have a source URL`;
+            : `Refetch metadata for ${issueCount} failed row(s) that still have a source URL`;
   }
 }
 
@@ -2187,7 +2201,9 @@ function canCancel(item) {
 function canRedownload(item) {
   if (!item.can_redownload || !cachedHasYtDlp) return false;
   const slug = statusSlug(item.status);
-  return slug === "done" || slug === "failed";
+  if (slug === "done" || slug === "failed") return true;
+  // Idle Issues rows (metadata/download error still on the card)
+  return slug === "idle" && !!(item.error && String(item.error).trim());
 }
 
 function appendRemoveMenuButton(group, item) {
@@ -2250,7 +2266,7 @@ function appendRedownloadButton(actions, item) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "secondary";
-  const label = slug === "failed" ? "Retry" : "Redo";
+  const label = slug === "done" ? "Redo" : "Retry";
   setButtonLabel(btn, ICON.refresh, label);
   btn.title =
     "Deletes the matched file in the output folder (if found), then downloads this URL again with current quality settings.";
@@ -2762,6 +2778,7 @@ async function refreshQueue(force = false) {
   pruneThumbFailedKeys(data.items);
   stopActiveMedia();
   const allItems = data.items || [];
+  lastQueueItems = allItems;
   const structureKey = allItems.map((it) => it.item_id).join(",");
   const searchInput = document.getElementById("queue-search");
   const searchQuery = searchInput ? searchInput.value : settings.queue_search || "";
@@ -2795,6 +2812,7 @@ async function refreshQueue(force = false) {
       ? "No queue items match the current search or filter."
       : "Queue is empty. Add URLs above.";
     root.appendChild(empty);
+    if (lastStatusPayload) updateDownloadControlButtons(lastStatusPayload);
     return;
   }
   renderGroupedQueue(root, items, {
@@ -2820,6 +2838,7 @@ async function refreshQueue(force = false) {
     groupExtras: true,
   });
   updateBulkSelectionUi();
+  if (lastStatusPayload) updateDownloadControlButtons(lastStatusPayload);
 }
 
 async function cancelItem(id) {

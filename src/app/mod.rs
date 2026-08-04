@@ -884,7 +884,7 @@ impl PydlApp {
             if self
                 .items
                 .iter()
-                .any(|x| x.item_id == id && x.status == ItemStatus::Failed)
+                .any(|x| x.item_id == id && crate::app_state::item_is_download_issue(x))
             {
                 self.retry_download_item_id(id);
                 retried += 1;

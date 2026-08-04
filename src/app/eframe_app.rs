@@ -787,7 +787,7 @@ impl PydlApp {
                     {
                         self.remove_selected_items();
                     }
-                    if self.status_failed > 0
+                    if self.has_retryable_download_issues()
                         && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
                             .clicked()
                     {
@@ -795,7 +795,7 @@ impl PydlApp {
                     }
                 });
             }
-            if self.status_failed > 0 {
+            if self.has_retryable_download_issues() {
                 button_group(ui, "dl_retry_all", |g| {
                     if g
                         .warning(&format!("{} Retry all failed", ui_icons::RETRY), true)

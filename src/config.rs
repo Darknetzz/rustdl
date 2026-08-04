@@ -132,7 +132,7 @@ pub struct AppSettings {
     /// Passed as `--retry-sleep` when > 0 (seconds between yt-dlp retries).
     #[serde(default = "default_yt_dlp_retry_sleep_secs")]
     pub yt_dlp_retry_sleep_secs: u32,
-    /// Whole-download retries in rustdl on transient connection errors (0 = off).
+    /// Whole-download retries in rustdl on transient connection errors (0 = off, max 10).
     #[serde(default = "default_yt_dlp_download_auto_retries")]
     pub yt_dlp_download_auto_retries: u32,
     pub yt_ignore_errors: bool,
@@ -672,7 +672,7 @@ fn default_yt_dlp_retry_sleep_secs() -> u32 {
 }
 
 fn default_yt_dlp_download_auto_retries() -> u32 {
-    2
+    5
 }
 
 fn default_downloader_options_expanded() -> bool {
@@ -1002,7 +1002,7 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
     cfg.yt_dlp_retry_count = cfg.yt_dlp_retry_count.clamp(1, 999);
     cfg.yt_dlp_socket_timeout_secs = cfg.yt_dlp_socket_timeout_secs.clamp(0, 3600);
     cfg.yt_dlp_retry_sleep_secs = cfg.yt_dlp_retry_sleep_secs.clamp(0, 300);
-    cfg.yt_dlp_download_auto_retries = cfg.yt_dlp_download_auto_retries.clamp(0, 5);
+    cfg.yt_dlp_download_auto_retries = cfg.yt_dlp_download_auto_retries.clamp(0, 10);
     cfg.log_dock_height = cfg.log_dock_height.clamp(80.0, 480.0);
     cfg.undocked_footer_height = cfg.undocked_footer_height.clamp(100.0, 800.0);
     cfg.log_float_width = cfg.log_float_width.clamp(400.0, 2400.0);

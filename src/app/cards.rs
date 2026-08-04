@@ -274,10 +274,9 @@ impl PydlApp {
                     self.draw_more_info_button(ui, id);
                 });
 
-                let can_retry_download = status == ItemStatus::Failed
+                let can_retry_download = self.has_yt_dlp
                     && output_ready
-                    && self.has_yt_dlp
-                    && self.item_has_redownload_target(&self.items[idx]);
+                    && crate::app_state::item_can_retry_download(&self.items[idx]);
                 let can_retry_metadata = matches!(status, ItemStatus::Idle)
                     && has_error.is_some()
                     && self.has_yt_dlp
@@ -516,6 +515,36 @@ impl PydlApp {
         });
     }
 
+    /// Compact Retry/Refetch for list rows (no nested frame that gets clipped in the action strip).
+    fn draw_list_retry_buttons(
+        &mut self,
+        ui: &mut egui::Ui,
+        id: u64,
+        can_retry_download: bool,
+        can_retry_metadata: bool,
+    ) {
+        if can_retry_download {
+            let btn = ui
+                .add(egui::Button::new(format!("{} Retry", ui_icons::RETRY)).small())
+                .on_hover_text(
+                    "Queue this video for download again using the same URL as this row.",
+                );
+            if btn.clicked() {
+                self.retry_download_item_id(id);
+            }
+        }
+        if can_retry_metadata {
+            let btn = ui
+                .add(egui::Button::new(format!("{} Refetch", ui_icons::RETRY)).small())
+                .on_hover_text(
+                    "Run yt-dlp metadata again for this URL (after errors or no preview).",
+                );
+            if btn.clicked() {
+                self.retry_metadata_item_id(id);
+            }
+        }
+    }
+
     fn draw_card_list(&mut self, ui: &mut egui::Ui, idx: usize, allow_reorder: bool) {
         let id = self.items[idx].item_id;
         let status = self.items[idx].status;
@@ -525,10 +554,9 @@ impl PydlApp {
         let failure_text =
             crate::app_state::queue_item_failure_text(&self.items[idx]).map(|t| t.to_owned());
         let has_error = self.items[idx].error.is_some();
-        let can_retry_download = status == ItemStatus::Failed
+        let can_retry_download = self.has_yt_dlp
             && output_ready
-            && self.has_yt_dlp
-            && self.item_has_redownload_target(&self.items[idx]);
+            && crate::app_state::item_can_retry_download(&self.items[idx]);
         let can_retry_metadata = matches!(status, ItemStatus::Idle)
             && has_error
             && self.has_yt_dlp
@@ -576,10 +604,9 @@ impl PydlApp {
                     // Keep Retry/Refetch on the primary action strip so list virtualization
                     // cannot clip them away under the ERROR line.
                     if can_retry_download || can_retry_metadata {
-                        self.draw_card_retry_buttons(
+                        self.draw_list_retry_buttons(
                             ui,
                             id,
-                            "list_retry",
                             can_retry_download,
                             can_retry_metadata,
                         );

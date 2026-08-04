@@ -251,6 +251,21 @@ pub fn item_has_redownload_target(item: &QueueItem) -> bool {
     resolve_item_download_url(item).is_some()
 }
 
+/// Issues group rows: failed downloads, or Idle rows that still carry an error.
+pub fn item_is_download_issue(item: &QueueItem) -> bool {
+    item.status == ItemStatus::Failed
+        || (item.status == ItemStatus::Idle
+            && item
+                .error
+                .as_deref()
+                .is_some_and(|e| !e.trim().is_empty()))
+}
+
+/// Whether the row can be re-queued for download (Issues + a usable URL).
+pub fn item_can_retry_download(item: &QueueItem) -> bool {
+    item_is_download_issue(item) && item_has_redownload_target(item)
+}
+
 /// True when the row has at least one remote thumbnail URL to try (yt-dlp field or YouTube id fallbacks).
 pub fn queue_item_has_thumbnail_source(item: &QueueItem) -> bool {
     !crate::ytdlp::thumbnail_url_candidates(item).is_empty()
@@ -376,6 +391,38 @@ mod tests {
         dec_status_count(&mut counts, ItemStatus::Queued);
         assert_eq!(counts.queued, 0);
         assert_eq!(counts.active, 1);
+    }
+
+    #[test]
+    fn item_can_retry_download_for_failed_and_idle_error() {
+        let failed = QueueItem {
+            item_id: 1,
+            status: ItemStatus::Failed,
+            webpage_url: "https://example.com/watch?v=a".to_owned(),
+            source_line: "https://example.com/watch?v=a".to_owned(),
+            ..Default::default()
+        };
+        let idle_err = QueueItem {
+            item_id: 2,
+            status: ItemStatus::Idle,
+            error: Some("boom".to_owned()),
+            webpage_url: "https://example.com/watch?v=b".to_owned(),
+            source_line: "https://example.com/watch?v=b".to_owned(),
+            ..Default::default()
+        };
+        let idle_ok = QueueItem {
+            item_id: 3,
+            status: ItemStatus::Idle,
+            webpage_url: "https://example.com/watch?v=c".to_owned(),
+            source_line: "https://example.com/watch?v=c".to_owned(),
+            ..Default::default()
+        };
+        assert!(item_is_download_issue(&failed));
+        assert!(item_can_retry_download(&failed));
+        assert!(item_is_download_issue(&idle_err));
+        assert!(item_can_retry_download(&idle_err));
+        assert!(!item_is_download_issue(&idle_ok));
+        assert!(!item_can_retry_download(&idle_ok));
     }
 
     #[test]

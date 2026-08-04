@@ -228,15 +228,15 @@ impl PydlApp {
                 .on_hover_text("Maps to yt-dlp --retry-sleep.")
                 .changed();
             ui.end_row();
-            ui.label("Auto-retry on connection errors (0–5)");
+            ui.label("Auto-retry on connection errors (0–10)");
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut self.settings.yt_dlp_download_auto_retries)
-                        .range(0_u32..=5)
+                        .range(0_u32..=10)
                         .speed(1),
                 )
                 .on_hover_text(
-                    "rustdl retries the whole download on transient network errors, keeping partial files.",
+                    "rustdl retries the whole download on transient network errors before marking Failed, keeping partial files.",
                 )
                 .changed();
             ui.end_row();

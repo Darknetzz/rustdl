@@ -214,14 +214,14 @@ impl PydlApp {
             {
                 self.remove_selected_items();
             }
-            if self.status_failed > 0
+            if self.has_retryable_download_issues()
                 && g.warning(&format!("{} Retry selected", ui_icons::RETRY), true)
                     .clicked()
             {
                 self.retry_selected_failed();
             }
         }
-        if self.status_failed > 0
+        if self.has_retryable_download_issues()
             && g
                 .warning(
                     &format!("{} Retry all failed", ui_icons::RETRY),
@@ -234,7 +234,7 @@ impl PydlApp {
         {
             self.retry_failed_items();
         }
-        if self.status_failed > 0
+        if self.has_download_issues()
             && !self.add_in_progress
             && g.secondary(&format!("{} Refetch all failed", ui_icons::RETRY), true)
                 .on_hover_text(
@@ -686,6 +686,14 @@ impl PydlApp {
     }
 
     fn downloader_queue_status_parts(&self) -> (String, Vec<crate::app_ui::QueueStatusPart>) {
+        let issue_count = self
+            .items
+            .iter()
+            .filter(|it| crate::app_state::item_is_download_issue(it))
+            .count();
+        let ready_count = self
+            .status_ready
+            .saturating_sub(issue_count.saturating_sub(self.status_failed));
         let mut parts: Vec<crate::app_ui::QueueStatusPart> = Vec::new();
         if self.status_resolving > 0 {
             parts.push(crate::app_ui::QueueStatusPart {
@@ -695,10 +703,10 @@ impl PydlApp {
                 group: "Resolving",
             });
         }
-        if self.status_ready > 0 {
+        if ready_count > 0 {
             parts.push(crate::app_ui::QueueStatusPart {
                 name: "ready",
-                count: self.status_ready,
+                count: ready_count,
                 color: status_color(ItemStatus::Idle),
                 group: "Ready",
             });
@@ -727,10 +735,10 @@ impl PydlApp {
                 group: "Done",
             });
         }
-        if self.status_failed > 0 {
+        if issue_count > 0 {
             parts.push(crate::app_ui::QueueStatusPart {
                 name: "failed",
-                count: self.status_failed,
+                count: issue_count,
                 color: status_color(ItemStatus::Failed),
                 group: "Issues",
             });

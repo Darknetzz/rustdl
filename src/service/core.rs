@@ -1842,7 +1842,7 @@ impl DownloadCore {
         let Some(idx) = self.resolve_item_idx(item_id) else {
             return;
         };
-        if self.items[idx].status != ItemStatus::Failed {
+        if !app_state::item_is_download_issue(&self.items[idx]) {
             return;
         }
         let _ = self.redownload_item_id(item_id);
@@ -1867,16 +1867,16 @@ impl DownloadCore {
         let failed_no_url = self
             .items
             .iter()
-            .filter(|it| it.status == ItemStatus::Failed && !self.item_has_redownload_target(it))
+            .filter(|it| app_state::item_is_download_issue(it) && !self.item_has_redownload_target(it))
             .count();
         let ids: Vec<u64> = self
             .items
             .iter()
-            .filter(|it| it.status == ItemStatus::Failed && self.item_has_redownload_target(it))
+            .filter(|it| app_state::item_can_retry_download(it))
             .map(|it| it.item_id)
             .collect();
         if ids.is_empty() {
-            if self.status_failed > 0 {
+            if self.items.iter().any(app_state::item_is_download_issue) {
                 self.append_log(
                     "No failed items have a video URL to retry. Check the row or re-add the link.",
                 );
@@ -1906,11 +1906,12 @@ impl DownloadCore {
         Ok(())
     }
 
-    /// Re-runs yt-dlp metadata resolution (title, formats, thumbnail) for every **Failed** row
-    /// that still has a source URL, replacing each row in place (same item id/position) and
-    /// re-queuing it as pending metadata. Unlike [`Self::retry_failed_items`] this does not
-    /// re-attempt the download itself; it is meant for failures caused by stale/incomplete
-    /// metadata (e.g. a format that disappeared) rather than transient download errors.
+    /// Re-runs yt-dlp metadata resolution (title, formats, thumbnail) for every **Issues** row
+    /// (Failed, or Idle with an error) that still has a source URL, replacing each row in place
+    /// (same item id/position) and re-queuing it as pending metadata. Unlike
+    /// [`Self::retry_failed_items`] this does not re-attempt the download itself; it is meant for
+    /// failures caused by stale/incomplete metadata (e.g. a format that disappeared) rather than
+    /// transient download errors.
     pub fn refetch_failed_items(&mut self) -> Result<usize, RefetchFailedError> {
         if self.add_in_progress {
             return Err(RefetchFailedError::AddInProgress);
@@ -1930,11 +1931,13 @@ impl DownloadCore {
         let targets: Vec<(u64, String)> = self
             .items
             .iter()
-            .filter(|it| it.status == ItemStatus::Failed && !it.source_line.trim().is_empty())
+            .filter(|it| {
+                app_state::item_is_download_issue(it) && !it.source_line.trim().is_empty()
+            })
             .map(|it| (it.item_id, it.source_line.clone()))
             .collect();
         if targets.is_empty() {
-            if self.status_failed > 0 {
+            if self.items.iter().any(app_state::item_is_download_issue) {
                 self.append_log(
                     "No failed items have a source URL to refetch. Check the row or re-add the link.",
                 );
@@ -2635,6 +2638,9 @@ mod queue_lifecycle_tests {
         let (shared, _dir) = test_core_with_output_dir();
         let mut core = shared.lock();
         core.has_yt_dlp = true;
+        core.items.clear();
+        core.rebuild_item_index();
+        core.update_status();
         assert!(matches!(
             core.retry_failed_items(),
             Err(RetryFailedError::NothingToRetry)
@@ -2646,6 +2652,9 @@ mod queue_lifecycle_tests {
         let (shared, _dir) = test_core_with_output_dir();
         let mut core = shared.lock();
         core.has_yt_dlp = true;
+        core.items.clear();
+        core.rebuild_item_index();
+        core.update_status();
         assert!(matches!(
             core.refetch_failed_items(),
             Err(RefetchFailedError::NothingToRefetch)

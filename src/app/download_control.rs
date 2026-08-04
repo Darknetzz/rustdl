@@ -65,6 +65,18 @@ impl PydlApp {
         crate::app_state::item_has_redownload_target(item)
     }
 
+    pub(super) fn has_retryable_download_issues(&self) -> bool {
+        self.items
+            .iter()
+            .any(crate::app_state::item_can_retry_download)
+    }
+
+    pub(super) fn has_download_issues(&self) -> bool {
+        self.items
+            .iter()
+            .any(crate::app_state::item_is_download_issue)
+    }
+
     pub(super) fn redownload_item_id(&mut self, item_id: u64) {
         self.download_core_action(|core| {
             if let Err(err) = core.redownload_item_id(item_id) {
