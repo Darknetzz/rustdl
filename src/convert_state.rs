@@ -202,11 +202,14 @@ pub fn synthetic_convert_items(count: usize) -> Vec<ConvertQueueItem> {
         .collect()
 }
 
-/// Pending row that will be skipped at encode time (already target codec, re-encode disabled).
+/// Pending row that will be skipped at encode time (already target codec, re-encode disabled,
+/// and not wider than the configured max width — a source that still needs downscaling is
+/// re-encoded even when its codec already matches the target).
 pub fn convert_item_will_skip_already_target(
     item: &ConvertQueueItem,
     reencode_target: bool,
     target_codec: &str,
+    max_width: u32,
 ) -> bool {
     if reencode_target {
         return false;
@@ -215,6 +218,9 @@ pub fn convert_item_will_skip_already_target(
         item.status,
         ItemStatus::Idle | ItemStatus::Queued | ItemStatus::Resolving
     ) {
+        return false;
+    }
+    if item.width.is_some_and(|w| w > max_width) {
         return false;
     }
     codec_matches_target(&item.video_codec, target_codec)
@@ -460,9 +466,22 @@ mod tests {
             video_codec: "av1".to_owned(),
             ..Default::default()
         };
-        assert!(convert_item_will_skip_already_target(&item, false, "av1"));
-        assert!(!convert_item_will_skip_already_target(&item, true, "av1"));
-        assert!(!convert_item_will_skip_already_target(&item, false, "hevc"));
+        assert!(convert_item_will_skip_already_target(&item, false, "av1", 1920));
+        assert!(!convert_item_will_skip_already_target(&item, true, "av1", 1920));
+        assert!(!convert_item_will_skip_already_target(&item, false, "hevc", 1920));
+
+        let wide_item = ConvertQueueItem {
+            status: ItemStatus::Idle,
+            video_codec: "av1".to_owned(),
+            width: Some(3840),
+            ..Default::default()
+        };
+        assert!(!convert_item_will_skip_already_target(
+            &wide_item, false, "av1", 1920
+        ));
+        assert!(convert_item_will_skip_already_target(
+            &wide_item, false, "av1", 3840
+        ));
     }
 
     #[test]

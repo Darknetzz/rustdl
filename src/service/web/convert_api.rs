@@ -131,6 +131,7 @@ async fn convert_queue(State(st): State<ApiState>) -> Json<ConvertQueueResponse>
                     item,
                     reencode_target,
                     &target_codec,
+                    c.settings.convert_max_width,
                 ),
                 probing: c.convert_media_inflight.contains(&item.item_id),
                 can_open_file: targets.file.is_some(),

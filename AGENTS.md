@@ -4,7 +4,7 @@ Guidance for AI agents and automation working in this repository.
 
 ## What this project is
 
-**rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues. It is a **multi-surface product**: one shared download/convert engine backs the egui desktop app, an optional LAN web UI, and headless CLI modes. There are **no Cargo `[features]`** — everything ships in a single binary (~35k lines of Rust + ~5k lines of LAN web JS).
+**rustdl** is a desktop application (Rust + [eframe](https://github.com/emilk/egui)/egui) for managing [yt-dlp](https://github.com/yt-dlp/yt-dlp) download queues and ffmpeg video converting to AV1. It is a **multi-surface product**: one shared download/convert engine backs the egui desktop app, an optional LAN web UI, and headless CLI modes. There are **no Cargo `[features]`** — everything ships in a single binary (~35k lines of Rust + ~5k lines of LAN web JS).
 
 The crate library root is `src/lib.rs`; the binary calls `rustdl::main_entry()` from `src/main.rs`.
 

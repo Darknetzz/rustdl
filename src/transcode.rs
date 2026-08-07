@@ -1376,8 +1376,10 @@ where
 {
     let target = normalize_target_codec(&cfg.target_codec);
     if !cfg.reencode_target {
-        if let Some(codec) = input_codec(&plan.input, &cfg.ffprobe_path) {
-            if codec_matches_target(&codec, target) && enc.codec == target {
+        if let Some(media) = probe_input_media(&plan.input, &cfg.ffprobe_path) {
+            let within_max_width = media.width.map_or(true, |w| w <= cfg.max_width);
+            if codec_matches_target(&media.codec, target) && enc.codec == target && within_max_width
+            {
                 on_line(format!(
                     "skip_reason=already {} input and re-encode disabled",
                     target_codec_label(target)

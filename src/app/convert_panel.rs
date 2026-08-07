@@ -1073,6 +1073,7 @@ impl PydlApp {
             it,
             self.settings.convert_reencode_target,
             output_codec,
+            self.settings.convert_max_width,
         );
         let fill = if done {
             theme::done_card_fill(&theme)
