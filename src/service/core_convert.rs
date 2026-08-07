@@ -542,6 +542,7 @@ impl DownloadCore {
         for item_id in item_ids {
             self.convert_media_inflight.remove(&item_id);
             self.evict_thumbnail(item_id);
+            crate::thumbnail_store::delete_convert_thumbnail(item_id);
         }
         self.convert_items.clear();
         self.convert_duration_ms.clear();
@@ -562,6 +563,10 @@ impl DownloadCore {
             .retain(|it| !id_set.contains(&it.item_id));
         let removed = before - self.convert_items.len();
         if removed > 0 {
+            for &item_id in &id_set {
+                self.evict_thumbnail(item_id);
+                crate::thumbnail_store::delete_convert_thumbnail(item_id);
+            }
             self.update_convert_status();
             self.schedule_convert_queue_save();
             self.bump_generation();
@@ -626,6 +631,9 @@ impl DownloadCore {
         if let Err(err) = save_convert_queue_snapshot(&snapshot) {
             self.append_log(&format!("Failed to save converter queue state: {err}"));
         }
+        let active: std::collections::HashSet<u64> =
+            self.convert_items.iter().map(|it| it.item_id).collect();
+        crate::thumbnail_store::prune_convert_thumbnails(&active);
     }
 
     pub fn clear_convert_queue_persistence(&mut self) {

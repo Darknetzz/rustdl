@@ -876,6 +876,19 @@ impl DownloadCore {
                     eprintln!("rustdl: failed to save queue thumbnail for item {item_id}: {err:#}");
                 }
             }
+        } else if let Some(idx) = self.convert_item_idx(item_id) {
+            let source_path = self.convert_items[idx].source_path.clone();
+            if let Err(err) = crate::thumbnail_store::save_convert_thumbnail(
+                item_id,
+                crate::thumbnail_store::ConvertThumbnailSave {
+                    source_key: &source_key,
+                    content_type: &content_type,
+                    source_path: &source_path,
+                    bytes: &bytes,
+                },
+            ) {
+                eprintln!("rustdl: failed to save convert thumbnail for item {item_id}: {err:#}");
+            }
         }
     }
 
@@ -888,6 +901,9 @@ impl DownloadCore {
             if entry.source_key == source_key {
                 return Some((entry.bytes.clone(), entry.content_type.clone()));
             }
+        }
+        if self.convert_item_idx(item_id).is_some() {
+            return crate::thumbnail_store::load_convert_thumbnail(item_id, source_key);
         }
         if let Some(found) = crate::thumbnail_store::load_downloader_thumbnail(item_id, source_key)
         {
@@ -2383,6 +2399,32 @@ mod thumbnail_cache_tests {
         };
         assert!(!session_has_restorable_data(&[], &convert_only, false));
         assert!(session_has_restorable_data(&[], &convert_only, true));
+    }
+
+    /// Converter items live in a disjoint id range from downloader items; `cache_thumbnail_bytes`
+    /// must route them to the Converter on-disk store, not silently drop the disk-persist step.
+    #[test]
+    fn convert_item_thumbnail_persists_to_convert_store() {
+        let runtime = Arc::new(Runtime::new().expect("runtime"));
+        let (shared, _rx) = DownloadCore::new_shared(runtime, true);
+        let mut core = shared.lock();
+        let item_id = 1_999_999;
+        core.convert_items.push(ConvertQueueItem {
+            item_id,
+            source_path: "D:\\Videos\\test-thumbnail-routing.mkv".to_owned(),
+            ..Default::default()
+        });
+        core.rebuild_convert_item_index();
+        let key = DownloadCore::convert_thumbnail_source_key(&core.convert_items[0].source_path);
+        let bytes = vec![0x89u8; 64];
+        core.cache_thumbnail_bytes(item_id, key.clone(), bytes, "image/png");
+        assert!(core.cached_thumbnail_bytes(item_id, &key).is_some());
+        let on_disk = crate::thumbnail_store::load_convert_thumbnail(item_id, &key);
+        crate::thumbnail_store::delete_convert_thumbnail(item_id);
+        assert!(
+            on_disk.is_some(),
+            "expected on-disk convert thumbnail for item {item_id}"
+        );
     }
 
     #[test]
