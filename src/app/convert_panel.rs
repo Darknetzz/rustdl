@@ -146,11 +146,13 @@ fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings
         muted,
     );
     ui.label(RichText::new("·").small().color(muted));
-    let container = if settings.convert_use_recommended_container {
-        crate::transcode::recommended_container_for_target(&settings.convert_target_codec)
-            .to_ascii_uppercase()
-    } else {
-        "same ext".to_owned()
+    let container = match settings.convert_container.as_str() {
+        "source" => "Source".to_owned(),
+        "mkv" => "MKV".to_owned(),
+        "mp4" => "MP4".to_owned(),
+        "webm" => "WebM".to_owned(),
+        _ => crate::transcode::recommended_container_for_target(&settings.convert_target_codec)
+            .to_ascii_uppercase(),
     };
     draw_labeled_meta_badge(
         ui,

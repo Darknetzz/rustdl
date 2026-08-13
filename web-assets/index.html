@@ -624,7 +624,15 @@
           <label class="check"><input type="checkbox" id="set-convert-auto-start" /> Automatically start batch when paths are added</label>
           <label class="check"><input type="checkbox" id="set-convert-overwrite" /> Overwrite existing output files</label>
           <label class="check"><input type="checkbox" id="set-convert-reencode" /> Re-encode files that are already at target codec</label>
-          <label class="check"><input type="checkbox" id="set-convert-recommended-container" checked /> Use recommended container for target codec</label>
+          <label>Output container
+            <select id="set-convert-container">
+              <option value="auto">Auto (recommended for codec)</option>
+              <option value="source">Source (keep original)</option>
+              <option value="mkv">MKV</option>
+              <option value="mp4">MP4</option>
+              <option value="webm">WebM</option>
+            </select>
+          </label>
           <label class="check"><input type="checkbox" id="set-convert-delete-original" /> Delete original after a successful transcode</label>
           <label class="check"><input type="checkbox" id="set-convert-rename-original" /> Rename output to original filename (in-place replacement)</label>
           <label class="check"><input type="checkbox" id="set-convert-remember-queue" /> Remember the Convert queue between sessions</label>

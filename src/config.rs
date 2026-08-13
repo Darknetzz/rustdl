@@ -217,12 +217,15 @@ pub struct AppSettings {
     /// Re-encode inputs already using the target codec.
     #[serde(default, alias = "av1_reencode_av1")]
     pub convert_reencode_target: bool,
-    /// Write outputs using a recommended container for the target codec.
+    /// Output container format: `auto` (recommended for codec), `source` (keep original),
+    /// `mkv`, `mp4`, or `webm`.
     #[serde(
-        default = "default_convert_use_recommended_container",
-        alias = "av1_use_recommended_container"
+        default = "default_convert_container",
+        alias = "av1_use_recommended_container",
+        alias = "convert_use_recommended_container",
+        deserialize_with = "deserialize_convert_container"
     )]
-    pub convert_use_recommended_container: bool,
+    pub convert_container: String,
     /// Target video codec: `av1`, `hevc`, or `h264`.
     #[serde(default = "default_convert_target_codec", alias = "av1_target_codec")]
     pub convert_target_codec: String,
@@ -679,8 +682,34 @@ fn default_downloader_options_expanded() -> bool {
     true
 }
 
-fn default_convert_use_recommended_container() -> bool {
-    true
+fn default_convert_container() -> String {
+    "auto".to_owned()
+}
+
+/// Accepts both legacy bool (`true`→`"auto"`, `false`→`"source"`) and new string values.
+fn deserialize_convert_container<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct ContainerVisitor;
+    impl<'de> de::Visitor<'de> for ContainerVisitor {
+        type Value = String;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a boolean or a container string (auto, source, mkv, mp4, webm)")
+        }
+        fn visit_bool<E: de::Error>(self, v: bool) -> Result<String, E> {
+            Ok(if v { "auto" } else { "source" }.to_owned())
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<String, E> {
+            Ok(v.to_owned())
+        }
+        fn visit_string<E: de::Error>(self, v: String) -> Result<String, E> {
+            Ok(v)
+        }
+    }
+    deserializer.deserialize_any(ContainerVisitor)
 }
 
 impl Default for AppSettings {
@@ -742,7 +771,7 @@ impl Default for AppSettings {
             convert_rename_original: false,
             convert_overwrite: false,
             convert_reencode_target: false,
-            convert_use_recommended_container: true,
+            convert_container: default_convert_container(),
             convert_target_codec: default_convert_target_codec(),
             convert_target_bitrate: String::new(),
             convert_max_width: 1920,

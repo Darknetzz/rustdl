@@ -104,8 +104,8 @@ pub struct ConvertConfig {
     pub overwrite: bool,
     pub reencode_target: bool,
     pub target_codec: String,
-    /// When true, outputs use a recommended container for the target codec.
-    pub use_recommended_container: bool,
+    /// Output container: `auto` (recommended for codec), `source`, `mkv`, `mp4`, or `webm`.
+    pub container: String,
     pub target_bitrate: String,
     pub max_width: u32,
     pub size_preset: String,
@@ -489,15 +489,19 @@ pub fn recommended_container_for_target(target_codec: &str) -> &'static str {
 }
 
 fn planned_output_extension(input: &Path, cfg: &ConvertConfig) -> String {
-    if cfg.use_recommended_container {
-        return recommended_container_for_target(&cfg.target_codec).to_owned();
+    match cfg.container.as_str() {
+        "mkv" => "mkv".to_owned(),
+        "mp4" => "mp4".to_owned(),
+        "webm" => "webm".to_owned(),
+        "source" => input
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
+            .unwrap_or_else(|| recommended_container_for_target(&cfg.target_codec).to_owned()),
+        // "auto" or any unrecognized value → recommended for target codec
+        _ => recommended_container_for_target(&cfg.target_codec).to_owned(),
     }
-    input
-        .extension()
-        .and_then(|s| s.to_str())
-        .map(|e| e.to_ascii_lowercase())
-        .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
-        .unwrap_or_else(|| recommended_container_for_target(&cfg.target_codec).to_owned())
 }
 
 pub fn collect_plan(inputs: &[ConvertInput], cfg: &ConvertConfig) -> Vec<ConvertPlanItem> {
@@ -1507,7 +1511,7 @@ mod tests {
             overwrite: false,
             reencode_target: false,
             target_codec: target_codec.to_owned(),
-            use_recommended_container: recommended,
+            container: if recommended { "auto".to_owned() } else { "source".to_owned() },
             target_bitrate: String::new(),
             max_width: 1920,
             size_preset: "balanced".to_owned(),

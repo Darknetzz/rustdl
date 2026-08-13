@@ -3351,7 +3351,7 @@ function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-convert-auto-start", s.convert_auto_start_on_add);
   setCheck("set-convert-overwrite", s.convert_overwrite);
   setCheck("set-convert-reencode", s.convert_reencode_target);
-  setCheck("set-convert-recommended-container", s.convert_use_recommended_container);
+  setVal("set-convert-container", s.convert_container || "auto");
   setCheck("set-convert-delete-original", s.convert_delete_original);
   setCheck("set-convert-rename-original", s.convert_rename_original);
   setCheck("set-convert-remember-queue", s.convert_remember_queue);
@@ -3510,9 +3510,7 @@ function collectSettingsForm(base) {
   s.convert_auto_start_on_add = document.getElementById("set-convert-auto-start").checked;
   s.convert_overwrite = document.getElementById("set-convert-overwrite").checked;
   s.convert_reencode_target = document.getElementById("set-convert-reencode").checked;
-  s.convert_use_recommended_container = document.getElementById(
-    "set-convert-recommended-container",
-  ).checked;
+  s.convert_container = document.getElementById("set-convert-container")?.value || "auto";
   s.convert_delete_original = document.getElementById("set-convert-delete-original").checked;
   s.convert_rename_original = document.getElementById("set-convert-rename-original").checked;
   s.convert_remember_queue = document.getElementById("set-convert-remember-queue").checked;

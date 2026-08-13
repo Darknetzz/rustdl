@@ -43,7 +43,7 @@ impl DownloadCore {
             overwrite: self.settings.convert_overwrite,
             reencode_target: self.settings.convert_reencode_target,
             target_codec: self.settings.convert_target_codec.clone(),
-            use_recommended_container: self.settings.convert_use_recommended_container,
+            container: self.settings.convert_container.clone(),
             target_bitrate: self.settings.convert_target_bitrate.clone(),
             max_width: self.settings.convert_max_width,
             size_preset: self.settings.convert_size_preset.clone(),

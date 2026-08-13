@@ -1855,24 +1855,59 @@ impl PydlApp {
                                 "Re-encode files already in the target codec",
                                 &mut self.settings.convert_reencode_target,
                             );
-                            let recommended_container = crate::transcode::recommended_container_for_target(
-                                &self.settings.convert_target_codec,
-                            )
-                            .to_ascii_uppercase();
-                            let codec_label = crate::transcode::target_codec_label(
-                                &self.settings.convert_target_codec,
-                            );
-                            ui.label(format!(
-                                "Use recommended container ({recommended_container})"
-                            ));
-                            changed |= ui
-                                .checkbox(&mut self.settings.convert_use_recommended_container, "")
-                                .on_hover_text(format!(
-                                    "When enabled, {} outputs use .{}. When off, outputs keep the source extension.",
-                                    codec_label,
-                                    recommended_container.to_ascii_lowercase(),
-                                ))
-                                .changed();
+                            ui.label("Output container");
+                            {
+                                let recommended = crate::transcode::recommended_container_for_target(
+                                    &self.settings.convert_target_codec,
+                                )
+                                .to_ascii_uppercase();
+                                let selected_label = match self.settings.convert_container.as_str() {
+                                    "source" => "Source (keep original)".to_owned(),
+                                    "mkv" => "MKV".to_owned(),
+                                    "mp4" => "MP4".to_owned(),
+                                    "webm" => "WebM".to_owned(),
+                                    _ => format!("Auto ({recommended})"),
+                                };
+                                egui::ComboBox::from_id_salt("settings_convert_container")
+                                    .selected_text(&selected_label)
+                                    .show_ui(ui, |ui| {
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_container,
+                                                "auto".to_owned(),
+                                                format!("Auto ({recommended})"),
+                                            )
+                                            .changed();
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_container,
+                                                "source".to_owned(),
+                                                "Source (keep original)",
+                                            )
+                                            .changed();
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_container,
+                                                "mkv".to_owned(),
+                                                "MKV",
+                                            )
+                                            .changed();
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_container,
+                                                "mp4".to_owned(),
+                                                "MP4",
+                                            )
+                                            .changed();
+                                        changed |= ui
+                                            .selectable_value(
+                                                &mut self.settings.convert_container,
+                                                "webm".to_owned(),
+                                                "WebM",
+                                            )
+                                            .changed();
+                                    });
+                            }
                             ui.end_row();
                             ui.label("Target bitrate");
                             changed |= ui

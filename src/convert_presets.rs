@@ -25,7 +25,7 @@ pub struct ConvertPresetFields {
     pub convert_dry_run: bool,
     pub convert_overwrite: bool,
     pub convert_reencode_target: bool,
-    pub convert_use_recommended_container: bool,
+    pub convert_container: String,
     pub convert_delete_original: bool,
     pub convert_rename_original: bool,
     pub convert_output_dir: String,
@@ -57,7 +57,7 @@ impl Default for ConvertPresetFields {
             convert_dry_run: false,
             convert_overwrite: false,
             convert_reencode_target: false,
-            convert_use_recommended_container: true,
+            convert_container: "auto".to_owned(),
             convert_delete_original: false,
             convert_rename_original: false,
             convert_output_dir: String::new(),
@@ -121,7 +121,7 @@ impl ConvertPresetFields {
             convert_dry_run: settings.convert_dry_run,
             convert_overwrite: settings.convert_overwrite,
             convert_reencode_target: settings.convert_reencode_target,
-            convert_use_recommended_container: settings.convert_use_recommended_container,
+            convert_container: settings.convert_container.clone(),
             convert_delete_original: settings.convert_delete_original,
             convert_rename_original: settings.convert_rename_original,
             convert_output_dir: settings.convert_output_dir.clone(),
@@ -152,7 +152,7 @@ impl ConvertPresetFields {
         settings.convert_dry_run = self.convert_dry_run;
         settings.convert_overwrite = self.convert_overwrite;
         settings.convert_reencode_target = self.convert_reencode_target;
-        settings.convert_use_recommended_container = self.convert_use_recommended_container;
+        settings.convert_container = self.convert_container.clone();
         settings.convert_delete_original = self.convert_delete_original;
         settings.convert_rename_original = self.convert_rename_original;
         settings.convert_output_dir = self.convert_output_dir.clone();
