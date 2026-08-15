@@ -8,6 +8,7 @@ use crate::app_ui::{
     patch_resizable_panel_state_height, show_mode_panel, url_input_height, with_full_width,
     BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG,
     LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    VIDEOS_DOCKED_HEIGHT_RATIO,
 };
 use crate::service::DownloadCore;
 impl eframe::App for PydlApp {
@@ -234,9 +235,12 @@ impl eframe::App for PydlApp {
                 };
                 let scroll_min = main_body_scroll_min(viewport_h);
                 let scroll_h = if videos_docked {
-                    // Leave room for the queue; shrink to Converter/Downloader content height.
+                    // Cap the controls column so the queue keeps a real share of leftover height.
                     let avail = finite_ui_span(ui.available_height(), scroll_min);
-                    (avail - queue_min).max(80.0).min(avail)
+                    let queue_share = (avail * VIDEOS_DOCKED_HEIGHT_RATIO)
+                        .max(queue_min)
+                        .min((avail - 80.0).max(queue_min));
+                    (avail - queue_share).max(80.0).min(avail)
                 } else {
                     bounded_ui_height(ui, scroll_min).max(scroll_min)
                 };

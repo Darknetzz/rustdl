@@ -966,6 +966,11 @@ pub fn show_mode_panel<R>(
                 ret
             };
             if fill_height {
+                let h = finite_ui_span(ui.max_rect().height(), 0.0);
+                if h > 1.0 && h < MAX_REASONABLE_UI_SPAN {
+                    ui.set_min_height(h);
+                    ui.set_max_height(h);
+                }
                 with_full_panel(ui, draw)
             } else {
                 with_full_width(ui, draw)
@@ -1121,6 +1126,7 @@ pub fn pin_allocated_rect(ui: &mut egui::Ui) -> egui::Vec2 {
     let h = finite_ui_span(r.height(), 1.0).max(1.0);
     ui.set_max_width(w);
     if h < MAX_REASONABLE_UI_SPAN {
+        ui.set_min_height(h);
         ui.set_max_height(h);
     }
     egui::vec2(w, h)
@@ -1808,32 +1814,6 @@ pub fn queue_list_height_from_layout(
 /// or a short Videos dock will collapse the queue list.
 pub fn docked_log_lines_max_h(remaining_h: f32) -> f32 {
     (remaining_h - DOCKED_LOG_CHROME_H).clamp(0.0, 480.0)
-}
-
-/// Fixed-height region laid out from the bottom (sticky footer) so leftover space is above.
-///
-/// Callers should draw the footer (and optional log) first, then a nested top-down
-/// list using `available_height()` for the leftover space above the footer.
-pub fn with_sticky_bottom_fill<R>(
-    ui: &mut egui::Ui,
-    size: egui::Vec2,
-    add: impl FnOnce(&mut egui::Ui) -> R,
-) -> R {
-    let size = egui::vec2(
-        finite_ui_span(size.x, 1.0).max(1.0),
-        finite_ui_span(size.y, 1.0).max(1.0),
-    );
-    allocate_top_down_rect(ui, size, |ui| {
-        pin_allocated_rect(ui);
-        ui.set_min_height(size.y);
-        ui.set_max_height(size.y);
-        let width = clip_bounded_width(ui);
-        ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-            ui.set_max_width(width);
-            add(ui)
-        })
-        .inner
-    })
 }
 
 /// Allocate a fixed-height region anchored to `body_bottom` (bottom-up layout).
