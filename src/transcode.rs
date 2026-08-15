@@ -1511,7 +1511,11 @@ mod tests {
             overwrite: false,
             reencode_target: false,
             target_codec: target_codec.to_owned(),
-            container: if recommended { "auto".to_owned() } else { "source".to_owned() },
+            container: if recommended {
+                "auto".to_owned()
+            } else {
+                "source".to_owned()
+            },
             target_bitrate: String::new(),
             max_width: 1920,
             size_preset: "balanced".to_owned(),

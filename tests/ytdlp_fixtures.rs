@@ -32,7 +32,7 @@ fn download_args_fixture_best_quality() {
     let settings = AppSettings::default();
     let quality = quality_format_args(&settings);
     assert_eq!(quality[0], "-f");
-    assert!(quality[1].contains("bestvideo"));
+    assert_eq!(quality[1], "bestvideo*+bestaudio/best");
 
     let args = build_download_extra_args(&settings);
     assert!(args.windows(2).any(|w| w[0] == "-f"));

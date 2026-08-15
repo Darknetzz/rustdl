@@ -9,7 +9,7 @@ use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
-use crate::ytdlp_download_args::with_fallback_format_args;
+use crate::ytdlp_download_args::{with_fallback_format_args, FALLBACK_FORMAT_SELECTOR};
 use crate::ytdlp_errors::{is_format_unavailable_error, is_transient_download_error};
 
 type DownloadJob = (u64, String, Arc<AtomicBool>, Vec<String>, String);
@@ -397,8 +397,9 @@ pub(crate) fn spawn_download_worker(
                             &bus,
                             UiEvent::DownloadLine {
                                 item_id,
-                                line: "Requested format not available; retrying with -f best."
-                                    .to_owned(),
+                                line: format!(
+                                    "Requested format not available; retrying with -f {FALLBACK_FORMAT_SELECTOR}."
+                                ),
                             },
                         );
                         match download_with_transient_retries(
@@ -423,8 +424,9 @@ pub(crate) fn spawn_download_worker(
                                     UiEvent::DownloadDone {
                                         item_id,
                                         ok: true,
-                                        detail: "Completed (used -f best after format error)."
-                                            .to_owned(),
+                                        detail: format!(
+                                            "Completed (used -f {FALLBACK_FORMAT_SELECTOR} after format error)."
+                                        ),
                                     },
                                 );
                                 continue;

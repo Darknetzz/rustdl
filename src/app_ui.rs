@@ -2919,7 +2919,10 @@ mod tests {
         assert_eq!(queue_dl_list_row_height("Ready"), QUEUE_DL_LIST_ROW_H);
         assert_eq!(queue_dl_list_row_height("Done"), QUEUE_DL_LIST_ROW_H);
         assert_eq!(queue_dl_list_row_height("Active"), QUEUE_DL_LIST_ROW_H);
-        assert_eq!(queue_dl_list_row_height("Issues"), QUEUE_DL_LIST_ROW_ISSUES_H);
+        assert_eq!(
+            queue_dl_list_row_height("Issues"),
+            QUEUE_DL_LIST_ROW_ISSUES_H
+        );
         assert!(QUEUE_DL_LIST_ROW_ISSUES_H > QUEUE_DL_LIST_ROW_H);
     }
 

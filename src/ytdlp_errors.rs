@@ -54,6 +54,15 @@ pub fn download_failure_user_hint(err: &str) -> Option<&'static str> {
              and add cookies in Settings if login is required.",
         );
     }
+    if msg.contains("skipping format")
+        || msg.contains("unsupported url format")
+        || msg.contains("no video formats found")
+        || msg.contains("no formats found")
+    {
+        return Some(
+            "yt-dlp found no usable formats for this page. Update yt-dlp, confirm ffmpeg is set in Settings, and add cookies if the site requires login.",
+        );
+    }
     if msg.contains("no suitable extractors") || msg.contains("unsupported url") {
         return Some("This URL is not supported by yt-dlp. Verify the link and update yt-dlp.");
     }
@@ -65,7 +74,7 @@ pub fn download_failure_user_hint(err: &str) -> Option<&'static str> {
     }
     if is_format_unavailable_error(err) {
         return Some(
-            "Selected quality/format is not available. Retry the download or switch to Best quality in Settings.",
+            "Selected quality/format is not available. Update yt-dlp, confirm ffmpeg is set, and avoid a tight minimum height/FPS or custom -f.",
         );
     }
     None
@@ -112,5 +121,25 @@ mod tests {
         assert!(download_failure_user_hint(err)
             .unwrap()
             .contains("generic extractor"));
+    }
+
+    #[test]
+    fn extractor_skipped_formats_hint() {
+        let err = "WARNING: Skipping format \"h264-720p\": unsupported URL format\n\
+             ERROR: No video formats found!";
+        let hint = download_failure_user_hint(err).unwrap();
+        assert!(hint.contains("no usable formats"));
+        assert!(hint.contains("Update yt-dlp"));
+    }
+
+    #[test]
+    fn requested_format_unavailable_hint() {
+        let hint = download_failure_user_hint(
+            "ERROR: Requested format is not available. Use --list-formats for a list of available formats",
+        )
+        .unwrap();
+        assert!(hint.contains("Selected quality/format is not available"));
+        assert!(hint.contains("Update yt-dlp"));
+        assert!(!hint.contains("Best quality"));
     }
 }

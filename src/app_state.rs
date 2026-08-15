@@ -255,10 +255,7 @@ pub fn item_has_redownload_target(item: &QueueItem) -> bool {
 pub fn item_is_download_issue(item: &QueueItem) -> bool {
     item.status == ItemStatus::Failed
         || (item.status == ItemStatus::Idle
-            && item
-                .error
-                .as_deref()
-                .is_some_and(|e| !e.trim().is_empty()))
+            && item.error.as_deref().is_some_and(|e| !e.trim().is_empty()))
 }
 
 /// Whether the row can be re-queued for download (Issues + a usable URL).

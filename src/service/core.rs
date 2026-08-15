@@ -1883,7 +1883,9 @@ impl DownloadCore {
         let failed_no_url = self
             .items
             .iter()
-            .filter(|it| app_state::item_is_download_issue(it) && !self.item_has_redownload_target(it))
+            .filter(|it| {
+                app_state::item_is_download_issue(it) && !self.item_has_redownload_target(it)
+            })
             .count();
         let ids: Vec<u64> = self
             .items
@@ -1947,9 +1949,7 @@ impl DownloadCore {
         let targets: Vec<(u64, String)> = self
             .items
             .iter()
-            .filter(|it| {
-                app_state::item_is_download_issue(it) && !it.source_line.trim().is_empty()
-            })
+            .filter(|it| app_state::item_is_download_issue(it) && !it.source_line.trim().is_empty())
             .map(|it| (it.item_id, it.source_line.clone()))
             .collect();
         if targets.is_empty() {

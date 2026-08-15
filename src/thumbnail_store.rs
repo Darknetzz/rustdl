@@ -136,11 +136,7 @@ pub fn prune_downloader_thumbnails_at(base: &Path, active_item_ids: &HashSet<u64
     prune_thumbnails_at(base, active_item_ids, delete_downloader_thumbnail_at);
 }
 
-fn prune_thumbnails_at(
-    base: &Path,
-    active_item_ids: &HashSet<u64>,
-    delete: impl Fn(&Path, u64),
-) {
+fn prune_thumbnails_at(base: &Path, active_item_ids: &HashSet<u64>, delete: impl Fn(&Path, u64)) {
     let Ok(entries) = fs::read_dir(base) else {
         return;
     };
@@ -314,8 +310,8 @@ mod tests {
         )
         .expect("save");
         assert_eq!(rel, "thumbnails/convert/1000005.img");
-        let loaded =
-            load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv").expect("load");
+        let loaded = load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv")
+            .expect("load");
         assert_eq!(loaded.0.len(), 64);
         assert_eq!(loaded.1, "image/png");
         assert!(load_convert_thumbnail_at(dir.path(), 1_000_005, "other").is_none());
@@ -323,10 +319,14 @@ mod tests {
         let mut active = HashSet::new();
         active.insert(1_000_005);
         prune_convert_thumbnails_at(dir.path(), &active);
-        assert!(load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv").is_some());
+        assert!(
+            load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv").is_some()
+        );
 
         active.clear();
         prune_convert_thumbnails_at(dir.path(), &active);
-        assert!(load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv").is_none());
+        assert!(
+            load_convert_thumbnail_at(dir.path(), 1_000_005, "D:\\Videos\\movie.mkv").is_none()
+        );
     }
 }

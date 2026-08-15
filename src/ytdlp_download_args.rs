@@ -8,6 +8,9 @@ use crate::models::QueueItem;
 use crate::profiles::{find_profile, ProfileStore};
 use crate::ytdlp;
 
+/// Permissive `-f` used when the quality selector matches nothing (muxed HLS, video-only leftovers).
+pub const FALLBACK_FORMAT_SELECTOR: &str = "bestvideo*+bestaudio/bestvideo*/best*";
+
 /// Cookies and impersonation flags for `yt-dlp -J` when resolving URLs.
 pub fn metadata_extra_args(settings: &AppSettings) -> Vec<String> {
     let mut args = ytdlp::impersonate_args_from_setting(&settings.yt_dlp_impersonate);
@@ -61,8 +64,8 @@ pub fn apply_download_min_requirements(fmt: &str, min_height: u32, min_fps: u32)
 
 fn build_quality_format(max_height: Option<u32>, min_height: u32, min_fps: u32) -> String {
     let video = match max_height {
-        Some(h) => format!("bestvideo[height<={h}]"),
-        None => "bestvideo".to_owned(),
+        Some(h) => format!("bestvideo*[height<={h}]"),
+        None => "bestvideo*".to_owned(),
     };
     let combined = match max_height {
         Some(h) => format!("best[height<={h}]"),
@@ -251,13 +254,13 @@ pub fn build_download_extra_args_for_item(
     args
 }
 
-/// Drops `-f` / `--format` selectors and appends a permissive `-f best` fallback.
+/// Drops `-f` / `--format` selectors and appends a permissive muxed-HLS-friendly fallback.
 pub fn with_fallback_format_args(args: &[String]) -> Vec<String> {
     let mut out = args.to_vec();
     strip_cli_flag_pair(&mut out, "-f");
     strip_cli_flag_pair(&mut out, "--format");
     out.push("-f".to_owned());
-    out.push("best".to_owned());
+    out.push(FALLBACK_FORMAT_SELECTOR.to_owned());
     out
 }
 
@@ -358,6 +361,15 @@ mod tests {
     }
 
     #[test]
+    fn quality_preset_best_includes_muxed_video() {
+        let s = base_settings();
+        assert_eq!(
+            quality_format_args(&s),
+            vec!["-f".to_owned(), "bestvideo*+bestaudio/best".to_owned()]
+        );
+    }
+
+    #[test]
     fn quality_preset_1080p() {
         let mut s = base_settings();
         s.quality_preset = "1080p".to_owned();
@@ -365,7 +377,7 @@ mod tests {
             quality_format_args(&s),
             vec![
                 "-f".to_owned(),
-                "bestvideo[height<=1080]+bestaudio/best[height<=1080]".to_owned()
+                "bestvideo*[height<=1080]+bestaudio/best[height<=1080]".to_owned()
             ]
         );
     }
@@ -380,7 +392,7 @@ mod tests {
             quality_format_args(&s),
             vec![
                 "-f".to_owned(),
-                "bestvideo[height<=1080][height>=720][fps>=30]+bestaudio/best[height<=1080][height>=720][fps>=30]"
+                "bestvideo*[height<=1080][height>=720][fps>=30]+bestaudio/best[height<=1080][height>=720][fps>=30]"
                     .to_owned()
             ]
         );
@@ -390,13 +402,13 @@ mod tests {
     fn quality_preset_custom_with_min_requirements() {
         let mut s = base_settings();
         s.quality_preset = "custom".to_owned();
-        s.quality_format_custom = "bestvideo+bestaudio/best".to_owned();
+        s.quality_format_custom = "bestvideo*+bestaudio/best".to_owned();
         s.download_min_height = 1080;
         assert_eq!(
             quality_format_args(&s),
             vec![
                 "-f".to_owned(),
-                "bestvideo[height>=1080]+bestaudio/best[height>=1080]".to_owned()
+                "bestvideo*[height>=1080]+bestaudio/best[height>=1080]".to_owned()
             ]
         );
     }
@@ -460,17 +472,17 @@ mod tests {
     fn with_fallback_format_args_replaces_selector() {
         let args = vec![
             "-f".to_owned(),
-            "bestvideo+bestaudio/best".to_owned(),
+            "bestvideo*+bestaudio/best".to_owned(),
             "--continue".to_owned(),
         ];
         let fallback = with_fallback_format_args(&args);
-        assert!(!fallback.contains(&"bestvideo+bestaudio/best".to_owned()));
+        assert!(!fallback.contains(&"bestvideo*+bestaudio/best".to_owned()));
         assert_eq!(
             fallback
                 .windows(2)
                 .find(|w| w[0] == "-f")
                 .map(|w| w[1].as_str()),
-            Some("best")
+            Some(FALLBACK_FORMAT_SELECTOR)
         );
     }
 

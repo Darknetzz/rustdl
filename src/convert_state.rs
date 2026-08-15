@@ -466,9 +466,15 @@ mod tests {
             video_codec: "av1".to_owned(),
             ..Default::default()
         };
-        assert!(convert_item_will_skip_already_target(&item, false, "av1", 1920));
-        assert!(!convert_item_will_skip_already_target(&item, true, "av1", 1920));
-        assert!(!convert_item_will_skip_already_target(&item, false, "hevc", 1920));
+        assert!(convert_item_will_skip_already_target(
+            &item, false, "av1", 1920
+        ));
+        assert!(!convert_item_will_skip_already_target(
+            &item, true, "av1", 1920
+        ));
+        assert!(!convert_item_will_skip_already_target(
+            &item, false, "hevc", 1920
+        ));
 
         let wide_item = ConvertQueueItem {
             status: ItemStatus::Idle,

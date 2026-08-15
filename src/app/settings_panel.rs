@@ -1415,7 +1415,7 @@ impl PydlApp {
                                         egui::TextEdit::singleline(
                                             &mut self.settings.quality_format_custom,
                                         )
-                                        .hint_text("bestvideo+bestaudio/best"),
+                                        .hint_text("bestvideo*+bestaudio/best"),
                                     )
                                     .changed();
                                 ui.end_row();
