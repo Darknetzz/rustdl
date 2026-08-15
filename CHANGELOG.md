@@ -20,6 +20,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 ### Fixed
 
 - Downloads that fail with **Requested format is not available** retry with a looser yt-dlp `-f` (including muxed HLS and video-only streams) instead of only `-f best`; quality presets now match yt-dlp’s `bestvideo*` default.
+- Downloads that fail because yt-dlp used the **generic extractor** (unable to extract flashvars) retry once with `--impersonate chrome` when browser impersonation was not already set.
 - Video Converter now finishes files that play fine but have damaged mid-stream packets (discard corrupt packets; if audio re-encode fails, automatically retry with audio copy).
 - Convert queue rows no longer overlap each other in list layout (virtualized slots clip to their row height; row height matches full convert card content).
 - Docked **Videos / Convert queue** sits directly under the Converter/Downloader controls and fills the remaining window height (no empty gap above a fixed bottom dock).

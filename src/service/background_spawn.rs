@@ -9,8 +9,12 @@ use crate::models::VideoPreview;
 use crate::pkg_version;
 use crate::transcode::{self, ConvertConfig, ConvertInput};
 use crate::ytdlp;
-use crate::ytdlp_download_args::{with_fallback_format_args, FALLBACK_FORMAT_SELECTOR};
-use crate::ytdlp_errors::{is_format_unavailable_error, is_transient_download_error};
+use crate::ytdlp_download_args::{
+    with_fallback_format_args, with_impersonate_if_missing, FALLBACK_FORMAT_SELECTOR,
+};
+use crate::ytdlp_errors::{
+    is_format_unavailable_error, is_generic_extractor_error, is_transient_download_error,
+};
 
 type DownloadJob = (u64, String, Arc<AtomicBool>, Vec<String>, String);
 
@@ -432,6 +436,52 @@ pub(crate) fn spawn_download_worker(
                                 continue;
                             }
                             Err(retry_e) => err_text = retry_e,
+                        }
+                    }
+
+                    if is_generic_extractor_error(&err_text) {
+                        if let Some(retry_args) = with_impersonate_if_missing(&active_args) {
+                            try_send_ui(
+                                &bus,
+                                UiEvent::DownloadLine {
+                                    item_id,
+                                    line: "Generic extractor failed; retrying with --impersonate chrome."
+                                        .to_owned(),
+                                },
+                            );
+                            match download_with_transient_retries(
+                                item_id,
+                                &target_url,
+                                &output_dir,
+                                &output_filename_template,
+                                &retry_args,
+                                &yt_bin,
+                                &ffmpeg_path,
+                                &subprocess_priority,
+                                cancel_flag.clone(),
+                                &bus,
+                                download_auto_retries,
+                                retry_sleep_secs,
+                            )
+                            .await
+                            {
+                                Ok(()) => {
+                                    try_send_ui(
+                                        &bus,
+                                        UiEvent::DownloadDone {
+                                            item_id,
+                                            ok: true,
+                                            detail: "Completed (used --impersonate chrome after generic extractor error)."
+                                                .to_owned(),
+                                        },
+                                    );
+                                    continue;
+                                }
+                                Err(retry_e) => {
+                                    err_text = retry_e;
+                                    active_args = retry_args;
+                                }
+                            }
                         }
                     }
 

@@ -264,6 +264,19 @@ pub fn with_fallback_format_args(args: &[String]) -> Vec<String> {
     out
 }
 
+const DEFAULT_IMPERSONATE_RETRY: &str = "chrome";
+
+/// Adds `--impersonate chrome` when the download did not already impersonate a browser.
+pub fn with_impersonate_if_missing(args: &[String]) -> Option<Vec<String>> {
+    if args.iter().any(|a| a.eq_ignore_ascii_case("--impersonate")) {
+        return None;
+    }
+    let mut out = args.to_vec();
+    out.push("--impersonate".to_owned());
+    out.push(DEFAULT_IMPERSONATE_RETRY.to_owned());
+    Some(out)
+}
+
 /// Args for re-downloading: bypass archive skip and replace an existing output file.
 pub fn build_redownload_extra_args(settings: &AppSettings) -> Vec<String> {
     let mut args = build_download_extra_args(settings);
@@ -484,6 +497,25 @@ mod tests {
                 .map(|w| w[1].as_str()),
             Some(FALLBACK_FORMAT_SELECTOR)
         );
+    }
+
+    #[test]
+    fn with_impersonate_if_missing_adds_chrome() {
+        let args = vec!["--continue".to_owned()];
+        let extra = with_impersonate_if_missing(&args).expect("impersonate");
+        assert_eq!(
+            extra
+                .windows(2)
+                .find(|w| w[0] == "--impersonate")
+                .map(|w| w[1].as_str()),
+            Some("chrome")
+        );
+    }
+
+    #[test]
+    fn with_impersonate_if_missing_skips_when_set() {
+        let args = vec!["--impersonate".to_owned(), "firefox".to_owned()];
+        assert!(with_impersonate_if_missing(&args).is_none());
     }
 
     #[test]

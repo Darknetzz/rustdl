@@ -42,12 +42,17 @@ pub fn is_format_unavailable_error(err: &str) -> bool {
         || msg.contains("no formats found")
 }
 
+/// Returns true when yt-dlp fell through to the generic extractor and could not parse the page.
+pub fn is_generic_extractor_error(err: &str) -> bool {
+    let msg = err.to_ascii_lowercase();
+    msg.contains("unable to extract flashvars")
+        || (msg.contains("[generic]") && msg.contains("unable to extract"))
+}
+
 /// Short, actionable hint for common yt-dlp failures (shown on the queue row).
 pub fn download_failure_user_hint(err: &str) -> Option<&'static str> {
     let msg = err.to_ascii_lowercase();
-    if msg.contains("unable to extract flashvars")
-        || (msg.contains("[generic]") && msg.contains("unable to extract"))
-    {
+    if is_generic_extractor_error(err) {
         return Some(
             "yt-dlp used the generic extractor and could not read this page. \
              Use the site’s watch-page URL (not a redirect/embed), update yt-dlp, \
@@ -117,6 +122,7 @@ mod tests {
     fn generic_flashvars_hint() {
         let err =
             "ERROR: [generic] Unable to extract flashvars; please report this issue on GitHub";
+        assert!(is_generic_extractor_error(err));
         assert!(download_failure_user_hint(err).is_some());
         assert!(download_failure_user_hint(err)
             .unwrap()
