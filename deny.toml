@@ -15,6 +15,7 @@ allow = [
     "ISC",
     "Zlib",
     "CC0-1.0",
+    "Unlicense",
     "BSL-1.0",
     "MPL-2.0",
     "Unicode-3.0",

@@ -98,7 +98,7 @@ Before a PR, run the local CI script (GitHub Actions workflows are manual-only t
 
 Includes `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`. Pass `-SkipDeny` / `-SkipAudit` (or `--skip-deny` / `--skip-audit`) to skip the optional tools.
 
-MSRV: **Rust 1.76+** (`rust-version` in `Cargo.toml`).
+MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 
 ## Repository layout
 

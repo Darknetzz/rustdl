@@ -10,6 +10,11 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Security
+
+- Updated locked **quinn-proto** to 0.11.15+ (GHSA-4w2j-m93h-cj5j / remote memory exhaustion in QUIC stream reassembly). rustdl does not enable HTTP/3; the crate was pulled in as an unused optional dependency of reqwest.
+- Linux system tray no longer pulls unmaintained **atty** (Dependabot / RUSTSEC-2021-0145); StatusNotifierItem now uses ksni 0.3 (zbus) instead of ksni 0.2 / libdbus codegen.
+
 ### Added
 
 - **Retry all failed** and **Retry selected** for Video Converter jobs (desktop + LAN web UI + command palette): reset failed encodes to ready so you can start the batch again without re-adding files.

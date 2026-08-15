@@ -2,7 +2,7 @@
 name = "rustdl"
 version = "0.13.0"
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.80"
 description = "Desktop GUI for yt-dlp (egui)"
 license = "MIT"
 readme = "README.md"
@@ -67,7 +67,9 @@ windows-sys = { version = "0.52", features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-ksni = "0.2"
+# 0.3 uses zbus (no libdbus / atty). async-io matches notify-rust's zbus runtime
+# (default tokio feature can panic when mixed with notify-rust).
+ksni = { version = "0.3", default-features = false, features = ["blocking", "async-io"] }
 # Match eframe's winit; used to force X11 when Wayland maps an invisible window (GNOME/Zorin).
 winit = "0.30"
 

@@ -22,7 +22,7 @@ pub struct SystemTray {
     #[cfg(windows)]
     _icon: tray_icon::TrayIcon,
     #[cfg(target_os = "linux")]
-    _handle: ksni::Handle<LinuxTray>,
+    _handle: ksni::blocking::Handle<LinuxTray>,
 }
 
 impl SystemTray {
@@ -170,17 +170,15 @@ impl ksni::Tray for LinuxTray {
 
 #[cfg(target_os = "linux")]
 fn build_tray() -> Result<SystemTray, String> {
-    static LINUX_TRAY: OnceCell<()> = OnceCell::new();
+    use ksni::blocking::TrayMethods;
     let (action_tx, action_rx) = crossbeam_channel::unbounded();
     let _ = TRAY_ACTION_RX.set(action_rx);
-    let service = ksni::TrayService::new(LinuxTray {
+    let handle = LinuxTray {
         icon: crate::app_icon::ksni_tray_icon(),
         action_tx,
-    });
-    let handle = service.handle();
-    LINUX_TRAY.get_or_init(|| {
-        service.spawn();
-    });
+    }
+    .spawn()
+    .map_err(|e| e.to_string())?;
     Ok(SystemTray { _handle: handle })
 }
 
