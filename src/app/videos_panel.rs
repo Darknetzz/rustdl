@@ -12,9 +12,9 @@ use crate::app_ui::{
     note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
     queue_footer_reserve, queue_list_height_from_layout, queue_list_min_scroll_h,
     queue_log_block_height, queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
-    show_persisted_resizable_window, status_color, sticky_fill_list_height, with_full_width,
-    with_sticky_bottom_fill, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    show_persisted_resizable_window, status_color, with_full_width, with_sticky_bottom_fill,
+    PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
+    UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -633,9 +633,17 @@ impl PydlApp {
                 d.insert_temp(queue_footer_height_id(scroll_id), footer_measured);
             });
             ui.add_space(2.0);
+            let list_h = {
+                let avail = ui.available_height();
+                let to_top = if ui.cursor().min.y.is_finite() && ui.max_rect().top().is_finite() {
+                    (ui.cursor().min.y - ui.max_rect().top()).max(0.0)
+                } else {
+                    0.0
+                };
+                finite_ui_span(avail.max(to_top), 1.0).max(1.0)
+            };
             ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
                 ui.set_max_width(cw);
-                let list_h = sticky_fill_list_height(ui);
                 self.draw_queue_list_body(ui, list_h, scroll_id, docked, list_h);
             });
         });

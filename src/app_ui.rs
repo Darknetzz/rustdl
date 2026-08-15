@@ -1813,7 +1813,7 @@ pub fn docked_log_lines_max_h(remaining_h: f32) -> f32 {
 /// Fixed-height region laid out from the bottom (sticky footer) so leftover space is above.
 ///
 /// Callers should draw the footer (and optional log) first, then a nested top-down
-/// region for the scrollable list using [`pin_allocated_rect`] + `max_rect().height()`.
+/// list using `available_height()` for the leftover space above the footer.
 pub fn with_sticky_bottom_fill<R>(
     ui: &mut egui::Ui,
     size: egui::Vec2,
@@ -1834,12 +1834,6 @@ pub fn with_sticky_bottom_fill<R>(
         })
         .inner
     })
-}
-
-/// Nested top-down region that fills leftover space above a sticky bottom stack.
-pub fn sticky_fill_list_height(ui: &mut egui::Ui) -> f32 {
-    pin_allocated_rect(ui);
-    finite_ui_span(ui.max_rect().height(), 1.0).max(1.0)
 }
 
 /// Allocate a fixed-height region anchored to `body_bottom` (bottom-up layout).
