@@ -10,6 +10,10 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Documentation
+
+- README Windows install no longer lists `winget install Darknetzz.rustdl` (the package is not in winget yet); download from GitHub Releases instead.
+
 ### Security
 
 - Updated locked **quinn-proto** to 0.11.15+ (GHSA-4w2j-m93h-cj5j / remote memory exhaustion in QUIC stream reassembly). rustdl does not enable HTTP/3; the crate was pulled in as an unused optional dependency of reqwest.

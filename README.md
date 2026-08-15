@@ -32,13 +32,13 @@ To refresh these images locally: `python scripts/capture_readme_screenshots.py` 
 
 ## Install (Windows)
 
+Download `rustdl.exe` from [GitHub Releases](https://github.com/Darknetzz/rustdl/releases).
+
+<!-- Not yet listed in microsoft/winget-pkgs — restore when the package is accepted.
 After a release is published, you can install with [winget](https://github.com/microsoft/winget-cli) using the manifest in [`packaging/winget/Darknetzz.rustdl.yaml`](packaging/winget/Darknetzz.rustdl.yaml):
 
-```powershell
-winget install Darknetzz.rustdl
-```
-
-Or download `rustdl.exe` from [GitHub Releases](https://github.com/Darknetzz/rustdl/releases).
+    winget install Darknetzz.rustdl
+-->
 
 ## Run
 
