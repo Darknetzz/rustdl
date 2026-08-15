@@ -1810,6 +1810,38 @@ pub fn docked_log_lines_max_h(remaining_h: f32) -> f32 {
     (remaining_h - DOCKED_LOG_CHROME_H).clamp(0.0, 480.0)
 }
 
+/// Fixed-height region laid out from the bottom (sticky footer) so leftover space is above.
+///
+/// Callers should draw the footer (and optional log) first, then a nested top-down
+/// region for the scrollable list using [`pin_allocated_rect`] + `max_rect().height()`.
+pub fn with_sticky_bottom_fill<R>(
+    ui: &mut egui::Ui,
+    size: egui::Vec2,
+    add: impl FnOnce(&mut egui::Ui) -> R,
+) -> R {
+    let size = egui::vec2(
+        finite_ui_span(size.x, 1.0).max(1.0),
+        finite_ui_span(size.y, 1.0).max(1.0),
+    );
+    allocate_top_down_rect(ui, size, |ui| {
+        pin_allocated_rect(ui);
+        ui.set_min_height(size.y);
+        ui.set_max_height(size.y);
+        let width = clip_bounded_width(ui);
+        ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+            ui.set_max_width(width);
+            add(ui)
+        })
+        .inner
+    })
+}
+
+/// Nested top-down region that fills leftover space above a sticky bottom stack.
+pub fn sticky_fill_list_height(ui: &mut egui::Ui) -> f32 {
+    pin_allocated_rect(ui);
+    finite_ui_span(ui.max_rect().height(), 1.0).max(1.0)
+}
+
 /// Allocate a fixed-height region anchored to `body_bottom` (bottom-up layout).
 pub fn allocate_bottom_up_rect<R>(
     ui: &mut egui::Ui,
@@ -2055,6 +2087,7 @@ pub fn with_full_panel<R>(ui: &mut egui::Ui, add_contents: impl FnOnce(&mut egui
             ui.set_max_width(width);
             if fixed_h {
                 ui.set_min_height(parent_h);
+                ui.set_max_height(parent_h);
             }
             add_contents(ui)
         },
