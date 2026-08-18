@@ -21,6 +21,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
+- Video Converter queue rows show each file’s **current video codec** (H.264, H.265, AV1, …), including compact list layout (desktop + LAN web UI).
 - **Retry all failed** and **Retry selected** for Video Converter jobs (desktop + LAN web UI + command palette): reset failed encodes to ready so you can start the batch again without re-adding files.
 - **Ctrl+V** / **Cmd+V** pastes into the URL input (Downloader) or path input (Converter) even when that field is not focused, unless another text field or dialog already has keyboard focus.
 - **Refetch all failed** button next to **Retry all failed** on the download queue (desktop + LAN web UI + command palette): re-runs yt-dlp metadata resolution for every failed row that still has a source URL, for failures caused by stale metadata rather than the download itself.

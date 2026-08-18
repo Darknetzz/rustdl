@@ -102,6 +102,14 @@ fn convert_item_has_media(item: &ConvertQueueItem) -> bool {
         || item.bitrate_bps.is_some()
 }
 
+fn convert_source_codec_label(item: &ConvertQueueItem) -> Option<String> {
+    if item.video_codec.is_empty() {
+        None
+    } else {
+        Some(transcode::display_video_codec_label(&item.video_codec))
+    }
+}
+
 fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings, theme: &str) {
     let muted = text_muted(theme);
     let target = crate::transcode::target_codec_label(&settings.convert_target_codec);
@@ -322,10 +330,11 @@ fn draw_convert_media_badges(
         );
         return;
     }
+    let muted = text_muted(theme);
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(6.0, 4.0);
-        if !item.video_codec.is_empty() {
-            draw_meta_badge(ui, &item.video_codec.to_uppercase(), MetaBadgeKind::Codec);
+        if let Some(codec) = convert_source_codec_label(item) {
+            draw_labeled_meta_badge(ui, "Current:", &codec, MetaBadgeKind::Codec, muted);
         }
         if let (Some(w), Some(h)) = (item.width, item.height) {
             draw_meta_badge(ui, &format!("{w}x{h}"), MetaBadgeKind::Resolution);
@@ -1168,6 +1177,15 @@ impl PydlApp {
                                 false,
                             );
                             if compact {
+                                if let Some(codec) = convert_source_codec_label(it) {
+                                    draw_meta_badge(ui, &codec, MetaBadgeKind::Codec);
+                                } else if self.convert_media_inflight.contains(&it.item_id) {
+                                    ui.label(
+                                        RichText::new("Probing…")
+                                            .small()
+                                            .color(text_muted(&theme)),
+                                    );
+                                }
                                 let name = std::path::Path::new(&it.source_path)
                                     .file_name()
                                     .and_then(|s| s.to_str())

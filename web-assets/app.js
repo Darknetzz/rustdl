@@ -4342,6 +4342,33 @@ function appendMetaBadge(container, kind, text) {
   container.appendChild(b);
 }
 
+function displayVideoCodecLabel(codec) {
+  const raw = String(codec || "").trim();
+  if (!raw) return "";
+  const c = raw.toLowerCase().replace(/[.\- _]/g, "");
+  if (c === "h264" || c === "avc" || c === "avc1") return "H.264";
+  if (c === "hevc" || c === "h265" || c === "hev1" || c === "hvc1") return "H.265";
+  if (c === "av1" || c === "av01") return "AV1";
+  if (c === "vp9" || c === "vp09") return "VP9";
+  if (c === "vp8" || c === "vp08") return "VP8";
+  if (c === "mpeg4" || c === "mp4v") return "MPEG-4";
+  if (c === "mpeg2video" || c === "mpeg2") return "MPEG-2";
+  if (c === "mpeg1video" || c === "mpeg1") return "MPEG-1";
+  return raw.toUpperCase();
+}
+
+function appendLabeledMetaBadge(container, prefix, kind, text) {
+  if (!text) return;
+  const wrap = document.createElement("span");
+  wrap.className = "meta-badge-labeled";
+  const p = document.createElement("span");
+  p.className = "meta-badge-prefix";
+  p.textContent = prefix;
+  wrap.appendChild(p);
+  appendMetaBadge(wrap, kind, text);
+  container.appendChild(wrap);
+}
+
 function ConvertWillSkipNotice() {
   const el = document.createElement("p");
   el.className = "convert-will-skip-notice";
@@ -4356,7 +4383,9 @@ function ConvertMediaBadges(item) {
     appendMetaBadge(badges, "other", "Probing…");
     return badges;
   }
-  if (item.video_codec) appendMetaBadge(badges, "codec", String(item.video_codec).toUpperCase());
+  if (item.video_codec) {
+    appendLabeledMetaBadge(badges, "Current:", "codec", displayVideoCodecLabel(item.video_codec));
+  }
   if (item.width && item.height)
     appendMetaBadge(badges, "resolution", `${item.width}×${item.height}`);
   if (item.fps) appendMetaBadge(badges, "fps", `${Number(item.fps).toFixed(2)} fps`);

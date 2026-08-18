@@ -257,6 +257,26 @@ pub fn target_codec_label(target_codec: &str) -> &'static str {
     }
 }
 
+/// Human-readable label for a probed source codec (`h264` → `H.264`).
+pub fn display_video_codec_label(codec: &str) -> String {
+    let raw = codec.trim();
+    if raw.is_empty() {
+        return String::new();
+    }
+    let c = raw.to_ascii_lowercase().replace(['.', '-', ' ', '_'], "");
+    match c.as_str() {
+        "h264" | "avc" | "avc1" => "H.264".to_owned(),
+        "hevc" | "h265" | "hev1" | "hvc1" => "H.265".to_owned(),
+        "av1" | "av01" => "AV1".to_owned(),
+        "vp9" | "vp09" => "VP9".to_owned(),
+        "vp8" | "vp08" => "VP8".to_owned(),
+        "mpeg4" | "mp4v" => "MPEG-4".to_owned(),
+        "mpeg2video" | "mpeg2" => "MPEG-2".to_owned(),
+        "mpeg1video" | "mpeg1" => "MPEG-1".to_owned(),
+        _ => raw.to_ascii_uppercase(),
+    }
+}
+
 pub fn output_suffix_for_target(target_codec: &str) -> &'static str {
     match normalize_target_codec(target_codec) {
         "hevc" => "H265",
@@ -1798,5 +1818,16 @@ Invalid data found when processing input";
             Some("flac")
         );
         assert!(audio_extract_output_path(out, "none").is_none());
+    }
+
+    #[test]
+    fn display_video_codec_label_maps_common_ffprobe_names() {
+        assert_eq!(display_video_codec_label("h264"), "H.264");
+        assert_eq!(display_video_codec_label("avc1"), "H.264");
+        assert_eq!(display_video_codec_label("hevc"), "H.265");
+        assert_eq!(display_video_codec_label("av1"), "AV1");
+        assert_eq!(display_video_codec_label("vp9"), "VP9");
+        assert_eq!(display_video_codec_label("prores"), "PRORES");
+        assert_eq!(display_video_codec_label(""), "");
     }
 }
