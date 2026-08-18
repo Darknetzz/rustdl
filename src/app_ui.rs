@@ -1510,6 +1510,24 @@ pub fn queue_status_compact(list_h: f32, convert_mode: bool) -> bool {
     }
 }
 
+/// Compact vs full status row with hysteresis so hover cannot flip the chrome every frame.
+pub fn queue_status_compact_sticky(
+    list_h: f32,
+    convert_mode: bool,
+    was_compact: Option<bool>,
+) -> bool {
+    let enter = if convert_mode {
+        QUEUE_STATUS_COMPACT_CONVERT_THRESHOLD
+    } else {
+        QUEUE_STATUS_COMPACT_DL_THRESHOLD
+    };
+    match was_compact {
+        Some(true) => list_h < enter + LAYOUT_HEIGHT_DEADBAND,
+        Some(false) => list_h < enter,
+        None => queue_status_compact(list_h, convert_mode),
+    }
+}
+
 pub fn max_bottom_panel_height(viewport_h: f32) -> f32 {
     if !viewport_h.is_finite() || viewport_h < 1.0 {
         return BOTTOM_PANEL_MAX_H;
@@ -1657,10 +1675,10 @@ pub fn stabilize_layout_height(stored: Option<f32>, measured: f32, deadband: f32
     }
 }
 
-/// Footer toolbar reserve: prefer last frame's measured height when available.
+/// Footer toolbar reserve for list-height math.
 ///
-/// Falls back to the width/mode estimate only before the first measure so an inflated
-/// estimate does not leave empty space under the footer buttons.
+/// Uses the width/mode estimate so hover cannot move the footer. A measured height is
+/// applied only when it is clearly taller than the estimate (an extra wrapped row).
 pub fn queue_footer_reserve(
     content_width: f32,
     convert_mode: bool,
@@ -1670,8 +1688,8 @@ pub fn queue_footer_reserve(
 ) -> f32 {
     let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked, ui_scale) + 2.0;
     match measured_h.filter(|m| m.is_finite() && *m > 0.0) {
-        Some(m) => stabilize_layout_height(Some(est), m, LAYOUT_HEIGHT_DEADBAND),
-        None => est,
+        Some(m) if m > est + LAYOUT_HEIGHT_DEADBAND => m,
+        _ => est,
     }
 }
 
@@ -2915,7 +2933,33 @@ mod tests {
             queue_footer_reserve(800.0, false, true, Some(est + 40.0), 1.0),
             est + 40.0
         );
+        assert_eq!(
+            queue_footer_reserve(800.0, false, true, Some(est - 40.0), 1.0),
+            est
+        );
         assert_eq!(queue_footer_reserve(800.0, false, true, None, 1.0), est);
+    }
+
+    #[test]
+    fn queue_status_compact_sticky_does_not_flip_near_threshold() {
+        let enter = QUEUE_STATUS_COMPACT_DL_THRESHOLD;
+        assert!(queue_status_compact_sticky(enter - 1.0, false, Some(false)));
+        assert!(!queue_status_compact_sticky(
+            enter + 1.0,
+            false,
+            Some(false)
+        ));
+        // Stay compact until well above the enter threshold.
+        assert!(queue_status_compact_sticky(
+            enter + LAYOUT_HEIGHT_DEADBAND - 1.0,
+            false,
+            Some(true)
+        ));
+        assert!(!queue_status_compact_sticky(
+            enter + LAYOUT_HEIGHT_DEADBAND + 1.0,
+            false,
+            Some(true)
+        ));
     }
 
     #[test]
@@ -3072,4 +3116,7 @@ mod tests {
     fn apply_layout_preset_minimal_hides_thumbnails() {
         let mut s = crate::config::AppSettings::default();
         apply_layout_preset(&mut s, "minimal", Some(800.0));
-        assert!(!s.sho
+        assert!(!s.show_thumbnails);
+        assert!(s.videos_dock_height >= BOTTOM_PANEL_MIN_H);
+    }
+}

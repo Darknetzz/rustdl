@@ -11,10 +11,11 @@ use crate::app_ui::{
     fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
     note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
     queue_footer_reserve, queue_list_height_from_layout, queue_list_min_scroll_h,
-    queue_log_block_height, queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
-    show_persisted_resizable_window, stabilize_layout_height, status_color, with_full_width,
-    PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
-    LAYOUT_HEIGHT_DEADBAND, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    queue_log_block_height, queue_status_compact_sticky, queue_undocked_strip_reserve,
+    remaining_ui_height, show_mode_panel, show_persisted_resizable_window, stabilize_layout_height,
+    status_color, with_full_width, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H,
+    BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H, LAYOUT_HEIGHT_DEADBAND, UNDOCKED_FOOTER_PANEL_ID,
+    UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -49,8 +50,8 @@ fn queue_footer_height_id(scroll_id: &str) -> egui::Id {
     egui::Id::new("queue_footer_h").with(scroll_id)
 }
 
-fn queue_leftover_height_id(scroll_id: &str) -> egui::Id {
-    egui::Id::new("queue_leftover_h").with(scroll_id)
+fn queue_status_compact_id(scroll_id: &str) -> egui::Id {
+    egui::Id::new("queue_status_compact").with(scroll_id)
 }
 
 fn queue_undocked_strip_height_id() -> egui::Id {
@@ -569,7 +570,13 @@ impl PydlApp {
             footer_h,
             log_block_est,
         );
-        let status_compact = queue_status_compact(predicted_list_h, self.convert_mode);
+        let compact_id = queue_status_compact_id(layout.scroll_id);
+        let was_compact = ui.ctx().data(|d| d.get_temp::<bool>(compact_id));
+        let status_compact =
+            queue_status_compact_sticky(predicted_list_h, self.convert_mode, was_compact);
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(compact_id, status_compact);
+        });
 
         if self.convert_mode {
             if !self.convert_items.is_empty() {
@@ -591,18 +598,7 @@ impl PydlApp {
         }
 
         let content_top = ui.cursor().min.y;
-        let leftover_raw = height_to_bottom(ui, body_bottom).max(1.0);
-        let leftover_prev = ui
-            .ctx()
-            .data(|d| d.get_temp::<f32>(queue_leftover_height_id(layout.scroll_id)));
-        let leftover = stabilize_layout_height(
-            leftover_prev,
-            leftover_raw,
-            LAYOUT_HEIGHT_DEADBAND,
-        );
-        ui.ctx().data_mut(|d| {
-            d.insert_temp(queue_leftover_height_id(layout.scroll_id), leftover);
-        });
+        let leftover = remaining_ui_height(ui).max(1.0).floor();
         let (log_lines, log_block_est) = if layout.dock_log {
             queue_docked_under_videos_log_fit(
                 true,
@@ -625,18 +621,19 @@ impl PydlApp {
             self.constrain_panel_content(ui);
             self.draw_queue_list_body(ui, list_h, layout.scroll_id, layout.docked, list_h);
             ui.add_space(2.0);
+            ui.set_width(cw);
+            ui.set_max_width(cw);
             let footer_rect = ui
                 .scope(|ui| {
+                    ui.set_width(cw);
+                    ui.set_max_width(cw);
                     self.draw_videos_footer_toolbar(ui, layout.is_docked() || self.convert_mode);
                 })
                 .response
                 .rect;
             let footer_measured = footer_rect.height().max(0.0) + 2.0;
-            let footer_stable = stabilize_layout_height(
-                measured_footer,
-                footer_measured,
-                LAYOUT_HEIGHT_DEADBAND,
-            );
+            let footer_stable =
+                stabilize_layout_height(measured_footer, footer_measured, LAYOUT_HEIGHT_DEADBAND);
             ui.ctx().data_mut(|d| {
                 d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_stable);
             });
