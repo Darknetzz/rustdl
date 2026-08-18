@@ -11,10 +11,10 @@ use crate::app_ui::{
     fill_allocated_rect, finite_ui_span, height_to_bottom, left_button_row,
     note_resizable_panel_height, pin_allocated_rect, queue_docked_under_videos_log_fit,
     queue_footer_reserve, queue_list_height_from_layout, queue_list_min_scroll_h,
-    queue_log_block_height, queue_status_compact, queue_undocked_strip_reserve,
-    remaining_ui_height, show_mode_panel, show_persisted_resizable_window, status_color,
-    with_full_width, PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H,
-    DOCKED_LOG_HEADING_H, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    queue_log_block_height, queue_status_compact, queue_undocked_strip_reserve, show_mode_panel,
+    show_persisted_resizable_window, stabilize_layout_height, status_color, with_full_width,
+    PersistedFloatWindowParams, BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, DOCKED_LOG_HEADING_H,
+    LAYOUT_HEIGHT_DEADBAND, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
 };
 use crate::models::ItemStatus;
 use crate::theme::{BG_CANVAS, BORDER_PANEL, TEXT_MUTED};
@@ -47,6 +47,10 @@ const QUEUE_MODE_PANEL_MARGIN: egui::Margin = egui::Margin {
 
 fn queue_footer_height_id(scroll_id: &str) -> egui::Id {
     egui::Id::new("queue_footer_h").with(scroll_id)
+}
+
+fn queue_leftover_height_id(scroll_id: &str) -> egui::Id {
+    egui::Id::new("queue_leftover_h").with(scroll_id)
 }
 
 fn queue_undocked_strip_height_id() -> egui::Id {
@@ -525,24 +529,10 @@ impl PydlApp {
     fn draw_videos_queue_body(&mut self, ui: &mut egui::Ui, layout: VideosQueueLayout<'_>) {
         self.constrain_panel_content(ui);
         ui.spacing_mut().item_spacing.y = 3.0;
-        let body_bottom = {
-            let captured = layout.body_bottom.filter(|y| y.is_finite());
-            let max_b = ui.max_rect().bottom();
-            let clip_b = ui.clip_rect().bottom();
-            let allocated = if max_b.is_finite() && clip_b.is_finite() {
-                max_b.min(clip_b)
-            } else if max_b.is_finite() {
-                max_b
-            } else {
-                clip_b
-            };
-            // Prefer the allocated panel bottom when it extends below a stale capture.
-            match captured {
-                Some(y) if allocated.is_finite() => y.max(allocated),
-                Some(y) => y,
-                None => allocated,
-            }
-        };
+        let body_bottom = layout
+            .body_bottom
+            .filter(|y| y.is_finite())
+            .unwrap_or_else(|| ui.max_rect().bottom());
 
         self.draw_queue_search_row(ui);
 
@@ -601,9 +591,18 @@ impl PydlApp {
         }
 
         let content_top = ui.cursor().min.y;
-        let leftover = remaining_ui_height(ui)
-            .max(height_to_bottom(ui, body_bottom))
-            .max(1.0);
+        let leftover_raw = height_to_bottom(ui, body_bottom).max(1.0);
+        let leftover_prev = ui
+            .ctx()
+            .data(|d| d.get_temp::<f32>(queue_leftover_height_id(layout.scroll_id)));
+        let leftover = stabilize_layout_height(
+            leftover_prev,
+            leftover_raw,
+            LAYOUT_HEIGHT_DEADBAND,
+        );
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(queue_leftover_height_id(layout.scroll_id), leftover);
+        });
         let (log_lines, log_block_est) = if layout.dock_log {
             queue_docked_under_videos_log_fit(
                 true,
@@ -633,8 +632,13 @@ impl PydlApp {
                 .response
                 .rect;
             let footer_measured = footer_rect.height().max(0.0) + 2.0;
+            let footer_stable = stabilize_layout_height(
+                measured_footer,
+                footer_measured,
+                LAYOUT_HEIGHT_DEADBAND,
+            );
             ui.ctx().data_mut(|d| {
-                d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_measured);
+                d.insert_temp(queue_footer_height_id(layout.scroll_id), footer_stable);
             });
             if show_dock_log {
                 ui.add_space(6.0);

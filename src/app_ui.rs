@@ -1643,6 +1643,20 @@ pub fn queue_footer_toolbar_reserve(
     base + convert_extra + docked_extra
 }
 
+/// Ignore sub-row hover/wrap jitter when persisting a measured footer height.
+pub const LAYOUT_HEIGHT_DEADBAND: f32 = 16.0;
+
+/// Keep the last layout height unless `measured` moved by at least `deadband` (hover jitter).
+pub fn stabilize_layout_height(stored: Option<f32>, measured: f32, deadband: f32) -> f32 {
+    if !measured.is_finite() || measured <= 0.0 {
+        return stored.filter(|s| s.is_finite() && *s > 0.0).unwrap_or(0.0);
+    }
+    match stored.filter(|s| s.is_finite() && *s > 0.0) {
+        Some(prev) if (measured - prev).abs() < deadband.max(0.0) => prev,
+        _ => measured,
+    }
+}
+
 /// Footer toolbar reserve: prefer last frame's measured height when available.
 ///
 /// Falls back to the width/mode estimate only before the first measure so an inflated
@@ -1655,9 +1669,10 @@ pub fn queue_footer_reserve(
     ui_scale: f32,
 ) -> f32 {
     let est = queue_footer_toolbar_reserve(content_width, convert_mode, docked, ui_scale) + 2.0;
-    measured_h
-        .filter(|m| m.is_finite() && *m > 0.0)
-        .unwrap_or(est)
+    match measured_h.filter(|m| m.is_finite() && *m > 0.0) {
+        Some(m) => stabilize_layout_height(Some(est), m, LAYOUT_HEIGHT_DEADBAND),
+        None => est,
+    }
 }
 
 /// Undocked videos strip reserve (compact strip in main footer when queue is floating).
@@ -2884,31 +2899,39 @@ mod tests {
     }
 
     #[test]
-    fn queue_footer_reserve_prefers_measured() {
+    fn queue_footer_reserve_ignores_hover_jitter() {
         let est = queue_footer_reserve(800.0, false, true, None, 1.0);
-        let raised = queue_footer_reserve(800.0, false, true, Some(140.0), 1.0);
-        assert!(raised >= est);
-        assert_eq!(raised, 140.0);
-        // Trust measured even when below the width estimate (avoids under-footer void).
+        // Hover-sized shrink/grow must not change list reserve.
         assert_eq!(
-            queue_footer_reserve(800.0, false, true, Some(50.0), 1.0),
-            50.0
+            queue_footer_reserve(800.0, false, true, Some(est - 8.0), 1.0),
+            est
+        );
+        assert_eq!(
+            queue_footer_reserve(800.0, false, true, Some(est + 8.0), 1.0),
+            est
+        );
+        // A real extra wrapped row is taller than the deadband.
+        assert_eq!(
+            queue_footer_reserve(800.0, false, true, Some(est + 40.0), 1.0),
+            est + 40.0
         );
         assert_eq!(queue_footer_reserve(800.0, false, true, None, 1.0), est);
     }
 
     #[test]
-    fn queue_list_height_recovers_when_measured_footer_below_estimate() {
-        let content_top = 100.0;
-        let body_bottom = 500.0;
-        let est = queue_footer_reserve(800.0, false, true, None, 1.0);
-        let measured = 50.0;
-        assert!(measured < est);
-        let old_list =
-            queue_list_height_from_layout(content_top, body_bottom, est.max(measured), 0.0);
-        let new_footer = queue_footer_reserve(800.0, false, true, Some(measured), 1.0);
-        let new_list = queue_list_height_from_layout(content_top, body_bottom, new_footer, 0.0);
-        assert!((new_list - old_list - (est - measured)).abs() < 0.01);
+    fn stabilize_layout_height_ignores_small_deltas() {
+        assert_eq!(
+            stabilize_layout_height(Some(74.0), 80.0, LAYOUT_HEIGHT_DEADBAND),
+            74.0
+        );
+        assert_eq!(
+            stabilize_layout_height(Some(74.0), 100.0, LAYOUT_HEIGHT_DEADBAND),
+            100.0
+        );
+        assert_eq!(
+            stabilize_layout_height(None, 74.0, LAYOUT_HEIGHT_DEADBAND),
+            74.0
+        );
     }
 
     #[test]
@@ -3049,7 +3072,4 @@ mod tests {
     fn apply_layout_preset_minimal_hides_thumbnails() {
         let mut s = crate::config::AppSettings::default();
         apply_layout_preset(&mut s, "minimal", Some(800.0));
-        assert!(!s.show_thumbnails);
-        assert!(s.videos_dock_height >= BOTTOM_PANEL_MIN_H);
-    }
-}
+        assert!(!s.sho

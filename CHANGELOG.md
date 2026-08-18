@@ -32,6 +32,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 - Downloads that fail because yt-dlp used the **generic extractor** (unable to extract flashvars) retry once with `--impersonate chrome` when browser impersonation was not already set.
 - Video Converter now finishes files that play fine but have damaged mid-stream packets (discard corrupt packets; if audio re-encode fails, automatically retry with audio copy).
 - Convert queue rows no longer overlap each other in list layout (virtualized slots clip to their row height; row height matches full convert card content).
+- Docked **Videos / Convert queue** footer buttons no longer bounce up and down while moving the mouse (list/footer height ignores hover jitter).
 - Docked **Videos / Convert queue** action buttons stay pinned to the bottom of the panel; the card list fills the space above them instead of sitting in a thin scroll strip over a large empty band.
 - Docked **Videos / Convert queue** sits directly under the Converter/Downloader controls and fills the remaining window height (no empty gap above a fixed bottom dock).
 - Docked **Videos / Convert queue** panel is no longer manually resizable; height follows window size / layout presets, and the queue list fills the space above a shrink-wrapped footer (fixes the cramped list and empty void, including while clicking toolbar buttons).
