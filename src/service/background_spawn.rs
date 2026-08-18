@@ -676,7 +676,7 @@ async fn run_convert_job(
             );
         }
         Ok(Err(e)) => {
-            let err_text = e.to_string();
+            let err_text = transcode::convert_error_text(&e);
             if err_text.to_ascii_lowercase().starts_with("skipped") {
                 let _ = try_send_ui(
                     bus,
@@ -689,7 +689,9 @@ async fn run_convert_job(
                 );
                 return;
             }
-            if transcode::convert_failure_is_unreadable_source(&err_text) {
+            if transcode::convert_failure_is_unreadable_source(&err_text)
+                || transcode::convert_failure_is_output_verification(&err_text)
+            {
                 let _ = try_send_ui(
                     bus,
                     UiEvent::ConvertDone {
@@ -747,7 +749,8 @@ async fn run_convert_job(
                                 item_id,
                                 ok: false,
                                 detail: format!(
-                                    "Primary encoder failed: {err_text}\nCPU fallback failed: {retry_err}"
+                                    "Primary encoder failed: {err_text}\nCPU fallback failed: {}",
+                                    transcode::convert_error_text(&retry_err)
                                 ),
                                 final_output_path: None,
                             },

@@ -29,6 +29,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Video Converter no longer discards a finished encode because the source had no audio (silent clips keep the converted file; CPU retry is skipped when only post-encode verification failed).
 - Downloads that fail with **Requested format is not available** retry with a looser yt-dlp `-f` (including muxed HLS and video-only streams) instead of only `-f best`; quality presets now match yt-dlp’s `bestvideo*` default.
 - Downloads that fail because yt-dlp used the **generic extractor** (unable to extract flashvars) retry once with `--impersonate chrome` when browser impersonation was not already set.
 - Video Converter now finishes files that play fine but have damaged mid-stream packets (discard corrupt packets; if audio re-encode fails, automatically retry with audio copy).

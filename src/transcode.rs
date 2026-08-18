@@ -36,6 +36,16 @@ pub fn convert_failure_is_unreadable_source(err: &str) -> bool {
         || s.contains("no such file or directory")
 }
 
+/// Encode finished but the output file was rejected (truncated, missing streams). CPU retry won't help.
+pub fn convert_failure_is_output_verification(err: &str) -> bool {
+    err.to_ascii_lowercase().contains("failed verification")
+}
+
+/// Full anyhow chain for convert UI/log text (`Display` only shows the last context).
+pub fn convert_error_text(err: &anyhow::Error) -> String {
+    format!("{err:#}")
+}
+
 /// True when encode failed on damaged packets (NAL/AAC) that often still play in VLC/mpv.
 pub fn convert_failure_may_retry_audio_copy(err: &str) -> bool {
     let s = err.to_ascii_lowercase();
@@ -118,7 +128,8 @@ pub struct ConvertConfig {
     pub audio_extract: String,
     /// In-encode subtitle handling: `none`, `soft`, or `burn`.
     pub subtitle_mode: String,
-    /// When true, ffprobe must find video and audio on the encoded output before the source is removed.
+    /// When true, ffprobe must find a video stream on the encoded output (and audio if the source had audio)
+    /// before the source is removed.
     pub verify_output_video_audio: bool,
 }
 
@@ -1179,6 +1190,23 @@ fn output_decodes_without_premature_end(output: &Path, ffmpeg_path: &str) -> Res
     Ok(())
 }
 
+fn convert_output_stream_issue(
+    verify_streams: bool,
+    output: &ConvertInputMedia,
+    source_has_audio: bool,
+) -> Option<&'static str> {
+    if !verify_streams {
+        return None;
+    }
+    if output.codec.is_empty() {
+        return Some("Encoded output has no video stream.");
+    }
+    if source_has_audio && output.audio_codec.is_none() {
+        return Some("Encoded output has no audio stream.");
+    }
+    None
+}
+
 /// Returns an error when the encoded file looks truncated or is missing required streams.
 pub fn validate_convert_output(
     input: &Path,
@@ -1189,15 +1217,14 @@ pub fn validate_convert_output(
 ) -> Result<()> {
     let output_media = probe_input_media(output, ffprobe_path)
         .ok_or_else(|| anyhow!("Could not probe encoded output."))?;
-    if verify_streams {
-        if output_media.codec.is_empty() {
-            return Err(anyhow!("Encoded output has no video stream."));
-        }
-        if output_media.audio_codec.is_none() {
-            return Err(anyhow!("Encoded output has no audio stream."));
-        }
-    }
     let input_media = probe_input_media(input, ffprobe_path);
+    let source_has_audio = input_media
+        .as_ref()
+        .is_some_and(|media| media.audio_codec.is_some());
+    if let Some(msg) = convert_output_stream_issue(verify_streams, &output_media, source_has_audio)
+    {
+        return Err(anyhow!("{msg}"));
+    }
     let input_duration_ms = input_media.and_then(|m| m.duration_ms);
     if let Err(msg) = output_duration_looks_complete(input_duration_ms, output_media.duration_ms) {
         return Err(anyhow!("{msg}"));
@@ -1486,7 +1513,7 @@ where
         copy_audio: false,
     };
     if let Err(err) = run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)) {
-        let err_text = err.to_string();
+        let err_text = convert_error_text(&err);
         if err_text.to_ascii_lowercase().contains("cancelled") {
             return Err(err);
         }
@@ -1496,8 +1523,14 @@ where
                     .to_owned(),
             );
             pass.copy_audio = true;
-            run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line))
-                .map_err(|retry_err| anyhow!("{err_text}\nAudio-copy retry failed: {retry_err}"))?;
+            run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)).map_err(
+                |retry_err| {
+                    anyhow!(
+                        "{err_text}\nAudio-copy retry failed: {}",
+                        convert_error_text(&retry_err)
+                    )
+                },
+            )?;
         } else {
             return Err(err);
         }
@@ -1805,6 +1838,39 @@ Invalid data found when processing input";
         assert!(output_duration_looks_complete(Some(600_000), Some(500_000)).is_err());
         assert!(output_duration_looks_complete(Some(600_000), None).is_err());
         assert!(output_duration_looks_complete(None, None).is_ok());
+    }
+
+    fn video_only_media() -> ConvertInputMedia {
+        ConvertInputMedia {
+            codec: "av1".to_owned(),
+            ..ConvertInputMedia::default()
+        }
+    }
+
+    #[test]
+    fn convert_output_allows_silent_source_without_audio() {
+        let out = video_only_media();
+        assert_eq!(convert_output_stream_issue(true, &out, false), None);
+        assert_eq!(
+            convert_output_stream_issue(true, &out, true),
+            Some("Encoded output has no audio stream.")
+        );
+        assert_eq!(convert_output_stream_issue(false, &out, true), None);
+        let blank = ConvertInputMedia::default();
+        assert_eq!(
+            convert_output_stream_issue(true, &blank, false),
+            Some("Encoded output has no video stream.")
+        );
+    }
+
+    #[test]
+    fn convert_error_text_includes_verification_cause() {
+        let err = anyhow!("Encoded output has no audio stream.")
+            .context("Encode output failed verification; the original file was kept.");
+        let text = convert_error_text(&err);
+        assert!(text.contains("failed verification"));
+        assert!(text.contains("no audio stream"));
+        assert!(convert_failure_is_output_verification(&text));
     }
 
     #[test]

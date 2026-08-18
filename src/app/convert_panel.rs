@@ -1181,9 +1181,7 @@ impl PydlApp {
                                     draw_meta_badge(ui, &codec, MetaBadgeKind::Codec);
                                 } else if self.convert_media_inflight.contains(&it.item_id) {
                                     ui.label(
-                                        RichText::new("Probing…")
-                                            .small()
-                                            .color(text_muted(&theme)),
+                                        RichText::new("Probing…").small().color(text_muted(&theme)),
                                     );
                                 }
                                 let name = std::path::Path::new(&it.source_path)
