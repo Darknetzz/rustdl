@@ -115,14 +115,24 @@ fn draw_convert_encode_settings_badges(ui: &mut egui::Ui, settings: &AppSettings
     let target = crate::transcode::target_codec_label(&settings.convert_target_codec);
     draw_labeled_meta_badge(ui, "Target:", target, MetaBadgeKind::Codec, muted);
     ui.label(RichText::new("·").small().color(muted));
-    let bitrate = if settings.convert_target_bitrate.trim().is_empty() {
-        "auto".to_owned()
-    } else {
-        settings.convert_target_bitrate.clone()
-    };
     let max_width = format!("{}w", settings.convert_max_width);
     ui.spacing_mut().item_spacing = egui::vec2(8.0, 4.0);
-    draw_labeled_meta_badge(ui, "Bitrate:", &bitrate, MetaBadgeKind::Bitrate, muted);
+    if crate::config::convert_rate_control_is_crf(&settings.convert_rate_control) {
+        draw_labeled_meta_badge(
+            ui,
+            "CRF:",
+            &settings.convert_crf.to_string(),
+            MetaBadgeKind::Bitrate,
+            muted,
+        );
+    } else {
+        let bitrate = if settings.convert_target_bitrate.trim().is_empty() {
+            "auto".to_owned()
+        } else {
+            settings.convert_target_bitrate.clone()
+        };
+        draw_labeled_meta_badge(ui, "Bitrate:", &bitrate, MetaBadgeKind::Bitrate, muted);
+    }
     ui.label(RichText::new("·").small().color(muted));
     draw_labeled_meta_badge(
         ui,

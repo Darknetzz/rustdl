@@ -8,10 +8,22 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{load_json_file, AppSettings};
 
+fn default_preset_rate_control() -> String {
+    "bitrate".to_owned()
+}
+
+fn default_preset_crf() -> u32 {
+    23
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct ConvertPresetFields {
     pub convert_target_codec: String,
     pub convert_target_bitrate: String,
+    #[serde(default = "default_preset_rate_control")]
+    pub convert_rate_control: String,
+    #[serde(default = "default_preset_crf")]
+    pub convert_crf: u32,
     pub convert_max_width: u32,
     pub convert_size_preset: String,
     pub convert_size_limit_kind: String,
@@ -44,6 +56,8 @@ impl Default for ConvertPresetFields {
         Self {
             convert_target_codec: "av1".to_owned(),
             convert_target_bitrate: String::new(),
+            convert_rate_control: default_preset_rate_control(),
+            convert_crf: default_preset_crf(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
             convert_size_limit_kind: String::new(),
@@ -108,6 +122,8 @@ impl ConvertPresetFields {
         Self {
             convert_target_codec: settings.convert_target_codec.clone(),
             convert_target_bitrate: settings.convert_target_bitrate.clone(),
+            convert_rate_control: settings.convert_rate_control.clone(),
+            convert_crf: settings.convert_crf,
             convert_max_width: settings.convert_max_width,
             convert_size_preset: settings.convert_size_preset.clone(),
             convert_size_limit_kind: settings.convert_size_limit_kind.clone(),
@@ -139,6 +155,8 @@ impl ConvertPresetFields {
     pub fn apply_to(&self, settings: &mut AppSettings) {
         settings.convert_target_codec = self.convert_target_codec.clone();
         settings.convert_target_bitrate = self.convert_target_bitrate.clone();
+        settings.convert_rate_control = self.convert_rate_control.clone();
+        settings.convert_crf = self.convert_crf;
         settings.convert_max_width = self.convert_max_width;
         settings.convert_size_preset = self.convert_size_preset.clone();
         settings.convert_size_limit_kind = self.convert_size_limit_kind.clone();
@@ -182,7 +200,9 @@ pub fn builtin_convert_presets() -> Vec<ConvertPreset> {
             name: "Quality H.265".to_owned(),
             fields: ConvertPresetFields {
                 convert_target_codec: "hevc".to_owned(),
-                convert_size_preset: "quality".to_owned(),
+                convert_rate_control: "crf".to_owned(),
+                convert_crf: 28,
+                convert_size_preset: "balanced".to_owned(),
                 convert_parallel: 1,
                 ..Default::default()
             },

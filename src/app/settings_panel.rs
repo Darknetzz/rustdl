@@ -1909,13 +1909,64 @@ impl PydlApp {
                                     });
                             }
                             ui.end_row();
-                            ui.label("Target bitrate");
-                            changed |= ui
-                                .add(
-                                    egui::TextEdit::singleline(&mut self.settings.convert_target_bitrate)
+                            ui.label("Rate control");
+                            let rate_label =
+                                if crate::config::convert_rate_control_is_crf(
+                                    &self.settings.convert_rate_control,
+                                ) {
+                                    "Quality (CRF)"
+                                } else {
+                                    "Bitrate"
+                                };
+                            egui::ComboBox::from_id_salt("settings_convert_rate_control")
+                                .selected_text(rate_label)
+                                .show_ui(ui, |ui| {
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.convert_rate_control,
+                                            "bitrate".to_owned(),
+                                            "Bitrate",
+                                        )
+                                        .changed();
+                                    changed |= ui
+                                        .selectable_value(
+                                            &mut self.settings.convert_rate_control,
+                                            "crf".to_owned(),
+                                            "Quality (CRF)",
+                                        )
+                                        .changed();
+                                })
+                                .response
+                                .on_hover_text(
+                                    "Bitrate keeps a target -b:v. Quality uses -crf on CPU encoders, -cq on NVIDIA, and QP on AMD.",
+                                );
+                            ui.end_row();
+                            if crate::config::convert_rate_control_is_crf(
+                                &self.settings.convert_rate_control,
+                            ) {
+                                ui.label("CRF");
+                                changed |= ui
+                                    .add(
+                                        egui::DragValue::new(&mut self.settings.convert_crf)
+                                            .range(0_u32..=crate::config::CONVERT_CRF_MAX)
+                                            .speed(1),
+                                    )
+                                    .on_hover_text(
+                                        "Lower is higher quality and larger files. Software encoders use ffmpeg -crf. \
+                                         NVIDIA uses -cq; AMD uses QP. Typical H.264 ~18–28, H.265 ~24–32, AV1 ~20–40.",
+                                    )
+                                    .changed();
+                            } else {
+                                ui.label("Target bitrate");
+                                changed |= ui
+                                    .add(
+                                        egui::TextEdit::singleline(
+                                            &mut self.settings.convert_target_bitrate,
+                                        )
                                         .hint_text("auto"),
-                                )
-                                .changed();
+                                    )
+                                    .changed();
+                            }
                             ui.end_row();
                             ui.label("Max width");
                             changed |= ui

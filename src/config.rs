@@ -232,6 +232,12 @@ pub struct AppSettings {
     /// Default target bitrate (e.g. 1800k). Empty means auto.
     #[serde(default, alias = "av1_target_bitrate")]
     pub convert_target_bitrate: String,
+    /// Rate control: `bitrate` (default) or `crf` (quality).
+    #[serde(default = "default_convert_rate_control")]
+    pub convert_rate_control: String,
+    /// Constant rate factor / quality (lower = higher quality). Used when rate control is `crf`.
+    #[serde(default = "default_convert_crf")]
+    pub convert_crf: u32,
     /// Maximum output width (maintain aspect ratio).
     #[serde(default = "default_convert_max_width", alias = "av1_max_width")]
     pub convert_max_width: u32,
@@ -586,6 +592,28 @@ fn default_convert_remember_queue() -> bool {
     true
 }
 
+fn default_convert_rate_control() -> String {
+    "bitrate".to_owned()
+}
+
+fn default_convert_crf() -> u32 {
+    23
+}
+
+pub const CONVERT_CRF_MAX: u32 = 63;
+
+/// Normalizes stored converter rate control (`bitrate` or `crf`).
+pub fn normalize_convert_rate_control(raw: &str) -> String {
+    match raw.trim().to_ascii_lowercase().as_str() {
+        "crf" | "quality" => "crf".to_owned(),
+        _ => "bitrate".to_owned(),
+    }
+}
+
+pub fn convert_rate_control_is_crf(raw: &str) -> bool {
+    normalize_convert_rate_control(raw) == "crf"
+}
+
 fn default_convert_target_codec() -> String {
     "av1".to_owned()
 }
@@ -774,6 +802,8 @@ impl Default for AppSettings {
             convert_container: default_convert_container(),
             convert_target_codec: default_convert_target_codec(),
             convert_target_bitrate: String::new(),
+            convert_rate_control: default_convert_rate_control(),
+            convert_crf: default_convert_crf(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
             convert_min_shrink_percent: 0.0,
@@ -1048,6 +1078,8 @@ pub fn normalize_settings(cfg: &mut AppSettings) {
     } else {
         cfg.convert_size_preset = preset;
     }
+    cfg.convert_rate_control = normalize_convert_rate_control(&cfg.convert_rate_control);
+    cfg.convert_crf = cfg.convert_crf.min(CONVERT_CRF_MAX);
     cfg.convert_target_codec =
         crate::transcode::normalize_target_codec(&cfg.convert_target_codec).to_owned();
     cfg.convert_audio_extract = normalize_convert_audio_extract(&cfg.convert_audio_extract);

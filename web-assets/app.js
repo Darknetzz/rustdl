@@ -3238,6 +3238,15 @@ function updateConvertSizeLimitFieldsVisibility() {
   }
 }
 
+function updateConvertRateControlFieldsVisibility() {
+  const mode = document.getElementById("set-convert-rate-control")?.value || "bitrate";
+  const crf = mode === "crf" || mode === "quality";
+  const bitrateWrap = document.getElementById("set-convert-bitrate-wrap");
+  const crfWrap = document.getElementById("set-convert-crf-wrap");
+  if (bitrateWrap) bitrateWrap.hidden = crf;
+  if (crfWrap) crfWrap.hidden = !crf;
+}
+
 function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-show-thumbnails", s.show_thumbnails);
   setCheck("set-compact-cards", s.compact_cards);
@@ -3331,7 +3340,10 @@ function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-watchlist-auto-enqueue", s.watchlist_auto_enqueue);
 
   setVal("set-convert-target-codec", s.convert_target_codec || "av1");
+  setVal("set-convert-rate-control", s.convert_rate_control || "bitrate");
   setVal("set-convert-bitrate", s.convert_target_bitrate);
+  setVal("set-convert-crf", s.convert_crf ?? 23);
+  updateConvertRateControlFieldsVisibility();
   setVal("set-convert-max-width", s.convert_max_width);
   setVal("set-convert-preset", s.convert_size_preset);
   let sizeLimitKind = s.convert_size_limit_kind || "none";
@@ -3484,7 +3496,11 @@ function collectSettingsForm(base) {
     document.getElementById("set-watchlist-auto-enqueue")?.checked ?? false;
 
   s.convert_target_codec = document.getElementById("set-convert-target-codec").value || "av1";
+  s.convert_rate_control =
+    document.getElementById("set-convert-rate-control")?.value || "bitrate";
   s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
+  s.convert_crf = parseInt(document.getElementById("set-convert-crf")?.value, 10);
+  if (!Number.isFinite(s.convert_crf)) s.convert_crf = 23;
   s.convert_max_width = parseInt(document.getElementById("set-convert-max-width").value, 10) || 1920;
   s.convert_size_preset = document.getElementById("set-convert-preset").value;
   s.convert_size_limit_kind =
@@ -5730,3 +5746,6 @@ bootstrapAuth().catch(() => showAuthPanel());
 document
   .getElementById("set-convert-size-limit-kind")
   ?.addEventListener("change", updateConvertSizeLimitFieldsVisibility);
+document
+  .getElementById("set-convert-rate-control")
+  ?.addEventListener("change", updateConvertRateControlFieldsVisibility);

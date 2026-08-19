@@ -152,6 +152,7 @@ Track URLs whose source quality may improve over time (e.g. a live premiere that
 - Input accepts file and folder paths (one per line).
 - Output is written **next to each input file** by default (`movie.mkv` → `movie-AV1.mkv` in the same folder). Set **Output folder** under Settings → Video Converter to send all batch outputs to one directory instead.
 - **Target codec** (Settings → Converter): AV1 (default), H.265, or H.264.
+- **Rate control**: Bitrate (`-b:v`, default) or Quality (**CRF**). Lower CRF is higher quality and larger files. CPU encoders use ffmpeg `-crf`; NVIDIA uses `-cq`; AMD uses QP. The size preset still scales bitrate or offsets CRF.
 - Supports recursive scan, dry-run, overwrite, delete original, rename to original filename, and optional re-encode when input already matches the target codec.
 - Queue items are remembered between sessions until you click **Clear** (disable in Settings → Converter → *Remember Convert queue between sessions* to start fresh each launch).
 - Encoder auto-detect per target: AV1 → `av1_nvenc` → `av1_amf` → `libsvtav1`; H.265 → `hevc_nvenc` → `hevc_amf` → `libx265`; H.264 → `h264_nvenc` → `h264_amf` → `libx264`.

@@ -117,6 +117,9 @@ pub struct ConvertConfig {
     /// Output container: `auto` (recommended for codec), `source`, `mkv`, `mp4`, or `webm`.
     pub container: String,
     pub target_bitrate: String,
+    /// `bitrate` or `crf`.
+    pub rate_control: String,
+    pub crf: u32,
     pub max_width: u32,
     pub size_preset: String,
     pub size_limit: ConvertSizeLimit,
@@ -402,6 +405,147 @@ fn effective_target_bitrate_bps(cfg: &ConvertConfig) -> i64 {
     (base as f64 * preset_bitrate_multiplier(&cfg.size_preset)).round() as i64
 }
 
+fn preset_crf_offset(preset: &str) -> i32 {
+    match preset.trim().to_ascii_lowercase().as_str() {
+        "light" => -2,
+        "aggressive" => 3,
+        _ => 0,
+    }
+}
+
+fn convert_uses_crf(cfg: &ConvertConfig) -> bool {
+    crate::config::convert_rate_control_is_crf(&cfg.rate_control)
+}
+
+fn effective_crf(cfg: &ConvertConfig) -> u32 {
+    let base = cfg.crf.min(crate::config::CONVERT_CRF_MAX);
+    let adjusted = base as i32 + preset_crf_offset(&cfg.size_preset);
+    adjusted.clamp(0, crate::config::CONVERT_CRF_MAX as i32) as u32
+}
+
+fn encoder_rate_control_args(
+    enc: &EncoderChoice,
+    use_crf: bool,
+    target_bitrate_bps: i64,
+    crf: u32,
+) -> Vec<String> {
+    let bitrate = target_bitrate_bps.to_string();
+    let maxrate =
+        ((target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64).to_string();
+    let bufsize =
+        ((target_bitrate_bps as f64 * BITRATE_BUFSIZE_MULTIPLIER).round() as i64).to_string();
+    let quality = crf.to_string();
+    match enc.hw_type {
+        "nvidia" => {
+            if use_crf {
+                vec![
+                    "-preset".into(),
+                    "p7".into(),
+                    "-rc".into(),
+                    "vbr".into(),
+                    "-cq".into(),
+                    quality,
+                ]
+            } else {
+                vec![
+                    "-preset".into(),
+                    "p7".into(),
+                    "-rc".into(),
+                    "vbr".into(),
+                    "-b:v".into(),
+                    bitrate,
+                    "-maxrate".into(),
+                    maxrate,
+                    "-bufsize".into(),
+                    bufsize,
+                ]
+            }
+        }
+        "amd" => {
+            let mut args = vec![
+                "-usage".into(),
+                "0".into(),
+                "-quality".into(),
+                "70".into(),
+                "-profile:v".into(),
+                "1".into(),
+                "-align".into(),
+                "3".into(),
+            ];
+            if use_crf {
+                args.extend([
+                    "-rc".into(),
+                    "cqp".into(),
+                    "-qp_i".into(),
+                    quality.clone(),
+                    "-qp_p".into(),
+                    quality.clone(),
+                    "-qp_b".into(),
+                    quality,
+                ]);
+            } else {
+                args.extend(["-rc".into(), "1".into(), "-b:v".into(), bitrate]);
+            }
+            args
+        }
+        _ => match enc.encoder {
+            "libsvtav1" => {
+                let mut args = vec!["-preset".into(), "8".into(), "-g".into(), "240".into()];
+                if use_crf {
+                    args.extend(["-crf".into(), quality]);
+                } else {
+                    args.extend(["-b:v".into(), bitrate]);
+                }
+                args
+            }
+            "libx265" => {
+                let mut args = vec![
+                    "-preset".into(),
+                    "medium".into(),
+                    "-tag:v".into(),
+                    "hvc1".into(),
+                ];
+                if use_crf {
+                    args.extend(["-crf".into(), quality]);
+                } else {
+                    args.extend(["-b:v".into(), bitrate]);
+                }
+                args
+            }
+            "libx264" => {
+                let mut args = vec![
+                    "-preset".into(),
+                    "medium".into(),
+                    "-profile:v".into(),
+                    "high".into(),
+                ];
+                if use_crf {
+                    args.extend(["-crf".into(), quality]);
+                } else {
+                    args.extend(["-b:v".into(), bitrate]);
+                }
+                args
+            }
+            _ => {
+                if use_crf {
+                    vec!["-crf".into(), quality]
+                } else {
+                    vec!["-b:v".into(), bitrate]
+                }
+            }
+        },
+    }
+}
+
+fn append_encoder_rate_control(cmd: &mut Command, enc: &EncoderChoice, cfg: &ConvertConfig) {
+    cmd.args(encoder_rate_control_args(
+        enc,
+        convert_uses_crf(cfg),
+        effective_target_bitrate_bps(cfg),
+        effective_crf(cfg),
+    ));
+}
+
 fn select_pixel_format(hw_type: &str) -> &'static str {
     if hw_type == "cpu" {
         "yuv420p"
@@ -464,51 +608,6 @@ fn append_cpu_thread_args(cmd: &mut Command, enc: &EncoderChoice, cpu_threads: u
             ]);
         }
         _ => {}
-    }
-}
-
-fn append_encoder_rate_control(cmd: &mut Command, enc: &EncoderChoice, target_bitrate_bps: i64) {
-    let maxrate = (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
-    let bufsize = (target_bitrate_bps as f64 * BITRATE_BUFSIZE_MULTIPLIER).round() as i64;
-    match enc.hw_type {
-        "nvidia" => {
-            cmd.args(["-preset", "p7", "-rc", "vbr"]);
-            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-            cmd.arg("-maxrate").arg(maxrate.to_string());
-            cmd.arg("-bufsize").arg(bufsize.to_string());
-        }
-        "amd" => {
-            cmd.args([
-                "-usage",
-                "0",
-                "-quality",
-                "70",
-                "-profile:v",
-                "1",
-                "-rc",
-                "1",
-                "-align",
-                "3",
-            ]);
-            cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-        }
-        _ => match enc.encoder {
-            "libsvtav1" => {
-                cmd.args(["-preset", "8", "-g", "240"]);
-                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-            }
-            "libx265" => {
-                cmd.args(["-preset", "medium", "-tag:v", "hvc1"]);
-                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-            }
-            "libx264" => {
-                cmd.args(["-preset", "medium", "-profile:v", "high"]);
-                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-            }
-            _ => {
-                cmd.arg("-b:v").arg(target_bitrate_bps.to_string());
-            }
-        },
     }
 }
 
@@ -1306,7 +1405,6 @@ struct FfmpegEncodePass<'a> {
     cfg: &'a ConvertConfig,
     enc: &'a EncoderChoice,
     target: &'a str,
-    target_bitrate_bps: i64,
     vf: &'a str,
     subtitle_mode: &'a str,
     has_subtitles: bool,
@@ -1349,7 +1447,7 @@ where
     if pass.enc.codec == "hevc" && pass.enc.hw_type != "cpu" {
         cmd.args(["-tag:v", "hvc1"]);
     }
-    append_encoder_rate_control(&mut cmd, pass.enc, pass.target_bitrate_bps);
+    append_encoder_rate_control(&mut cmd, pass.enc, pass.cfg);
     if pass.subtitle_mode == "soft" && pass.has_subtitles {
         append_soft_subtitle_maps(&mut cmd);
     }
@@ -1453,7 +1551,7 @@ where
         return Ok(plan.output.clone());
     }
     let target_bitrate_bps = effective_target_bitrate_bps(cfg);
-    if cfg.size_limit.is_active() {
+    if cfg.size_limit.is_active() && !convert_uses_crf(cfg) {
         if let Ok(meta) = std::fs::metadata(&plan.input) {
             let input_bytes = meta.len();
             if input_bytes > 0 {
@@ -1506,7 +1604,6 @@ where
         cfg,
         enc,
         target,
-        target_bitrate_bps,
         vf: &vf,
         subtitle_mode: &subtitle_mode,
         has_subtitles,
@@ -1570,6 +1667,8 @@ mod tests {
                 "source".to_owned()
             },
             target_bitrate: String::new(),
+            rate_control: "bitrate".to_owned(),
+            crf: 23,
             max_width: 1920,
             size_preset: "balanced".to_owned(),
             size_limit: ConvertSizeLimit::default(),
@@ -1775,6 +1874,71 @@ Invalid data found when processing input";
         assert_eq!(parse_bitrate_to_bps("2500k"), Some(2_500_000));
         assert_eq!(parse_bitrate_to_bps("2.5m"), Some(2_500_000));
         assert_eq!(parse_bitrate_to_bps("1800000"), Some(1_800_000));
+    }
+
+    fn test_encoder(encoder: &'static str, hw_type: &'static str) -> EncoderChoice {
+        EncoderChoice {
+            encoder,
+            codec: codec_for_encoder(encoder),
+            hw_type,
+        }
+    }
+
+    #[test]
+    fn encoder_rate_control_bitrate_keeps_b_v() {
+        let args = encoder_rate_control_args(&test_encoder("libx264", "cpu"), false, 2_000_000, 23);
+        assert!(args.windows(2).any(|w| w == ["-b:v", "2000000"]));
+        assert!(!args.contains(&"-crf".to_owned()));
+    }
+
+    #[test]
+    fn encoder_rate_control_crf_cpu_uses_crf() {
+        let x264 = encoder_rate_control_args(&test_encoder("libx264", "cpu"), true, 2_000_000, 23);
+        assert!(x264.windows(2).any(|w| w == ["-crf", "23"]));
+        assert!(!x264.contains(&"-b:v".to_owned()));
+
+        let svt = encoder_rate_control_args(&test_encoder("libsvtav1", "cpu"), true, 2_000_000, 32);
+        assert!(svt.windows(2).any(|w| w == ["-crf", "32"]));
+        assert!(!svt.contains(&"-b:v".to_owned()));
+    }
+
+    #[test]
+    fn encoder_rate_control_crf_nvenc_uses_cq() {
+        let args =
+            encoder_rate_control_args(&test_encoder("hevc_nvenc", "nvidia"), true, 2_000_000, 23);
+        assert!(args.windows(2).any(|w| w == ["-cq", "23"]));
+        assert!(!args.contains(&"-b:v".to_owned()));
+        assert!(!args.contains(&"-maxrate".to_owned()));
+    }
+
+    #[test]
+    fn encoder_rate_control_crf_amf_uses_qp() {
+        let args = encoder_rate_control_args(&test_encoder("hevc_amf", "amd"), true, 2_000_000, 28);
+        assert!(args.windows(2).any(|w| w == ["-rc", "cqp"]));
+        assert!(args.windows(2).any(|w| w == ["-qp_i", "28"]));
+        assert!(args.windows(2).any(|w| w == ["-qp_p", "28"]));
+        assert!(args.windows(2).any(|w| w == ["-qp_b", "28"]));
+        assert!(!args.contains(&"-b:v".to_owned()));
+    }
+
+    #[test]
+    fn effective_crf_applies_size_preset_offset() {
+        let dir = Path::new(".");
+        let mut cfg = test_config(dir, "av1", true);
+        cfg.rate_control = "crf".to_owned();
+        cfg.crf = 23;
+        cfg.size_preset = "balanced".to_owned();
+        assert_eq!(effective_crf(&cfg), 23);
+        cfg.size_preset = "light".to_owned();
+        assert_eq!(effective_crf(&cfg), 21);
+        cfg.size_preset = "aggressive".to_owned();
+        assert_eq!(effective_crf(&cfg), 26);
+        cfg.crf = 0;
+        cfg.size_preset = "light".to_owned();
+        assert_eq!(effective_crf(&cfg), 0);
+        cfg.crf = 63;
+        cfg.size_preset = "aggressive".to_owned();
+        assert_eq!(effective_crf(&cfg), 63);
     }
 
     #[test]
