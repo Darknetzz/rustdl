@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use eframe::egui;
@@ -41,6 +42,51 @@ pub fn convert_failure_is_output_verification(err: &str) -> bool {
     err.to_ascii_lowercase().contains("failed verification")
 }
 
+/// Encode finished but delete-original / rename-to-original failed. CPU retry won't help.
+pub fn convert_failure_is_finalize(err: &str) -> bool {
+    let s = err.to_ascii_lowercase();
+    s.contains("failed to delete original")
+        || s.contains("failed to rename output")
+        || s.contains("cannot rename output to original name")
+}
+
+/// Delete-original preflight: source is locked before encode starts.
+pub fn convert_failure_is_source_in_use(err: &str) -> bool {
+    err.to_ascii_lowercase()
+        .contains("cannot be deleted after convert")
+}
+
+/// Hardware→CPU fallback cannot fix source/verify/finalize failures.
+pub fn convert_failure_skips_cpu_fallback(err: &str) -> bool {
+    convert_failure_is_unreadable_source(err)
+        || convert_failure_is_output_verification(err)
+        || convert_failure_is_finalize(err)
+        || convert_failure_is_source_in_use(err)
+}
+
+/// Post-encode cleanup failed; the encoded output at `output` was kept.
+#[derive(Debug)]
+pub struct ConvertFinalizeError {
+    pub output: PathBuf,
+    pub message: String,
+}
+
+impl std::fmt::Display for ConvertFinalizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ConvertFinalizeError {}
+
+pub fn convert_finalize_kept_output(err: &anyhow::Error) -> Option<PathBuf> {
+    err.chain().find_map(|cause| {
+        cause
+            .downcast_ref::<ConvertFinalizeError>()
+            .map(|e| e.output.clone())
+    })
+}
+
 /// Full anyhow chain for convert UI/log text (`Display` only shows the last context).
 pub fn convert_error_text(err: &anyhow::Error) -> String {
     format!("{err:#}")
@@ -73,6 +119,17 @@ fn convert_source_error_summary(err: &str) -> Option<&'static str> {
         Some(
             "The source has bitstream damage that players may conceal, but ffmpeg could not finish encoding. \
              Try re-downloading a clean copy, or remux/repair the file first.",
+        )
+    } else if convert_failure_is_finalize(err) {
+        Some(
+            "Encode finished, but the original file could not be deleted or renamed. \
+             The converted file was kept. Close whatever is using the source, then Retry \
+             to finish cleanup without re-encoding.",
+        )
+    } else if convert_failure_is_source_in_use(err) {
+        Some(
+            "The source file is in use by another program, so Delete original cannot run. \
+             Close that program, then Retry.",
         )
     } else {
         None
@@ -1220,6 +1277,58 @@ fn remove_partial_output(output: &Path) {
     }
 }
 
+/// When ffmpeg fails or is cancelled, only delete the output if this run created or overwrote it.
+fn should_remove_partial_output(overwrite: bool, existed_before: bool) -> bool {
+    overwrite || !existed_before
+}
+
+fn maybe_remove_partial_output(output: &Path, overwrite: bool, existed_before: bool) {
+    if should_remove_partial_output(overwrite, existed_before) {
+        remove_partial_output(output);
+    }
+}
+
+/// Backoff between delete-original attempts (Windows error 32 is often a brief indexer/player lock).
+const DELETE_ORIGINAL_RETRY_DELAYS_MS: [u64; 3] = [200, 500, 1000];
+
+fn remove_original_file_with_delays(path: &Path, delays_ms: &[u64]) -> std::io::Result<()> {
+    let attempts = delays_ms.len() + 1;
+    let mut last_err = None;
+    for attempt in 0..attempts {
+        match std::fs::remove_file(path) {
+            Ok(()) => return Ok(()),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(err) => {
+                last_err = Some(err);
+                if let Some(ms) = delays_ms.get(attempt) {
+                    std::thread::sleep(Duration::from_millis(*ms));
+                }
+            }
+        }
+    }
+    Err(last_err.expect("at least one delete attempt"))
+}
+
+fn probe_source_delete_access(path: &Path) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::{
+            DELETE, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+        };
+        std::fs::OpenOptions::new()
+            .access_mode(DELETE)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .open(path)
+            .map(|_| ())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
 /// Minimum encoded duration as a fraction of the source duration (allows small container rounding drift).
 const OUTPUT_DURATION_MIN_RATIO: f64 = 0.95;
 /// Extra slack when comparing source vs output duration (milliseconds).
@@ -1336,9 +1445,25 @@ pub fn validate_convert_output(
 }
 
 fn finalize_output_file(plan: &ConvertPlanItem, cfg: &ConvertConfig) -> Result<PathBuf> {
+    finalize_output_file_with_delete_delays(plan, cfg, &DELETE_ORIGINAL_RETRY_DELAYS_MS).map_err(
+        |err| {
+            ConvertFinalizeError {
+                output: plan.output.clone(),
+                message: format!("{err:#}"),
+            }
+            .into()
+        },
+    )
+}
+
+fn finalize_output_file_with_delete_delays(
+    plan: &ConvertPlanItem,
+    cfg: &ConvertConfig,
+    delete_delays_ms: &[u64],
+) -> Result<PathBuf> {
     let output = plan.output.clone();
     let original_deleted = if cfg.delete_original {
-        match std::fs::remove_file(&plan.input) {
+        match remove_original_file_with_delays(&plan.input, delete_delays_ms) {
             Ok(()) => true,
             Err(_) if !plan.input.exists() => true,
             Err(err) => {
@@ -1419,6 +1544,7 @@ fn run_ffmpeg_convert_encode<F>(
 where
     F: FnMut(String),
 {
+    let existed_before = pass.plan.output.is_file();
     let ffmpeg = resolve_executable(&pass.cfg.ffmpeg_path, "ffmpeg");
     let stderr_buf: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
     let mut cmd = Command::new(ffmpeg);
@@ -1486,7 +1612,7 @@ where
         if cancel_flag.is_some_and(|f| f.load(Ordering::Relaxed)) {
             let _ = child.kill();
             let _ = child.wait();
-            remove_partial_output(&pass.plan.output);
+            maybe_remove_partial_output(&pass.plan.output, pass.cfg.overwrite, existed_before);
             return Err(anyhow!("Cancelled by user."));
         }
         line.clear();
@@ -1507,7 +1633,7 @@ where
             .ok()
             .map(|g| g.trim().to_owned())
             .unwrap_or_default();
-        remove_partial_output(&pass.plan.output);
+        maybe_remove_partial_output(&pass.plan.output, pass.cfg.overwrite, existed_before);
         return Err(ffmpeg_status_error(st, &stderr_text));
     }
     Ok(())
@@ -1585,6 +1711,27 @@ where
     }
     if let Some(parent) = plan.output.parent() {
         std::fs::create_dir_all(parent)?;
+    }
+    if plan.output.is_file()
+        && validate_convert_output(
+            &plan.input,
+            &plan.output,
+            &cfg.ffprobe_path,
+            &cfg.ffmpeg_path,
+            cfg.verify_output_video_audio,
+        )
+        .is_ok()
+    {
+        on_line("existing encoded output looks complete; skipping encode".to_owned());
+        return finalize_output_file(plan, cfg);
+    }
+    if cfg.delete_original {
+        if let Err(err) = probe_source_delete_access(&plan.input) {
+            return Err(anyhow!(
+                "Source is in use and cannot be deleted after convert: {}: {err}",
+                plan.input.display()
+            ));
+        }
     }
     let pix_fmt = select_pixel_format(enc.hw_type);
     let subtitle_mode = crate::config::normalize_convert_subtitle_mode(&cfg.subtitle_mode);
@@ -2059,5 +2206,154 @@ Invalid data found when processing input";
         assert_eq!(display_video_codec_label("vp9"), "VP9");
         assert_eq!(display_video_codec_label("prores"), "PRORES");
         assert_eq!(display_video_codec_label(""), "");
+    }
+
+    #[test]
+    fn should_remove_partial_output_keeps_preexisting_when_not_overwriting() {
+        assert!(!should_remove_partial_output(false, true));
+        assert!(should_remove_partial_output(false, false));
+        assert!(should_remove_partial_output(true, true));
+        assert!(should_remove_partial_output(true, false));
+    }
+
+    #[test]
+    fn convert_failure_finalize_and_source_in_use_skip_cpu_fallback() {
+        let delete_err = "Failed to delete original C:\\a.mp4: os error 32";
+        assert!(convert_failure_is_finalize(delete_err));
+        assert!(convert_failure_skips_cpu_fallback(delete_err));
+        let rename_err = "Failed to rename output to original name (C:\\a.mp4): access denied";
+        assert!(convert_failure_is_finalize(rename_err));
+        let exists_err = "Cannot rename output to original name; file exists: C:\\a.mp4";
+        assert!(convert_failure_is_finalize(exists_err));
+        let preflight =
+            "Source is in use and cannot be deleted after convert: C:\\a.mp4: os error 32";
+        assert!(convert_failure_is_source_in_use(preflight));
+        assert!(convert_failure_skips_cpu_fallback(preflight));
+        assert!(!convert_failure_is_finalize(preflight));
+        let msg = format_convert_failure(delete_err);
+        assert!(msg.contains("converted file was kept"));
+        assert!(msg.contains("Failed to delete original"));
+    }
+
+    #[test]
+    fn convert_finalize_kept_output_extracts_path() {
+        let output = PathBuf::from("D:/Temp/clip-AV1.mp4");
+        let err: anyhow::Error = ConvertFinalizeError {
+            output: output.clone(),
+            message: "Failed to delete original D:/Temp/clip.mp4: os error 32".to_owned(),
+        }
+        .into();
+        assert_eq!(convert_finalize_kept_output(&err), Some(output));
+        assert!(convert_failure_is_finalize(&convert_error_text(&err)));
+    }
+
+    #[test]
+    fn finalize_output_file_deletes_original() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let input = tmp.path().join("movie.mp4");
+        let output = tmp.path().join("movie-AV1.mp4");
+        std::fs::write(&input, b"src").expect("write input");
+        std::fs::write(&output, b"enc").expect("write output");
+        let mut cfg = test_config(tmp.path(), "av1", true);
+        cfg.delete_original = true;
+        let plan = ConvertPlanItem {
+            input: input.clone(),
+            output: output.clone(),
+        };
+        let result = finalize_output_file_with_delete_delays(&plan, &cfg, &[]).expect("finalize");
+        assert_eq!(result, output);
+        assert!(!input.exists());
+        assert!(output.exists());
+    }
+
+    #[test]
+    fn finalize_output_file_renames_after_delete() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let input = tmp.path().join("movie.mp4");
+        let output = tmp.path().join("movie-AV1.mp4");
+        std::fs::write(&input, b"src").expect("write input");
+        std::fs::write(&output, b"enc").expect("write output");
+        let mut cfg = test_config(tmp.path(), "av1", true);
+        cfg.delete_original = true;
+        cfg.rename_original = true;
+        let plan = ConvertPlanItem {
+            input: input.clone(),
+            output: output.clone(),
+        };
+        let result = finalize_output_file_with_delete_delays(&plan, &cfg, &[]).expect("finalize");
+        assert_eq!(result, tmp.path().join("movie.mp4"));
+        assert!(!output.exists());
+        assert_eq!(std::fs::read(result).expect("read renamed"), b"enc");
+    }
+
+    #[test]
+    fn finalize_output_file_keeps_encoded_path_when_rename_blocked() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let output = tmp.path().join("movie-AV1.mp4");
+        let target = tmp.path().join("movie.mp4");
+        std::fs::write(&output, b"enc").expect("write output");
+        std::fs::write(&target, b"other").expect("write target");
+        let mut cfg = test_config(tmp.path(), "av1", true);
+        cfg.rename_original = true;
+        let plan = ConvertPlanItem {
+            input: tmp.path().join("movie.mkv"),
+            output: output.clone(),
+        };
+        let err = finalize_output_file(&plan, &cfg).expect_err("rename should fail");
+        assert_eq!(convert_finalize_kept_output(&err), Some(output.clone()));
+        assert!(output.exists());
+        assert_eq!(std::fs::read(&output).expect("kept encode"), b"enc");
+    }
+
+    #[test]
+    fn remove_original_treats_already_gone_as_success() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let missing = tmp.path().join("gone.mp4");
+        remove_original_file_with_delays(&missing, &[]).expect("missing is ok");
+    }
+
+    #[cfg(windows)]
+    fn lock_without_delete_share(path: &Path) -> std::fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(path)
+            .expect("lock file")
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn probe_source_delete_access_fails_when_file_is_locked() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("locked.mp4");
+        std::fs::write(&path, b"src").expect("write");
+        let _lock = lock_without_delete_share(&path);
+        let err = probe_source_delete_access(&path).expect_err("should be in use");
+        assert_eq!(err.raw_os_error(), Some(32));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn finalize_delete_fails_when_original_is_locked() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let input = tmp.path().join("movie.mp4");
+        let output = tmp.path().join("movie-AV1.mp4");
+        std::fs::write(&input, b"src").expect("write input");
+        std::fs::write(&output, b"enc").expect("write output");
+        let _lock = lock_without_delete_share(&input);
+        let mut cfg = test_config(tmp.path(), "av1", true);
+        cfg.delete_original = true;
+        let plan = ConvertPlanItem {
+            input: input.clone(),
+            output: output.clone(),
+        };
+        let err = finalize_output_file_with_delete_delays(&plan, &cfg, &[])
+            .expect_err("delete should fail");
+        let text = format!("{err:#}");
+        assert!(convert_failure_is_finalize(&text));
+        assert!(input.exists());
+        assert_eq!(std::fs::read(&output).expect("kept encode"), b"enc");
     }
 }

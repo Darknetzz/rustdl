@@ -689,16 +689,15 @@ async fn run_convert_job(
                 );
                 return;
             }
-            if transcode::convert_failure_is_unreadable_source(&err_text)
-                || transcode::convert_failure_is_output_verification(&err_text)
-            {
+            if transcode::convert_failure_skips_cpu_fallback(&err_text) {
                 let _ = try_send_ui(
                     bus,
                     UiEvent::ConvertDone {
                         item_id,
                         ok: false,
                         detail: transcode::format_convert_failure(&err_text),
-                        final_output_path: None,
+                        final_output_path: transcode::convert_finalize_kept_output(&e)
+                            .map(|p| p.to_string_lossy().into_owned()),
                     },
                 );
                 return;
