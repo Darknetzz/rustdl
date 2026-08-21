@@ -13,7 +13,9 @@ use crate::external_tools::{
     resolve_executable,
 };
 
-const VIDEO_EXTS: &[&str] = &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"];
+/// Container extensions the Video Converter will scan / enqueue (ffmpeg-readable).
+pub const CONVERT_VIDEO_EXTENSIONS: &[&str] =
+    &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv", "flv"];
 const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
 const BITRATE_MAXRATE_MULTIPLIER: f64 = 1.2;
 const BITRATE_BUFSIZE_MULTIPLIER: f64 = 2.0;
@@ -684,7 +686,7 @@ fn planned_output_extension(input: &Path, cfg: &ConvertConfig) -> String {
             .extension()
             .and_then(|s| s.to_str())
             .map(|e| e.to_ascii_lowercase())
-            .filter(|e| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(e)))
+            .filter(|e| CONVERT_VIDEO_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)))
             .unwrap_or_else(|| recommended_container_for_target(&cfg.target_codec).to_owned()),
         // "auto" or any unrecognized value → recommended for target codec
         _ => recommended_container_for_target(&cfg.target_codec).to_owned(),
@@ -796,7 +798,11 @@ fn append_container_mux_args(cmd: &mut Command, output: &Path, enc: &EncoderChoi
 pub fn is_video_path(path: &Path) -> bool {
     path.extension()
         .and_then(|s| s.to_str())
-        .map(|ext| VIDEO_EXTS.iter().any(|x| x.eq_ignore_ascii_case(ext)))
+        .map(|ext| {
+            CONVERT_VIDEO_EXTENSIONS
+                .iter()
+                .any(|x| x.eq_ignore_ascii_case(ext))
+        })
         .unwrap_or(false)
 }
 
@@ -1896,6 +1902,30 @@ Invalid data found when processing input";
         );
         assert_eq!(plan.len(), 1);
         assert!(plan[0].output.to_string_lossy().ends_with("movie-AV1.mkv"));
+    }
+
+    #[test]
+    fn is_video_path_accepts_flv() {
+        assert!(is_video_path(Path::new("clip.flv")));
+        assert!(is_video_path(Path::new("CLIP.FLV")));
+        assert!(!is_video_path(Path::new("clip.txt")));
+    }
+
+    #[test]
+    fn collect_plan_detects_flv_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.path();
+        let movie = root.join("stream.flv");
+        std::fs::write(&movie, b"x").expect("write flv");
+        let cfg = test_config(root, "av1", true);
+        let plan = collect_plan(
+            &[ConvertInput {
+                source_path: root.to_string_lossy().to_string(),
+            }],
+            &cfg,
+        );
+        assert_eq!(plan.len(), 1);
+        assert!(plan[0].output.to_string_lossy().ends_with("stream-AV1.mkv"));
     }
 
     #[test]

@@ -24,10 +24,7 @@ pub fn pick_url_input_file() -> Option<std::path::PathBuf> {
 pub fn pick_convert_input_files() -> Vec<std::path::PathBuf> {
     rfd::FileDialog::new()
         .set_title("Select video files for conversion")
-        .add_filter(
-            "Video files",
-            &["mp4", "mkv", "avi", "mov", "webm", "m4v", "wmv"],
-        )
+        .add_filter("Video files", crate::transcode::CONVERT_VIDEO_EXTENSIONS)
         .pick_files()
         .unwrap_or_default()
 }

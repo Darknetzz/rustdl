@@ -149,7 +149,7 @@ Track URLs whose source quality may improve over time (e.g. a live premiere that
 
 ### Video Converter notes
 
-- Input accepts file and folder paths (one per line).
+- Input accepts file and folder paths (one per line). Supported containers: `mp4`, `mkv`, `avi`, `mov`, `webm`, `m4v`, `wmv`, `flv`.
 - Output is written **next to each input file** by default (`movie.mkv` → `movie-AV1.mkv` in the same folder). Set **Output folder** under Settings → Video Converter to send all batch outputs to one directory instead.
 - **Target codec** (Settings → Converter): AV1 (default), H.265, or H.264.
 - **Rate control**: Bitrate (`-b:v`, default) or Quality (**CRF**). Lower CRF is higher quality and larger files. CPU encoders use ffmpeg `-crf`; NVIDIA uses `-cq`; AMD uses QP. The size preset still scales bitrate or offsets CRF.
