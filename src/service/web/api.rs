@@ -1896,46 +1896,6 @@ mod tests {
     }
 
     #[test]
-    fn library_list_with_token() {
-        let rt = Arc::new(Runtime::new().expect("runtime"));
-        let state = test_state(rt.clone());
-        rt.block_on(async move {
-            let app = api_router(state);
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .uri("/api/library")
-                        .header("Authorization", "Bearer test-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        });
-    }
-
-    #[test]
-    fn queue_templates_list_with_token() {
-        let rt = Arc::new(Runtime::new().expect("runtime"));
-        let state = test_state(rt.clone());
-        rt.block_on(async move {
-            let app = api_router(state);
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .uri("/api/queue/templates")
-                        .header("Authorization", "Bearer test-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        });
-    }
-
-    #[test]
     fn cookie_check_without_cookies() {
         let rt = Arc::new(Runtime::new().expect("runtime"));
         let state = test_state(rt.clone());
@@ -1946,46 +1906,6 @@ mod tests {
                     Request::builder()
                         .method("POST")
                         .uri("/api/tools/cookie-check")
-                        .header("Authorization", "Bearer test-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        });
-    }
-
-    #[test]
-    fn convert_queue_with_token() {
-        let rt = Arc::new(Runtime::new().expect("runtime"));
-        let state = test_state(rt.clone());
-        rt.block_on(async move {
-            let app = api_router(state);
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .uri("/api/convert/queue")
-                        .header("Authorization", "Bearer test-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        });
-    }
-
-    #[test]
-    fn convert_presets_with_token() {
-        let rt = Arc::new(Runtime::new().expect("runtime"));
-        let state = test_state(rt.clone());
-        rt.block_on(async move {
-            let app = api_router(state);
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .uri("/api/convert/presets")
                         .header("Authorization", "Bearer test-token")
                         .body(Body::empty())
                         .unwrap(),

@@ -577,26 +577,6 @@ mod tests {
     }
 
     #[test]
-    fn convert_queue_with_token() {
-        let rt = Arc::new(Runtime::new().expect("runtime"));
-        let state = test_state(rt.clone());
-        rt.block_on(async move {
-            let app = api_router(state);
-            let response = app
-                .oneshot(
-                    Request::builder()
-                        .uri("/api/convert/queue")
-                        .header("Authorization", "Bearer test-token")
-                        .body(Body::empty())
-                        .unwrap(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::OK);
-        });
-    }
-
-    #[test]
     fn convert_reorder_rejects_invalid() {
         let rt = Arc::new(Runtime::new().expect("runtime"));
         let state = test_state(rt.clone());

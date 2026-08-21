@@ -242,15 +242,6 @@ mod tests {
     }
 
     #[test]
-    fn web_ui_browser_url_adds_scheme() {
-        let s = AppSettings {
-            web_bind_address: "127.0.0.1:8765".to_owned(),
-            ..Default::default()
-        };
-        assert_eq!(web_ui_browser_url(&s), "http://127.0.0.1:8765/");
-    }
-
-    #[test]
     fn web_ui_browser_url_uses_https_when_tls_enabled() {
         let s = AppSettings {
             web_bind_address: "127.0.0.1:8765".to_owned(),

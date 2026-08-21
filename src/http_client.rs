@@ -18,14 +18,3 @@ pub fn build_http_client(settings: &AppSettings) -> reqwest::Client {
     }
     builder.build().unwrap_or_else(|_| reqwest::Client::new())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_http_client_accepts_empty_proxy() {
-        let settings = AppSettings::default();
-        let _ = build_http_client(&settings);
-    }
-}

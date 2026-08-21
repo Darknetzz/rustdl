@@ -54,7 +54,7 @@ See `README.md` → **Run** for examples.
 |-------|--------|-------|
 | `src/` Rust | ~35k | Single crate, 75 `.rs` files |
 | `web-assets/app.js` | ~5.3k | Second UI stack for LAN web (duplicates much queue/settings UX) |
-| `tests/` | ~5.7k | Integration + perf (`queue_perf.rs` is large) |
+| `tests/` | small | Ignored subprocess smoke + manual queue perf benches |
 | `scripts/` | ~3k | Build, release, CI — not shipped |
 
 **Hotspot files** (start here when debugging layout or queue behavior): `src/app/mod.rs`, `src/app_ui.rs`, `src/app/settings_panel.rs`, `src/service/core.rs`, `src/service/web/api.rs`, `web-assets/app.js`.
@@ -154,9 +154,8 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | Path | Role |
 |------|------|
 | `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`, fonts) |
-| `tests/ytdlp_fixtures.rs` | yt-dlp argument / fixture tests |
-| `tests/queue_perf.rs` | Queue layout and perf regression tests |
-| `tests/subprocess_smoke.rs` | Subprocess smoke tests |
+| `tests/queue_perf.rs` | Ignored manual queue/mirror perf benches |
+| `tests/subprocess_smoke.rs` | Ignored yt-dlp PATH smoke (`RUSTDL_IT=1`) |
 | `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
 | `scripts/ci_local.ps1`, `scripts/ci_local.sh` | Local fmt / clippy / test / deny / audit |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
@@ -226,7 +225,7 @@ When editing UI spacing or panels, check both **docked** (main window) and **flo
 | Download library / completed files | `domain/done_file_index.rs`, `core.rs` refresh helpers |
 | CLI headless mode | `cli.rs` |
 | New persisted user file | `config.rs` (path helper), relevant store module, `README.md` + this file |
-| Layout math / presets | `app_ui.rs`, `videos_panel.rs`, tests in `tests/queue_perf.rs` |
+| Layout math / presets | `app_ui.rs`, `videos_panel.rs` (unit tests in `app_ui.rs`) |
 
 ### Layout QA checklist (manual)
 
@@ -400,7 +399,7 @@ Configure the webhook for **push** events on `Darknetzz/rustdl`. Payload URL pat
 - **Dual UI**: If a feature is exposed on the LAN web UI, update `web-assets/app.js` and web API handlers — not just egui panels.
 - **Scope**: Smallest correct diff; match existing naming and patterns in the file you touch. Prefer extending existing helpers in `app_ui.rs` / `core.rs` over new abstractions.
 - **Comments**: Only for non-obvious behavior; prefer clear code.
-- **Tests**: Add or extend tests when fixing real behavior bugs; layout regressions often go in `tests/queue_perf.rs`. Avoid trivial tests unless requested.
+- **Tests**: Add or extend tests when fixing real behavior bugs; layout regressions belong in `app_ui.rs` unit tests. Avoid trivial / tautological tests unless requested.
 - **Docs**: Do not add new markdown files unless asked. Keep `README.md` (user-facing) and `AGENTS.md` (agent-facing) in sync when adding features or persisted files.
 - **Git**: Do not commit, push, or open PRs unless the user explicitly asks. Do not change git config. When committing user-facing work, include the `CHANGELOG.md` update (see **CHANGELOG (required)** above); bump `Cargo.toml` `version` on medium/bigger commits (see **Versioning and releases**) and tag the bump commit with `rustdl-vX.Y.Z` (bump scripts or `-TagOnly`; do not push the tag until release unless asked).
 - **Secrets**: Never commit API tokens, config exports, or user `rustdl_config.json` contents.

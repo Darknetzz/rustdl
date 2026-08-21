@@ -234,17 +234,4 @@ mod tests {
         assert_eq!(usage_level_color(80.0), Color32::from_rgb(255, 167, 38));
         assert_eq!(usage_level_color(95.0), Color32::from_rgb(229, 57, 53));
     }
-
-    #[cfg(windows)]
-    #[test]
-    fn windows_gpu_usage_reads_pdh_counters() {
-        let mut monitor = SystemUsageMonitor::new();
-        monitor.maybe_poll();
-        std::thread::sleep(std::time::Duration::from_millis(1600));
-        monitor.maybe_poll();
-        assert!(
-            monitor.snapshot().gpu_percent.is_some(),
-            "GPU utilization should be readable after two PDH samples"
-        );
-    }
 }

@@ -2439,38 +2439,21 @@ mod thumbnail_cache_tests {
         assert!(core.cached_thumbnail_bytes(999_001, "a").is_none());
     }
 
-    /// Loads a saved on-disk downloader thumbnail via [`thumbnail_store`].
+    /// In-memory cache hit after `cache_thumbnail_bytes`.
     #[test]
-    fn cached_thumbnail_loads_saved_downloader_image_when_key_matches() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let bytes = vec![0x89u8; 64];
-        crate::thumbnail_store::save_downloader_thumbnail_at(
-            dir.path(),
-            42,
-            crate::thumbnail_store::DownloaderThumbnailSave {
-                source_key: "key-a",
-                content_type: "image/png",
-                webpage_url: "https://example.com/watch?v=abc",
-                thumbnail_url: None,
-                source_line: "https://example.com/watch?v=abc",
-                bytes: &bytes,
-            },
-        )
-        .expect("save thumbnail");
+    fn cached_thumbnail_returns_bytes_when_key_matches() {
         let runtime = Arc::new(Runtime::new().expect("runtime"));
         let (shared, _rx) = DownloadCore::new_shared(runtime, true);
         let mut core = shared.lock();
+        let bytes = vec![0x89u8; 64];
         core.items.push(QueueItem {
             item_id: 42,
             webpage_url: "https://example.com/watch?v=abc".to_owned(),
             source_line: "https://example.com/watch?v=abc".to_owned(),
-            thumbnail_path: Some("thumbnails/downloader/42.img".to_owned()),
             ..Default::default()
         });
         core.rebuild_item_index();
         let key = DownloadCore::queue_thumbnail_source_key(&core.items[0]);
-        // Point load at temp dir by saving through cache which uses global dir;
-        // verify in-memory cache path instead.
         core.cache_thumbnail_bytes(42, key.clone(), bytes.clone(), "image/png");
         assert!(
             core.cached_thumbnail_bytes(42, &key).is_some(),

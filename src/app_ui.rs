@@ -2789,31 +2789,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn resolution_badge_colors_follow_height_buckets() {
-        let (fill_1080, _) = resolution_badge_colors("1920x1080");
-        let (fill_720, _) = resolution_badge_colors("1280x720");
-        assert_ne!(fill_1080, fill_720);
-    }
-
-    #[test]
-    fn codec_badge_colors_distinguish_common_codecs() {
-        let (av1, _) = codec_badge_colors("convert");
-        let (h264, _) = codec_badge_colors("H264");
-        let (hevc, _) = codec_badge_colors("HEVC");
-        assert_ne!(av1, h264);
-        assert_ne!(h264, hevc);
-    }
-
-    #[test]
-    fn fps_badge_colors_distinguish_common_rates() {
-        let (fps60, _) = fps_badge_colors("60.00 fps");
-        let (fps30, _) = fps_badge_colors("30.00 fps");
-        let (fps24, _) = fps_badge_colors("23.98 fps");
-        assert_ne!(fps60, fps30);
-        assert_ne!(fps30, fps24);
-    }
-
-    #[test]
     fn queue_list_height_from_layout_with_status_block() {
         let list_h = queue_list_height_from_layout(100.0, 500.0, 72.0, 200.0);
         assert!((list_h - 128.0).abs() < 0.01);

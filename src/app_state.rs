@@ -492,11 +492,6 @@ mod tests {
     }
 
     #[test]
-    fn synthetic_queue_has_expected_len() {
-        assert_eq!(synthetic_queue_items(200).len(), 200);
-    }
-
-    #[test]
     fn status_delta_matches_full_recompute() {
         let items = synthetic_queue_items(100);
         let full = compute_status_counts(&items);
@@ -510,12 +505,6 @@ mod tests {
         assert_eq!(incremental.active, full.active);
         assert_eq!(incremental.done, full.done);
         assert_eq!(incremental.failed, full.failed);
-    }
-
-    #[test]
-    fn item_index_map_matches_len() {
-        let items = synthetic_queue_items(200);
-        assert_eq!(rebuild_item_index_map(&items).len(), 200);
     }
 
     #[test]

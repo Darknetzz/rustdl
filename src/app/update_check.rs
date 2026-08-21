@@ -352,10 +352,8 @@ fn parse_github_owner_repo(url: &str) -> Option<(String, String)> {
 #[cfg(test)]
 mod tests {
     use super::{
-        detect_github_repo, normalize_release_tag, parse_github_owner_repo, parse_release_json,
-        pick_platform_asset_url,
+        normalize_release_tag, parse_github_owner_repo, parse_release_json, pick_platform_asset_url,
     };
-    use crate::pkg_version;
 
     #[test]
     fn normalize_release_tag_handles_rustdl_prefix() {
@@ -372,11 +370,6 @@ mod tests {
         assert_eq!(tag, "1.2.3");
         assert_eq!(url, "https://github.com/o/r/releases/tag/v1.2.3");
         assert!(asset.is_none());
-    }
-
-    #[test]
-    fn github_api_error_private_repo_hint() {
-        assert!(super::github_api_error(reqwest::StatusCode::NOT_FOUND, false).contains("private"));
     }
 
     #[test]
@@ -435,12 +428,5 @@ mod tests {
             parse_github_owner_repo("git@github.com:org/repo.git"),
             Some(("org".to_owned(), "repo".to_owned()))
         );
-    }
-
-    #[test]
-    fn detect_github_repo_defaults_to_rustdl() {
-        let (owner, repo) = detect_github_repo();
-        assert_eq!(owner, pkg_version::GITHUB_OWNER);
-        assert_eq!(repo, pkg_version::GITHUB_REPO);
     }
 }

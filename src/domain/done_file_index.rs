@@ -432,18 +432,8 @@ mod tests {
     #[cfg(windows)]
     fn path_is_under_output_dir_accepts_extended_length_prefix() {
         assert!(super::path_is_under_output_dir(
-            r"D:\Kriss\Downloads",
-            Path::new(r"\\?\D:\Kriss\Downloads\clip [abc123].mkv"),
+            r"D:\Videos\Out",
+            Path::new(r"\\?\D:\Videos\Out\clip [abc123].mkv"),
         ));
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn resolve_path_under_output_accepts_extended_length_prefix() {
-        let saved =
-            r"\\?\D:\Kriss\Downloads\Last two Afghan Jews fighting each other [b4fx6BjWEqk].mkv";
-        if Path::new(saved).is_file() {
-            assert!(super::resolve_path_under_output(r"D:\Kriss\Downloads", saved).is_some());
-        }
     }
 }

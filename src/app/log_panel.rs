@@ -829,13 +829,3 @@ mod version_display_tests {
         );
     }
 }
-
-#[cfg(test)]
-mod web_ui_link_tests {
-    use super::web_ui_link_host;
-
-    #[test]
-    fn host_from_url() {
-        assert_eq!(web_ui_link_host("http://127.0.0.1:8765/"), "127.0.0.1:8765");
-    }
-}

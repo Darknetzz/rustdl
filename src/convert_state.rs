@@ -176,32 +176,6 @@ pub fn rebuild_convert_item_index_map(items: &[ConvertQueueItem]) -> HashMap<u64
     map
 }
 
-/// Synthetic converter rows for performance regression tests.
-pub fn synthetic_convert_items(count: usize) -> Vec<ConvertQueueItem> {
-    (0..count)
-        .map(|i| {
-            let item_id = (i + 1) as u64;
-            ConvertQueueItem {
-                item_id,
-                source_path: format!(r"C:\videos\clip_{item_id}.mp4"),
-                output_path: format!(r"C:\out\clip_{item_id}.mkv"),
-                status: match i % 5 {
-                    0 => ItemStatus::Idle,
-                    1 => ItemStatus::Queued,
-                    2 => ItemStatus::Downloading,
-                    3 => ItemStatus::Done,
-                    _ => ItemStatus::Failed,
-                },
-                percent: if i % 5 == 2 { 42.0 } else { 0.0 },
-                detail: String::new(),
-                input_bytes: 1_000_000,
-                output_bytes: if i % 5 == 3 { Some(400_000) } else { None },
-                ..Default::default()
-            }
-        })
-        .collect()
-}
-
 /// Pending row that will be skipped at encode time (already target codec, re-encode disabled,
 /// and not wider than the configured max width — a source that still needs downscaling is
 /// re-encoded even when its codec already matches the target).

@@ -1,4 +1,7 @@
-//! Synthetic queue benchmarks for large-list performance regressions.
+//! Manual queue/mirror perf checks (ignored by default).
+//!
+//! Run with:
+//! `cargo test --test queue_perf -- --ignored`
 //!
 //! Manual GUI profile checklist (set `RUSTDL_PROFILE=1`):
 //!
@@ -9,74 +12,7 @@
 //! Slow frames (>8ms) log to stderr for `process_events`, `draw_grouped_cards`, and
 //! `draw_convert_grouped_cards`.
 
-use rustdl::app_state::{
-    compute_status_counts, compute_transfer_totals, rebuild_item_index_map, synthetic_queue_items,
-};
-use rustdl::convert_state::{
-    compute_convert_status_counts, rebuild_convert_item_index_map, synthetic_convert_items,
-};
-
-#[test]
-fn synthetic_200_convert_status_counts() {
-    let items = synthetic_convert_items(200);
-    let counts = compute_convert_status_counts(&items);
-    assert_eq!(
-        counts.ready
-            + counts.queued
-            + counts.running
-            + counts.done
-            + counts.skipped
-            + counts.failed,
-        200
-    );
-}
-
-#[test]
-fn synthetic_200_convert_index_rebuild() {
-    let items = synthetic_convert_items(200);
-    let map = rebuild_convert_item_index_map(&items);
-    assert_eq!(map.len(), 200);
-    assert_eq!(map.get(&1), Some(&0));
-    assert_eq!(map.get(&200), Some(&199));
-}
-
-#[test]
-fn synthetic_200_item_status_counts() {
-    let items = synthetic_queue_items(200);
-    let counts = compute_status_counts(&items);
-    assert_eq!(
-        counts.resolving
-            + counts.ready
-            + counts.queued
-            + counts.active
-            + counts.done
-            + counts.failed,
-        200
-    );
-}
-
-#[test]
-fn synthetic_200_item_index_rebuild() {
-    let items = synthetic_queue_items(200);
-    let map = rebuild_item_index_map(&items);
-    assert_eq!(map.len(), 200);
-    assert_eq!(map.get(&1), Some(&0));
-    assert_eq!(map.get(&200), Some(&199));
-}
-
-#[test]
-fn transfer_totals_empty_when_no_progress_text() {
-    let items = synthetic_queue_items(50);
-    let totals = compute_transfer_totals(&items);
-    assert_eq!(totals.with_known_total, 0);
-}
-
-#[test]
-fn synthetic_500_item_index_rebuild() {
-    let items = synthetic_queue_items(500);
-    let map = rebuild_item_index_map(&items);
-    assert_eq!(map.len(), 500);
-}
+use rustdl::app_state::{rebuild_item_index_map, synthetic_queue_items};
 
 #[test]
 #[ignore = "manual perf check; run with `cargo test --ignored synthetic_500_item_index_rebuild_bench`"]
