@@ -238,6 +238,9 @@ pub struct AppSettings {
     /// Constant rate factor / quality (lower = higher quality). Used when rate control is `crf`.
     #[serde(default = "default_convert_crf")]
     pub convert_crf: u32,
+    /// In bitrate mode, never encode above the probed source bitrate.
+    #[serde(default = "default_convert_cap_bitrate_to_source")]
+    pub convert_cap_bitrate_to_source: bool,
     /// Maximum output width (maintain aspect ratio).
     #[serde(default = "default_convert_max_width", alias = "av1_max_width")]
     pub convert_max_width: u32,
@@ -600,6 +603,10 @@ fn default_convert_crf() -> u32 {
     23
 }
 
+fn default_convert_cap_bitrate_to_source() -> bool {
+    true
+}
+
 pub const CONVERT_CRF_MAX: u32 = 63;
 
 /// Normalizes stored converter rate control (`bitrate` or `crf`).
@@ -804,6 +811,7 @@ impl Default for AppSettings {
             convert_target_bitrate: String::new(),
             convert_rate_control: default_convert_rate_control(),
             convert_crf: default_convert_crf(),
+            convert_cap_bitrate_to_source: default_convert_cap_bitrate_to_source(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
             convert_min_shrink_percent: 0.0,

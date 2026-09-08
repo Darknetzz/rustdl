@@ -154,6 +154,8 @@ pub struct ConvertInputMedia {
     pub height: Option<u32>,
     pub fps: Option<f32>,
     pub bitrate_bps: Option<u64>,
+    /// Video/container bitrate suitable for encode caps (never audio-only).
+    pub encode_cap_bitrate_bps: Option<u64>,
     pub duration_ms: Option<u64>,
     pub format_name: Option<String>,
     pub creation_time: Option<String>,
@@ -179,6 +181,8 @@ pub struct ConvertConfig {
     /// `bitrate` or `crf`.
     pub rate_control: String,
     pub crf: u32,
+    /// When true (bitrate mode), clamp `-b:v` / `-maxrate` to the source bitrate.
+    pub cap_bitrate_to_source: bool,
     pub max_width: u32,
     pub size_preset: String,
     pub size_limit: ConvertSizeLimit,
@@ -459,9 +463,60 @@ fn preset_bitrate_multiplier(preset: &str) -> f64 {
     }
 }
 
-fn effective_target_bitrate_bps(cfg: &ConvertConfig) -> i64 {
+fn configured_target_bitrate_bps(cfg: &ConvertConfig) -> i64 {
     let base = parse_bitrate_to_bps(&cfg.target_bitrate).unwrap_or(BITRATE_FALLBACK_BPS);
     (base as f64 * preset_bitrate_multiplier(&cfg.size_preset)).round() as i64
+}
+
+/// Source bitrate used to cap encode targets: video stream → container → size estimate.
+pub fn source_bitrate_for_encode_cap(media: &ConvertInputMedia) -> Option<u64> {
+    media
+        .encode_cap_bitrate_bps
+        .or(media.bitrate_bps)
+        .filter(|&bps| bps > 0)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ResolvedEncodeBitrate {
+    target_bps: i64,
+    /// When set, NVIDIA `-maxrate` must not exceed this (typically source bitrate).
+    maxrate_cap_bps: Option<i64>,
+    /// Uncapped configured target when a source cap reduced it.
+    capped_from_bps: Option<i64>,
+}
+
+fn resolve_encode_bitrate_bps(
+    cfg: &ConvertConfig,
+    source_cap_bps: Option<u64>,
+) -> ResolvedEncodeBitrate {
+    let uncapped = configured_target_bitrate_bps(cfg);
+    if convert_uses_crf(cfg) || !cfg.cap_bitrate_to_source {
+        return ResolvedEncodeBitrate {
+            target_bps: uncapped,
+            maxrate_cap_bps: None,
+            capped_from_bps: None,
+        };
+    }
+    let Some(src) = source_cap_bps.filter(|&b| b > 0).map(|b| b as i64) else {
+        return ResolvedEncodeBitrate {
+            target_bps: uncapped,
+            maxrate_cap_bps: None,
+            capped_from_bps: None,
+        };
+    };
+    if uncapped > src {
+        ResolvedEncodeBitrate {
+            target_bps: src,
+            maxrate_cap_bps: Some(src),
+            capped_from_bps: Some(uncapped),
+        }
+    } else {
+        ResolvedEncodeBitrate {
+            target_bps: uncapped,
+            maxrate_cap_bps: Some(src),
+            capped_from_bps: None,
+        }
+    }
 }
 
 fn preset_crf_offset(preset: &str) -> i32 {
@@ -482,15 +537,24 @@ fn effective_crf(cfg: &ConvertConfig) -> u32 {
     adjusted.clamp(0, crate::config::CONVERT_CRF_MAX as i32) as u32
 }
 
+fn nvidia_maxrate_bps(target_bitrate_bps: i64, maxrate_cap_bps: Option<i64>) -> i64 {
+    let mut maxrate =
+        (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
+    if let Some(cap) = maxrate_cap_bps {
+        maxrate = maxrate.min(cap);
+    }
+    maxrate.max(target_bitrate_bps)
+}
+
 fn encoder_rate_control_args(
     enc: &EncoderChoice,
     use_crf: bool,
     target_bitrate_bps: i64,
     crf: u32,
+    maxrate_cap_bps: Option<i64>,
 ) -> Vec<String> {
     let bitrate = target_bitrate_bps.to_string();
-    let maxrate =
-        ((target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64).to_string();
+    let maxrate = nvidia_maxrate_bps(target_bitrate_bps, maxrate_cap_bps).to_string();
     let bufsize =
         ((target_bitrate_bps as f64 * BITRATE_BUFSIZE_MULTIPLIER).round() as i64).to_string();
     let quality = crf.to_string();
@@ -596,12 +660,18 @@ fn encoder_rate_control_args(
     }
 }
 
-fn append_encoder_rate_control(cmd: &mut Command, enc: &EncoderChoice, cfg: &ConvertConfig) {
+fn append_encoder_rate_control(
+    cmd: &mut Command,
+    enc: &EncoderChoice,
+    cfg: &ConvertConfig,
+    resolved: ResolvedEncodeBitrate,
+) {
     cmd.args(encoder_rate_control_args(
         enc,
         convert_uses_crf(cfg),
-        effective_target_bitrate_bps(cfg),
+        resolved.target_bps,
         effective_crf(cfg),
+        resolved.maxrate_cap_bps,
     ));
 }
 
@@ -971,11 +1041,22 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         })
         .or_else(|| format.bit_rate.as_deref().and_then(parse_bitrate_field));
 
-    if bitrate_bps.is_none() {
+    let mut encode_cap_bitrate_bps = video
+        .and_then(|s| s.bit_rate.as_deref())
+        .and_then(parse_bitrate_field)
+        .or_else(|| format.bit_rate.as_deref().and_then(parse_bitrate_field));
+
+    if bitrate_bps.is_none() || encode_cap_bitrate_bps.is_none() {
         if let (Some(ms), Ok(meta)) = (duration_ms, std::fs::metadata(file_path)) {
             let secs = ms as f64 / 1000.0;
             if secs > 0.0 {
-                bitrate_bps = Some(((meta.len() as f64 * 8.0 / secs) * 0.9) as u64);
+                let estimated = ((meta.len() as f64 * 8.0 / secs) * 0.9) as u64;
+                if bitrate_bps.is_none() {
+                    bitrate_bps = Some(estimated);
+                }
+                if encode_cap_bitrate_bps.is_none() {
+                    encode_cap_bitrate_bps = Some(estimated);
+                }
             }
         }
     }
@@ -986,6 +1067,7 @@ pub fn probe_input_media(file_path: &Path, ffprobe_path: &str) -> Option<Convert
         height,
         fps,
         bitrate_bps,
+        encode_cap_bitrate_bps,
         duration_ms,
         format_name: format
             .format_name
@@ -1540,6 +1622,7 @@ struct FfmpegEncodePass<'a> {
     subtitle_mode: &'a str,
     has_subtitles: bool,
     copy_audio: bool,
+    resolved_bitrate: ResolvedEncodeBitrate,
 }
 
 fn run_ffmpeg_convert_encode<F>(
@@ -1579,7 +1662,7 @@ where
     if pass.enc.codec == "hevc" && pass.enc.hw_type != "cpu" {
         cmd.args(["-tag:v", "hvc1"]);
     }
-    append_encoder_rate_control(&mut cmd, pass.enc, pass.cfg);
+    append_encoder_rate_control(&mut cmd, pass.enc, pass.cfg, pass.resolved_bitrate);
     if pass.subtitle_mode == "soft" && pass.has_subtitles {
         append_soft_subtitle_maps(&mut cmd);
     }
@@ -1682,13 +1765,23 @@ where
         ));
         return Ok(plan.output.clone());
     }
-    let target_bitrate_bps = effective_target_bitrate_bps(cfg);
+    let probed = probe_input_media(&plan.input, &cfg.ffprobe_path);
+    let source_cap = probed
+        .as_ref()
+        .and_then(source_bitrate_for_encode_cap);
+    let resolved = resolve_encode_bitrate_bps(cfg, source_cap);
+    if let Some(from) = resolved.capped_from_bps {
+        on_line(format!(
+            "bitrate_capped_to_source={} from={}",
+            resolved.target_bps, from
+        ));
+    }
+    let target_bitrate_bps = resolved.target_bps;
     if cfg.size_limit.is_active() && !convert_uses_crf(cfg) {
         if let Ok(meta) = std::fs::metadata(&plan.input) {
             let input_bytes = meta.len();
             if input_bytes > 0 {
-                let media = probe_input_media(&plan.input, &cfg.ffprobe_path);
-                let duration_secs = media
+                let duration_secs = probed
                     .as_ref()
                     .and_then(|m| m.duration_ms)
                     .map(|ms| ms as f64 / 1000.0)
@@ -1761,6 +1854,7 @@ where
         subtitle_mode: &subtitle_mode,
         has_subtitles,
         copy_audio: false,
+        resolved_bitrate: resolved,
     };
     if let Err(err) = run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)) {
         let err_text = convert_error_text(&err);
@@ -1822,6 +1916,7 @@ mod tests {
             target_bitrate: String::new(),
             rate_control: "bitrate".to_owned(),
             crf: 23,
+            cap_bitrate_to_source: true,
             max_width: 1920,
             size_preset: "balanced".to_owned(),
             size_limit: ConvertSizeLimit::default(),
@@ -2063,26 +2158,34 @@ Invalid data found when processing input";
 
     #[test]
     fn encoder_rate_control_bitrate_keeps_b_v() {
-        let args = encoder_rate_control_args(&test_encoder("libx264", "cpu"), false, 2_000_000, 23);
+        let args =
+            encoder_rate_control_args(&test_encoder("libx264", "cpu"), false, 2_000_000, 23, None);
         assert!(args.windows(2).any(|w| w == ["-b:v", "2000000"]));
         assert!(!args.contains(&"-crf".to_owned()));
     }
 
     #[test]
     fn encoder_rate_control_crf_cpu_uses_crf() {
-        let x264 = encoder_rate_control_args(&test_encoder("libx264", "cpu"), true, 2_000_000, 23);
+        let x264 =
+            encoder_rate_control_args(&test_encoder("libx264", "cpu"), true, 2_000_000, 23, None);
         assert!(x264.windows(2).any(|w| w == ["-crf", "23"]));
         assert!(!x264.contains(&"-b:v".to_owned()));
 
-        let svt = encoder_rate_control_args(&test_encoder("libsvtav1", "cpu"), true, 2_000_000, 32);
+        let svt =
+            encoder_rate_control_args(&test_encoder("libsvtav1", "cpu"), true, 2_000_000, 32, None);
         assert!(svt.windows(2).any(|w| w == ["-crf", "32"]));
         assert!(!svt.contains(&"-b:v".to_owned()));
     }
 
     #[test]
     fn encoder_rate_control_crf_nvenc_uses_cq() {
-        let args =
-            encoder_rate_control_args(&test_encoder("hevc_nvenc", "nvidia"), true, 2_000_000, 23);
+        let args = encoder_rate_control_args(
+            &test_encoder("hevc_nvenc", "nvidia"),
+            true,
+            2_000_000,
+            23,
+            None,
+        );
         assert!(args.windows(2).any(|w| w == ["-cq", "23"]));
         assert!(!args.contains(&"-b:v".to_owned()));
         assert!(!args.contains(&"-maxrate".to_owned()));
@@ -2090,12 +2193,98 @@ Invalid data found when processing input";
 
     #[test]
     fn encoder_rate_control_crf_amf_uses_qp() {
-        let args = encoder_rate_control_args(&test_encoder("hevc_amf", "amd"), true, 2_000_000, 28);
+        let args = encoder_rate_control_args(
+            &test_encoder("hevc_amf", "amd"),
+            true,
+            2_000_000,
+            28,
+            None,
+        );
         assert!(args.windows(2).any(|w| w == ["-rc", "cqp"]));
         assert!(args.windows(2).any(|w| w == ["-qp_i", "28"]));
         assert!(args.windows(2).any(|w| w == ["-qp_p", "28"]));
         assert!(args.windows(2).any(|w| w == ["-qp_b", "28"]));
         assert!(!args.contains(&"-b:v".to_owned()));
+    }
+
+    #[test]
+    fn resolve_encode_bitrate_caps_to_source() {
+        let dir = Path::new(".");
+        let mut cfg = test_config(dir, "av1", true);
+        cfg.cap_bitrate_to_source = true;
+        cfg.target_bitrate = String::new(); // 2 Mbps fallback
+        cfg.size_preset = "balanced".to_owned();
+
+        let capped = resolve_encode_bitrate_bps(&cfg, Some(1_500_000));
+        assert_eq!(capped.target_bps, 1_500_000);
+        assert_eq!(capped.maxrate_cap_bps, Some(1_500_000));
+        assert_eq!(capped.capped_from_bps, Some(2_000_000));
+
+        let below = resolve_encode_bitrate_bps(&cfg, Some(3_000_000));
+        assert_eq!(below.target_bps, 2_000_000);
+        assert_eq!(below.maxrate_cap_bps, Some(3_000_000));
+        assert_eq!(below.capped_from_bps, None);
+
+        let unknown = resolve_encode_bitrate_bps(&cfg, None);
+        assert_eq!(unknown.target_bps, 2_000_000);
+        assert_eq!(unknown.maxrate_cap_bps, None);
+
+        cfg.cap_bitrate_to_source = false;
+        let uncapped = resolve_encode_bitrate_bps(&cfg, Some(1_000_000));
+        assert_eq!(uncapped.target_bps, 2_000_000);
+        assert_eq!(uncapped.maxrate_cap_bps, None);
+    }
+
+    #[test]
+    fn resolve_encode_bitrate_applies_preset_then_cap() {
+        let dir = Path::new(".");
+        let mut cfg = test_config(dir, "av1", true);
+        cfg.cap_bitrate_to_source = true;
+        cfg.target_bitrate = "2M".to_owned();
+        cfg.size_preset = "light".to_owned(); // 2M * 1.25 = 2.5M
+        let resolved = resolve_encode_bitrate_bps(&cfg, Some(2_000_000));
+        assert_eq!(resolved.target_bps, 2_000_000);
+        assert_eq!(resolved.capped_from_bps, Some(2_500_000));
+    }
+
+    #[test]
+    fn nvidia_maxrate_respects_source_cap() {
+        assert_eq!(nvidia_maxrate_bps(2_000_000, None), 2_400_000);
+        assert_eq!(nvidia_maxrate_bps(2_000_000, Some(1_800_000)), 2_000_000);
+        assert_eq!(nvidia_maxrate_bps(1_500_000, Some(1_500_000)), 1_500_000);
+        let args = encoder_rate_control_args(
+            &test_encoder("av1_nvenc", "nvidia"),
+            false,
+            1_500_000,
+            23,
+            Some(1_500_000),
+        );
+        assert!(args.windows(2).any(|w| w == ["-b:v", "1500000"]));
+        assert!(args.windows(2).any(|w| w == ["-maxrate", "1500000"]));
+    }
+
+    #[test]
+    fn source_bitrate_for_encode_cap_prefers_encode_cap_field() {
+        let mut media = ConvertInputMedia {
+            bitrate_bps: Some(128_000),
+            encode_cap_bitrate_bps: Some(1_790_000),
+            ..ConvertInputMedia::default()
+        };
+        assert_eq!(source_bitrate_for_encode_cap(&media), Some(1_790_000));
+        media.encode_cap_bitrate_bps = None;
+        assert_eq!(source_bitrate_for_encode_cap(&media), Some(128_000));
+    }
+
+    #[test]
+    fn resolve_encode_bitrate_ignores_cap_in_crf_mode() {
+        let dir = Path::new(".");
+        let mut cfg = test_config(dir, "av1", true);
+        cfg.cap_bitrate_to_source = true;
+        cfg.rate_control = "crf".to_owned();
+        let resolved = resolve_encode_bitrate_bps(&cfg, Some(500_000));
+        assert_eq!(resolved.target_bps, 2_000_000);
+        assert_eq!(resolved.maxrate_cap_bps, None);
+        assert_eq!(resolved.capped_from_bps, None);
     }
 
     #[test]

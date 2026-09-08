@@ -1966,6 +1966,18 @@ impl PydlApp {
                                         .hint_text("auto"),
                                     )
                                     .changed();
+                                ui.end_row();
+                                ui.label("");
+                                changed |= ui
+                                    .checkbox(
+                                        &mut self.settings.convert_cap_bitrate_to_source,
+                                        "Cap bitrate to source",
+                                    )
+                                    .on_hover_text(
+                                        "Never set -b:v / -maxrate above the probed source bitrate. \
+                                         Ignored in Quality (CRF) mode.",
+                                    )
+                                    .changed();
                             }
                             ui.end_row();
                             ui.label("Max width");

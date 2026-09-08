@@ -47,6 +47,7 @@ impl DownloadCore {
             target_bitrate: self.settings.convert_target_bitrate.clone(),
             rate_control: self.settings.convert_rate_control.clone(),
             crf: self.settings.convert_crf,
+            cap_bitrate_to_source: self.settings.convert_cap_bitrate_to_source,
             max_width: self.settings.convert_max_width,
             size_preset: self.settings.convert_size_preset.clone(),
             size_limit: ConvertSizeLimit::from_settings(&self.settings),

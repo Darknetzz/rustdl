@@ -593,6 +593,7 @@
             </select>
           </label>
           <label id="set-convert-bitrate-wrap">Target bitrate <input type="text" id="set-convert-bitrate" placeholder="auto (e.g. 2M, 1500k)" /></label>
+          <label id="set-convert-cap-bitrate-wrap" title="Never set -b:v / -maxrate above the probed source bitrate. Ignored in Quality (CRF) mode."><input type="checkbox" id="set-convert-cap-bitrate" checked /> Cap bitrate to source</label>
           <label id="set-convert-crf-wrap" hidden>CRF
             <input type="number" id="set-convert-crf" min="0" max="63" step="1" title="Lower is higher quality and larger files. Typical H.264 ~18–28, H.265 ~24–32, AV1 ~20–40." />
           </label>
