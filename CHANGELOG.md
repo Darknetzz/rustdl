@@ -12,7 +12,8 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
-- Video Converter default **rate control** is now **Quality (CRF 30)** instead of Bitrate. Existing saved settings are unchanged.
+- Video Converter default **rate control** stays **Bitrate** (empty target → ~2 Mbps auto); Quality (CRF) remains available in Settings. Existing saved settings are unchanged.
+- Video Converter **Cap bitrate to source** defaults to **off** so the 2 Mbps auto fallback can shrink high-bitrate sources again. Turn it on under Settings → Converter if you want to avoid inflating already-efficient clips.
 - Video Converter default **size limit** is now **Min shrink 30%** (skip when the output would not shrink enough). Existing saved settings are unchanged; turn the limit Off under Settings → Converter if you want the old behavior.
 
 ### Fixed
@@ -30,7 +31,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Added
 
-- Video Converter **Cap bitrate to source** (on by default in bitrate mode): clamps `-b:v` / `-maxrate` to the probed source bitrate so the 2 Mbps auto fallback does not inflate already-efficient clips. Desktop + LAN web UI.
+- Video Converter **Cap bitrate to source** (off by default in bitrate mode): clamps `-b:v` / `-maxrate` to the probed source bitrate so the 2 Mbps auto fallback does not inflate already-efficient clips. Desktop + LAN web UI.
 - Video Converter **Rate control**: Bitrate (existing `-b:v`) or Quality (**CRF**). Software encoders use `-crf`; NVIDIA uses `-cq`; AMD uses QP. Size preset still biases bitrate or CRF. Desktop + LAN web UI.
 - **Retry all failed** and **Retry selected** for Video Converter jobs (desktop + LAN web UI + command palette): reset failed encodes to ready so you can start the batch again without re-adding files.
 - **Ctrl+V** / **Cmd+V** pastes into the URL input (Downloader) or path input (Converter) even when that field is not focused, unless another text field or dialog already has keyboard focus.

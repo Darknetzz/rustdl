@@ -3342,11 +3342,11 @@ function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-watchlist-auto-enqueue", s.watchlist_auto_enqueue);
 
   setVal("set-convert-target-codec", s.convert_target_codec || "av1");
-  setVal("set-convert-rate-control", s.convert_rate_control || "crf");
+  setVal("set-convert-rate-control", s.convert_rate_control || "bitrate");
   setVal("set-convert-bitrate", s.convert_target_bitrate);
   setCheck(
     "set-convert-cap-bitrate",
-    s.convert_cap_bitrate_to_source !== false,
+    s.convert_cap_bitrate_to_source === true,
   );
   setVal("set-convert-crf", s.convert_crf ?? 30);
   updateConvertRateControlFieldsVisibility();
@@ -3507,10 +3507,10 @@ function collectSettingsForm(base) {
 
   s.convert_target_codec = document.getElementById("set-convert-target-codec").value || "av1";
   s.convert_rate_control =
-    document.getElementById("set-convert-rate-control")?.value || "crf";
+    document.getElementById("set-convert-rate-control")?.value || "bitrate";
   s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
   s.convert_cap_bitrate_to_source =
-    document.getElementById("set-convert-cap-bitrate")?.checked ?? true;
+    document.getElementById("set-convert-cap-bitrate")?.checked ?? false;
   s.convert_crf = parseInt(document.getElementById("set-convert-crf")?.value, 10);
   if (!Number.isFinite(s.convert_crf)) s.convert_crf = 30;
   s.convert_max_width = parseInt(document.getElementById("set-convert-max-width").value, 10) || 1920;

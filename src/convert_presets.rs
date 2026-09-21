@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{load_json_file, AppSettings};
 
 fn default_preset_rate_control() -> String {
-    "crf".to_owned()
+    "bitrate".to_owned()
 }
 
 fn default_preset_crf() -> u32 {
@@ -17,7 +17,7 @@ fn default_preset_crf() -> u32 {
 }
 
 fn default_preset_cap_bitrate_to_source() -> bool {
-    true
+    false
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
