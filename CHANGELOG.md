@@ -10,6 +10,15 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Changed
+
+- Video Converter default **rate control** is now **Quality (CRF 30)** instead of Bitrate. Existing saved settings are unchanged.
+- Video Converter default **size limit** is now **Min shrink 30%** (skip when the output would not shrink enough). Existing saved settings are unchanged; turn the limit Off under Settings → Converter if you want the old behavior.
+
+### Fixed
+
+- Video Converter **Output size limit** can be set back to **Off** again (turning Off no longer snaps back to Min shrink).
+
 ### Documentation
 
 - README Windows install no longer lists `winget install Darknetzz.rustdl` (the package is not in winget yet); download from GitHub Releases instead.

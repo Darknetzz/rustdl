@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 use crate::config::{load_json_file, AppSettings};
 
 fn default_preset_rate_control() -> String {
-    "bitrate".to_owned()
+    "crf".to_owned()
 }
 
 fn default_preset_crf() -> u32 {
-    23
+    30
 }
 
 fn default_preset_cap_bitrate_to_source() -> bool {
@@ -67,10 +67,10 @@ impl Default for ConvertPresetFields {
             convert_cap_bitrate_to_source: default_preset_cap_bitrate_to_source(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
-            convert_size_limit_kind: String::new(),
-            convert_size_limit_value: String::new(),
+            convert_size_limit_kind: crate::convert_size_limit::default_size_limit_kind(),
+            convert_size_limit_value: crate::convert_size_limit::default_size_limit_value(),
             convert_size_limit_violation: crate::convert_size_limit::VIOLATION_SKIP.to_owned(),
-            convert_min_shrink_percent: 0.0,
+            convert_min_shrink_percent: crate::convert_size_limit::default_min_shrink_percent(),
             convert_cpu_threads: 0,
             convert_parallel: 1,
             convert_encoder_override: String::new(),

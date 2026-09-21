@@ -14,6 +14,21 @@ pub const VIOLATION_FAIL: &str = "fail";
 pub const VIOLATION_ENCODE_DELETE: &str = "encode_delete";
 pub const VIOLATION_KEEP: &str = "keep";
 
+/// Fresh-install default: require at least this much shrink vs source (percent).
+pub const DEFAULT_MIN_SHRINK_PERCENT: f32 = 30.0;
+
+pub fn default_size_limit_kind() -> String {
+    KIND_MIN_SHRINK_PERCENT.to_owned()
+}
+
+pub fn default_size_limit_value() -> String {
+    format!("{:.0}", DEFAULT_MIN_SHRINK_PERCENT)
+}
+
+pub fn default_min_shrink_percent() -> f32 {
+    DEFAULT_MIN_SHRINK_PERCENT
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ConvertSizeLimit {
     pub kind: String,
@@ -266,7 +281,12 @@ pub fn normalize_settings_limits(cfg: &mut AppSettings) {
     cfg.convert_size_limit_kind = normalize_kind(&cfg.convert_size_limit_kind);
     cfg.convert_size_limit_violation = normalize_violation(&cfg.convert_size_limit_violation);
 
-    if cfg.convert_size_limit_kind == KIND_NONE && cfg.convert_min_shrink_percent > 0.0 {
+    // Legacy configs only had `convert_min_shrink_percent` (no kind/value). Do not re-arm
+    // the limit when the user explicitly chooses Off while a leftover value is still present.
+    if cfg.convert_size_limit_kind == KIND_NONE
+        && cfg.convert_size_limit_value.trim().is_empty()
+        && cfg.convert_min_shrink_percent > 0.0
+    {
         cfg.convert_size_limit_kind = KIND_MIN_SHRINK_PERCENT.to_owned();
         cfg.convert_size_limit_value = format!("{:.0}", cfg.convert_min_shrink_percent);
         if cfg.convert_size_limit_violation.is_empty() {
@@ -276,6 +296,7 @@ pub fn normalize_settings_limits(cfg: &mut AppSettings) {
 
     if cfg.convert_size_limit_kind == KIND_NONE {
         cfg.convert_size_limit_value.clear();
+        cfg.convert_min_shrink_percent = 0.0;
     } else if cfg.convert_size_limit_value.trim().is_empty() {
         if cfg.convert_size_limit_kind == KIND_MIN_SHRINK_PERCENT
             && cfg.convert_min_shrink_percent > 0.0
@@ -329,11 +350,39 @@ mod tests {
     fn migrates_legacy_min_shrink_percent() {
         let mut s = AppSettings {
             convert_min_shrink_percent: 40.0,
+            convert_size_limit_kind: String::new(),
+            convert_size_limit_value: String::new(),
             ..Default::default()
         };
         normalize_settings_limits(&mut s);
         assert_eq!(s.convert_size_limit_kind, KIND_MIN_SHRINK_PERCENT);
         assert_eq!(s.convert_size_limit_value, "40");
+    }
+
+    #[test]
+    fn explicit_off_is_not_rearmed_by_legacy_min_shrink() {
+        let mut s = AppSettings {
+            convert_size_limit_kind: KIND_NONE.to_owned(),
+            convert_size_limit_value: "30".to_owned(),
+            convert_min_shrink_percent: 30.0,
+            ..Default::default()
+        };
+        normalize_settings_limits(&mut s);
+        assert_eq!(s.convert_size_limit_kind, KIND_NONE);
+        assert!(s.convert_size_limit_value.is_empty());
+        assert_eq!(s.convert_min_shrink_percent, 0.0);
+        assert!(!ConvertSizeLimit::from_settings(&s).is_active());
+    }
+
+    #[test]
+    fn default_settings_require_thirty_percent_shrink() {
+        let mut s = AppSettings::default();
+        normalize_settings_limits(&mut s);
+        let limit = ConvertSizeLimit::from_settings(&s);
+        assert_eq!(limit.kind, KIND_MIN_SHRINK_PERCENT);
+        assert_eq!(limit.value, f64::from(DEFAULT_MIN_SHRINK_PERCENT));
+        assert!(limit.is_active());
+        assert_eq!(limit.max_allowed_bytes(1_000), Some(700));
     }
 
     #[test]

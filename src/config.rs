@@ -232,10 +232,10 @@ pub struct AppSettings {
     /// Default target bitrate (e.g. 1800k). Empty means auto.
     #[serde(default, alias = "av1_target_bitrate")]
     pub convert_target_bitrate: String,
-    /// Rate control: `bitrate` (default) or `crf` (quality).
+    /// Rate control: `crf` (quality, default) or `bitrate`.
     #[serde(default = "default_convert_rate_control")]
     pub convert_rate_control: String,
-    /// Constant rate factor / quality (lower = higher quality). Used when rate control is `crf`.
+    /// Constant rate factor / quality (lower = higher quality). Used when rate control is `crf`. Default 30.
     #[serde(default = "default_convert_crf")]
     pub convert_crf: u32,
     /// In bitrate mode, never encode above the probed source bitrate.
@@ -247,15 +247,24 @@ pub struct AppSettings {
     /// Output quality policy.
     #[serde(default, alias = "av1_size_preset")]
     pub convert_size_preset: String,
-    /// Require minimum shrink percentage relative to source. Zero disables.
-    /// Legacy alias; synced from [`Self::convert_size_limit_kind`] when that is `min_shrink_percent`.
-    #[serde(default, alias = "av1_min_shrink_percent")]
+    /// Require minimum shrink percentage relative to source (legacy mirror of size limit).
+    /// Synced from [`Self::convert_size_limit_kind`] when that is `min_shrink_percent`.
+    #[serde(
+        default = "crate::convert_size_limit::default_min_shrink_percent",
+        alias = "av1_min_shrink_percent"
+    )]
     pub convert_min_shrink_percent: f32,
     /// Output size limit kind: `none`, `min_shrink_percent`, `max_percent_of_source`, or `max_output_bytes`.
-    #[serde(default, alias = "av1_size_limit_kind")]
+    #[serde(
+        default = "crate::convert_size_limit::default_size_limit_kind",
+        alias = "av1_size_limit_kind"
+    )]
     pub convert_size_limit_kind: String,
     /// Limit value (percent or human size such as `500M`, depending on kind).
-    #[serde(default, alias = "av1_size_limit_value")]
+    #[serde(
+        default = "crate::convert_size_limit::default_size_limit_value",
+        alias = "av1_size_limit_value"
+    )]
     pub convert_size_limit_value: String,
     /// When a limit is violated: `skip`, `fail`, `encode_delete`, or `keep`.
     #[serde(
@@ -596,11 +605,11 @@ fn default_convert_remember_queue() -> bool {
 }
 
 fn default_convert_rate_control() -> String {
-    "bitrate".to_owned()
+    "crf".to_owned()
 }
 
 fn default_convert_crf() -> u32 {
-    23
+    30
 }
 
 fn default_convert_cap_bitrate_to_source() -> bool {
@@ -814,9 +823,9 @@ impl Default for AppSettings {
             convert_cap_bitrate_to_source: default_convert_cap_bitrate_to_source(),
             convert_max_width: 1920,
             convert_size_preset: "balanced".to_owned(),
-            convert_min_shrink_percent: 0.0,
-            convert_size_limit_kind: String::new(),
-            convert_size_limit_value: String::new(),
+            convert_min_shrink_percent: crate::convert_size_limit::default_min_shrink_percent(),
+            convert_size_limit_kind: crate::convert_size_limit::default_size_limit_kind(),
+            convert_size_limit_value: crate::convert_size_limit::default_size_limit_value(),
             convert_size_limit_violation: default_convert_size_limit_violation(),
             convert_remember_queue: true,
             last_mode: default_last_mode(),

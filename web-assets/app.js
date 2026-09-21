@@ -3342,18 +3342,22 @@ function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   setCheck("set-watchlist-auto-enqueue", s.watchlist_auto_enqueue);
 
   setVal("set-convert-target-codec", s.convert_target_codec || "av1");
-  setVal("set-convert-rate-control", s.convert_rate_control || "bitrate");
+  setVal("set-convert-rate-control", s.convert_rate_control || "crf");
   setVal("set-convert-bitrate", s.convert_target_bitrate);
   setCheck(
     "set-convert-cap-bitrate",
     s.convert_cap_bitrate_to_source !== false,
   );
-  setVal("set-convert-crf", s.convert_crf ?? 23);
+  setVal("set-convert-crf", s.convert_crf ?? 30);
   updateConvertRateControlFieldsVisibility();
   setVal("set-convert-max-width", s.convert_max_width);
   setVal("set-convert-preset", s.convert_size_preset);
   let sizeLimitKind = s.convert_size_limit_kind || "none";
-  if (sizeLimitKind === "none" && (s.convert_min_shrink_percent || 0) > 0) {
+  if (
+    sizeLimitKind === "none" &&
+    !(s.convert_size_limit_value || "").trim() &&
+    (s.convert_min_shrink_percent || 0) > 0
+  ) {
     sizeLimitKind = "min_shrink_percent";
     s.convert_size_limit_value = String(s.convert_min_shrink_percent);
   }
@@ -3503,12 +3507,12 @@ function collectSettingsForm(base) {
 
   s.convert_target_codec = document.getElementById("set-convert-target-codec").value || "av1";
   s.convert_rate_control =
-    document.getElementById("set-convert-rate-control")?.value || "bitrate";
+    document.getElementById("set-convert-rate-control")?.value || "crf";
   s.convert_target_bitrate = document.getElementById("set-convert-bitrate").value;
   s.convert_cap_bitrate_to_source =
     document.getElementById("set-convert-cap-bitrate")?.checked ?? true;
   s.convert_crf = parseInt(document.getElementById("set-convert-crf")?.value, 10);
-  if (!Number.isFinite(s.convert_crf)) s.convert_crf = 23;
+  if (!Number.isFinite(s.convert_crf)) s.convert_crf = 30;
   s.convert_max_width = parseInt(document.getElementById("set-convert-max-width").value, 10) || 1920;
   s.convert_size_preset = document.getElementById("set-convert-preset").value;
   s.convert_size_limit_kind =
