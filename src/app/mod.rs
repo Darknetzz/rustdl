@@ -49,7 +49,8 @@ use crate::app_parsing::parse_urls_from_text_blob;
 use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, bounded_ui_height, button_group, centered_button_row,
-    content_width, left_button_row, modal_backdrop, NavbarStatusInputs, ALERT_DANGER_TEXT,
+    content_width, left_button_row, modal_backdrop, modal_window, NavbarStatusInputs,
+    ALERT_DANGER_TEXT,
     ALERT_WARNING_TEXT,
 };
 use crate::config::{
@@ -1410,7 +1411,7 @@ impl PydlApp {
         modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
-        egui::Window::new("Playlist preview")
+        modal_window("Playlist preview")
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
@@ -1505,7 +1506,7 @@ impl PydlApp {
         modal_frame.stroke = egui::Stroke::new(1.0_f32, crate::theme::BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
-        egui::Window::new("Download options")
+        modal_window("Download options")
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
@@ -2609,7 +2610,12 @@ impl PydlApp {
         if !self.session_restore_prompt_open {
             return;
         }
-        let _ = modal_backdrop(ctx, egui::Id::new("session_restore_backdrop"));
+        // Backdrop click = start fresh (same as dismiss). Must run before the window so a
+        // Middle-order full-screen Area cannot stack above the Foreground dialog.
+        if modal_backdrop(ctx, egui::Id::new("session_restore_backdrop")) {
+            self.decline_session_restore();
+            return;
+        }
         let body = self.session_restore_prompt_body();
         let mut modal_frame = egui::Frame::window(&ctx.style());
         modal_frame.fill = BG_LOG;
@@ -2617,7 +2623,7 @@ impl PydlApp {
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
         let mut open = true;
-        egui::Window::new("Restore previous session?")
+        modal_window("Restore previous session?")
             .open(&mut open)
             .frame(modal_frame)
             .collapsible(false)
@@ -2665,7 +2671,7 @@ impl PydlApp {
                 });
             });
         if !open {
-            self.session_restore_prompt_open = false;
+            self.decline_session_restore();
         }
     }
 
@@ -2769,7 +2775,7 @@ impl PydlApp {
         modal_frame.stroke = egui::Stroke::new(1.0_f32, BORDER_PANEL);
         modal_frame.inner_margin = egui::Margin::same(20.0);
         modal_frame.rounding = egui::Rounding::same(8.0);
-        egui::Window::new(if shutting_down {
+        modal_window(if shutting_down {
             "Still shutting down…"
         } else {
             "Quit rustdl?"

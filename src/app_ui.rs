@@ -2161,7 +2161,16 @@ pub fn centered_button_row<R>(
     .inner
 }
 
-/// Dim the viewport behind a modal. Call before the modal window so the dialog stays on top.
+/// Layer for dialog windows drawn after [`modal_backdrop`].
+///
+/// The backdrop is `Order::Middle` and covers the full screen. If the dialog is also Middle,
+/// a click on the dim calls `move_to_top` on the backdrop and it then sits *above* the dialog,
+/// stealing every later click (including the dialog buttons). Foreground keeps the dialog on top.
+pub fn modal_window(title: impl Into<egui::WidgetText>) -> egui::Window<'static> {
+    egui::Window::new(title).order(egui::Order::Foreground)
+}
+
+/// Dim the viewport behind a modal. Call before [`modal_window`] so panels stay dimmed.
 /// Returns `true` if the user clicked the backdrop.
 pub fn modal_backdrop(ctx: &egui::Context, id: egui::Id) -> bool {
     let screen = ctx.screen_rect();

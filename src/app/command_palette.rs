@@ -1,7 +1,7 @@
 use eframe::egui;
 use eframe::egui::{Align, Color32, RichText};
 
-use crate::app_ui::{bounded_ui_height, modal_backdrop};
+use crate::app_ui::{bounded_ui_height, modal_backdrop, modal_window};
 use crate::config::snap_ui_scale;
 use crate::ui_icons;
 
@@ -238,7 +238,7 @@ impl PydlApp {
             self.command_palette_selection = filtered.len() - 1;
         }
 
-        egui::Window::new(format!("{} Command palette", ui_icons::RECHECK))
+        modal_window(format!("{} Command palette", ui_icons::RECHECK))
             .open(&mut palette_open)
             .collapsible(false)
             .resizable(false)
