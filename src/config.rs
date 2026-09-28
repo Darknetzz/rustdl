@@ -226,7 +226,7 @@ pub struct AppSettings {
         deserialize_with = "deserialize_convert_container"
     )]
     pub convert_container: String,
-    /// Target video codec: `av1`, `hevc`, or `h264`.
+    /// Target video codec: `av1`, `hevc`, or `h264` (see [`crate::transcode::TargetCodec`]).
     #[serde(default = "default_convert_target_codec", alias = "av1_target_codec")]
     pub convert_target_codec: String,
     /// Default target bitrate (e.g. 1800k). Empty means auto.

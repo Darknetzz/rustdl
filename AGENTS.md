@@ -134,7 +134,7 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | **`src/service/web/`** | LAN server: `server.rs`, `api.rs`, `convert_api.rs`, `auth.rs`, `media.rs`, `assets.rs` |
 | **`src/domain/`** | Shared types: `events.rs` (`UiEvent`), `done_file_index.rs` |
 | **`src/ytdlp.rs`**, **`ytdlp_download_args.rs`**, **`ytdlp_errors.rs`** | yt-dlp subprocess, args, errors |
-| **`src/transcode.rs`** | ffmpeg encode pipeline, encoder auto-detect |
+| **`src/transcode.rs`** | ffmpeg encode pipeline, encoder auto-detect; `TargetCodec` owns convert target metadata (labels, encoder chains, mux tags) |
 | **`src/config.rs`** | `AppSettings`, paths, load/save |
 | **`src/models.rs`** | Queue item types and status |
 | **`src/profiles.rs`** | Download profiles (built-in + user) |

@@ -20,13 +20,128 @@ const BITRATE_FALLBACK_BPS: i64 = 2_000_000;
 const BITRATE_MAXRATE_MULTIPLIER: f64 = 1.2;
 const BITRATE_BUFSIZE_MULTIPLIER: f64 = 2.0;
 
+/// Canonical convert target codec. Add new codecs here first; public helpers below delegate to it.
+///
+/// AV2 is intentionally omitted: user ffmpeg builds do not yet expose a usable encoder
+/// (`libavm` / production SVT-style). Wire it here when `ffmpeg -encoders` + smoke encode pass.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum TargetCodec {
+    Av1,
+    Hevc,
+    H264,
+}
+
+impl TargetCodec {
+    /// Settings / UI option order (value, label).
+    pub const ALL: &[TargetCodec] = &[Self::Av1, Self::Hevc, Self::H264];
+
+    pub fn parse(raw: &str) -> Self {
+        match raw.trim().to_ascii_lowercase().as_str() {
+            "hevc" | "h265" | "h.265" => Self::Hevc,
+            "h264" | "h.264" | "avc" => Self::H264,
+            _ => Self::Av1,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Av1 => "av1",
+            Self::Hevc => "hevc",
+            Self::H264 => "h264",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Av1 => "AV1",
+            Self::Hevc => "H.265",
+            Self::H264 => "H.264",
+        }
+    }
+
+    pub fn output_suffix(self) -> &'static str {
+        match self {
+            Self::Av1 => "AV1",
+            Self::Hevc => "H265",
+            Self::H264 => "H264",
+        }
+    }
+
+    pub fn recommended_container(self) -> &'static str {
+        match self {
+            Self::Av1 => "mkv",
+            Self::Hevc | Self::H264 => "mp4",
+        }
+    }
+
+    pub fn cpu_encoder(self) -> &'static str {
+        match self {
+            Self::Av1 => "libsvtav1",
+            Self::Hevc => "libx265",
+            Self::H264 => "libx264",
+        }
+    }
+
+    pub fn encoder_chain(self) -> &'static [&'static str] {
+        match self {
+            Self::Av1 => &["av1_nvenc", "av1_amf", "libsvtav1"],
+            Self::Hevc => &["hevc_nvenc", "hevc_amf", "libx265"],
+            Self::H264 => &["h264_nvenc", "h264_amf", "libx264"],
+        }
+    }
+
+    /// MP4/M4V `-tag:v` fourcc when muxing this codec.
+    pub fn mp4_vtag(self) -> Option<&'static str> {
+        match self {
+            Self::Av1 => Some("av01"),
+            Self::Hevc => Some("hvc1"),
+            Self::H264 => Some("avc1"),
+        }
+    }
+
+    /// Prefer Opus over AAC when the output container allows it.
+    pub fn prefers_opus_audio(self) -> bool {
+        matches!(self, Self::Av1)
+    }
+
+    pub fn matches_probed(self, input_codec: &str) -> bool {
+        let c = input_codec
+            .trim()
+            .to_ascii_lowercase()
+            .replace(['.', '-', ' ', '_'], "");
+        match self {
+            Self::Av1 => c == "av1" || c.contains("av01"),
+            Self::Hevc => {
+                c.contains("hevc")
+                    || c.contains("h265")
+                    || c == "hev1"
+                    || c == "hvc1"
+                    || c.contains("x265")
+            }
+            Self::H264 => {
+                c.contains("h264")
+                    || c.contains("avc")
+                    || c == "avc1"
+                    || c.contains("x264")
+                    || c == "264"
+            }
+        }
+    }
+
+    pub fn from_encoder(encoder: &str) -> Self {
+        if encoder.contains("hevc") || encoder == "libx265" {
+            Self::Hevc
+        } else if encoder.contains("h264") || encoder == "libx264" {
+            Self::H264
+        } else {
+            Self::Av1
+        }
+    }
+}
+
 /// Session-wide target video codec: `av1`, `hevc`, or `h264`.
 pub fn normalize_target_codec(raw: &str) -> &'static str {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "hevc" | "h265" | "h.265" => "hevc",
-        "h264" | "h.264" | "avc" => "h264",
-        _ => "av1",
-    }
+    TargetCodec::parse(raw).as_str()
 }
 
 /// True when ffmpeg could not open/demux the input at all (missing/truncated)—CPU encoder retry won't help.
@@ -233,29 +348,15 @@ fn known_encoder(name: &str) -> Option<&'static str> {
 }
 
 pub fn codec_for_encoder(encoder: &str) -> &'static str {
-    if encoder.contains("hevc") || encoder == "libx265" {
-        "hevc"
-    } else if encoder.contains("h264") || encoder == "libx264" {
-        "h264"
-    } else {
-        "av1"
-    }
+    TargetCodec::from_encoder(encoder).as_str()
 }
 
 pub fn cpu_encoder_for_target(target_codec: &str) -> &'static str {
-    match normalize_target_codec(target_codec) {
-        "hevc" => "libx265",
-        "h264" => "libx264",
-        _ => "libsvtav1",
-    }
+    TargetCodec::parse(target_codec).cpu_encoder()
 }
 
 fn encoder_chain_for_target(target_codec: &str) -> &'static [&'static str] {
-    match normalize_target_codec(target_codec) {
-        "hevc" => &["hevc_nvenc", "hevc_amf", "libx265"],
-        "h264" => &["h264_nvenc", "h264_amf", "libx264"],
-        _ => &["av1_nvenc", "av1_amf", "libsvtav1"],
-    }
+    TargetCodec::parse(target_codec).encoder_chain()
 }
 
 pub fn encoders_for_target(target_codec: &str) -> Vec<&'static str> {
@@ -272,36 +373,35 @@ pub fn detect_encoder_with_override(
     override_enc: &str,
     target_codec: &str,
 ) -> EncoderChoice {
-    let target = normalize_target_codec(target_codec);
+    let target = TargetCodec::parse(target_codec);
     let override_enc = override_enc.trim();
     let ffmpeg = resolve_executable(ffmpeg_path, "ffmpeg");
     if !override_enc.is_empty() {
         if let Some(enc) = known_encoder(override_enc) {
-            if codec_for_encoder(enc) == target
+            if TargetCodec::from_encoder(enc) == target
                 && encoder_supported(&ffmpeg, enc)
                 && encoder_usable(&ffmpeg, enc)
             {
                 return EncoderChoice {
                     encoder: enc,
-                    codec: codec_for_encoder(enc),
+                    codec: target.as_str(),
                     hw_type: hw_type_for_encoder(enc),
                 };
             }
         }
     }
-    for enc in encoder_chain_for_target(target) {
+    for enc in target.encoder_chain() {
         if encoder_supported(&ffmpeg, enc) && encoder_usable(&ffmpeg, enc) {
             return EncoderChoice {
                 encoder: enc,
-                codec: codec_for_encoder(enc),
+                codec: target.as_str(),
                 hw_type: hw_type_for_encoder(enc),
             };
         }
     }
-    let cpu = cpu_encoder_for_target(target);
     EncoderChoice {
-        encoder: cpu,
-        codec: target,
+        encoder: target.cpu_encoder(),
+        codec: target.as_str(),
         hw_type: "cpu",
     }
 }
@@ -327,11 +427,7 @@ pub fn encoder_hw_vendor_label(hw_type: &str) -> &'static str {
 }
 
 pub fn target_codec_label(target_codec: &str) -> &'static str {
-    match normalize_target_codec(target_codec) {
-        "hevc" => "H.265",
-        "h264" => "H.264",
-        _ => "AV1",
-    }
+    TargetCodec::parse(target_codec).label()
 }
 
 /// Human-readable label for a probed source codec (`h264` → `H.264`).
@@ -355,11 +451,7 @@ pub fn display_video_codec_label(codec: &str) -> String {
 }
 
 pub fn output_suffix_for_target(target_codec: &str) -> &'static str {
-    match normalize_target_codec(target_codec) {
-        "hevc" => "H265",
-        "h264" => "H264",
-        _ => "AV1",
-    }
+    TargetCodec::parse(target_codec).output_suffix()
 }
 
 pub fn encoder_indicator_label(enc: &EncoderChoice) -> String {
@@ -741,10 +833,7 @@ fn append_cpu_thread_args(cmd: &mut Command, enc: &EncoderChoice, cpu_threads: u
 }
 
 pub fn recommended_container_for_target(target_codec: &str) -> &'static str {
-    match normalize_target_codec(target_codec) {
-        "av1" => "mkv",
-        _ => "mp4",
-    }
+    TargetCodec::parse(target_codec).recommended_container()
 }
 
 fn planned_output_extension(input: &Path, cfg: &ConvertConfig) -> String {
@@ -831,11 +920,12 @@ fn default_audio_for_output(output: &Path, target_codec: &str) -> (&'static str,
         .extension()
         .and_then(|s| s.to_str())
         .map(|s| s.to_ascii_lowercase());
+    let target = TargetCodec::parse(target_codec);
     match ext.as_deref() {
         Some("mp4" | "m4v") => ("aac", "128k"),
-        Some("mkv") if normalize_target_codec(target_codec) == "av1" => ("libopus", "64k"),
+        Some("mkv") if target.prefers_opus_audio() => ("libopus", "64k"),
         Some("webm") => ("libopus", "64k"),
-        _ if normalize_target_codec(target_codec) == "av1" => ("libopus", "64k"),
+        _ if target.prefers_opus_audio() => ("libopus", "64k"),
         _ => ("aac", "128k"),
     }
 }
@@ -851,17 +941,8 @@ fn append_container_mux_args(cmd: &mut Command, output: &Path, enc: &EncoderChoi
     if !matches!(ext.as_str(), "mp4" | "m4v") {
         return;
     }
-    match enc.codec {
-        "av1" => {
-            cmd.args(["-tag:v", "av01"]);
-        }
-        "hevc" => {
-            cmd.args(["-tag:v", "hvc1"]);
-        }
-        "h264" => {
-            cmd.args(["-tag:v", "avc1"]);
-        }
-        _ => {}
+    if let Some(tag) = TargetCodec::parse(enc.codec).mp4_vtag() {
+        cmd.args(["-tag:v", tag]);
     }
 }
 
@@ -877,28 +958,7 @@ pub fn is_video_path(path: &Path) -> bool {
 }
 
 pub fn codec_matches_target(input_codec: &str, target_codec: &str) -> bool {
-    let c = input_codec
-        .trim()
-        .to_ascii_lowercase()
-        .replace(['.', '-', ' ', '_'], "");
-    match normalize_target_codec(target_codec) {
-        "av1" => c == "av1" || c.contains("av01"),
-        "hevc" => {
-            c.contains("hevc")
-                || c.contains("h265")
-                || c == "hev1"
-                || c == "hvc1"
-                || c.contains("x265")
-        }
-        "h264" => {
-            c.contains("h264")
-                || c.contains("avc")
-                || c == "avc1"
-                || c.contains("x264")
-                || c == "264"
-        }
-        _ => false,
-    }
+    TargetCodec::parse(target_codec).matches_probed(input_codec)
 }
 
 fn parse_ffprobe_fraction(value: &str) -> Option<f64> {
@@ -2111,6 +2171,22 @@ Invalid data found when processing input";
         assert_eq!(normalize_target_codec("H.265"), "hevc");
         assert_eq!(normalize_target_codec("h264"), "h264");
         assert_eq!(normalize_target_codec(""), "av1");
+        // Unknown / future codecs (e.g. av2) stay on AV1 until TargetCodec gains an arm.
+        assert_eq!(normalize_target_codec("av2"), "av1");
+    }
+
+    #[test]
+    fn target_codec_all_covers_supported_targets() {
+        let values: Vec<&str> = TargetCodec::ALL.iter().map(|c| c.as_str()).collect();
+        assert_eq!(values, vec!["av1", "hevc", "h264"]);
+        for codec in TargetCodec::ALL {
+            assert_eq!(TargetCodec::parse(codec.as_str()), *codec);
+            assert!(!codec.encoder_chain().is_empty());
+            assert_eq!(
+                codec.cpu_encoder(),
+                *codec.encoder_chain().last().expect("chain")
+            );
+        }
     }
 
     #[test]

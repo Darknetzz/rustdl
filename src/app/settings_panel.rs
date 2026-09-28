@@ -1773,14 +1773,12 @@ impl PydlApp {
                                     &self.settings.convert_target_codec,
                                 ))
                                 .show_ui(ui, |ui| {
-                                    for (value, label) in
-                                        [("av1", "AV1"), ("hevc", "H.265"), ("h264", "H.264")]
-                                    {
+                                    for codec in crate::transcode::TargetCodec::ALL {
                                         changed |= ui
                                             .selectable_value(
                                                 &mut self.settings.convert_target_codec,
-                                                value.to_owned(),
-                                                label,
+                                                codec.as_str().to_owned(),
+                                                codec.label(),
                                             )
                                             .changed();
                                     }

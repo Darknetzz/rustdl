@@ -437,11 +437,7 @@ impl DownloadCore {
 
     pub fn fallback_convert_encoder_to_software(&mut self) {
         self.settings.convert_encoder_override =
-            match transcode::normalize_target_codec(&self.settings.convert_target_codec) {
-                "hevc" => "libx265".to_owned(),
-                "h264" => "libx264".to_owned(),
-                _ => "libsvtav1".to_owned(),
-            };
+            transcode::cpu_encoder_for_target(&self.settings.convert_target_codec).to_owned();
         self.convert_encoder_choice = None;
         self.convert_encoder_detect_key.clear();
         self.refresh_convert_encoder_detection();
