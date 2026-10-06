@@ -39,15 +39,14 @@ try {
     }
 
     git config --local core.hooksPath .githooks
-    Write-Host 'Installed .githooks/pre-push (core.hooksPath = .githooks).'
+    Write-Host "Installed .githooks/pre-push (core.hooksPath = .githooks)."
     Write-Host ''
-    Write-Host 'After every successful:  git push github dev'
-    Write-Host '  → builds and refreshes https://github.com/Darknetzz/rustdl/releases/tag/rustdl-dev'
+    Write-Host 'After git push github dev, GitLab CI builds and publishes when you also'
+    Write-Host '  git push gitlab dev'
+    Write-Host '  (or use .\scripts\push_dev.ps1 which pushes both remotes).'
     Write-Host ''
-    Write-Host 'Works with pushall and plain git push. Log: %TEMP%\rustdl-dev-release.log'
-    Write-Host 'Requires: gh auth login, release build (runs automatically).'
-    Write-Host ''
-    Write-Host 'Disable: .\scripts\install_dev_release_hook.ps1 -Uninstall'
+    Write-Host 'Local compile+gh publish is off by default. Emergency: $env:RUSTDL_LOCAL_PUBLISH=1'
+    Write-Host 'Disable hook: .\scripts\install_dev_release_hook.ps1 -Uninstall'
 }
 finally {
     Pop-Location

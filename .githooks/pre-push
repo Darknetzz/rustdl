@@ -1,5 +1,6 @@
 #!/bin/sh
-# After a successful push of dev to github, build and refresh rustdl-dev plus any new stable release.
+# After a successful push of dev to github: GitLab CI publishes (push gitlab too).
+# Local compile is opt-in via RUSTDL_LOCAL_PUBLISH=1.
 # Installed via: scripts/install_dev_release_hook.ps1 (sets core.hooksPath = .githooks)
 #
 # Git has no post-push hook; this schedules publish in the background once the remote
@@ -114,6 +115,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	[ "$remote_ref" = "refs/heads/dev" ] || continue
 	# branch delete
 	[ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
+	# GitLab CI publishes GitHub + GitLab releases. Local compile is opt-in.
+	if [ -z "${RUSTDL_LOCAL_PUBLISH:-}" ]; then
+		echo "rustdl: skipping local release build (GitLab CI publishes after git push gitlab dev)." >&2
+		echo "rustdl: pipeline: https://gitlab.roste.org/kriss/rustdl/-/pipelines" >&2
+		echo "rustdl: emergency local publish: RUSTDL_LOCAL_PUBLISH=1" >&2
+		continue
+	fi
 	if ! schedule_publish "$local_sha"; then
 		publish_failed=1
 	fi

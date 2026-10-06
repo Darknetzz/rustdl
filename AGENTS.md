@@ -65,7 +65,9 @@ See `README.md` → **Run** for examples.
 
 ## Building the binary
 
-**Prefer the repo build scripts** (they `cd` to the repo root and run `cargo build --release`):
+**Automatic:** GitLab CI (`.gitlab-ci.yml`) on `dev` / `rustdl-v*` builds a Linux release binary and publishes it to GitHub + GitLab Releases. GitHub Actions stay **manual-only** (`workflow_dispatch`).
+
+**Local** (they `cd` to the repo root and run `cargo build --release`):
 
 | Platform | Command |
 |----------|---------|
@@ -81,6 +83,8 @@ On Windows, release builds fail with “Access is denied” if `rustdl.exe` is s
 
 Do **not** assume `cargo build --release` from an arbitrary cwd unless you have already changed to the repo root.
 
+The GitLab instance currently has a **Linux** shared runner only. `rustdl.exe` is not built in CI until a Windows runner with tag `windows` is registered and `WINDOWS_RUNNER_AVAILABLE=true` is set in GitLab CI/CD variables. Until then, ship Windows binaries with the local build scripts (or `-LocalPublish`).
+
 ## Running and testing locally
 
 ```bash
@@ -89,7 +93,7 @@ cargo run -- --download URL  # headless download
 cargo check                  # fast compile check when exe is locked
 ```
 
-Before a PR, run the local CI script (GitHub Actions workflows are manual-only to avoid runner cost):
+Before a PR, wait for GitLab CI or run the local CI script (GitHub Actions stay manual-only):
 
 | Platform | Command |
 |----------|---------|
@@ -156,17 +160,19 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | `web-assets/` | LAN web UI (`index.html`, `app.js`, `style.css`, fonts) |
 | `tests/queue_perf.rs` | Ignored manual queue/mirror perf benches |
 | `tests/subprocess_smoke.rs` | Ignored yt-dlp PATH smoke (`RUSTDL_IT=1`) |
-| `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Release binary build |
+| `scripts/build_binary.ps1`, `scripts/build_binary.sh` | Local release binary build |
 | `scripts/ci_local.ps1`, `scripts/ci_local.sh` | Local fmt / clippy / test / deny / audit |
+| `scripts/ci_publish_releases.sh` | GitLab CI: upload `dist/` to GitHub + GitLab Releases |
 | `scripts/bump_version.ps1`, `scripts/bump_version.sh` | Semver bump in `Cargo.toml` + annotated `rustdl-vX.Y.Z` tag on the bump commit |
 | `scripts/release.ps1`, `scripts/release.sh` | Optional: finalize `[Unreleased]` changelog + compare links (`release: vX.Y.Z` commit) |
 | `scripts/extract_release_notes.ps1`, `scripts/extract_release_notes.sh` | Extract `## [X.Y.Z]` body from `CHANGELOG.md` for a tag (used by `publish_stable_release`, `release`, and `.github/workflows/release.yml`) |
 | `scripts/refresh_release_notes.ps1`, `scripts/refresh_release_notes.sh` | Re-upload GitHub release descriptions from `CHANGELOG.md` for existing tags |
 | `scripts/publish_dev_release.ps1`, `scripts/publish_dev_release.sh` | Build and refresh the rolling **`rustdl-dev`** GitHub pre-release |
 | `scripts/publish_stable_release.ps1`, `scripts/publish_stable_release.sh` | Tag and publish **`rustdl-vX.Y.Z`** when the Cargo version is new on GitHub |
-| `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub, publish rolling dev + stable releases, mirror GitLab |
-| `scripts/install_dev_release_hook.ps1`, `scripts/install_dev_release_hook.sh` | One-time: enable `.githooks/pre-push` auto-publish on `git push github dev` |
-| `.githooks/pre-push` | Git hook (via `core.hooksPath`) — schedules rolling dev + stable release publish after push |
+| `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub + GitLab (CI publishes; `-LocalPublish` / `--local-publish` for emergency local build) |
+| `scripts/install_dev_release_hook.ps1`, `scripts/install_dev_release_hook.sh` | Optional: `.githooks/pre-push` (skips local compile unless `RUSTDL_LOCAL_PUBLISH=1`) |
+| `.githooks/pre-push` | Git hook — reminds you GitLab CI publishes; does not compile unless `RUSTDL_LOCAL_PUBLISH=1` |
+| `.gitlab-ci.yml` | GitLab CI: verify, Linux (optional Windows) release build, publish GitHub + GitLab Releases |
 | `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
@@ -316,9 +322,7 @@ The script runs `cargo fmt --check`, `clippy`, and `test` unless you pass `-Skip
 2. Confirm `Cargo.toml` `version` matches `X.Y.Z`.
 3. Update compare links — `[X.Y.Z]: …/compare/rustdl-vPREV…rustdl-vX.Y.Z` and `[Unreleased]: …/compare/rustdl-vX.Y.Z…dev`.
 4. Commit on `dev` (`release: vX.Y.Z`).
-5. `git tag rustdl-vX.Y.Z` then `git push github dev` and `git push github rustdl-vX.Y.Z`.
-
-Build release binaries locally (`.\scripts\build_binary.ps1` / `./scripts/build_binary.sh`); publish with `gh release create` / `gh release upload` if desired. Mirror to GitLab separately if needed (`git push gitlab dev --tags`).
+5. `git tag rustdl-vX.Y.Z` then `git push github dev`, `git push github rustdl-vX.Y.Z`, and the same refs to **`gitlab`** so GitLab CI can publish binaries.
 
 ### Windows winget
 
@@ -338,46 +342,38 @@ This repo keeps an **example manifest** at `packaging/winget/Darknetzz.rustdl.ya
 
 Do not commit a local `winget-pkgs/` clone; it is a separate checkout for PR prep only.
 
-### Dev push publish (no GitHub Actions)
+### Dev push publish (GitLab CI, no GitHub Actions)
 
-GitHub does not run custom hooks on push, and this repo keeps Actions **manual-only**. On every `dev` push to **`github`**, the hook (or `push_dev`) builds once, refreshes the rolling **`rustdl-dev`** pre-release, and publishes a **stable** `rustdl-vX.Y.Z` release when that Cargo version is not on GitHub yet.
+GitHub Actions stay **manual-only**. Automatic builds run on **GitLab** after `dev` (or `rustdl-v*`) is pushed to **`gitlab`**.
 
 | Approach | When to use |
 |----------|-------------|
-| **`.githooks/pre-push` (recommended)** | One-time install per clone; runs after any successful `git push github dev` (including via `pushall`). |
-| **`push_dev` scripts** | Manual all-in-one push + publish (no hook). |
-| **`dev_release_webhook.py`** | Optional server; GitHub **push** webhook when pushes come from machines without the hook. |
+| **`push_dev` (recommended)** | Pushes `github` then `gitlab`; GitLab CI builds and publishes. |
+| **`.githooks/pre-push`** | Reminds you that publish is CI; does **not** compile locally unless `RUSTDL_LOCAL_PUBLISH=1`. |
+| **Local scripts** | Emergency: `push_dev -LocalPublish` / `publish_dev_release` on your machine. |
 
-**Automatic publish (recommended, one-time per clone):**
+**Automatic publish:**
 
-| Platform | Command |
-|----------|---------|
-| Windows | `.\scripts\install_dev_release_hook.ps1` |
-| Unix | `./scripts/install_dev_release_hook.sh` |
+1. Set GitLab CI/CD variable **`GH_TOKEN`** (GitHub PAT, `repo` scope, masked). Do not mark it Protected unless `dev` is a protected branch.
+2. Push `dev` to **gitlab** (`.\scripts\push_dev.ps1` or `git push gitlab dev`).
+3. Pipeline: https://gitlab.roste.org/kriss/rustdl/-/pipelines
 
-Sets `core.hooksPath = .githooks`. After that, **any** successful `git push github dev` (or `pushall`, which pushes `github` first) schedules a background build + `gh release` upload to **`rustdl-dev`** and any missing stable **`rustdl-vX.Y.Z`**. Log: `%TEMP%\rustdl-dev-release.log` (Windows) or `$TMPDIR/rustdl-dev-release.log` (Unix). Disable: same script with `-Uninstall` / `--uninstall`.
+The **`linux`** job runs fmt, clippy, tests, and a Linux release binary. The **`publish`** job uploads artifacts to GitHub **`rustdl-dev`** (and a new **`rustdl-vX.Y.Z`** if that version is not on GitHub yet) and creates/updates matching **GitLab Releases**.
 
-Requires **`gh auth login`** with `repo` scope. Only pushes to remote **`github`** ref **`dev`** trigger publish (GitLab mirror pushes do not).
+Windows **`rustdl.exe`**: register a GitLab runner with tag `windows`, then set CI variable `WINDOWS_RUNNER_AVAILABLE=true`. Until then, keep using local `build_binary.ps1` for the Windows asset.
 
-**Manual all-in-one push + publish:**
+**Manual all-in-one push (no local compile):**
 
 | Platform | Command |
 |----------|---------|
 | Windows | `.\scripts\push_dev.ps1` |
 | Unix | `./scripts/push_dev.sh` |
 
-Use when the hook is not installed. Pushes `dev` to **`github`**, runs `publish_dev_release` + `publish_stable_release`, then mirrors **`gitlab`**. `-SkipGitlab` / `--skip-gitlab` if the mirror is unreachable.
+**Emergency local compile + GitHub upload:** `.\scripts\push_dev.ps1 -LocalPublish` / `./scripts/push_dev.sh --local-publish`.
 
-**Publish only** (already pushed, or webhook checkout):
+**`rustdl-dev`** is always a pre-release at the tip of `dev`. **`rustdl-vX.Y.Z`** is a stable release per `Cargo.toml` version; each GitHub version is published once.
 
-| Platform | Command |
-|----------|---------|
-| Windows | `.\scripts\publish_dev_release.ps1` ; `.\scripts\publish_stable_release.ps1` |
-| Unix | `./scripts/publish_dev_release.sh` ; `./scripts/publish_stable_release.sh` |
-
-**`rustdl-dev`** is always a pre-release at the tip of `dev`. **`rustdl-vX.Y.Z`** is a stable release per `Cargo.toml` version; each version is published once (re-run with `-Force` / `--force` to refresh).
-
-**Webhook (optional):** on a build machine with this repo, `gh`, and Rust:
+**Webhook (optional, unused if GitLab CI is working):** on a build machine with this repo, `gh`, and Rust:
 
 ```bash
 export RUSTDL_WEBHOOK_SECRET='…'   # same secret as GitHub → Settings → Webhooks
@@ -390,7 +386,7 @@ Configure the webhook for **push** events on `Darknetzz/rustdl`. Payload URL pat
 
 ### GitHub Actions (optional, manual only)
 
-`.github/workflows/ci.yml` and `.github/workflows/release.yml` are **`workflow_dispatch` only** (no runs on push, PR, or tag) to avoid GitHub runner cost. Use `scripts/ci_local.ps1` / `ci_local.sh` and local build/release scripts instead. Workflows remain in the repo for emergency manual runs from the GitHub Actions UI if needed.
+`.github/workflows/ci.yml` and `.github/workflows/release.yml` remain **`workflow_dispatch` only** (no runs on push, PR, or tag). Do **not** enable GitHub Actions for automatic CI. Day-to-day pipelines are GitLab (`.gitlab-ci.yml`).
 
 ## Agent conventions
 

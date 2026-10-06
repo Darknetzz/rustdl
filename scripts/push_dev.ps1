@@ -1,21 +1,20 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-  Push dev to GitHub, publish the rolling dev release, then mirror to GitLab.
-
-  Use this instead of plain `git push` when you want every dev push to refresh
-  the rustdl-dev GitHub pre-release (no GitHub Actions).
+  Push dev to GitHub and GitLab. GitLab CI builds binaries and publishes
+  GitHub + GitLab releases (no GitHub Actions).
 
 .EXAMPLE
   .\scripts\push_dev.ps1
   .\scripts\push_dev.ps1 -DryRun
   .\scripts\push_dev.ps1 -SkipGitlab
-  .\scripts\push_dev.ps1 -SkipPublish
+  .\scripts\push_dev.ps1 -LocalPublish
 #>
 [CmdletBinding()]
 param(
     [switch] $DryRun,
     [switch] $SkipPublish,
+    [switch] $LocalPublish,
     [switch] $SkipGitlab,
     [string] $GithubRemote = 'github',
     [string] $GitlabRemote = 'gitlab'
@@ -40,7 +39,7 @@ try {
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     }
 
-    if (-not $SkipPublish) {
+    if ($LocalPublish -and -not $SkipPublish) {
         Write-Host ''
         Write-Host '--- rolling dev release ---'
         $publishArgs = @()
@@ -54,6 +53,11 @@ try {
         if ($DryRun) { $stableArgs += '-DryRun' }
         & (Join-Path $PSScriptRoot 'publish_stable_release.ps1') -SkipBuild @stableArgs
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } elseif (-not $LocalPublish) {
+        Write-Host ''
+        Write-Host 'Local binary publish skipped; GitLab CI publishes after git push gitlab.'
+        Write-Host '  https://gitlab.roste.org/kriss/rustdl/-/pipelines'
+        Write-Host '  Emergency: .\scripts\push_dev.ps1 -LocalPublish'
     }
 
     if (-not $SkipGitlab) {
@@ -64,7 +68,7 @@ try {
         } else {
             git push $GitlabRemote dev
             if ($LASTEXITCODE -ne 0) {
-                Write-Warning "GitLab push failed (GitHub and dev release may already be updated)."
+                Write-Warning "GitLab push failed (GitHub may already be updated)."
                 exit $LASTEXITCODE
             }
         }
@@ -73,9 +77,6 @@ try {
     if ($DryRun) {
         Write-Host ''
         Write-Host 'Dry run complete.'
-    } else {
-        Write-Host ''
-        Write-Host 'Push and publish complete.'
     }
 }
 finally {

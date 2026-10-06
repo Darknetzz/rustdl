@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Push dev to GitHub, publish rolling dev release, then mirror to GitLab.
+# Push dev to GitHub and GitLab. GitLab CI builds binaries and publishes
+# GitHub + GitLab releases (no GitHub Actions).
 #
 # Usage:
 #   ./scripts/push_dev.sh
 #   ./scripts/push_dev.sh --dry-run
 #   ./scripts/push_dev.sh --skip-gitlab
-#   ./scripts/push_dev.sh --skip-publish
+#   ./scripts/push_dev.sh --local-publish
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,6 +14,7 @@ cd "$repo_root"
 
 dry_run=0
 skip_publish=0
+local_publish=0
 skip_gitlab=0
 github_remote='github'
 gitlab_remote='gitlab'
@@ -21,11 +23,12 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) dry_run=1 ;;
     --skip-publish) skip_publish=1 ;;
+    --local-publish) local_publish=1 ;;
     --skip-gitlab) skip_gitlab=1 ;;
     --github-remote) github_remote="$2"; shift ;;
     --gitlab-remote) gitlab_remote="$2"; shift ;;
     -h|--help)
-      sed -n '2,8p' "$0" | sed 's/^# \?//'
+      sed -n '2,10p' "$0" | sed 's/^# \?//'
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -45,7 +48,7 @@ else
   git push "$github_remote" dev
 fi
 
-if [[ "$skip_publish" -eq 0 ]]; then
+if [[ "$local_publish" -eq 1 && "$skip_publish" -eq 0 ]]; then
   echo
   echo '--- rolling dev release ---'
   publish_args=()
@@ -57,6 +60,11 @@ if [[ "$skip_publish" -eq 0 ]]; then
   stable_args=(--skip-build)
   [[ "$dry_run" -eq 1 ]] && stable_args+=(--dry-run)
   ./scripts/publish_stable_release.sh "${stable_args[@]}"
+elif [[ "$local_publish" -eq 0 ]]; then
+  echo
+  echo 'Local binary publish skipped; GitLab CI publishes after git push gitlab.'
+  echo '  https://gitlab.roste.org/kriss/rustdl/-/pipelines'
+  echo '  Emergency: ./scripts/push_dev.sh --local-publish'
 fi
 
 if [[ "$skip_gitlab" -eq 0 ]]; then

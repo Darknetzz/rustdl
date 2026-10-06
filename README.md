@@ -77,11 +77,13 @@ On first run without a saved API token, rustdl generates one and prints it. Open
 - App version comes from `Cargo.toml` (shown in **About** and `rustdl --version`).
 - User-facing changes are recorded in [CHANGELOG.md](CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com/) style).
 - During development: add bullets under `[Unreleased]`; bump version on medium+ changes with `.\scripts\bump_version.ps1` (Windows) or `./scripts/bump_version.sh` (Unix).
-- To ship a release: `.\scripts\release.ps1 -DryRun` then `.\scripts\release.ps1 -Push` (or `./scripts/release.sh --dry-run` then `--push --yes`). That finalizes the changelog, commits `release: vX.Y.Z`, tags `rustdl-vX.Y.Z`, and pushes to GitHub. Build binaries locally with `.\scripts\build_binary.ps1` (or `./scripts/build_binary.sh`) and attach them with `gh release upload` if you publish a [GitHub release](https://github.com/Darknetzz/rustdl/releases). See `AGENTS.md` for the full routine.
+- To ship a release: `.\scripts\release.ps1 -DryRun` then `.\scripts\release.ps1 -Push` (or `./scripts/release.sh --dry-run` then `--push --yes`). That finalizes the changelog, commits `release: vX.Y.Z`, tags `rustdl-vX.Y.Z`, and pushes to GitHub. Push `dev` (and tags) to **gitlab** as well so [GitLab CI](https://gitlab.roste.org/kriss/rustdl/-/pipelines) builds binaries and uploads them to GitHub + GitLab Releases. GitHub Actions are not used. See `AGENTS.md` for the full routine.
 
 ## Development checks
 
-Run the full checklist locally (CI is not run automatically on GitHub):
+Automatic CI runs on **GitLab** (`dev` pushes, merge requests, `rustdl-v*` tags): fmt, clippy, tests, Linux release binary, then publish to GitHub + GitLab Releases. GitHub Actions stay **manual-only**.
+
+Run the checklist locally when you are not waiting on the pipeline:
 
 | Platform | Command |
 |----------|---------|

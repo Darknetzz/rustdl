@@ -1,5 +1,5 @@
-# Disabled for automatic runs (use scripts/ci_local.ps1 or scripts/ci_local.sh locally).
-# Manual dispatch only — does not run on push/PR.
+# Disabled for automatic runs. Day-to-day CI is GitLab (.gitlab-ci.yml).
+# Manual dispatch only — do not enable on push/PR.
 name: ci
 
 on:

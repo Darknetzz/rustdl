@@ -1,5 +1,5 @@
-# Disabled for automatic runs — build with scripts/build_binary.ps1|.sh and publish with gh locally.
-# Manual dispatch only — does not run on tag push.
+# Disabled for automatic runs — GitLab CI (.gitlab-ci.yml) builds and publishes.
+# Manual dispatch only — do not enable on tag push.
 name: release
 
 on:

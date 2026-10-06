@@ -39,8 +39,9 @@ git config --local core.hooksPath .githooks
 
 echo 'Installed .githooks/pre-push (core.hooksPath = .githooks).'
 echo
-echo 'After every successful:  git push github dev'
-echo '  → builds and refreshes https://github.com/Darknetzz/rustdl/releases/tag/rustdl-dev'
+echo 'After git push github dev, GitLab CI builds and publishes when you also'
+echo '  git push gitlab dev'
+echo '  (or use ./scripts/push_dev.sh which pushes both remotes).'
 echo
-echo "Log: \${TMPDIR:-/tmp}/rustdl-dev-release.log"
-echo 'Disable: ./scripts/install_dev_release_hook.sh --uninstall'
+echo 'Local compile+gh publish is off by default. Emergency: RUSTDL_LOCAL_PUBLISH=1'
+echo 'Disable hook: ./scripts/install_dev_release_hook.sh --uninstall'
