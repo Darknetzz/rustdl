@@ -1,5 +1,6 @@
 //! Writes `OUT_DIR/build_info.rs` so build time changes invalidate the crate reliably.
-//! On Windows, embeds `assets/rustdl.ico` into the `.exe` (Explorer, shortcuts).
+//! When the *target* is Windows (including MinGW cross-compile from Linux), embeds
+//! `assets/rustdl.ico` into the `.exe` (Explorer, shortcuts).
 
 use std::env;
 use std::fs;
@@ -28,12 +29,25 @@ fn main() {
     fs::write(&stamp, unix.to_string()).expect("write build stamp");
     println!("cargo:rerun-if-changed={}", stamp.display());
 
-    #[cfg(windows)]
-    {
-        println!("cargo:rerun-if-changed=assets/rustdl.ico");
-        let mut res = winres::WindowsResource::new();
-        res.set_icon("assets/rustdl.ico");
-        res.compile()
-            .expect("failed to embed Windows executable icon");
+    embed_windows_icon();
+}
+
+fn embed_windows_icon() {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    if target_os != "windows" {
+        return;
     }
+
+    println!("cargo:rerun-if-changed=assets/rustdl.ico");
+    let mut res = winres::WindowsResource::new();
+    res.set_icon("assets/rustdl.ico");
+    // Host is Linux in GitLab CI (`x86_64-pc-windows-gnu` cross-compile).
+    if cfg!(not(windows)) {
+        let windres = env::var("WINDRES").unwrap_or_else(|_| "x86_64-w64-mingw32-windres".to_owned());
+        res.set_windres_path(&windres);
+        let ar = env::var("AR").unwrap_or_else(|_| "x86_64-w64-mingw32-ar".to_owned());
+        res.set_ar_path(&ar);
+    }
+    res.compile()
+        .expect("failed to embed Windows executable icon");
 }

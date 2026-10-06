@@ -1,13 +1,12 @@
 # GitLab CI is the automatic build/publish path. GitHub Actions stay manual-only
 # (workflow_dispatch) and are not used here.
 #
-# Runner: gitlab.roste.org currently has a Linux shared runner only. Windows
-# rustdl.exe is built when WINDOWS_RUNNER_AVAILABLE=true and a runner with tag
-# `windows` is registered.
+# Linux Docker runner (see packaging/gitlab-runner/config.toml.example).
+# Windows rustdl.exe is cross-compiled with MinGW (`x86_64-pc-windows-gnu`).
 #
-# Project CI/CD variables (Settings → CI/CD → Variables):
-#   GH_TOKEN  GitHub PAT with `repo` scope (masked; unprotect if `dev` is unprotected)
-#   WINDOWS_RUNNER_AVAILABLE  "true" to enable the Windows job
+# Project CI/CD variables:
+#   GH_TOKEN       GitHub PAT with `repo` scope (masked; unprotect if `dev` is unprotected)
+#   CI_RUST_IMAGE  optional custom image (default rust:latest), e.g. registry.roste.org/kriss/rustdl/ci:latest
 
 workflow:
   rules:
@@ -17,52 +16,62 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web"
 
 variables:
-  CARGO_HOME: $CI_PROJECT_DIR/.cargo
+  CI_RUST_IMAGE: rust:latest
+  CARGO_HOME: /usr/local/cargo
   CARGO_TERM_COLOR: always
+  CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
   FF_USE_FASTZIP: "true"
 
 default:
-  image: rust:1-bookworm
+  image: $CI_RUST_IMAGE
   interruptible: true
 
 stages:
-  - verify
+  - build
   - publish
 
-.linux_deps: &linux_deps
-  - apt-get update
-  - |
+.rust_base:
+  stage: build
+  cache:
+    key:
+      files:
+        - Cargo.lock
+      prefix: rustdl-${CI_JOB_NAME}
+    paths:
+      - target/
+    policy: pull-push
+
+.apt_linux: &apt_linux |
+  if ! command -v pkg-config >/dev/null; then
+    apt-get update
     apt-get install -y --no-install-recommends \
-      build-essential pkg-config cmake clang libclang-dev \
+      build-essential pkg-config cmake clang libclang-dev python3 curl ca-certificates \
       libgtk-3-dev libglib2.0-dev libxkbcommon-dev \
       libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-      libwayland-dev libasound2-dev python3 curl ca-certificates
+      libwayland-dev libasound2-dev
+  fi
 
-.cargo_cache: &cargo_cache
-  key:
-    files:
-      - Cargo.lock
-    prefix: cargo-linux
-  paths:
-    - .cargo/
-    - target/
-  policy: pull-push
+.apt_windows_gnu: &apt_windows_gnu |
+  if ! command -v x86_64-w64-mingw32-gcc >/dev/null; then
+    apt-get update
+    apt-get install -y --no-install-recommends \
+      cmake clang libclang-dev nasm python3 curl ca-certificates \
+      gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64
+  fi
 
-linux:
-  stage: verify
-  cache:
-    <<: *cargo_cache
+build:linux:
+  extends: .rust_base
   before_script:
-    - *linux_deps
+    - *apt_linux
     - rustc -vV
     - cargo --version
   script:
     - cargo fmt --all -- --check
     - cargo clippy --all-targets --all-features -- -D warnings
     - cargo test --all-targets --all-features
-    - cargo build --release
+    - cargo build --release --target x86_64-unknown-linux-gnu
     - mkdir -p dist
-    - cp target/release/rustdl dist/rustdl-x86_64-unknown-linux-gnu
+    - cp target/x86_64-unknown-linux-gnu/release/rustdl dist/rustdl-x86_64-unknown-linux-gnu
     - chmod +x dist/rustdl-x86_64-unknown-linux-gnu
   artifacts:
     name: rustdl-linux-$CI_COMMIT_SHORT_SHA
@@ -70,32 +79,19 @@ linux:
       - dist/rustdl-x86_64-unknown-linux-gnu
     expire_in: 14 days
 
-windows:
-  stage: verify
-  tags:
-    - windows
-  rules:
-    - if: $WINDOWS_RUNNER_AVAILABLE == "true"
-  cache:
-    key:
-      files:
-        - Cargo.lock
-      prefix: cargo-windows
-    paths:
-      - .cargo/
-      - target/
-    policy: pull-push
+build:windows:
+  extends: .rust_base
   variables:
-    CARGO_HOME: $CI_PROJECT_DIR/.cargo
+    RUSTFLAGS: "-C link-arg=-static-libgcc"
   before_script:
+    - *apt_windows_gnu
+    - rustup target add x86_64-pc-windows-gnu
     - rustc -vV
     - cargo --version
   script:
-    - cargo clippy --all-targets --all-features -- -D warnings
-    - cargo test --all-targets --all-features
-    - cargo build --release
-    - mkdir dist
-    - copy target\release\rustdl.exe dist\rustdl.exe
+    - cargo build --release --target x86_64-pc-windows-gnu
+    - mkdir -p dist
+    - cp target/x86_64-pc-windows-gnu/release/rustdl.exe dist/rustdl.exe
   artifacts:
     name: rustdl-windows-$CI_COMMIT_SHORT_SHA
     paths:
@@ -106,18 +102,20 @@ publish:
   stage: publish
   interruptible: false
   needs:
-    - job: linux
+    - job: build:linux
       artifacts: true
-    - job: windows
-      optional: true
+    - job: build:windows
       artifacts: true
   rules:
     - if: $CI_COMMIT_BRANCH == "dev"
     - if: $CI_COMMIT_TAG =~ /^rustdl-v/
   cache: []
   before_script:
-    - apt-get update
-    - apt-get install -y --no-install-recommends curl ca-certificates python3 tar gzip
+    - |
+      if ! command -v python3 >/dev/null || ! command -v curl >/dev/null; then
+        apt-get update
+        apt-get install -y --no-install-recommends curl ca-certificates python3 tar gzip
+      fi
     - |
       curl -fsSL "https://github.com/cli/cli/releases/download/v2.102.0/gh_2.102.0_linux_amd64.tar.gz" \
         | tar -xz -C /tmp

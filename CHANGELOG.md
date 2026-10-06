@@ -24,7 +24,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Documentation
 
-- **GitLab CI** now builds release binaries and publishes **GitHub** + **GitLab** Releases (GitHub Actions stay manual-only).
+- **GitLab CI** builds Linux and Windows (MinGW cross-compile) binaries on a Linux Docker runner and publishes **GitHub** + **GitLab** Releases (GitHub Actions stay manual-only).
 - README Windows install no longer lists `winget install Darknetzz.rustdl` (the package is not in winget yet); download from GitHub Releases instead.
 
 ### Security

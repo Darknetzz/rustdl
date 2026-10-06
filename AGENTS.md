@@ -65,7 +65,7 @@ See `README.md` → **Run** for examples.
 
 ## Building the binary
 
-**Automatic:** GitLab CI (`.gitlab-ci.yml`) on `dev` / `rustdl-v*` builds a Linux release binary and publishes it to GitHub + GitLab Releases. GitHub Actions stay **manual-only** (`workflow_dispatch`).
+**Automatic:** GitLab CI (`.gitlab-ci.yml`) on `dev` / `rustdl-v*` builds Linux and Windows (MinGW cross-compile) release binaries on a Linux Docker runner, then publishes to GitHub + GitLab Releases. GitHub Actions stay **manual-only** (`workflow_dispatch`).
 
 **Local** (they `cd` to the repo root and run `cargo build --release`):
 
@@ -83,7 +83,7 @@ On Windows, release builds fail with “Access is denied” if `rustdl.exe` is s
 
 Do **not** assume `cargo build --release` from an arbitrary cwd unless you have already changed to the repo root.
 
-The GitLab instance currently has a **Linux** shared runner only. `rustdl.exe` is not built in CI until a Windows runner with tag `windows` is registered and `WINDOWS_RUNNER_AVAILABLE=true` is set in GitLab CI/CD variables. Until then, ship Windows binaries with the local build scripts (or `-LocalPublish`).
+CI uses a **Linux Docker** GitLab runner (`packaging/gitlab-runner/config.toml.example`). `rustdl.exe` is produced with `x86_64-pc-windows-gnu` (MinGW), not a Windows runner. Optional faster image: `ci/Dockerfile` pushed to `registry.roste.org/kriss/rustdl/ci:latest`, then CI variable `CI_RUST_IMAGE`.
 
 ## Running and testing locally
 
@@ -172,7 +172,9 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | `scripts/push_dev.ps1`, `scripts/push_dev.sh` | Push `dev` to GitHub + GitLab (CI publishes; `-LocalPublish` / `--local-publish` for emergency local build) |
 | `scripts/install_dev_release_hook.ps1`, `scripts/install_dev_release_hook.sh` | Optional: `.githooks/pre-push` (skips local compile unless `RUSTDL_LOCAL_PUBLISH=1`) |
 | `.githooks/pre-push` | Git hook — reminds you GitLab CI publishes; does not compile unless `RUSTDL_LOCAL_PUBLISH=1` |
-| `.gitlab-ci.yml` | GitLab CI: verify, Linux (optional Windows) release build, publish GitHub + GitLab Releases |
+| `.gitlab-ci.yml` | GitLab CI: Linux + MinGW Windows release builds, publish GitHub + GitLab Releases |
+| `ci/Dockerfile` | Optional CI builder image (GTK + MinGW) for `registry.roste.org/kriss/rustdl/ci` |
+| `packaging/gitlab-runner/config.toml.example` | Linux Docker runner + Cargo registry volume |
 | `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |
@@ -358,9 +360,9 @@ GitHub Actions stay **manual-only**. Automatic builds run on **GitLab** after `d
 2. Push `dev` to **gitlab** (`.\scripts\push_dev.ps1` or `git push gitlab dev`).
 3. Pipeline: https://gitlab.roste.org/kriss/rustdl/-/pipelines
 
-The **`linux`** job runs fmt, clippy, tests, and a Linux release binary. The **`publish`** job uploads artifacts to GitHub **`rustdl-dev`** (and a new **`rustdl-vX.Y.Z`** if that version is not on GitHub yet) and creates/updates matching **GitLab Releases**.
+The **`build:linux`** and **`build:windows`** jobs run in parallel. Linux also runs fmt, clippy, and tests. Windows is MinGW-cross-compiled (`x86_64-pc-windows-gnu`). **`publish`** uploads both artifacts to GitHub **`rustdl-dev`** (and a new **`rustdl-vX.Y.Z`** if that version is not on GitHub yet) and matching GitLab Releases.
 
-Windows **`rustdl.exe`**: register a GitLab runner with tag `windows`, then set CI variable `WINDOWS_RUNNER_AVAILABLE=true`. Until then, keep using local `build_binary.ps1` for the Windows asset.
+Runner cache: mount the host Cargo registry as in `packaging/gitlab-runner/config.toml.example` (`/var/cache/gitlab-runner/cargo` → `/usr/local/cargo/registry`).
 
 **Manual all-in-one push (no local compile):**
 

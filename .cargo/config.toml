@@ -1,0 +1,4 @@
+# Used when cross-compiling Windows from Linux (GitLab Docker runner).
+# Native Windows MSVC builds ignore this (they do not use the gnu target).
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"

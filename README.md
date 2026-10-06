@@ -81,7 +81,7 @@ On first run without a saved API token, rustdl generates one and prints it. Open
 
 ## Development checks
 
-Automatic CI runs on **GitLab** (`dev` pushes, merge requests, `rustdl-v*` tags): fmt, clippy, tests, Linux release binary, then publish to GitHub + GitLab Releases. GitHub Actions stay **manual-only**.
+Automatic CI runs on **GitLab** (`dev` pushes, merge requests, `rustdl-v*` tags): fmt, clippy, tests, Linux + Windows (MinGW) release binaries, then publish to GitHub + GitLab Releases. GitHub Actions stay **manual-only**.
 
 Run the checklist locally when you are not waiting on the pipeline:
 
