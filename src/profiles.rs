@@ -114,6 +114,47 @@ impl Default for DownloadProfileFields {
     }
 }
 
+impl DownloadProfileFields {
+    /// Quality, extra args, and post-process flags that distinguish built-in presets.
+    /// Cookies, retries, organize paths, and similar environment fields are ignored.
+    fn matches_preset_options(&self, settings: &AppSettings) -> bool {
+        norm_extra_args(&self.yt_dlp_extra_args) == norm_extra_args(&settings.yt_dlp_extra_args)
+            && self.yt_ignore_errors == settings.yt_ignore_errors
+            && self.yt_write_info_json == settings.yt_write_info_json
+            && self.yt_write_auto_subs == settings.yt_write_auto_subs
+            && self.yt_embed_metadata == settings.yt_embed_metadata
+            && self.ffmpeg_faststart == settings.ffmpeg_faststart
+            && self.ffmpeg_remux_mp4 == settings.ffmpeg_remux_mp4
+            && self.ffmpeg_extract_audio_mp3 == settings.ffmpeg_extract_audio_mp3
+            && self.quality_preset == settings.quality_preset
+            && self.quality_format_custom.trim() == settings.quality_format_custom.trim()
+            && self.download_min_height == settings.download_min_height
+            && self.download_min_fps == settings.download_min_fps
+            && self.merge_container == settings.merge_container
+    }
+}
+
+fn norm_extra_args(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Built-in preset whose quality/post-process options match `settings`, if any.
+pub fn matching_builtin_preset_name(settings: &AppSettings) -> Option<&'static str> {
+    for p in builtin_profiles() {
+        if !p.fields.matches_preset_options(settings) {
+            continue;
+        }
+        return match p.name.as_str() {
+            "Best quality" => Some("Best quality"),
+            "Audio only" => Some("Audio only"),
+            "Fast download" => Some("Fast download"),
+            "Archive mode" => Some("Archive mode"),
+            _ => None,
+        };
+    }
+    None
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DownloadProfile {
     pub name: String,
@@ -348,4 +389,59 @@ pub fn import_profiles_json(path: &Path) -> Result<ProfileStore> {
     let raw = fs::read_to_string(path)
         .with_context(|| format!("failed to read {}", path.to_string_lossy()))?;
     serde_json::from_str(&raw).context("invalid profiles JSON")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::AppSettings;
+
+    fn settings_for_builtin(name: &str) -> AppSettings {
+        let profile = builtin_profiles()
+            .into_iter()
+            .find(|p| p.name == name)
+            .expect("builtin profile");
+        let mut settings = AppSettings::default();
+        profile.apply_to(&mut settings);
+        settings
+    }
+
+    #[test]
+    fn matching_preset_follows_builtin_apply() {
+        for name in [
+            "Best quality",
+            "Audio only",
+            "Fast download",
+            "Archive mode",
+        ] {
+            assert_eq!(
+                matching_builtin_preset_name(&settings_for_builtin(name)),
+                Some(name)
+            );
+        }
+    }
+
+    #[test]
+    fn matching_preset_ignores_cookies_and_retries() {
+        let mut settings = settings_for_builtin("Best quality");
+        settings.yt_dlp_cookies = "cookies.txt".to_owned();
+        settings.yt_dlp_retry_count = 3;
+        settings.yt_proxy = "http://127.0.0.1:8080".to_owned();
+        assert_eq!(
+            matching_builtin_preset_name(&settings),
+            Some("Best quality")
+        );
+    }
+
+    #[test]
+    fn matching_preset_custom_when_quality_diverges() {
+        let mut settings = settings_for_builtin("Best quality");
+        settings.quality_preset = "1080p".to_owned();
+        assert_eq!(matching_builtin_preset_name(&settings), None);
+    }
+
+    #[test]
+    fn default_settings_are_custom_until_a_preset_is_applied() {
+        assert_eq!(matching_builtin_preset_name(&AppSettings::default()), None);
+    }
 }

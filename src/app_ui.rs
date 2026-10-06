@@ -2451,6 +2451,15 @@ impl<'a> ButtonGroup<'a> {
         self.add(|ui| grouped_warning_button(ui, label, enabled, compact))
     }
 
+    /// Secondary when idle; success when this option is the current selection.
+    pub fn option(&mut self, label: &str, enabled: bool, selected: bool) -> Response {
+        if selected {
+            self.success(label, enabled)
+        } else {
+            self.secondary(label, enabled)
+        }
+    }
+
     /// Copy or open the downloader page URL for this row.
     pub fn url_menu(&mut self, url: &str, open_clicked: &mut bool) -> Response {
         let compact = self.compact;

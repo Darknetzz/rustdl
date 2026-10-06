@@ -12,6 +12,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- Downloader **Presets** highlight the matching built-in preset (or **Custom** when quality/post-process options no longer match). Desktop + LAN web UI.
 - Video Converter default **rate control** stays **Bitrate** (empty target → ~2 Mbps auto); Quality (CRF) remains available in Settings. Existing saved settings are unchanged.
 - Video Converter **Cap bitrate to source** defaults to **off** so the 2 Mbps auto fallback can shrink high-bitrate sources again. Turn it on under Settings → Converter if you want to avoid inflating already-efficient clips.
 - Video Converter default **size limit** is now **Min shrink 30%** (skip when the output would not shrink enough). Existing saved settings are unchanged; turn the limit Off under Settings → Converter if you want the old behavior.

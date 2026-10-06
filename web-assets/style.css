@@ -1621,6 +1621,10 @@ dialog::backdrop {
   flex-wrap: wrap;
 }
 
+.preset-row .preset-btn[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px rgba(129, 199, 132, 0.85);
+}
+
 .command-preview {
   font-size: 0.75rem;
   white-space: pre-wrap;

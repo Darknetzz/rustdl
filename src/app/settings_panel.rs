@@ -9,8 +9,8 @@ use crate::config::{
     UI_SCALE_MAX, UI_SCALE_MIN, UI_SCALE_STEP,
 };
 use crate::profiles::{
-    all_profiles, delete_user_profile, find_profile, rename_user_profile, save_user_profile,
-    DownloadProfile,
+    all_profiles, delete_user_profile, find_profile, matching_builtin_preset_name,
+    rename_user_profile, save_user_profile, DownloadProfile,
 };
 use crate::ui_icons;
 
@@ -1545,45 +1545,68 @@ impl PydlApp {
                         ui.separator();
                         ui.label(RichText::new("Downloader options").strong());
                         ui.label(RichText::new("Presets").strong());
+                        let selected_preset = matching_builtin_preset_name(&self.settings);
+                        let custom_selected = selected_preset.is_none();
+                        let preset_selected = |name: &str| selected_preset == Some(name);
                         left_button_row(ui, |ui| {
                             button_group(ui, "dl_presets", |g| {
-                            if g.secondary(
-                                &format!("{} Best quality", ui_icons::PRESET_BEST),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.apply_preset(DownloadPreset::BestQuality);
-                            }
-                            if g.secondary(
-                                &format!("{} Audio only", ui_icons::PRESET_AUDIO),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.apply_preset(DownloadPreset::AudioOnly);
-                            }
-                            if g.warning(
-                                &format!("{} Fast download", ui_icons::PRESET_FAST),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.apply_preset(DownloadPreset::FastDownload);
-                            }
-                            if g.secondary(
-                                &format!("{} Archive mode", ui_icons::PRESET_ARCHIVE),
-                                true,
-                            )
-                            .clicked()
-                            {
-                                self.apply_preset(DownloadPreset::ArchiveMode);
-                            }
+                                if g.option(
+                                    &format!("{} Best quality", ui_icons::PRESET_BEST),
+                                    true,
+                                    preset_selected("Best quality"),
+                                )
+                                .on_hover_text("Highest quality, mp4 merge, faststart")
+                                .clicked()
+                                {
+                                    self.apply_preset(DownloadPreset::BestQuality);
+                                }
+                                if g.option(
+                                    &format!("{} Audio only", ui_icons::PRESET_AUDIO),
+                                    true,
+                                    preset_selected("Audio only"),
+                                )
+                                .on_hover_text("MP3 extraction")
+                                .clicked()
+                                {
+                                    self.apply_preset(DownloadPreset::AudioOnly);
+                                }
+                                if g.option(
+                                    &format!("{} Fast download", ui_icons::PRESET_FAST),
+                                    true,
+                                    preset_selected("Fast download"),
+                                )
+                                .on_hover_text("Speed and fragment concurrency")
+                                .clicked()
+                                {
+                                    self.apply_preset(DownloadPreset::FastDownload);
+                                }
+                                if g.option(
+                                    &format!("{} Archive mode", ui_icons::PRESET_ARCHIVE),
+                                    true,
+                                    preset_selected("Archive mode"),
+                                )
+                                .on_hover_text("Extra metadata artifacts")
+                                .clicked()
+                                {
+                                    self.apply_preset(DownloadPreset::ArchiveMode);
+                                }
+                                g.option(
+                                    &format!("{} Custom", ui_icons::PRESET_CUSTOM),
+                                    true,
+                                    custom_selected,
+                                )
+                                .on_hover_text(if custom_selected {
+                                    "Current downloader options do not match a built-in preset."
+                                } else {
+                                    "Custom is highlighted when quality or post-process options no longer match a built-in preset."
+                                });
                             });
                         });
                         ui.label(
                             RichText::new(
-                                "Best quality: highest quality, mp4 merge, faststart. Audio only: MP3 extraction. \
+                                "The highlighted preset matches current quality and post-process options. \
+                                 Custom is highlighted after you change those options. \
+                                 Best quality: highest quality, mp4 merge, faststart. Audio only: MP3 extraction. \
                                  Fast download: speed and fragment concurrency. Archive mode: extra metadata artifacts.",
                             )
                             .small()

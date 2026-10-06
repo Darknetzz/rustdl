@@ -68,6 +68,7 @@ pub const PRESET_BEST: &str = m::ICON_STAR;
 pub const PRESET_AUDIO: &str = m::ICON_MUSIC_NOTE;
 pub const PRESET_FAST: &str = m::ICON_BOLT;
 pub const PRESET_ARCHIVE: &str = m::ICON_ARCHIVE;
+pub const PRESET_CUSTOM: &str = m::ICON_TUNE;
 
 pub const COPY_CLIPBOARD: &str = m::ICON_CONTENT_PASTE;
 /// Page link actions on downloader queue cards.

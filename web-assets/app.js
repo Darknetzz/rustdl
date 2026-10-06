@@ -3410,6 +3410,102 @@ function populateSettingsForm(s, commandPreview, webUiBrowserUrl) {
   updateQualityCustomVisibility();
   updateOrganizeUi(s);
   updateWebUiQrImage(!!(s.web_auth_token || "").trim());
+  updateDownloadPresetButtons(s);
+}
+
+/** Keep in sync with `matching_builtin_preset_name` in `src/profiles.rs`. */
+function normExtraArgs(s) {
+  return String(s || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function matchingDownloadPreset(s) {
+  const extras = normExtraArgs(s?.yt_dlp_extra_args);
+  const qualityCustom = String(s?.quality_format_custom || "").trim();
+  const fingerprints = [
+    {
+      name: "Best quality",
+      extra: "--merge-output-format mp4",
+      ignore: false,
+      info: false,
+      subs: false,
+      embed: false,
+      faststart: true,
+      remux: false,
+      mp3: false,
+      quality: "best",
+    },
+    {
+      name: "Audio only",
+      extra: "",
+      ignore: false,
+      info: false,
+      subs: false,
+      embed: false,
+      faststart: false,
+      remux: false,
+      mp3: true,
+      quality: "audio",
+    },
+    {
+      name: "Fast download",
+      extra: "--concurrent-fragments 4",
+      ignore: true,
+      info: false,
+      subs: false,
+      embed: false,
+      faststart: false,
+      remux: false,
+      mp3: false,
+      quality: "best",
+    },
+    {
+      name: "Archive mode",
+      extra: "--write-description",
+      ignore: false,
+      info: true,
+      subs: true,
+      embed: true,
+      faststart: true,
+      remux: false,
+      mp3: false,
+      quality: "best",
+    },
+  ];
+  for (const p of fingerprints) {
+    if (
+      extras === p.extra &&
+      !!s?.yt_ignore_errors === p.ignore &&
+      !!s?.yt_write_info_json === p.info &&
+      !!s?.yt_write_auto_subs === p.subs &&
+      !!s?.yt_embed_metadata === p.embed &&
+      !!s?.ffmpeg_faststart === p.faststart &&
+      !!s?.ffmpeg_remux_mp4 === p.remux &&
+      !!s?.ffmpeg_extract_audio_mp3 === p.mp3 &&
+      (s?.quality_preset || "best") === p.quality &&
+      qualityCustom === "" &&
+      (s?.download_min_height || 0) === 0 &&
+      (s?.download_min_fps || 0) === 0 &&
+      (s?.merge_container || "default") === "default"
+    ) {
+      return p.name;
+    }
+  }
+  return "custom";
+}
+
+function updateDownloadPresetButtons(s) {
+  const selected = matchingDownloadPreset(s);
+  document.querySelectorAll(".preset-btn").forEach((btn) => {
+    const name = btn.dataset.profile || "custom";
+    const on = name === selected;
+    btn.classList.toggle("success", on);
+    btn.classList.toggle("secondary", !on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
 function collectSettingsForm(base) {
@@ -4069,7 +4165,19 @@ document.getElementById("btn-apply-profile").onclick = () => {
 };
 
 document.querySelectorAll(".preset-btn").forEach((btn) => {
-  btn.onclick = () => applyProfile(btn.dataset.profile).catch(console.error);
+  btn.onclick = () => {
+    if (btn.dataset.profile === "custom") return;
+    applyProfile(btn.dataset.profile).catch(console.error);
+  };
+});
+
+document.getElementById("settings-form")?.addEventListener("change", () => {
+  if (!cachedSettings) return;
+  try {
+    updateDownloadPresetButtons(collectSettingsForm(cachedSettings));
+  } catch (_) {
+    /* form may not be fully mounted */
+  }
 });
 
 /* ----------------------------- Video Converter ----------------------------- */

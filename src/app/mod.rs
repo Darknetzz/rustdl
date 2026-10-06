@@ -50,8 +50,7 @@ use crate::app_state::{StatusCounts, TransferTotals};
 use crate::app_ui::{
     alert_danger, alert_warning, bounded_ui_height, button_group, centered_button_row,
     content_width, left_button_row, modal_backdrop, modal_window, NavbarStatusInputs,
-    ALERT_DANGER_TEXT,
-    ALERT_WARNING_TEXT,
+    ALERT_DANGER_TEXT, ALERT_WARNING_TEXT,
 };
 use crate::config::{
     default_downloads, export_queue_urls, load_settings, rustdl_config_dir, save_settings,

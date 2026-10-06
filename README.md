@@ -212,7 +212,7 @@ Presets are quick-start bundles in **Settings -> Download** that set multiple to
 | Fast download | Prioritizes speed with `--concurrent-fragments 4` and ignore errors (HTTP retries remain unlimited by default) |
 | Archive mode | Enables writing metadata artifacts (`info.json`, subtitles, embedded metadata) and sets extra args to `--write-description` |
 
-Presets update current settings immediately, and you can still tweak any individual fields afterward.
+Presets update current settings immediately, and you can still tweak any individual fields afterward. The matching preset stays highlighted; **Custom** is highlighted when quality or post-process options no longer match a built-in preset (cookies, retries, and organize paths do not count).
 
 #### Pasting multiple URLs
 

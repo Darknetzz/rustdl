@@ -630,8 +630,7 @@ fn effective_crf(cfg: &ConvertConfig) -> u32 {
 }
 
 fn nvidia_maxrate_bps(target_bitrate_bps: i64, maxrate_cap_bps: Option<i64>) -> i64 {
-    let mut maxrate =
-        (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
+    let mut maxrate = (target_bitrate_bps as f64 * BITRATE_MAXRATE_MULTIPLIER).round() as i64;
     if let Some(cap) = maxrate_cap_bps {
         maxrate = maxrate.min(cap);
     }
@@ -845,7 +844,11 @@ fn planned_output_extension(input: &Path, cfg: &ConvertConfig) -> String {
             .extension()
             .and_then(|s| s.to_str())
             .map(|e| e.to_ascii_lowercase())
-            .filter(|e| CONVERT_VIDEO_EXTENSIONS.iter().any(|x| x.eq_ignore_ascii_case(e)))
+            .filter(|e| {
+                CONVERT_VIDEO_EXTENSIONS
+                    .iter()
+                    .any(|x| x.eq_ignore_ascii_case(e))
+            })
             .unwrap_or_else(|| recommended_container_for_target(&cfg.target_codec).to_owned()),
         // "auto" or any unrecognized value → recommended for target codec
         _ => recommended_container_for_target(&cfg.target_codec).to_owned(),
@@ -1826,9 +1829,7 @@ where
         return Ok(plan.output.clone());
     }
     let probed = probe_input_media(&plan.input, &cfg.ffprobe_path);
-    let source_cap = probed
-        .as_ref()
-        .and_then(source_bitrate_for_encode_cap);
+    let source_cap = probed.as_ref().and_then(source_bitrate_for_encode_cap);
     let resolved = resolve_encode_bitrate_bps(cfg, source_cap);
     if let Some(from) = resolved.capped_from_bps {
         on_line(format!(
@@ -2269,13 +2270,8 @@ Invalid data found when processing input";
 
     #[test]
     fn encoder_rate_control_crf_amf_uses_qp() {
-        let args = encoder_rate_control_args(
-            &test_encoder("hevc_amf", "amd"),
-            true,
-            2_000_000,
-            28,
-            None,
-        );
+        let args =
+            encoder_rate_control_args(&test_encoder("hevc_amf", "amd"), true, 2_000_000, 28, None);
         assert!(args.windows(2).any(|w| w == ["-rc", "cqp"]));
         assert!(args.windows(2).any(|w| w == ["-qp_i", "28"]));
         assert!(args.windows(2).any(|w| w == ["-qp_p", "28"]));
