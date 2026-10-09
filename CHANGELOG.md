@@ -19,6 +19,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Fixed
 
+- Post-download **ffprobe** stream checks now report the real exit code/stderr (and which binary/file were used) instead of a generic “could not parse output” message; probes also resolve `ffprobe` via PATH and retry briefly so a still-flushing file is less likely to mark a good download as Failed.
 - Desktop modals (session restore, quit confirm, command palette, playlist preview, download options): clicking the dimmed backdrop no longer traps the UI so dialog buttons stop working.
 - Video Converter **Output size limit** can be set back to **Off** again (turning Off no longer snaps back to Min shrink).
 

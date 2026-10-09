@@ -2186,12 +2186,7 @@ impl DownloadCore {
             return Err("No matching file in the output folder.".to_owned());
         };
         let path_str = path.to_string_lossy().to_string();
-        ytdlp::probe_video_audio_stream_presence(&path_str, &self.settings.ffprobe_path).ok_or_else(
-            || {
-                "ffprobe failed or could not parse output. Check the file and ffprobe path."
-                    .to_owned()
-            },
-        )
+        ytdlp::probe_video_audio_stream_presence(&path_str, &self.settings.ffprobe_path)
     }
 
     fn streams_incomplete_message(has_video: bool, has_audio: bool) -> Option<String> {

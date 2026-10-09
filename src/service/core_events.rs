@@ -669,13 +669,8 @@ impl super::core::DownloadCore {
             &path_str,
             &self.settings.ffprobe_path,
         ) {
-            Some(v) => v,
-            None => {
-                return Some(
-                    "ffprobe failed or could not parse output. Check the file and ffprobe path."
-                        .to_owned(),
-                );
-            }
+            Ok(v) => v,
+            Err(msg) => return Some(msg),
         };
         streams_incomplete_message(has_video, has_audio)
     }

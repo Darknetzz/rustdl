@@ -130,12 +130,9 @@ fn yt_dlp_spawn_error_message(custom_path: &str, source_err: &std::io::Error) ->
 }
 
 fn resolve_ffprobe_exe(ffprobe_path: &str) -> String {
-    let trimmed = ffprobe_path.trim();
-    if trimmed.is_empty() {
-        "ffprobe".to_owned()
-    } else {
-        trimmed.to_owned()
-    }
+    // Prefer an absolute PATH resolution so Windows CreateProcess does not depend on
+    // an ambiguous bare `ffprobe` lookup (same binary as version detection).
+    resolve_exe_for_version_spawn(ffprobe_path, "ffprobe")
 }
 
 pub fn normalize_url_for_dedupe(input: &str) -> String {
@@ -730,15 +727,45 @@ fn stream_presence_from_ffprobe_json(bytes: &[u8]) -> Option<(bool, bool)> {
     Some((has_video, has_audio))
 }
 
-/// Returns `(has_video, has_audio)` when ffprobe succeeds; `None` if ffprobe failed or output was not valid JSON.
-pub fn probe_video_audio_stream_presence(
+/// Keep UI / queue error strings short while preserving the useful ffprobe line.
+fn truncate_ffprobe_detail(s: &str, max_chars: usize) -> String {
+    let t = s.split_whitespace().collect::<Vec<_>>().join(" ");
+    if t.is_empty() {
+        return String::new();
+    }
+    let n = t.chars().count();
+    if n <= max_chars {
+        t
+    } else {
+        t.chars()
+            .take(max_chars.saturating_sub(1))
+            .collect::<String>()
+            + "…"
+    }
+}
+
+fn format_ffprobe_probe_failure(
+    ffprobe: &str,
     file_path: &str,
-    ffprobe_path: &str,
-) -> Option<(bool, bool)> {
-    let ffprobe = resolve_ffprobe_exe(ffprobe_path);
-    let mut cmd = Command::new(&ffprobe);
+    kind: &str,
+    detail: &str,
+) -> String {
+    let mut msg = format!("ffprobe {kind} ({ffprobe} → {file_path})");
+    let detail = truncate_ffprobe_detail(detail, 180);
+    if !detail.is_empty() {
+        msg.push_str(": ");
+        msg.push_str(&detail);
+    }
+    msg
+}
+
+fn probe_video_audio_stream_presence_once(
+    file_path: &str,
+    ffprobe: &str,
+) -> Result<(bool, bool), String> {
+    let mut cmd = Command::new(ffprobe);
     no_console_window(&mut cmd);
-    let out = cmd
+    let out = match cmd
         .args([
             "-v",
             "error",
@@ -749,13 +776,81 @@ pub fn probe_video_audio_stream_presence(
             file_path,
         ])
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .output()
-        .ok()?;
+    {
+        Ok(o) => o,
+        Err(err) => {
+            return Err(format_ffprobe_probe_failure(
+                ffprobe,
+                file_path,
+                "could not start",
+                &err.to_string(),
+            ));
+        }
+    };
     if !out.status.success() {
-        return None;
+        let code = out
+            .status
+            .code()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|| "signal".to_owned());
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let detail = if stderr.trim().is_empty() {
+            format!("exit {code}")
+        } else {
+            format!("exit {code}; {}", stderr.trim())
+        };
+        return Err(format_ffprobe_probe_failure(
+            ffprobe,
+            file_path,
+            "failed",
+            &detail,
+        ));
     }
-    stream_presence_from_ffprobe_json(&out.stdout)
+    match stream_presence_from_ffprobe_json(&out.stdout) {
+        Some(v) => Ok(v),
+        None => {
+            let preview = String::from_utf8_lossy(&out.stdout);
+            let detail = if preview.trim().is_empty() {
+                "empty stdout".to_owned()
+            } else {
+                format!("invalid JSON: {}", preview.trim())
+            };
+            Err(format_ffprobe_probe_failure(
+                ffprobe,
+                file_path,
+                "could not parse output",
+                &detail,
+            ))
+        }
+    }
+}
+
+/// Returns `(has_video, has_audio)` when ffprobe succeeds.
+///
+/// Retries briefly: right after yt-dlp finishes, the file can still be incomplete or briefly
+/// locked (AV / indexer), which makes a single probe look like a hard failure.
+pub fn probe_video_audio_stream_presence(
+    file_path: &str,
+    ffprobe_path: &str,
+) -> Result<(bool, bool), String> {
+    const ATTEMPTS: usize = 3;
+    const RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(200);
+    let ffprobe = resolve_ffprobe_exe(ffprobe_path);
+    let mut last_err = String::new();
+    for attempt in 0..ATTEMPTS {
+        match probe_video_audio_stream_presence_once(file_path, &ffprobe) {
+            Ok(v) => return Ok(v),
+            Err(err) => {
+                last_err = err;
+                if attempt + 1 < ATTEMPTS {
+                    std::thread::sleep(RETRY_DELAY);
+                }
+            }
+        }
+    }
+    Err(last_err)
 }
 
 pub fn probe_video_resolution_with_path(file_path: &str, ffprobe_path: &str) -> Option<(u32, u32)> {
@@ -1550,6 +1645,29 @@ mod tests {
             super::stream_presence_from_ffprobe_json(raw),
             Some((true, true))
         );
+    }
+
+    #[test]
+    fn truncate_ffprobe_detail_collapses_whitespace_and_caps_length() {
+        let long = "a".repeat(200);
+        let out = super::truncate_ffprobe_detail(&format!("  foo   bar  {long}"), 40);
+        assert!(out.starts_with("foo bar "));
+        assert!(out.ends_with('…'));
+        assert!(out.chars().count() <= 40);
+    }
+
+    #[test]
+    fn format_ffprobe_probe_failure_includes_paths_and_detail() {
+        let msg = super::format_ffprobe_probe_failure(
+            r"D:\Bin\ffprobe.exe",
+            r"D:\out\clip.mp4",
+            "failed",
+            "exit 1; Invalid data found when processing input",
+        );
+        assert!(msg.contains("ffprobe failed"));
+        assert!(msg.contains(r"D:\Bin\ffprobe.exe"));
+        assert!(msg.contains(r"D:\out\clip.mp4"));
+        assert!(msg.contains("Invalid data"));
     }
 
     #[test]
