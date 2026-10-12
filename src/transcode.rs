@@ -774,15 +774,19 @@ fn select_pixel_format(hw_type: &str) -> &'static str {
     }
 }
 
+/// Scale to square pixels while preserving **display** aspect ratio.
+///
+/// Uses `iw*sar` (not coded `iw`) so anamorphic sources — including portrait video stored
+/// as landscape coded size with a non-1:1 sample aspect ratio — keep the correct shape
+/// after `setsar=1`. AMD encoders need stronger alignment (64×16); others use even dims.
 fn build_video_filter_chain(hw_type: &str, max_video_width: u32, pix_fmt: &str) -> String {
     let w = max_video_width;
-    let scale = if hw_type == "amd" {
-        format!(
-            "scale='trunc(min({w},iw)/64)*64':'trunc(trunc(min({w},iw)/64)*64*ih/iw/16)*16',format={pix_fmt}"
-        )
-    } else {
-        format!("scale='min({w},iw)':-2:force_original_aspect_ratio=decrease,format={pix_fmt}")
-    };
+    let (align_w, align_h) = if hw_type == "amd" { (64, 16) } else { (2, 2) };
+    // ow = trunc(min(W, iw*sar) / align_w) * align_w
+    // oh = trunc(ow * ih / (iw*sar) / align_h) * align_h
+    let scale = format!(
+        "scale='trunc(min({w},iw*sar)/{align_w})*{align_w}':'trunc(trunc(min({w},iw*sar)/{align_w})*{align_w}*ih/(iw*sar)/{align_h})*{align_h}',format={pix_fmt}"
+    );
     format!("{scale},setsar=1")
 }
 
@@ -2383,6 +2387,20 @@ Invalid data found when processing input";
     fn build_video_filter_chain_uses_nv12_for_nvidia() {
         let vf = build_video_filter_chain("nvidia", 1920, "nv12");
         assert!(vf.contains("format=nv12"));
+        assert!(vf.contains("setsar=1"));
+        assert!(
+            vf.contains("iw*sar"),
+            "scale must use display width (iw*sar) so anamorphic portrait is not stretched"
+        );
+        assert!(vf.contains("/2)*2"), "non-AMD path should align to even dimensions");
+    }
+
+    #[test]
+    fn build_video_filter_chain_amd_aligns_and_uses_sar() {
+        let vf = build_video_filter_chain("amd", 1920, "nv12");
+        assert!(vf.contains("iw*sar"));
+        assert!(vf.contains("/64)*64"));
+        assert!(vf.contains("/16)*16"));
         assert!(vf.contains("setsar=1"));
     }
 
