@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use crate::config::{activity_log_file_path, save_activity_log, save_queue_items};
+use crate::config::{activity_log_text_path, save_activity_log, save_queue_items};
 
 use super::PydlApp;
 
@@ -94,34 +94,12 @@ impl PydlApp {
         self.log_lines = core.log_lines.clone();
     }
 
+    /// Flush the activity log to disk and open the plain-text sibling in an external editor.
     pub(super) fn open_activity_log_file(&mut self) {
-        let path = activity_log_file_path();
-        if !path.exists() {
-            let _ = save_activity_log(&self.log_lines);
-        }
-        if let Err(e) = crate::app_actions::open_path(&path) {
+        self.flush_log_to_disk();
+        let path = activity_log_text_path();
+        if let Err(e) = crate::app_actions::open_text_log(&path) {
             self.append_log(&format!("Failed to open activity log: {e}"));
-        }
-    }
-
-    pub(super) fn export_activity_log(&mut self) {
-        let path = activity_log_file_path();
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        let body: String = self
-            .log_lines
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("\n");
-        match std::fs::write(&path, &body) {
-            Ok(()) => self.append_log(&format!(
-                "Exported activity log ({} lines) to {}",
-                self.log_lines.len(),
-                path.display()
-            )),
-            Err(e) => self.append_log(&format!("Export activity log failed: {e}")),
         }
     }
 }

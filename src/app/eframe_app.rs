@@ -6,8 +6,7 @@ use crate::app_ui::{
     dock_panel_horizontal_frame, draw_mode_nav_bar, draw_navbar_status_badge, finite_ui_span,
     layout_breakpoint, main_body_scroll_min, main_viewport_size,
     patch_resizable_panel_state_height, show_mode_panel, url_input_height, with_full_width,
-    BOTTOM_PANEL_MAX_H, BOTTOM_PANEL_MIN_H, BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG,
-    LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
+    BOTTOM_PANEL_MIN_H, LAYOUT_WIDE_BREAKPOINT, UNDOCKED_FOOTER_PANEL_ID, UNDOCKED_VIDEOS_STRIP_H,
     VIDEOS_DOCKED_HEIGHT_RATIO,
 };
 use crate::service::DownloadCore;
@@ -133,7 +132,7 @@ impl eframe::App for PydlApp {
             ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Comma));
         let trigger_focus_search =
             ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F));
-        let trigger_toggle_log = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::L));
+        let trigger_open_log = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::L));
         let trigger_palette = ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K));
         let trigger_escape = ctx.input(|i| i.key_pressed(egui::Key::Escape));
         self.maybe_global_paste_into_primary_input(ctx);
@@ -143,9 +142,8 @@ impl eframe::App for PydlApp {
         if trigger_focus_search {
             self.focus_queue_search = true;
         }
-        if trigger_toggle_log {
-            self.settings.logs_open = !self.settings.logs_open;
-            self.persist_settings();
+        if trigger_open_log {
+            self.open_activity_log_file();
         }
         if trigger_palette {
             self.command_palette_open = true;
@@ -161,9 +159,6 @@ impl eframe::App for PydlApp {
                 if !self.settings.videos_docked {
                     self.settings.videos_open = false;
                 }
-                if !self.settings.logs_docked {
-                    self.settings.logs_open = false;
-                }
             }
         }
 
@@ -171,22 +166,10 @@ impl eframe::App for PydlApp {
             // Docked queue lives in the central column under Converter/Downloader controls
             // (fills remaining height). Only the undocked strip uses a bottom panel.
             if !self.settings.videos_docked {
-                let log_docked = self.settings.logs_open && self.settings.logs_docked;
-                let (default_h, height_range, resizable) = if log_docked {
-                    (
-                        self.settings
-                            .undocked_footer_height
-                            .max(BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG),
-                        BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG..=BOTTOM_PANEL_MAX_H,
-                        true,
-                    )
-                } else {
-                    (UNDOCKED_VIDEOS_STRIP_H, 72.0..=140.0, false)
-                };
                 egui::TopBottomPanel::bottom(UNDOCKED_FOOTER_PANEL_ID)
-                    .resizable(resizable)
-                    .default_height(default_h)
-                    .height_range(height_range)
+                    .resizable(false)
+                    .default_height(UNDOCKED_VIDEOS_STRIP_H)
+                    .height_range(72.0..=140.0)
                     .frame(dock_panel_horizontal_frame())
                     .show(ctx, |ui| {
                         self.draw_queue_footer(ui);
@@ -225,11 +208,7 @@ impl eframe::App for PydlApp {
                 let viewport_h = main_viewport_size(ctx).y;
                 let videos_docked = self.settings.videos_docked;
                 let queue_min = if videos_docked {
-                    if self.settings.logs_open && self.settings.logs_docked {
-                        BOTTOM_PANEL_MIN_H_WITH_DOCKED_LOG
-                    } else {
-                        BOTTOM_PANEL_MIN_H
-                    }
+                    BOTTOM_PANEL_MIN_H
                 } else {
                     0.0
                 };
@@ -515,9 +494,6 @@ impl eframe::App for PydlApp {
             if !self.settings.videos_docked {
                 self.draw_videos_window(ctx);
             }
-            if self.settings.logs_open && !self.settings.logs_docked {
-                self.draw_logs_window(ctx);
-            }
             self.maybe_notify_session_complete();
             self.maybe_notify_convert_batch_complete();
             self.draw_playlist_preview_dialog(ctx);
@@ -617,23 +593,13 @@ impl PydlApp {
     fn draw_main_header_actions(&mut self, ui: &mut egui::Ui) {
         button_toolbar_wrapped(ui, |ui| {
             button_group(ui, "hdr_actions", |g| {
-                if self.settings.logs_open {
-                    if g.secondary(&format!("{} Hide log", ui_icons::DISMISS), true)
-                        .on_hover_text("Close the activity log")
-                        .clicked()
-                    {
-                        self.settings.logs_open = false;
-                        self.persist_settings();
-                    }
-                } else if g
-                    .secondary(&format!("{} Show log", ui_icons::LOGS), true)
+                if g.secondary(&format!("{} Show log", ui_icons::LOGS), true)
                     .on_hover_text(
-                        "Open the activity log (dock under the queue or in its own window)",
+                        "Open the activity log file in an external editor (Notepad++ if installed)",
                     )
                     .clicked()
                 {
-                    self.settings.logs_open = true;
-                    self.persist_settings();
+                    self.open_activity_log_file();
                 }
                 if g.secondary(&format!("{} Library", ui_icons::OPEN_FOLDER), true)
                     .on_hover_text("Browse completed downloads and re-queue")

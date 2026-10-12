@@ -105,8 +105,13 @@ const COMMANDS: &[PaletteCommand] = &[
         section: None,
     },
     PaletteCommand {
-        label: "Toggle activity log",
-        keywords: "log show hide activity",
+        label: "Open activity log",
+        keywords: "log show open activity file notepad",
+        section: None,
+    },
+    PaletteCommand {
+        label: "Clear activity log",
+        keywords: "log clear erase activity",
         section: None,
     },
     PaletteCommand {
@@ -150,11 +155,6 @@ const COMMANDS: &[PaletteCommand] = &[
         section: None,
     },
     PaletteCommand {
-        label: "Export activity log",
-        keywords: "export log save file",
-        section: None,
-    },
-    PaletteCommand {
         label: "Dock Videos panel",
         keywords: "dock videos queue panel",
         section: Some("Panels"),
@@ -162,16 +162,6 @@ const COMMANDS: &[PaletteCommand] = &[
     PaletteCommand {
         label: "Float Videos window",
         keywords: "float undock videos window",
-        section: None,
-    },
-    PaletteCommand {
-        label: "Dock activity log",
-        keywords: "dock log panel bottom",
-        section: None,
-    },
-    PaletteCommand {
-        label: "Float activity log",
-        keywords: "float undock log window",
         section: None,
     },
     PaletteCommand {
@@ -382,10 +372,8 @@ impl PydlApp {
             "Refetch all failed" => self.refetch_failed_items(),
             "Remove selected" => self.remove_selected_items(),
             "Clear completed downloads" => self.clear_completed_downloads(),
-            "Toggle activity log" => {
-                self.settings.logs_open = !self.settings.logs_open;
-                self.persist_settings();
-            }
+            "Open activity log" => self.open_activity_log_file(),
+            "Clear activity log" => self.clear_activity_log(),
             "Focus queue search" => self.focus_queue_search = true,
             "Switch to Downloader mode" => self.set_app_mode(false),
             "Switch to Video Converter mode" => self.set_app_mode(true),
@@ -400,7 +388,6 @@ impl PydlApp {
             }
             "Open Download library" => self.library_open = true,
             "Switch to Library" => self.library_open = true,
-            "Export activity log" => self.export_activity_log(),
             "Dock Videos panel" => {
                 self.note_videos_dock_user_choice(true);
                 self.settings.videos_docked = true;
@@ -409,16 +396,6 @@ impl PydlApp {
             "Float Videos window" => {
                 self.note_videos_dock_user_choice(false);
                 self.settings.videos_docked = false;
-                self.persist_settings();
-            }
-            "Dock activity log" => {
-                self.settings.logs_docked = true;
-                self.settings.logs_open = true;
-                self.persist_settings();
-            }
-            "Float activity log" => {
-                self.settings.logs_docked = false;
-                self.settings.logs_open = true;
                 self.persist_settings();
             }
             "Layout: Compact queue" => {

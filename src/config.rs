@@ -71,7 +71,18 @@ fn write_atomic(path: &Path, raw: &str) -> Result<()> {
             })?;
         }
     }
-    let tmp = path.with_extension("json.tmp");
+    // Append `.tmp` to the full filename so siblings (e.g. `.json` + `.txt`) never share a temp path.
+    let tmp = {
+        let mut name = path
+            .file_name()
+            .map(|n| n.to_os_string())
+            .unwrap_or_else(|| "rustdl.tmp".into());
+        name.push(".tmp");
+        match path.parent() {
+            Some(parent) if !parent.as_os_str().is_empty() => parent.join(name),
+            _ => PathBuf::from(name),
+        }
+    };
     fs::write(&tmp, raw).with_context(|| format!("failed to write {}", tmp.to_string_lossy()))?;
     fs::rename(&tmp, path).with_context(|| {
         format!(
@@ -912,6 +923,11 @@ pub fn activity_log_file_path() -> PathBuf {
     rustdl_config_dir().join("rustdl_activity_log.json")
 }
 
+/// Plain-text sibling of the JSON activity log (one line per entry); opened by desktop "Show log".
+pub fn activity_log_text_path() -> PathBuf {
+    rustdl_config_dir().join("rustdl_activity_log.txt")
+}
+
 fn config_path() -> PathBuf {
     if dirs::config_dir().is_some() {
         config_file_path()
@@ -933,6 +949,14 @@ fn activity_log_path() -> PathBuf {
         activity_log_file_path()
     } else {
         PathBuf::from("rustdl_activity_log.json")
+    }
+}
+
+fn activity_log_text_file_path() -> PathBuf {
+    if dirs::config_dir().is_some() {
+        activity_log_text_path()
+    } else {
+        PathBuf::from("rustdl_activity_log.txt")
     }
 }
 
@@ -975,6 +999,17 @@ pub fn save_activity_log(lines: &VecDeque<String>) -> Result<()> {
         format!(
             "failed to write activity log file: {}",
             path.to_string_lossy()
+        )
+    })?;
+    let text_path = activity_log_text_file_path();
+    let mut text = lines.iter().cloned().collect::<Vec<_>>().join("\n");
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    write_atomic(&text_path, &text).with_context(|| {
+        format!(
+            "failed to write activity log text file: {}",
+            text_path.to_string_lossy()
         )
     })?;
     Ok(())

@@ -101,7 +101,7 @@ impl PydlApp {
                     (
                         &["Ctrl", "L"],
                         Some(&["Cmd", "L"]),
-                        "Show or hide activity log",
+                        "Open activity log file in an external editor",
                     ),
                     (
                         &["Ctrl", "K"],

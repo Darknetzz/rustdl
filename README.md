@@ -99,7 +99,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - Queue downloads with per-item progress, status, size, and live log output.
 - About dialog with app version and update check.
 - Settings persistence in user config directory.
-- Persisted activity log with timestamps; optional docked log panel under the queue.
+- Persisted activity log with timestamps; desktop **Show log** / **Ctrl+L** opens the plain-text log in an external editor (Notepad++ on Windows when installed). LAN web UI keeps an in-browser log viewer.
 - Queue search, bulk selection, pause/resume downloads, drag-to-reorder Ready items (list layout), import/export queue URLs to `.txt`.
 - Named download profiles (built-in + user-defined), quality presets, output filename template, download archive, proxy, speed limit, and SponsorBlock options.
 - Light / dark / system theme; last mode (Downloader vs Video Converter) remembered across restarts.
@@ -107,7 +107,7 @@ Covers `fmt`, `clippy`, `test`, `cargo deny`, and `cargo audit`.
 - **Video Converter** mode for local file/folder transcoding to AV1 (default), H.265, or H.264 with queue progress, dry-run, cancel, retry failed/skipped, and encoder auto-detect.
 - Optional: enqueue each completed video download into the Video Converter queue (Settings → Downloader).
 - Optional **LAN web UI**: control the downloader queue from a phone or another PC on your home network (Settings → **Web UI**).
-- **Command palette** (`Ctrl+K` / `Cmd+K`): keyboard shortcuts, layout presets (Compact / Review / Minimal), dock/float panels, export log, and quick navigation.
+- **Command palette** (`Ctrl+K` / `Cmd+K`): keyboard shortcuts, layout presets (Compact / Review / Minimal), dock/float Videos, open/clear activity log, and quick navigation.
 - **Watch folders**: auto-enqueue URLs from `.url` / `.txt` files (Downloader) and auto-scan new videos into the convert queue (Settings).
 - **Queue templates** and **convert encoding presets** saved under your config directory.
 - **Download library** (desktop window and LAN **Library** tab): browse completed downloads and re-queue URLs.
@@ -182,11 +182,10 @@ Settings tabs in the app are named **General**, **Downloader**, **Video Converte
 | Auto-start downloads when new items become ready | Optional. When enabled, starts downloads automatically after metadata resolution completes |
 | **LAN web UI** (enable, bind address, API token) | Settings → **Web UI** tab; see [LAN web UI](#lan-web-ui) |
 | Enqueue completed downloads in Video Converter queue | After a successful video download, adds the output file to the converter queue (skipped for audio-only / MP3 extraction) |
-| Autoscroll log to latest line | Keeps the log viewer pinned to the newest lines while logs are appended |
+| Autoscroll log to latest line | LAN web UI: keeps the log viewer pinned to the newest lines while logs are appended |
 | Parallel downloads | Number of concurrent worker queues used when starting downloads (`1..=6`) |
 | Max log chars | Maximum in-memory log buffer length before older characters are trimmed |
-| Dock activity log under video queue | Shows the log in a resizable panel below cards instead of a floating window |
-| Relative timestamps in activity log | Shows ages like `5 min ago` instead of full local time in the log viewer |
+| Relative timestamps in activity log | LAN web UI: shows ages like `5 min ago` instead of full local time in the log viewer |
 | List layout for queue cards | Compact list rows instead of horizontal preview cards |
 
 ### Executables
@@ -276,12 +275,13 @@ Also in the same folder:
 - `rustdl_queue.json` — saved download queue
 - `rustdl_convert_queue.json` — saved Video Converter queue (when *Remember Convert queue* is enabled)
 - `rustdl_activity_log.json` — persisted activity log (survives restarts)
+- `rustdl_activity_log.txt` — plain-text sibling of the activity log (opened by desktop **Show log**)
 - `rustdl_profiles.json` — user-defined download profiles
 - `rustdl_watchlist.json` — quality watchlist entries
 - `queue_templates/` — saved downloader queue templates
 - `rustdl_convert_presets.json` — user-defined convert presets (built-in Fast AV1 / Quality H.265 ship in-app)
 
-Open **Settings**, **Logs**, or **About** → **Open config folder** to reveal this directory in your file manager.
+Open **Settings** or **About** → **Open config folder** to reveal this directory in your file manager. Use **Show log** / **Ctrl+L** to open the plain-text activity log.
 
 ## Platform notes
 

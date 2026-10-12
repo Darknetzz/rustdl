@@ -419,22 +419,25 @@ impl PydlApp {
             if self.settings.videos_docked != videos_docked_before {
                 self.note_videos_dock_user_choice(self.settings.videos_docked);
             }
-            *changed |= settings_checkbox(
-                ui,
-                "Dock activity log under video queue (when queue is docked)",
-                &mut self.settings.logs_docked,
-            );
         });
         ui.label(RichText::new("Activity log").strong());
+        ui.label(
+            RichText::new(
+                "Desktop opens the log in an external editor (Show log / Ctrl+L). \
+                 These options apply to the LAN web UI activity log.",
+            )
+            .small()
+            .weak(),
+        );
         settings_form_grid(ui, "general_activity_log", |ui| {
             *changed |= settings_checkbox(
                 ui,
-                "Autoscroll log to latest line",
+                "Autoscroll log to latest line (web UI)",
                 &mut self.settings.autoscroll_log,
             );
             *changed |= settings_checkbox(
                 ui,
-                "Relative timestamps in activity log",
+                "Relative timestamps in activity log (web UI)",
                 &mut self.settings.log_relative_time,
             );
             ui.label("Max log chars");
@@ -453,7 +456,7 @@ impl PydlApp {
                 "Power save during active work",
                 &mut self.settings.ui_power_save,
                 "Lower UI refresh rate while downloading or converting, \
-                 use denser queue rows sooner, and lighter activity-log rendering",
+                 and use denser queue rows sooner",
             );
             let tray_hover = if cfg!(target_os = "linux") {
                 "Hide the window in the notification area when you minimize or \

@@ -204,18 +204,6 @@ const WEB_PALETTE_COMMANDS: &[PaletteCommandJson] = &[
         section: None,
     },
     PaletteCommandJson {
-        id: "dock_log",
-        label: "Dock activity log (host app)",
-        keywords: "dock log panel bottom desktop host",
-        section: None,
-    },
-    PaletteCommandJson {
-        id: "float_log",
-        label: "Float activity log (host app)",
-        keywords: "float undock log window desktop host",
-        section: None,
-    },
-    PaletteCommandJson {
         id: "open_about",
         label: "Open About",
         keywords: "about version help",

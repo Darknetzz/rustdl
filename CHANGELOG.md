@@ -10,8 +10,13 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ## [Unreleased]
 
+### Added
+
+- Desktop activity log also writes a plain-text sibling `rustdl_activity_log.txt` (one line per entry) whenever the JSON log is saved.
+
 ### Changed
 
+- Desktop **activity log** is external-only: **Show log**, **Ctrl/Cmd+L**, About, and the command palette open `rustdl_activity_log.txt`. On Windows, Notepad++ is preferred when installed; otherwise the OS default editor is used. The in-app docked/floating log panel is removed; the LAN web UI log viewer is unchanged.
 - Downloader **Presets** highlight the matching built-in preset (or **Custom** when quality/post-process options no longer match). Desktop + LAN web UI.
 - Video Converter default **rate control** stays **Bitrate** (empty target → ~2 Mbps auto); Quality (CRF) remains available in Settings. Existing saved settings are unchanged.
 - Video Converter **Cap bitrate to source** defaults to **off** so the 2 Mbps auto fallback can shrink high-bitrate sources again. Turn it on under Settings → Converter if you want to avoid inflating already-efficient clips.

@@ -312,10 +312,6 @@ pub struct PydlApp {
     last_done_lookup_poll: Option<Instant>,
     last_downloader_thumbnail_ensure_at: Option<Instant>,
     last_convert_thumbnail_ensure_at: Option<Instant>,
-    /// Cached filtered log line indices (rebuilt when log length or filter changes).
-    log_filtered_indices: Vec<usize>,
-    log_filter_cache_len: usize,
-    log_filter_cache_slug: String,
     /// Cached free/total space for the output folder volume.
     output_disk_space: Option<crate::disk_space::DiskSpace>,
     output_disk_space_polled_at: Option<Instant>,
@@ -332,8 +328,6 @@ pub struct PydlApp {
     command_palette_open: bool,
     command_palette_query: String,
     command_palette_selection: usize,
-    /// Max matching log lines rendered in docked/floating log panels (user can load more).
-    log_render_line_limit: usize,
     /// Set by keyboard shortcut; consumed by queue search field.
     focus_queue_search: bool,
     profile_rename_buffer: Option<(String, String)>,
@@ -556,9 +550,6 @@ impl PydlApp {
             last_done_lookup_poll: None,
             last_downloader_thumbnail_ensure_at: None,
             last_convert_thumbnail_ensure_at: None,
-            log_filtered_indices: Vec::new(),
-            log_filter_cache_len: 0,
-            log_filter_cache_slug: log_filter.slug().to_owned(),
             output_disk_space: None,
             output_disk_space_polled_at: None,
             system_usage: crate::system_usage::SystemUsageMonitor::new(),
@@ -576,7 +567,6 @@ impl PydlApp {
             command_palette_open: false,
             command_palette_query: String::new(),
             command_palette_selection: 0,
-            log_render_line_limit: crate::app::log_panel::DEFAULT_LOG_RENDER_LINES,
             focus_queue_search: false,
             profile_rename_buffer: None,
             videos_auto_undocked_for_size: false,
@@ -1282,7 +1272,6 @@ impl PydlApp {
             size.y,
             &mut self.settings.videos_dock_height,
             &mut self.settings.undocked_footer_height,
-            &mut self.settings.log_dock_height,
             pointer_down,
         ) {
             self.schedule_settings_save();

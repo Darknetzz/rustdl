@@ -1737,7 +1737,6 @@ pub fn clamp_dock_heights_for_viewport(
     viewport_height: f32,
     videos_dock_height: &mut f32,
     undocked_footer_height: &mut f32,
-    log_dock_height: &mut f32,
     pointer_down: bool,
 ) -> bool {
     if pointer_down || !viewport_height.is_finite() || viewport_height < 1.0 {
@@ -1751,16 +1750,6 @@ pub fn clamp_dock_heights_for_viewport(
     }
     if *undocked_footer_height > max_panel {
         *undocked_footer_height = max_panel;
-        changed = true;
-    }
-    let log_budget = (max_panel * 0.55).max(80.0);
-    let scaled = scaled_log_dock_height(*log_dock_height, log_budget);
-    if changed {
-        if (scaled - *log_dock_height).abs() > 0.5 {
-            *log_dock_height = scaled;
-        }
-    } else if *log_dock_height > scaled + 0.5 {
-        *log_dock_height = scaled;
         changed = true;
     }
     changed
@@ -1794,22 +1783,15 @@ pub fn apply_layout_preset(
             settings.compact_cards = true;
             settings.hide_card_subtitle = true;
             settings.show_thumbnails = true;
-            settings.log_dock_height = settings.log_dock_height.clamp(80.0, 120.0);
         }
         "review" => {
             settings.card_list_layout = false;
             settings.compact_cards = false;
             settings.hide_card_subtitle = false;
             settings.show_thumbnails = true;
-            settings.logs_open = true;
-            settings.logs_docked = true;
             if let Some(vh) = viewport_height {
                 settings.videos_dock_height =
                     dock_height_for_viewport_ratio(vh, REVIEW_DOCK_HEIGHT_RATIO);
-                let log_budget = (settings.videos_dock_height * 0.45).max(80.0);
-                settings.log_dock_height = scaled_log_dock_height(200.0, log_budget).max(120.0);
-            } else {
-                settings.log_dock_height = 200.0;
             }
         }
         "minimal" => {
@@ -3019,25 +3001,15 @@ mod tests {
     fn clamp_dock_heights_for_viewport_helper() {
         let mut dock = 800.0;
         let mut undock = 600.0;
-        let mut log = 400.0;
         assert!(super::clamp_dock_heights_for_viewport(
-            760.0,
-            &mut dock,
-            &mut undock,
-            &mut log,
-            false
+            760.0, &mut dock, &mut undock, false
         ));
         assert!(dock <= max_bottom_panel_height(760.0) + 0.01);
         assert!(undock <= max_bottom_panel_height(760.0) + 0.01);
         let mut dock2 = 200.0;
         let mut undock2 = 200.0;
-        let mut log2 = 180.0;
         assert!(!super::clamp_dock_heights_for_viewport(
-            760.0,
-            &mut dock2,
-            &mut undock2,
-            &mut log2,
-            true
+            760.0, &mut dock2, &mut undock2, true
         ));
         assert_eq!(dock2, 200.0);
     }
@@ -3095,14 +3067,12 @@ mod tests {
     }
 
     #[test]
-    fn apply_layout_preset_review_opens_docked_log() {
+    fn apply_layout_preset_review_uses_card_layout() {
         let mut s = crate::config::AppSettings::default();
         apply_layout_preset(&mut s, "review", Some(900.0));
         assert!(!s.card_list_layout);
-        assert!(s.logs_open);
-        assert!(s.logs_docked);
+        assert!(s.show_thumbnails);
         assert!(s.videos_dock_height >= BOTTOM_PANEL_MIN_H);
-        assert!(s.log_dock_height >= 120.0);
     }
 
     #[test]

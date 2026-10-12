@@ -116,7 +116,7 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | **`src/app/cards.rs`** | Preview cards / list rows, **More info** popup, per-item actions |
 | **`src/app/convert_panel.rs`** | Video Converter queue UI |
 | **`src/app/settings_panel.rs`** | Settings window (General / Downloader / Converter / Web UI tabs) |
-| **`src/app/log_panel.rs`** | Activity log (docked under queue + floating window) |
+| **`src/app/log_panel.rs`** | Log line colors, filter slug helpers, header/input chrome (desktop log is external) |
 | **`src/app/watchlist_panel.rs`** | Quality watchlist collapsible panel |
 | **`src/app/command_palette.rs`** | `Ctrl+K` command palette |
 | **`src/app/core_sync.rs`** | Mirrors `DownloadCore` ↔ `PydlApp` each frame |
@@ -188,7 +188,8 @@ Under `<config_dir>/rustdl/` (see `README.md` for OS paths):
 | `rustdl_config.json` | All settings |
 | `rustdl_queue.json` | Saved download queue |
 | `rustdl_convert_queue.json` | Saved Video Converter queue (when remember enabled) |
-| `rustdl_activity_log.json` | Persisted activity log |
+| `rustdl_activity_log.json` | Persisted activity log (canonical JSON store) |
+| `rustdl_activity_log.txt` | Plain-text sibling; desktop opens this externally |
 | `rustdl_profiles.json` | User-defined download profiles |
 | `rustdl_watchlist.json` | Quality watchlist entries |
 | `rustdl_convert_presets.json` | User convert encoding presets |
@@ -216,7 +217,7 @@ surfaces          GUI (egui)          LAN web (app.js)
 - **External tools**: Resolved via `PATH` or custom paths in settings (`src/external_tools.rs`). Requires `yt-dlp`; `ffmpeg` / `ffprobe` optional but needed for converter, thumbnails, **More info**, and watchlist probes.
 - **Platform `cfg`**: `tray.rs` (Windows + Linux); `win_*` modules (Windows only). No macOS tray yet. Linux GUI: `persist_window: false` in `lib.rs` to avoid off-screen restore.
 
-When editing UI spacing or panels, check both **docked** (main window) and **floating** (`draw_videos_window`, `draw_logs_window`) code paths in `src/app/videos_panel.rs` and related modules. Both paths should go through `VideosQueueLayout` in `videos_panel.rs` (shared scroll/footer/log reserve math).
+When editing UI spacing or panels, check both **docked** (main window) and **floating** (`draw_videos_window`) code paths in `src/app/videos_panel.rs` and related modules. Both paths should go through `VideosQueueLayout` in `videos_panel.rs` (shared scroll/footer math). Desktop activity log is external-only (`open_activity_log_file` → `rustdl_activity_log.txt`); the in-browser log lives in the LAN web UI.
 
 ### Where to change common things
 
@@ -237,14 +238,13 @@ When editing UI spacing or panels, check both **docked** (main window) and **flo
 
 ### Layout QA checklist (manual)
 
-After changing queue or log panel layout (`videos_panel.rs`, `log_panel.rs`, `app_ui.rs`):
+After changing queue layout (`videos_panel.rs`, `app_ui.rs`):
 
 1. **Docked Videos** — queue sits flush under Converter/Downloader controls and fills remaining height; footer controls stay visible.
 2. **Floating Videos** — resize window; list scrolls; dock/undock toggles work.
-3. **Docked log under Videos** — log lines fill remaining panel height after resize.
-4. **Floating Activity log** — resize window; log lines fill viewport.
-5. **Mode switch** — Downloader ↔ Video Converter preserves panel sizes; mode tint/stripe visible.
-6. **Large queue** — import or restore ~200 items; list layout stays responsive (`RUSTDL_PROFILE=1` optional).
+3. **Show log** — opens `rustdl_activity_log.txt` externally (Notepad++ on Windows when installed).
+4. **Mode switch** — Downloader ↔ Video Converter preserves panel sizes; mode tint/stripe visible.
+5. **Large queue** — import or restore ~200 items; list layout stays responsive (`RUSTDL_PROFILE=1` optional).
 
 ## Versioning and releases
 
