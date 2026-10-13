@@ -802,10 +802,7 @@ fn probe_video_audio_stream_presence_once(
             format!("exit {code}; {}", stderr.trim())
         };
         return Err(format_ffprobe_probe_failure(
-            ffprobe,
-            file_path,
-            "failed",
-            &detail,
+            ffprobe, file_path, "failed", &detail,
         ));
     }
     match stream_presence_from_ffprobe_json(&out.stdout) {

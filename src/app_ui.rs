@@ -3002,14 +3002,20 @@ mod tests {
         let mut dock = 800.0;
         let mut undock = 600.0;
         assert!(super::clamp_dock_heights_for_viewport(
-            760.0, &mut dock, &mut undock, false
+            760.0,
+            &mut dock,
+            &mut undock,
+            false
         ));
         assert!(dock <= max_bottom_panel_height(760.0) + 0.01);
         assert!(undock <= max_bottom_panel_height(760.0) + 0.01);
         let mut dock2 = 200.0;
         let mut undock2 = 200.0;
         assert!(!super::clamp_dock_heights_for_viewport(
-            760.0, &mut dock2, &mut undock2, true
+            760.0,
+            &mut dock2,
+            &mut undock2,
+            true
         ));
         assert_eq!(dock2, 200.0);
     }

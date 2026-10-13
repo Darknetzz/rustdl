@@ -2392,7 +2392,10 @@ Invalid data found when processing input";
             vf.contains("iw*sar"),
             "scale must use display width (iw*sar) so anamorphic portrait is not stretched"
         );
-        assert!(vf.contains("/2)*2"), "non-AMD path should align to even dimensions");
+        assert!(
+            vf.contains("/2)*2"),
+            "non-AMD path should align to even dimensions"
+        );
     }
 
     #[test]

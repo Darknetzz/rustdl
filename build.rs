@@ -43,7 +43,8 @@ fn embed_windows_icon() {
     res.set_icon("assets/rustdl.ico");
     // Host is Linux in GitLab CI (`x86_64-pc-windows-gnu` cross-compile).
     if cfg!(not(windows)) {
-        let windres = env::var("WINDRES").unwrap_or_else(|_| "x86_64-w64-mingw32-windres".to_owned());
+        let windres =
+            env::var("WINDRES").unwrap_or_else(|_| "x86_64-w64-mingw32-windres".to_owned());
         res.set_windres_path(&windres);
         let ar = env::var("AR").unwrap_or_else(|_| "x86_64-w64-mingw32-ar".to_owned());
         res.set_ar_path(&ar);

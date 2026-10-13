@@ -538,12 +538,8 @@ impl PydlApp {
             measured_footer,
             ui_scale,
         );
-        let predicted_list_h = queue_list_height_from_layout(
-            content_top_after_search,
-            body_bottom,
-            footer_h,
-            0.0,
-        );
+        let predicted_list_h =
+            queue_list_height_from_layout(content_top_after_search, body_bottom, footer_h, 0.0);
         let compact_id = queue_status_compact_id(layout.scroll_id);
         let was_compact = ui.ctx().data(|d| d.get_temp::<bool>(compact_id));
         let status_compact =
