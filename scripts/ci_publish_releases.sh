@@ -34,11 +34,15 @@ if [[ ${#assets[@]} -eq 0 ]]; then
   exit 1
 fi
 
-gitlab_auth_args() {
+# Must be an array — unquoted $(echo --header "JOB-TOKEN: $tok") splits on spaces
+# so curl treats the token as a URL host (masked DNS failure + 401).
+CURL_AUTH=()
+setup_curl_auth() {
+  CURL_AUTH=()
   if [[ -n "${GITLAB_TOKEN:-}" ]]; then
-    echo --header "PRIVATE-TOKEN: ${GITLAB_TOKEN}"
+    CURL_AUTH+=(--header "PRIVATE-TOKEN: ${GITLAB_TOKEN}")
   else
-    echo --header "JOB-TOKEN: ${CI_JOB_TOKEN:?CI_JOB_TOKEN or GITLAB_TOKEN required}"
+    CURL_AUTH+=(--header "JOB-TOKEN: ${CI_JOB_TOKEN:?CI_JOB_TOKEN or GITLAB_TOKEN required}")
   fi
 }
 
@@ -138,12 +142,13 @@ gitlab_pkg_ver() {
 gitlab_upload_packages() {
   local pkg_ver="$1"
   local file name url
+  setup_curl_auth
   for file in "${assets[@]}"; do
     name="$(basename "$file")"
     url="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/rustdl/${pkg_ver}/${name}"
     echo "Uploading GitLab package ${pkg_ver}/${name} ..."
     curl -fsS --request PUT \
-      $(gitlab_auth_args) \
+      "${CURL_AUTH[@]}" \
       --upload-file "$file" \
       "$url" >/dev/null
   done
@@ -194,8 +199,9 @@ PY
 
   local api="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
   local code
+  setup_curl_auth
   code="$(curl -sS -o /tmp/gl-release-body.json -w '%{http_code}' --request POST \
-    $(gitlab_auth_args) \
+    "${CURL_AUTH[@]}" \
     --header 'Content-Type: application/json' \
     --data "$payload" \
     "$api")"
@@ -218,7 +224,7 @@ print(json.dumps({
 PY
     )"
     curl -fsS --request PUT \
-      $(gitlab_auth_args) \
+      "${CURL_AUTH[@]}" \
       --header 'Content-Type: application/json' \
       --data "$update" \
       "${api}/${tag}" >/dev/null
