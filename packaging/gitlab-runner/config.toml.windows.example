@@ -1,0 +1,35 @@
+# Example GitLab Runner config for rustdl (Windows host, shell + pwsh).
+# Copy to C:\GitLab-Runner\config.toml on the runner machine (or merge into it).
+# Do not commit real runner tokens.
+#
+# Register first (PowerShell as admin), then set tags in GitLab UI if needed:
+#   cd C:\GitLab-Runner
+#   .\gitlab-runner.exe register --url https://gitlab.roste.org --token GLRT-... `
+#     --executor shell --shell pwsh --tag-list windows --name wingl-runner01
+#
+# Requirements on the host:
+#   - Git for Windows (`git` on Machine PATH — needed for CI checkout)
+#   - PowerShell 7+ (`pwsh` on PATH)
+#   - Rust stable MSVC (`rustup` default host x86_64-pc-windows-msvc)
+#   - Visual Studio 2022 Build Tools with "Desktop development with C++" / MSVC
+#   - Machine PATH includes the cargo bin dir (e.g. C:\rust\cargo\bin) so the
+#     gitlab-runner Windows service (LocalSystem) can find rustc/cargo
+#
+# Quick install (elevated pwsh) — prefer Chocolatey if winget is absent:
+#   choco install git -y
+#   # or: winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
+#   Restart-Service gitlab-runner   # pick up Machine PATH
+#
+# In GitLab → Settings → CI/CD → Runners → this runner:
+#   - Tags: windows
+#   - Run untagged jobs: OFF (so Linux Docker jobs stay on the Linux runner)
+
+concurrent = 1
+check_interval = 0
+
+[[runners]]
+  name = "wingl-runner01"
+  url = "https://gitlab.roste.org/"
+  token = "GLRT-YOUR_RUNNER_TOKEN"
+  executor = "shell"
+  shell = "pwsh"

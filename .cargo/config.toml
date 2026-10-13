@@ -1,4 +1,5 @@
-# Used when cross-compiling Windows from Linux (GitLab Docker runner).
+# Optional: cross-compile Windows from Linux (`cargo build --target x86_64-pc-windows-gnu`).
+# GitLab CI builds Windows natively on the `windows`-tagged shell runner (MSVC).
 # Native Windows MSVC builds ignore this (they do not use the gnu target).
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"

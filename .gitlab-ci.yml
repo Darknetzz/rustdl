@@ -1,8 +1,11 @@
 # GitLab CI is the automatic build/publish path. GitHub Actions stay manual-only
 # (workflow_dispatch) and are not used here.
 #
-# Linux Docker runner (see packaging/gitlab-runner/config.toml.example).
-# Windows rustdl.exe is cross-compiled with MinGW (`x86_64-pc-windows-gnu`).
+# Runners:
+#   - Linux Docker (untagged / docker) — build:linux + publish
+#     see packaging/gitlab-runner/config.toml.example
+#   - Windows shell pwsh (tag: windows) — build:windows native MSVC
+#     see packaging/gitlab-runner/config.toml.windows.example
 #
 # Project CI/CD variables:
 #   GH_TOKEN       GitHub PAT with `repo` scope (masked; unprotect if `dev` is unprotected)
@@ -19,7 +22,6 @@ variables:
   CI_RUST_IMAGE: rust:latest
   CARGO_HOME: /usr/local/cargo
   CARGO_TERM_COLOR: always
-  CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER: x86_64-w64-mingw32-gcc
   FF_USE_FASTZIP: "true"
 
 default:
@@ -51,14 +53,6 @@ stages:
       libwayland-dev libasound2-dev
   fi
 
-.apt_windows_gnu: &apt_windows_gnu |
-  if ! command -v x86_64-w64-mingw32-gcc >/dev/null; then
-    apt-get update
-    apt-get install -y --no-install-recommends \
-      cmake clang libclang-dev nasm python3 curl ca-certificates \
-      gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 binutils-mingw-w64-x86-64
-  fi
-
 build:linux:
   extends: .rust_base
   before_script:
@@ -79,19 +73,23 @@ build:linux:
       - dist/rustdl-x86_64-unknown-linux-gnu
     expire_in: 14 days
 
+# Native MSVC on the Windows shell runner (tag `windows`). Do not enable
+# "Run untagged jobs" on that runner, or it may pick up Linux Docker jobs.
 build:windows:
   extends: .rust_base
+  tags:
+    - windows
+  image: null
   variables:
-    RUSTFLAGS: "-C link-arg=-static-libgcc"
+    CARGO_HOME: "C:/rust/cargo"
+    RUSTUP_HOME: "C:/rust/rustup"
   before_script:
-    - *apt_windows_gnu
-    - rustup target add x86_64-pc-windows-gnu
     - rustc -vV
     - cargo --version
   script:
-    - cargo build --release --target x86_64-pc-windows-gnu
-    - mkdir -p dist
-    - cp target/x86_64-pc-windows-gnu/release/rustdl.exe dist/rustdl.exe
+    - cargo build --release
+    - New-Item -ItemType Directory -Force -Path dist | Out-Null
+    - Copy-Item -Force target/release/rustdl.exe dist/rustdl.exe
   artifacts:
     name: rustdl-windows-$CI_COMMIT_SHORT_SHA
     paths:

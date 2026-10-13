@@ -2,6 +2,9 @@
 # Copy to /etc/gitlab-runner/config.toml on the runner machine.
 # Do not commit real runner tokens.
 #
+# Windows native builds use a separate shell/pwsh runner — see
+# config.toml.windows.example (tag `windows`, run untagged jobs OFF).
+#
 # Register first:
 #   gitlab-runner register --url https://gitlab.roste.org --token GLRT-... --executor docker --docker-image rust:latest
 #

@@ -16,6 +16,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Changed
 
+- **GitLab CI** Windows builds now run natively (MSVC) on a `windows`-tagged shell/pwsh runner instead of MinGW cross-compile on Linux.
 - Desktop **activity log** is external-only: **Show log**, **Ctrl/Cmd+L**, About, and the command palette open `rustdl_activity_log.txt`. On Windows, Notepad++ is preferred when installed; otherwise the OS default editor is used. The in-app docked/floating log panel is removed; the LAN web UI log viewer is unchanged.
 - Downloader **Presets** highlight the matching built-in preset (or **Custom** when quality/post-process options no longer match). Desktop + LAN web UI.
 - Video Converter default **rate control** stays **Bitrate** (empty target → ~2 Mbps auto); Quality (CRF) remains available in Settings. Existing saved settings are unchanged.
@@ -31,7 +32,7 @@ When releasing, bump `version` in `Cargo.toml`, add a dated section below, and t
 
 ### Documentation
 
-- **GitLab CI** builds Linux and Windows (MinGW cross-compile) binaries on a Linux Docker runner and publishes **GitHub** + **GitLab** Releases (GitHub Actions stay manual-only).
+- **GitLab CI** builds Linux (Docker) and Windows (native MSVC) binaries and publishes **GitHub** + **GitLab** Releases (GitHub Actions stay manual-only).
 - README Windows install no longer lists `winget install Darknetzz.rustdl` (the package is not in winget yet); download from GitHub Releases instead.
 
 ### Security
