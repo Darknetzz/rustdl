@@ -2842,8 +2842,8 @@ impl PydlApp {
                         {
                             cancel_exit_confirm = true;
                         }
-                        if !shutting_down {
-                            if g
+                        if !shutting_down
+                            && g
                                 .warning(
                                     &format!("{} Quit and Clear Queue", ui_icons::CLEAR_QUEUE),
                                     true,
@@ -2852,9 +2852,8 @@ impl PydlApp {
                                     "Close rustdl and remove all saved downloader and converter queue items.",
                                 )
                                 .clicked()
-                            {
-                                self.confirm_exit(ctx, true);
-                            }
+                        {
+                            self.confirm_exit(ctx, true);
                         }
                         let quit_label = if shutting_down {
                             format!("{} Force Quit", ui_icons::EXIT)

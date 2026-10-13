@@ -194,8 +194,12 @@ fn query_disk_space_at(path: &Path) -> Option<DiskSpace> {
     if stat.f_frsize == 0 {
         return None;
     }
+    // `f_*` field widths differ by libc; cast keeps a portable u64 math path.
+    #[allow(clippy::unnecessary_cast)]
     let frsize = stat.f_frsize as u64;
+    #[allow(clippy::unnecessary_cast)]
     let available_bytes = (stat.f_bavail as u64).saturating_mul(frsize);
+    #[allow(clippy::unnecessary_cast)]
     let total_bytes = (stat.f_blocks as u64).saturating_mul(frsize);
     if total_bytes == 0 {
         return None;

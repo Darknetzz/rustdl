@@ -986,6 +986,7 @@ impl PydlApp {
 ///
 /// Important: use *per-bucket* counts for Ready/Issues — gating on total queue length collapsed
 /// Active/Issues on large libraries and left only thin headers over an empty scroll void.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn downloader_queue_group_open_regime(
     label: &str,
     total_items: usize,

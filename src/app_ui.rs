@@ -921,6 +921,7 @@ fn paint_mode_panel_background(
 ///
 /// Use `fill_height = true` for docked/floating queue shells so the accent frame fills the
 /// allocated panel; main-column panels should pass `false` (shrink-wrap).
+#[allow(clippy::too_many_arguments)]
 pub fn show_mode_panel<R>(
     ui: &mut egui::Ui,
     theme: &str,
@@ -1553,7 +1554,7 @@ pub fn url_input_height(viewport_h: f32) -> f32 {
 ///
 /// `available_for_log` is the lines-only budget (chrome / heading / separator already excluded).
 pub fn scaled_log_dock_height(user_pref: f32, available_for_log: f32) -> f32 {
-    let max_lines = available_for_log.max(0.0).min(480.0);
+    let max_lines = available_for_log.clamp(0.0, 480.0);
     if max_lines < 1.0 {
         return 0.0;
     }
@@ -2972,7 +2973,9 @@ mod tests {
             queue_dl_list_row_height("Issues"),
             QUEUE_DL_LIST_ROW_ISSUES_H
         );
-        assert!(QUEUE_DL_LIST_ROW_ISSUES_H > QUEUE_DL_LIST_ROW_H);
+        const {
+            assert!(QUEUE_DL_LIST_ROW_ISSUES_H > QUEUE_DL_LIST_ROW_H);
+        }
     }
 
     #[test]

@@ -407,11 +407,11 @@ mod tests {
     fn pick_platform_asset_url_prefers_rustdl_exe_on_windows() {
         let raw = r#"{"assets":[{"name":"notes.md","browser_download_url":"https://x/n"},{"name":"rustdl.exe","browser_download_url":"https://x/e"}]}"#;
         let json: serde_json::Value = serde_json::from_str(raw).unwrap();
+        let url = pick_platform_asset_url(&json);
         #[cfg(windows)]
-        assert_eq!(
-            pick_platform_asset_url(&json).as_deref(),
-            Some("https://x/e")
-        );
+        assert_eq!(url.as_deref(), Some("https://x/e"));
+        #[cfg(not(windows))]
+        assert!(url.is_none());
     }
 
     #[test]

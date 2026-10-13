@@ -1921,7 +1921,7 @@ where
         copy_audio: false,
         resolved_bitrate: resolved,
     };
-    if let Err(err) = run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)) {
+    if let Err(err) = run_ffmpeg_convert_encode(&pass, cancel, &mut on_line) {
         let err_text = convert_error_text(&err);
         if err_text.to_ascii_lowercase().contains("cancelled") {
             return Err(err);
@@ -1932,14 +1932,12 @@ where
                     .to_owned(),
             );
             pass.copy_audio = true;
-            run_ffmpeg_convert_encode(&pass, cancel, |line| on_line(line)).map_err(
-                |retry_err| {
-                    anyhow!(
-                        "{err_text}\nAudio-copy retry failed: {}",
-                        convert_error_text(&retry_err)
-                    )
-                },
-            )?;
+            run_ffmpeg_convert_encode(&pass, cancel, on_line).map_err(|retry_err| {
+                anyhow!(
+                    "{err_text}\nAudio-copy retry failed: {}",
+                    convert_error_text(&retry_err)
+                )
+            })?;
         } else {
             return Err(err);
         }
