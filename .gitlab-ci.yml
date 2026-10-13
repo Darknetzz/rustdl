@@ -57,6 +57,8 @@ build:linux:
   extends: .rust_base
   before_script:
     - *apt_linux
+    # rust:latest does not always ship rustfmt/clippy; custom CI image already has them.
+    - rustup component add rustfmt clippy
     - rustc -vV
     - cargo --version
   script:
