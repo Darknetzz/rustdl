@@ -176,6 +176,7 @@ MSRV: **Rust 1.80+** (`rust-version` in `Cargo.toml`).
 | `ci/Dockerfile` | Optional Linux CI builder image (GTK; MinGW optional for local cross-compile) for `registry.roste.org/kriss/rustdl/ci` |
 | `packaging/gitlab-runner/config.toml.example` | Linux Docker runner + Cargo registry volume |
 | `packaging/gitlab-runner/config.toml.windows.example` | Windows shell/pwsh runner (`windows` tag) |
+| `packaging/gitlab-runner/windows-maintenance.ps1` | Weekly rustup/choco/prune/Windows Update task for the Windows runner |
 | `scripts/dev_release_webhook.py` | Optional GitHub **push** webhook listener (no GitHub Actions) |
 | `packaging/winget/Darknetzz.rustdl.yaml` | Example [winget](https://github.com/microsoft/winget-cli) manifest (portable `rustdl.exe` from GitHub Releases) |
 | `deny.toml` | `cargo deny` policy (CI on `dev` pushes) |

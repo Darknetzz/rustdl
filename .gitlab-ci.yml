@@ -85,13 +85,20 @@ build:windows:
   variables:
     CARGO_HOME: "C:/rust/cargo"
     RUSTUP_HOME: "C:/rust/rustup"
+    RUSTC_WRAPPER: sccache
+    SCCACHE_DIR: "C:/rust/sccache"
+    SCCACHE_CACHE_SIZE: "10G"
   before_script:
+    - sccache --version
+    - sccache --zero-stats
     - rustc -vV
     - cargo --version
   script:
     - cargo build --release
     - New-Item -ItemType Directory -Force -Path dist | Out-Null
     - Copy-Item -Force target/release/rustdl.exe dist/rustdl.exe
+  after_script:
+    - sccache --show-stats
   artifacts:
     name: rustdl-windows-$CI_COMMIT_SHORT_SHA
     paths:

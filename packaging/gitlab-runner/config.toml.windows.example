@@ -20,6 +20,13 @@
 #   # or: winget install --id Git.Git -e --accept-source-agreements --accept-package-agreements
 #   Restart-Service gitlab-runner   # pick up Machine PATH
 #
+# Compile cache (sccache 0.18+ on PATH, cache under C:\rust\sccache):
+#   Machine env: RUSTC_WRAPPER=sccache, SCCACHE_DIR=C:\rust\sccache, SCCACHE_CACHE_SIZE=10G
+# Defender exclusions: C:\rust, C:\GitLab-Runner, and rustc/cargo/sccache/link/cl.
+# Weekly hygiene: packaging/gitlab-runner/windows-maintenance.ps1
+#   scheduled task rustdl-runner-maintenance (SYSTEM, Sunday 04:00).
+# Access: SSH inbound limited to 10.0.0.0/8; Remote Desktop disabled.
+#
 # In GitLab → Settings → CI/CD → Runners → this runner:
 #   - Tags: windows
 #   - Run untagged jobs: OFF (so Linux Docker jobs stay on the Linux runner)
@@ -33,3 +40,4 @@ check_interval = 0
   token = "GLRT-YOUR_RUNNER_TOKEN"
   executor = "shell"
   shell = "pwsh"
+  environment = ["RUSTC_WRAPPER=sccache", "SCCACHE_DIR=C:\\rust\\sccache", "SCCACHE_CACHE_SIZE=10G"]
