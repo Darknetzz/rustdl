@@ -25,7 +25,8 @@
 # Defender exclusions: C:\rust, C:\GitLab-Runner, and rustc/cargo/sccache/link/cl.
 # Weekly hygiene: packaging/gitlab-runner/windows-maintenance.ps1
 #   scheduled task rustdl-runner-maintenance (SYSTEM, Sunday 04:00).
-# Access: SSH inbound limited to 10.0.0.0/8; Remote Desktop disabled.
+# Access: leave SSH and Remote Desktop as the host admin set them.
+#   This runner currently allows SSH from 10.0.0.0/8 and keeps RDP enabled.
 #
 # In GitLab → Settings → CI/CD → Runners → this runner:
 #   - Tags: windows
